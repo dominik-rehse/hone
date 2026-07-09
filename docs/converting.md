@@ -7,6 +7,15 @@ still laid out that way. Run it **inside the target repo** (for example one with
 [`docs/model.md`](model.md) readable. Use subagents for the bulk per-spec
 distillation; each spec is independent.
 
+One manual prerequisite: install and enable the hone plugin in Claude Code
+(`/plugin marketplace add dominik-rehse/hone`, then install `hone@hone`) before
+running this. Everything else is automated in the steps below, including the
+enforcement sequencing — the migration is a one-time rewrite of the primary tree,
+so it runs with *both* enforcement layers off (neither methodology's loop applies
+to a bulk rewrite). Step 0 silences stdd and keeps hone dormant with a `.hone-off`
+marker; step 9 flips hone on once the suite is green. Enabling the plugin early is
+therefore harmless: it stays inert until step 9.
+
 ---
 
 > Convert this repository from the stdd methodology to hone. Read
@@ -15,6 +24,14 @@ distillation; each spec is independent.
 > tests) and adopt its plan→run worktree loop, **without changing runtime
 > behavior**: the test suite stays green at every step. Work on a branch, in
 > stages, committing after each.
+>
+> 0. **Silence enforcement, then branch.** Create a branch for the migration.
+>    Then `touch .stdd-off` and `touch .hone-off`. stdd's audit and guard would
+>    fight the spec deletions and tag stripping below; hone's guard forbids
+>    editing `src/`, `tests/`, or `docs/` in the primary tree — which is exactly
+>    what this bulk rewrite does, since it is not a `plan → run` worktree cycle.
+>    Both markers are gitignored, so the migration runs unenforced, like a spike,
+>    and you keep the suite green by hand.
 >
 > 1. **Inventory.** List `docs/specs/*`, `docs/decisions/*`,
 >    `docs/open-questions.md`, the overview docs (architecture, entities, ui,
@@ -53,10 +70,17 @@ distillation; each spec is independent.
 >    later hone cycle, not part of conversion.)
 >
 > 7. **Swap the machinery.** Remove the stdd markers, hooks, and scripts
->    (`.stdd-*`, the precommit gate, the guard/audit wiring) and install the hone
->    plugin (guard/gate/nag hooks, plan/run skills). Keep or rename the test
->    adapter to hone's `gate` contract. Add a gitignored `.plans/` and adopt the
->    worktree-native flow.
+>    (all `.stdd-*` — including the `.stdd-off` from step 0 — the precommit gate,
+>    and the guard/audit wiring). The hone plugin is already installed (the
+>    prerequisite above); keep or rename the test adapter to hone's `gate`
+>    contract, and `mkdir -p src` plus create the gitignored `.plans/`. Leave
+>    `.hone-off` in place for now — step 9 removes it.
 >
 > 8. **Verify.** Full suite green; type-check clean; `grep -rn 'stdd\|AC-\|slice-'`
 >    and reconcile every leftover; confirm no `docs/specs/` remains.
+>
+> 9. **Turn hone on.** With the suite green and every leftover reconciled, remove
+>    `.hone-off` so the guard, gate, and nag activate. Smoke-check that they fire:
+>    an edit to a `src/` file is now denied in the primary tree, and a Stop runs
+>    the gate. Commit, merge the branch, and from here every change goes through
+>    `/hone:plan` → `/hone:run` in a worktree.
