@@ -1,0 +1,14 @@
+{
+    "name": "hone",
+    "owner": {
+        "name": "Dominik Rehse"
+    },
+    "plugins": [
+        {
+            "name": "hone",
+            "source": "./",
+            "version": "0.1.0",
+            "description": "hone is a development model where a human writes a short Plan and an automated, worktree-native loop builds, verifies, consolidates, reviews, and lands each change unattended. Only rot-proof durable truth survives, and every cycle deletes something."
+        }
+    ]
+}

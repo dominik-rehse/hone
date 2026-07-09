@@ -1,0 +1,8 @@
+# Ephemeral hone artifacts (never committed in a project that adopts hone).
+# Kept here too so the plugin repo models the same ignores it installs.
+.plans/
+.worktrees/
+.hone-off
+.hone-test-globs
+.hone-gate-enforce
+.hone-nag-enforce

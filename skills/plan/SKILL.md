@@ -1,0 +1,87 @@
+---
+name: plan
+description: "Author the ephemeral Plan for one change: .plans/<change>.md, the only hand-written artifact. Guides sizing a change to the smallest unit worth its own review gate, and states what, why, and how you'll know it works. Does not write code, tests, or docs. Invoke with /hone:plan <change-name-or-sketch>."
+argument-hint: "[change-name-or-sketch]"
+disable-model-invocation: true
+---
+
+# /hone:plan — author a change Plan
+
+Input: $ARGUMENTS
+
+The Plan is the one hand-written artifact and the single manual step in hone.
+Everything after it (build, verify, consolidate, review, land) runs unattended
+from `/hone:run`. So the Plan is a *brief*, not a spec: it says what to build, why,
+and how you'll know it works, and then it is deleted at consolidate. It never
+accretes acceptance-criteria bookkeeping; the tests are the durable record of
+behaviour.
+
+This command helps a human write that brief. It writes **only** `.plans/<change>.md`
+(and, when the change rests on an empirical bet, an entry in
+`docs/open-questions.md`). It does not write code, tests, or other docs.
+
+## Task
+
+### 1. Name the change
+
+Derive a short, domain-named slug from `$ARGUMENTS` (`auth/refresh-token`,
+`export/csv-escaping`), mirroring `src/`. Never a positional name (`change-3`).
+The Plan lands at `.plans/<slug>.md`; if that file already exists, ask whether to
+resume or overwrite it.
+
+### 2. Size it to one review gate
+
+A change is the **smallest unit worth its own review gate**: split only where a
+reviewer could reject one part while approving its neighbour. Too large and the
+review can't hold it; too small and you multiply merge overhead on shared files.
+
+- If the sketch is really several independent changes, say so and propose the
+  split: one Plan each, each landable alone. Independent means disjoint `src/`
+  files (they can run in parallel worktrees; the merge verifies it).
+- If it's one indivisible change spanning several files, that's one Plan.
+
+Decide this now; the `plan-critic` will challenge a Plan whose scope is wrong.
+
+### 3. Surface empirical bets as open questions
+
+If the change rests on an assumption only running code can settle (a driver's
+dialect, an SDK's headless behaviour, a library on this runtime), record it in
+`docs/open-questions.md` as a question gated to this change, not in the Plan.
+Distinct from a *decision already made* (that's a Decision, written at
+consolidate). Don't invent questions to fill the file.
+
+### 4. Write `.plans/<slug>.md`
+
+Keep it to what an unattended loop needs and no more:
+
+```markdown
+# Plan: <slug>
+
+## What
+<2–4 sentences: the change, at the level of observable behaviour.>
+
+## Why
+<The reason now: the user need, the bug, the constraint. One short paragraph.>
+
+## How I'll know it works
+<The observable proof: the behaviour a test will pin, the end-to-end check, the
+error that stops reproducing. Concrete and checkable, not "it works".>
+
+## Notes for the loop (optional)
+- <Critical path? Name it: it earns a mutation check and maybe a property test.>
+- <A Decision this change makes or changes (topic + the why), for consolidate.>
+- <Files/areas expected to change; whether this is independent of in-flight work.>
+- <Open question OQ-N this change resolves, if any.>
+```
+
+Omit any section that would only restate another. No placeholders, no `TBD`: the
+`plan-critic` rejects them and a rejection escalates before any worktree spawns.
+
+### 5. Confirm
+
+> Plan written to `.plans/<slug>.md`[, open question added to
+> `docs/open-questions.md`]. Run `/hone:run <slug>` to build, verify,
+> consolidate, review, and land it, or `/hone:run` to pick it up with any other
+> ready Plans.
+
+Do not start building. `/hone:run` owns everything after the Plan.

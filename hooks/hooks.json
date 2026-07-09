@@ -1,0 +1,58 @@
+{
+  "description": "hone enforcement. PreToolUse: a guard on Write/Edit (test-first in a worktree, never the primary tree) and a bash-guard on shell commands (tamper resistance for the gate). SessionStart injects the lean workflow rule and bootstraps a hone project. Stop runs the gate (tests + type-check + lint via the one adapter) and the nag (leftover Plan, oversized/orphan Note). Scripts run through bash so hook execution does not depend on executable bits.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/guard.sh\"",
+            "timeout": 5,
+            "statusMessage": "hone guard: checking test-first and worktree..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/bash-guard.sh\"",
+            "timeout": 5,
+            "statusMessage": "hone guard: checking command..."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh\"",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/gate.sh\"",
+            "timeout": 120,
+            "statusMessage": "hone gate: running tests, type-check, lint..."
+          },
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/nag.sh\"",
+            "timeout": 10,
+            "statusMessage": "hone nag: checking Plans and Notes..."
+          }
+        ]
+      }
+    ]
+  }
+}
