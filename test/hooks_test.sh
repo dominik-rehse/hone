@@ -121,6 +121,18 @@ echo "# Plan" > "$REPO/.plans/ghost.md"   # no matching worktree
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "ghost.md has no .worktrees" && ok "leftover Plan flagged" || bad "should flag leftover Plan"
 
+# Nested slug (the plan skill derives <area>/<change> mirroring src/).
+mkdir -p "$REPO/.plans/auth"
+echo "# Plan" > "$REPO/.plans/auth/ghost-nested.md"   # no matching worktree
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q ".plans/auth/ghost-nested.md has no .worktrees/auth/ghost-nested" && ok "nested leftover Plan flagged" || bad "should flag nested leftover Plan"
+
+# A nested Plan whose worktree exists is active work — not flagged.
+mkdir -p "$REPO/.worktrees/auth/ghost-nested"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "ghost-nested" && bad "nested Plan with live worktree should not be flagged" || ok "nested Plan with live worktree not flagged"
+rm -rf "$REPO/.worktrees/auth" "$REPO/.plans/auth"
+
 printf 'line\n%.0s' $(seq 1 60) > "$REPO/docs/notes/auth.md"   # 60 lines > cap; src/auth exists
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "docs/notes/auth.md is 60 lines" && ok "oversized Note flagged" || bad "should flag oversized Note"

@@ -6,6 +6,8 @@
 #      A Plan is deleted at consolidate; one left behind with no in-flight
 #      worktree means the change landed (or was abandoned) without cleanup.
 #      (A Plan whose worktree still exists is active work — not flagged.)
+#      <change> may be nested (auth/refresh-token): the plan skill derives
+#      slugs mirroring src/, so the scan must recurse.
 #   2. Oversized Note  — a docs/notes/<area>.md over the size cap (a Note is a
 #      map + one invariant, not a spec: half a screen).
 #   3. Orphan Note     — a docs/notes/<area>.md with no corresponding src/<area>/.
@@ -35,15 +37,15 @@ findings=""
 # JSON \n; the advisory branch prints it as-is).
 add_finding() { findings+="- $1"$'\n'; }
 
-# 1. Leftover Plan.
+# 1. Leftover Plan. Recurse: slugs are nested (.plans/<area>/<change>.md).
 if [ -d ".plans" ]; then
-    for plan in .plans/*.md; do
-        [ -e "$plan" ] || continue
-        change=$(basename "$plan" .md)
+    while IFS= read -r plan; do
+        change=${plan#.plans/}
+        change=${change%.md}
         if [ ! -d ".worktrees/$change" ]; then
-            add_finding ".plans/${change}.md has no .worktrees/${change} — if the change landed, consolidate should have deleted the Plan; delete it (git keeps the history)."
+            add_finding "${plan} has no .worktrees/${change} — if the change landed, consolidate should have deleted the Plan; delete it (git keeps the history)."
         fi
-    done
+    done < <(find .plans -type f -name '*.md' 2>/dev/null)
 fi
 
 # 2. Oversized Note.
