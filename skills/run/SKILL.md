@@ -126,11 +126,12 @@ redundant test, an abstraction not earning its keep. Apply its accepted findings
 
 ### 6. Review — native `/code-review`
 
-Run Claude Code's `/code-review` on the finished change (the worktree diff). It
-is already multi-agent (parallel finders plus a verification pass), so hone
-reuses it rather than shipping a reviewer. Address its confirmed findings with
-further red-green cycles (never a fix without a test). Re-run it if you made
-non-trivial changes.
+Run Claude Code's `/code-review` on the finished change (the worktree diff)
+**once** — it is multi-agent (parallel finders plus a verification pass) and the
+loop's most expensive step, so it runs a single time and hone reuses it rather
+than shipping a reviewer. Address its confirmed findings with red-green cycles
+(never a fix without a test); those fixes are re-gated by `verify`, not by a
+second review.
 
 If the review surfaces something that makes the change genuinely ambiguous or
 wrong to land, **stop and escalate** (stop-point 3).
