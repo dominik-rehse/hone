@@ -36,7 +36,8 @@ report. Never disable a gate to get past it.
 
 Before spawning anything, submit the Plan to the `plan-critic` agent (Task tool,
 `subagent_type: plan-critic`). Give it a **constructed brief**: the Plan text,
-the list of open changes (other `.plans/*.md` and existing `hone/*` worktrees),
+the list of open changes (other `.plans/**/*.md` — slugs nest — and existing
+`hone/*` worktrees),
 and the relevant existing Decisions/Notes, never your own transcript. It returns
 structured findings.
 
@@ -98,6 +99,11 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
   mutant means a hollow test; close the gap with another red-green cycle. Skip it
   for non-critical or UI changes; never gate a trivial change on it.
 
+Close verify by stating each check's outcome — tests, type-check, lint,
+mutation — including any skip **with its reason** ("mutation: skipped — no
+critical path named in the Plan"). An unstated skip is indistinguishable from a
+forgotten check, and this receipt is what a later audit of the transcript reads.
+
 If verify cannot go green and you have exhausted the fix, **stop and escalate**
 (stop-point 2), leaving the worktree as evidence.
 
@@ -129,9 +135,20 @@ redundant test, an abstraction not earning its keep. Apply its accepted findings
 Run Claude Code's `/code-review` on the finished change (the worktree diff)
 **once** — it is multi-agent (parallel finders plus a verification pass) and the
 loop's most expensive step, so it runs a single time and hone reuses it rather
-than shipping a reviewer. Address its confirmed findings with red-green cycles
-(never a fix without a test); those fixes are re-gated by `verify`, not by a
-second review.
+than shipping a reviewer. Like the critics, it gets a constructed brief: pass
+the Plan text (still in hand — the file is gone) along with the diff, so the
+reviewer can tell a violation of the Plan's stated stance from the stance
+itself.
+
+Triage its findings against the Plan:
+
+- **Apply** confirmed findings with red-green cycles (never a fix without a
+  test); those fixes are re-gated by `verify`, not by a second review.
+- **Decline** a confirmed finding only when it contradicts the Plan's explicit
+  stance or falls outside the change's scope — and record every decline
+  durably, in the landing commit's body or (for a real defect deferred, not
+  dismissed) as a `docs/open-questions.md` entry. A decline that lives only in
+  the conversation is lost to the next cycle.
 
 If the review surfaces something that makes the change genuinely ambiguous or
 wrong to land, **stop and escalate** (stop-point 3).

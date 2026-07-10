@@ -220,7 +220,10 @@ sends the agent back to `build` for another red-green cycle, as many times as it
 takes to go green. The model checks each run *once*: `plan-critic`,
 `consolidate-critic`, and the expensive `/code-review`; their findings are
 applied or auto-fixed in place, and a review fix is a red-green cycle re-gated by
-`verify`, never a second review. The agent self-corrects in the worktree and
+`verify`, never a second review. A confirmed finding may be declined only when
+it contradicts the Plan's explicit stance or falls outside the change, and the
+decline is recorded durably (the landing commit's body, or an open question for
+a deferred defect), never left in the conversation alone. The agent self-corrects in the worktree and
 escalates only at the three stop-points on the diagram: admission rejects the
 Plan, verify can't go green once the fix is exhausted, or review finds the change
 genuinely ambiguous. On a stop it leaves the worktree in place as evidence; the
