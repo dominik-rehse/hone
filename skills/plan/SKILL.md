@@ -77,11 +77,19 @@ error that stops reproducing. Concrete and checkable, not "it works".>
 Omit any section that would only restate another. No placeholders, no `TBD`: the
 `plan-critic` rejects them and a rejection escalates before any worktree spawns.
 
-### 5. Confirm
+### 5. Confirm — the hand-off
 
-> Plan written to `.plans/<slug>.md`[, open question added to
-> `docs/open-questions.md`]. Run `/hone:run <slug>` to build, verify,
-> consolidate, review, and land it, or `/hone:run` to pick it up with any other
-> ready Plans.
+Close with an explicit hand-off. The Plan file is easy to lose track of: it
+lives in a hidden dot-directory, it is gitignored (so `git status` won't list
+it), and the slug you derived may differ from the name the user typed. State
+all of that plainly:
+
+> Plan written to `.plans/<slug>.md` — on disk in your checkout, on your current
+> branch. It won't show in `git status` (`.plans/` is gitignored by design; the
+> Plan is ephemeral and consolidate deletes it).
+> [I named it `<slug>` rather than `<what-you-typed>` to mirror `src/`.]
+> [Open question added to `docs/open-questions.md`.]
+> Run `/hone:run <slug>` to build, verify, consolidate, review, and land it, or
+> `/hone:run` to pick it up with any other ready Plans.
 
 Do not start building. `/hone:run` owns everything after the Plan.
