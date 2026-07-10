@@ -89,10 +89,11 @@ EOF
 echo "x" >> "$REPO/src/auth/login.ts" 2>/dev/null || { mkdir -p "$REPO/src/auth"; echo x > "$REPO/src/auth/login.ts"; }
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
 echo "$out" | grep -q '"decision":"block"' && ok "red suite blocks the stop" || bad "red suite should block"
-# Green adapter → no block.
+# Green adapter → no block, and a green receipt naming what ran.
 echo 'exit 0' > "$REPO/scripts/run-tests.sh"
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
 echo "$out" | grep -q '"decision":"block"' && bad "green suite should not block" || ok "green suite passes the gate"
+echo "$out" | grep -q '"systemMessage":"hone gate: green (tests (--unit))"' && ok "green gate emits a receipt naming the checks" || bad "green gate should emit a receipt"
 # Clean tree (no src/test changes) → gate is a no-op even with a failing adapter.
 echo 'exit 1' > "$REPO/scripts/run-tests.sh"
 (cd "$REPO" && git add -A && git commit -qm work)

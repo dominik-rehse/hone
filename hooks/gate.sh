@@ -25,7 +25,9 @@
 # their script existing; tests are the floor.
 #
 # Mechanism: a Stop hook may return {"decision":"block","reason":...} to keep the
-# turn going with the reason fed back to the model.
+# turn going with the reason fed back to the model. On green it returns
+# {"systemMessage":...} naming the checks that ran, so the transcript records
+# that the gate fired (silence would be indistinguishable from a skip).
 
 set -uo pipefail
 
@@ -58,6 +60,8 @@ fi
 block() { hone_stop_block "hone gate: $*"; exit 0; }
 
 # Run an adapter, capturing a short tail of its output for the block reason.
+# On success, append the label to the green receipt.
+ran=""
 run_step() {
     local label="$1"; shift
     local out rc
@@ -68,10 +72,14 @@ run_step() {
         tail=$(printf '%s\n' "$out" | tail -n 15)
         block "$label failed (exit $rc). Fix it before finishing — do not disable the gate. Output tail:"$'\n'"${tail}"
     fi
+    ran+="${ran:+, }$label"
 }
 
 run_step "tests ($TIER)" bash "$ADAPTER" "$TIER"
 [ -f "scripts/typecheck.sh" ] && run_step "type-check" bash "scripts/typecheck.sh"
 [ -f "scripts/lint.sh" ] && run_step "lint" bash "scripts/lint.sh"
 
+# Green receipt: one visible line saying what actually ran, so a transcript can
+# confirm the gate fired rather than inferring it from silence.
+printf '{"systemMessage":"hone gate: green (%s)"}\n' "$(hone_json_escape "$ran")"
 exit 0
