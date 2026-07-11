@@ -36,11 +36,22 @@ against it.
 - **Collision with an open change.** Given the other open Plans/worktrees in the
   brief, would this change fight one of them on the same `src/` files, type,
   Decision, or Note? If so it is not independent; say which change and which seam.
+- **Contract churn.** Does the Plan touch a **persistent contract** — a DB
+  schema or migration, a public API, a wire or file format? If so, is the
+  value-space it admits complete, or will a foreseeable follow-up rewrite the
+  same contract ("expose three of the SDK's five levels" begs the question;
+  in SQLite every constraint change is a full table rewrite)? And do any of the
+  *other* open Plans touch the same contract? Adjacent Plans on one contract
+  are not independent even without a file collision: they should merge, or be
+  sequenced with the contract settled entirely in the first. Flag narrowness
+  only when the wider space is already knowable — don't demand speculative
+  generality.
 
 ## Output
 
 Return structured findings, most-severe first. For each: a category
-(`placeholder` | `contradiction` | `ambiguity` | `scope` | `collision`), the
+(`placeholder` | `contradiction` | `ambiguity` | `scope` | `collision` |
+`contract-churn`), the
 specific location in the Plan, why it blocks an unattended run, and the concrete
 question or split the human must resolve. End with a one-line verdict:
 `ADMIT` or `REJECT`.
