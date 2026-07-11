@@ -79,6 +79,12 @@ order, so work with it:
 A bug fix is the same loop: the first red test *reproduces the defect*, then you
 fix the root cause. Never fix first and add a confirming test after.
 
+An **unrelated defect discovered en route** (broken tooling, a latent bug the
+Plan never mentioned) does not ride inside the change's commit. Fix it with its
+own red-green cycle and its **own commit on the branch**, honestly typed — or,
+if it is substantial, stop and escalate for its own Plan. The landing commit's
+body still notes the discovery; the fix just doesn't hide in an unrelated diff.
+
 Where the Plan names a critical path, prefer a **property test** for any
 universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
 
@@ -121,7 +127,9 @@ type, it already became one at build):
 - a resolved empirical bet → **close** its `docs/open-questions.md` entry;
 - redundant tests the change revealed → **prune** them (deduplication is a real
   output of this step, not an afterthought).
-- **delete `.plans/<change>.md`.** The Plan has done its job.
+- **delete `.plans/<change>.md`.** The Plan has done its job. A nested slug
+  leaves empty parent dirs behind — remove those too
+  (`rmdir -p .plans/<area> 2>/dev/null`).
 
 Then submit the change to the `consolidate-critic` agent (Task tool,
 `subagent_type: consolidate-critic`) with a constructed brief: the diff, the
@@ -159,11 +167,20 @@ Commit in the worktree, then merge into the primary tree and verify there:
 
 1. In `$WT`: `git add -A && git commit` with a Conventional Commits message. The
    Decision(s) this change governs land in **this same commit** as the code.
+   The **type follows the dominant durable artifact**: a change that alters the
+   behaviour of `deploy/` or `scripts/` is never `docs:`, whatever prose rode
+   along. The body carries a **`Cut:` line** naming what consolidate removed
+   (pruned tests, dead code, deleted doc lines) — or `Cut: nothing`, with the
+   reason, when there genuinely was nothing; the nag flags a zero-deletion
+   change, and this line is its answer.
 2. From the primary tree, merge the branch (`git merge --no-ff hone/<change>`).
 3. **Re-run the whole suite in the primary tree**: `scripts/run-tests.sh --all`.
    Green confirms the merge; this is the confirmation, not the merge succeeding.
 4. Remove the worktree:
    `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" remove "$WT"`.
+   That also deletes the merged `hone/<change>` branch and sweeps empty parent
+   dirs; confirm the branch is gone (`git branch --list 'hone/<change>'` prints
+   nothing) — a surviving branch means the merge didn't take.
 
 Confirm to the user: what landed, the Decisions/Notes written, what was deleted
 (the Plan, and any pruned tests; every cycle removes something).
