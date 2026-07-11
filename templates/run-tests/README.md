@@ -23,3 +23,9 @@ The gate also runs `scripts/typecheck.sh` and `scripts/lint.sh` *if they exist*
 `typecheck.sh` running `tsc --noEmit` or `mypy`/`pyright`, and a `lint.sh`
 running `eslint` or `ruff`. There is no template: they are one line each and
 project-specific.
+
+`typecheck.sh` must cover **everything the repo compiles** — `src/`, `tests/`,
+`scripts/`, tooling — not just production code. A tsconfig whose `include`
+stops at `src/` makes the gate's green overstate what was checked: type errors
+hide in exactly the code no test exercises (dev servers, deploy tooling) and
+surface as broken tooling long after they landed.

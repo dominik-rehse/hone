@@ -76,11 +76,13 @@ flowchart TD
 
 *Enforcement — config, not docs:*
 
-- *guard*: no production code without a failing test; no source edits in the
-  primary tree.
+- *guard*: no production code without a failing test; no durable edits
+  (`src/`, `tests/`, `docs/`, `db/`, plus `.hone-durable-paths` extensions) in
+  the primary tree.
 - *gate*: tests green, plus type-check and lint where the language has them
   (one adapter script keeps the hook language-agnostic).
-- *nag*: leftover Plan, oversized Note, orphan Note.
+- *nag*: leftover Plan, oversized Note, orphan Note, a merged `hone/*` branch
+  land forgot to delete, a change about to land that deletes nothing.
 
 ## The loop
 
