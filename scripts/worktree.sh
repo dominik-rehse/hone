@@ -18,7 +18,11 @@
 #       Provenance-guarded cleanup. Removes the worktree ONLY if hone created it
 #       (path under the main tree's .worktrees/); anything elsewhere is left for
 #       its owner. Prunes stale registrations after; refuses to remove the tree
-#       you are standing in. Exit: 0 removed · 2 usage/not-a-repo/failed/self ·
+#       you are standing in. Then finishes the land's hygiene: deletes the
+#       worktree's hone/* branch iff it is fully merged (`git branch -d`; an
+#       unmerged branch is evidence and stays, with a note), and removes
+#       now-empty parent dirs under .worktrees/ that a nested slug leaves
+#       behind. Exit: 0 removed · 2 usage/not-a-repo/failed/self ·
 #       3 left in place (not hone's to remove).
 #
 # Runs relative to the project root (git toplevel, else CLAUDE_PROJECT_DIR, else
@@ -93,8 +97,33 @@ cmd_remove() {
     esac
     [ "$here" = "$wt" ] && { echo "hone worktree: refusing to remove the worktree you are in ($wt); run land from the primary tree." >&2; return 2; }
 
+    # Capture the branch this worktree has checked out BEFORE removing it.
+    local branch
+    branch=$(git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null)
+
     git worktree remove "$wt" || { echo "hone worktree: 'git worktree remove $wt' failed (uncommitted changes, or run from inside it?)." >&2; return 2; }
     git worktree prune
+
+    # Land hygiene 1: a landed change's branch goes with its worktree. `-d`
+    # (not -D) so an unmerged branch — abandoned or unlanded work — survives as
+    # evidence rather than being destroyed.
+    case "$branch" in
+        hone/*)
+            if ! git branch -d "$branch" >/dev/null 2>&1; then
+                echo "hone worktree: kept branch $branch (not fully merged — evidence of unlanded work; delete with 'git branch -D $branch' only if abandoning it)." >&2
+            fi
+            ;;
+    esac
+
+    # Land hygiene 2: a nested slug (auth/refresh-token) leaves empty parent
+    # dirs under .worktrees/ after removal; sweep them up to (not including)
+    # .worktrees itself.
+    local parent
+    parent=$(dirname "$wt")
+    while [ "$parent" != "$main_root/.worktrees" ] && [ "$parent" != "$main_root" ] && [ "$parent" != "/" ]; do
+        rmdir "$parent" 2>/dev/null || break
+        parent=$(dirname "$parent")
+    done
 }
 
 main() {
