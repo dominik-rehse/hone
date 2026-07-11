@@ -158,6 +158,71 @@ out=$(cd "$REPO" && bash "$WSH" landable) && echo "$out" | grep -q "feature-x" &
 out=$(cd "$REPO" && bash "$WSH" remove "/tmp/not-ours" 2>&1); [ $? -eq 3 ] || echo "$out" | grep -q "did not create it" && ok "remove refuses foreign path (exit 3)" || bad "remove should refuse foreign path"
 
 echo
+echo "== guard: durable perimeter (db/ default, .hone-durable-paths) =="
+# db/ is durable by default → denied in the primary tree.
+out=$(guard_write "db/migrations/0001_init.sql" "$REPO")
+denied "$out" && ok "db/ denied in primary tree" || bad "db/ should be durable by default"
+# ...but writable in a worktree (rule 1 is primary-tree-only; rule 2 is src/-only).
+out=$(guard_write "db/migrations/0001_init.sql" "$WT")
+denied "$out" && bad "db/ should be writable in a worktree" || ok "db/ writable in a worktree"
+# .hone-durable-paths EXTENDS the perimeter: a dir prefix and an exact file.
+printf '# project perimeter\ndeploy/\ntsconfig.json\n' > "$REPO/.hone-durable-paths"
+out=$(guard_write "deploy/systemd/app.service" "$REPO")
+denied "$out" && ok "configured dir (deploy/) denied in primary tree" || bad "deploy/ should be denied via .hone-durable-paths"
+out=$(guard_write "tsconfig.json" "$REPO")
+denied "$out" && ok "configured file (tsconfig.json) denied in primary tree" || bad "tsconfig.json should be denied via .hone-durable-paths"
+out=$(guard_write "tsconfig.json.bak" "$REPO")
+denied "$out" && bad "tsconfig.json.bak should not match the tsconfig.json entry" || ok "prefix does not overmatch (tsconfig.json.bak allowed)"
+out=$(guard_write "package.json" "$REPO")
+denied "$out" && bad "unlisted root file should stay allowed" || ok "unlisted root file still allowed"
+rm -f "$REPO/.hone-durable-paths"
+out=$(guard_write "deploy/systemd/app.service" "$REPO")
+denied "$out" && bad "deploy/ should be allowed without .hone-durable-paths" || ok "perimeter shrinks back when the file is removed"
+
+echo
+echo "== nag: zero-deletion change (advisory, pre-land) =="
+# The auth-login worktree: commit everything so the tree is clean on hone/auth-login,
+# with a purely additive diff vs the primary branch.
+(cd "$WT" && echo "new behaviour" > added.txt && git add -A && git commit -qm "feat: additive only")
+out=$(cd "$WT" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "deletes nothing" && ok "purely additive pre-land change flagged" || bad "should flag a zero-deletion change on a clean hone/* branch"
+# Advisory even under .hone-nag-enforce: it rides along but never blocks alone.
+touch "$WT/.hone-nag-enforce"
+out=$(cd "$WT" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q '"decision":"block"' && bad "advisory-only finding should not block under enforce" || ok "zero-deletion finding stays advisory under enforce"
+rm -f "$WT/.hone-nag-enforce"
+# A change that deletes something is not flagged.
+(cd "$WT" && sed -i '1d' README.md && git add -A && git commit -qm "chore: cut a line")
+out=$(cd "$WT" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "deletes nothing" && bad "change with deletions should not be flagged" || ok "change with deletions passes"
+
+echo
+echo "== nag: merged hone/* branch left behind =="
+git -C "$REPO" branch hone/landed-ghost HEAD
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "hone/landed-ghost is fully merged and has no worktree" && ok "leftover merged branch flagged" || bad "should flag a merged hone/* branch with no worktree"
+git -C "$REPO" branch -d hone/landed-ghost >/dev/null 2>&1
+# A branch attached to a live worktree (hone/auth-login) is active work — check
+# it was NOT flagged in the run above.
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "hone/auth-login is fully merged" && bad "branch with live worktree should not be flagged" || ok "branch with live worktree not flagged"
+
+echo
+echo "== worktree.sh remove: branch and empty-dir hygiene =="
+# The earlier remove of feature-x (unmerged, ahead) must have KEPT its branch.
+git -C "$REPO" show-ref --verify --quiet refs/heads/hone/feature-x && ok "unmerged branch survives remove (evidence)" || bad "unmerged branch should survive remove"
+git -C "$REPO" branch -D hone/feature-x >/dev/null 2>&1
+# A merged change: nested slug, commit, merge, remove → branch deleted, empty
+# parent dir swept.
+WT2=$(cd "$REPO" && bash "$WSH" add area2/nested-change) || bad "nested worktree add failed"
+(cd "$WT2" && echo data > cut-me.txt && git add -A && git commit -qm "feat: nested change")
+(cd "$REPO" && git merge --no-ff -q hone/area2/nested-change -m "merge: nested-change")
+(cd "$REPO" && bash "$WSH" remove "$WT2" >/dev/null 2>&1) || bad "nested worktree remove failed"
+git -C "$REPO" show-ref --verify --quiet refs/heads/hone/area2/nested-change && bad "merged branch should be deleted at remove" || ok "merged branch deleted at remove"
+[ -d "$REPO/.worktrees/area2" ] && bad "empty parent dir should be swept" || ok "empty nested parent dir swept"
+[ -d "$REPO/.worktrees" ] && ok ".worktrees/ itself is kept" || bad ".worktrees/ itself should be kept"
+
+echo
 echo "-------------------------------------"
 printf 'PASS: %d   FAIL: %d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

@@ -79,6 +79,7 @@ step "merged and suite green in the primary tree"
 echo "== 6. remove the worktree =="
 bash "$WSH" remove "$WT" || die "worktree remove"
 [ -d "$WT" ] && die "worktree still present" || step "worktree removed"
+git show-ref --verify --quiet refs/heads/hone/mathx-add && die "merged branch should be deleted with its worktree" || step "merged branch hone/mathx-add deleted"
 
 echo
 echo "e2e land path: PASS"
