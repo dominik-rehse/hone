@@ -45,7 +45,7 @@ fi
 
 # 2. Gitignore the ephemeral artifacts.
 touch .gitignore
-for entry in ".plans/" ".worktrees/" ".hone-off" ".hone-test-globs" ".hone-gate-enforce" ".hone-nag-enforce"; do
+for entry in ".plans/" ".worktrees/" ".hone-off" ".hone-test-globs" ".hone-durable-paths" ".hone-gate-enforce" ".hone-nag-enforce"; do
     grep -qxF "$entry" .gitignore || printf '%s\n' "$entry" >> .gitignore
 done
 echo "hone setup: ensured ephemeral artifacts are gitignored."

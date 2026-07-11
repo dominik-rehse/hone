@@ -3,9 +3,10 @@
 # the hone model, in this order:
 #
 #   1. The primary tree is a merge target, never a workspace. A Write/Edit to a
-#      durable committed artifact (src/, tests/, docs/) in the PRIMARY git tree
-#      is denied — that work belongs in a worktree, landed by a merge. The
-#      ephemeral hand-written Plan (.plans/) and local config are exempt.
+#      durable committed artifact (src/, tests/, docs/, db/, plus any paths the
+#      project lists in .hone-durable-paths) in the PRIMARY git tree is denied —
+#      that work belongs in a worktree, landed by a merge. The ephemeral
+#      hand-written Plan (.plans/) and local config are exempt.
 #
 #   2. No production code without a failing test. Creating a NEW non-test file
 #      under src/ is denied unless a test file for it already exists. Test files
@@ -74,12 +75,27 @@ case "$TARGET_PATH" in
     *) exit 0 ;;  # outside the project — not ours to guard
 esac
 
-# A durable committed artifact is anything under src/, tests/, or docs/.
+# A durable committed artifact is anything under src/, tests/, docs/, or db/
+# (schema and migrations are as durable as code), plus any project-specific
+# paths listed in .hone-durable-paths (one per line, # comments allowed):
+# a directory prefix (`deploy/`) or an exact file (`tsconfig.json`). Unlike
+# .hone-test-globs, the file EXTENDS the defaults — the built-in perimeter
+# can grow, never shrink.
 is_durable() {
     case "$1" in
-        src/*|tests/*|docs/*) return 0 ;;
-        *) return 1 ;;
+        src/*|tests/*|docs/*|db/*) return 0 ;;
     esac
+    [ -f ".hone-durable-paths" ] || return 1
+    local entry
+    while IFS= read -r entry; do
+        entry=$(printf '%s' "$entry" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+        case "$entry" in ''|'#'*) continue ;; esac
+        entry="${entry%/}"
+        case "$1" in
+            "$entry"|"$entry"/*) return 0 ;;
+        esac
+    done < ".hone-durable-paths"
+    return 1
 }
 
 # Rule 1: no direct edits to durable artifacts in the primary tree.
