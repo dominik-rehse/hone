@@ -5,8 +5,9 @@ description: "hone: a human writes a short Plan; an automated worktree-native lo
 # hone workflow
 
 Every change runs `plan → run`. A human authors `.plans/<change>.md` (the one
-hand-written artifact; use `/hone:plan`). Then `/hone:run` executes it unattended
-in a git worktree: admission → build (test-first) → verify → consolidate →
+hand-written artifact; use `/hone:plan`, which ends with `plan-critic`
+admission while the human is present). Then `/hone:run` executes it unattended
+in a git worktree: build (test-first) → verify → consolidate →
 `/code-review` → land (merge to the primary tree, re-run the suite, remove the
 worktree). It proceeds without checking in and stops only when blocked with no
 resolution, genuinely ambiguous, or done. On a stop it leaves the worktree as

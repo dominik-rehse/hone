@@ -124,7 +124,7 @@ flowchart TD
     cmdPlan(["First you type /hone:plan,<br/>giving it a sketch of the change"])
     planFile[/"Together you write the Plan.<br/>.plans/&lt;change&gt;.md:<br/>1 · what to build<br/>2 · why<br/>3 · how you'll know it works"/]
     cmdRun(["Then you type /hone:run.<br/>From here, hone works alone"])
-    admit{"plan-critic asks:<br/>is the Plan clear, scoped,<br/>and free of collisions?<br/>(runs once)"}
+    admit{"plan-critic asks:<br/>is the Plan clear, scoped,<br/>and free of collisions?<br/>(runs once, still inside /hone:plan)"}
     wt["A fresh worktree is spawned:<br/>an isolated copy of the repo<br/>where all the work happens"]
     build["Build: run a red-green cycle,<br/>once per behaviour<br/>(the cycle is shown below)"]
     verify["Verify: run every check<br/>(tests, types, lint,<br/>hygiene, mutation)"]
@@ -136,10 +136,10 @@ flowchart TD
     stop["Stop: halt where it is, keeping<br/>the worktree as evidence"]
 
     cmdPlan --> planFile
-    planFile --> cmdRun
-    cmdRun --> admit
-    admit -->|"The Plan is sound"| wt
-    admit -.->|"The Plan needs work"| esc
+    planFile --> admit
+    admit -->|"The Plan is sound:<br/>hand-off"| cmdRun
+    admit -.->|"The Plan needs work:<br/>you revise it together<br/>and resubmit"| planFile
+    cmdRun --> wt
     wt --> build
     build --> verify
     verify -->|"All checks pass"| cons
@@ -201,10 +201,12 @@ flowchart TD
 
 - *plan* (`/hone:plan`): author `.plans/<change>.md`. The only manual step. Size
   a change to the smallest unit worth its own review gate: split only where a
-  reviewer could reject one part while approving its neighbor.
-- *run* (`/hone:run`): per Plan: *admission* first (`plan-critic` checks placeholders,
-  contradictions, ambiguity, scope, and collision with an open change; a
-  rejection escalates before any worktree is spawned), then in a fresh worktree:
+  reviewer could reject one part while approving its neighbor. It ends with
+  *admission*: `plan-critic` checks placeholders, contradictions, ambiguity,
+  scope, and collision with an open change, and a rejection is revised with the
+  human on the spot — the one moment they are guaranteed present — so no flawed
+  Plan is handed off.
+- *run* (`/hone:run`): per Plan, in a fresh worktree:
   - *build*: red-green: type, failing test, then code; `guard` enforces the
     order.
   - *verify*: `gate` and `nag`, plus a mutation check on critical paths.
@@ -219,16 +221,17 @@ Every step's completion is confirmed by its artifacts (the diff, the gate
 output), never by a subagent's report that it finished. A failed check is not a
 stop, and only the `build`⇄`verify` cycle loops: a red gate or a surviving mutant
 sends the agent back to `build` for another red-green cycle, as many times as it
-takes to go green. The model checks each run *once*: `plan-critic`,
-`consolidate-critic`, and the expensive `/code-review`; their findings are
+takes to go green. The model checks each change *once* per slot: `plan-critic`
+(at `/hone:plan`), `consolidate-critic`, and the expensive `/code-review`; their findings are
 applied or auto-fixed in place, and a review fix is a red-green cycle re-gated by
 `verify`, never a second review. A confirmed finding may be declined only when
 it contradicts the Plan's explicit stance or falls outside the change, and the
 decline is recorded durably (the landing commit's body, or an open question for
 a deferred defect), never left in the conversation alone. The agent self-corrects in the worktree and
-escalates only at the three stop-points on the diagram: admission rejects the
-Plan, verify can't go green once the fix is exhausted, or review finds the change
-genuinely ambiguous. On a stop it leaves the worktree in place as evidence; the
+escalates only at the two stop-points on the diagram: verify can't go green once
+the fix is exhausted, or review finds the change genuinely ambiguous. (A flawed
+Plan never reaches `run`: admission rejects it inside `/hone:plan`, where the
+human is present to revise it.) On a stop it leaves the worktree in place as evidence; the
 human revises the Plan and re-runs (or abandons the change), never disabling a
 gate to proceed. The Plan is the sole re-entry point: the human does not hand-fix
 code mid-loop.
@@ -266,7 +269,8 @@ prompted to *refute and argue for deletion* rather than approve, and runs *once*
 returning structured findings.
 
 - `plan-critic`: placeholders, contradictions, ambiguity, scope; belongs in an
-  existing area?
+  existing area? Runs inside `/hone:plan`, so a rejection is revised with the
+  human present rather than escalated mid-run.
 - `consolidate-critic`: Decision restating code? Note drifting into a spec?
   redundant test? abstraction earning its keep?
 - `/code-review`: Claude Code's native command for correctness plus what to
@@ -329,18 +333,26 @@ abstraction:
 ## Many changes at once
 
 Parallelism is `run` over several Plans, each in its own worktree, landed one
-at a time, not a special mode. Two rules:
+at a time, not a special mode. Three rules:
 
 - *Within a change the loop is serial.* Each red-green cycle learns from the
   last; the unit of parallelism is the change, never the cycles inside it.
-- *Independence is verified at the merge, not assumed.* The human judged the
-  Plans independent; a merge collision on a shared type or Note disproves it.
-  That seam becomes one serial change and a Decision-level reconsideration. After
-  all merges, a *global consolidate pass* catches cross-change duplication no
-  single worktree could see.
+- *Independence is checked before fan-out, never assumed.* Each `plan-critic`
+  ran at plan time, before later Plans existed, so `run` compares the complete
+  set first — expected files and areas, shared types and persistent contracts,
+  Decisions and Notes more than one Plan would touch — and partitions:
+  disjoint Plans fan out in parallel; overlapping Plans run sequentially, each
+  landing before the next starts, so the later change builds on the landed
+  result.
+- *Independence is verified at the merge.* A merge collision on a shared type
+  or Note means the upfront check missed a seam: that seam becomes one serial
+  change and a Decision-level reconsideration. After all merges, a *global
+  consolidate pass* catches cross-change duplication no single worktree could
+  see.
 
-`/hone:run --all` fans a worktree agent out per Plan and lands them through the
-same conservative merge-and-verify stage.
+`/hone:run --all` fans a worktree agent out per independent Plan, sequences the
+overlapping ones, and lands them all through the same conservative
+merge-and-verify stage.
 
 ## Filetree
 

@@ -1,6 +1,6 @@
 ---
 name: plan
-description: "Author the ephemeral Plan for one change: .plans/<change>.md, the only hand-written artifact. Guides sizing a change to the smallest unit worth its own review gate, and states what, why, and how you'll know it works. Does not write code, tests, or docs. Invoke with /hone:plan <change-name-or-sketch>."
+description: "Author the ephemeral Plan for one change: .plans/<change>.md, the only hand-written artifact. Guides sizing a change to the smallest unit worth its own review gate, states what, why, and how you'll know it works, then submits it to the plan-critic for admission while the human is still present to revise. Does not write code, tests, or docs. Invoke with /hone:plan <change-name-or-sketch>."
 argument-hint: "[change-name-or-sketch]"
 disable-model-invocation: true
 ---
@@ -37,10 +37,12 @@ review can't hold it; too small and you multiply merge overhead on shared files.
 
 - If the sketch is really several independent changes, say so and propose the
   split: one Plan each, each landable alone. Independent means disjoint `src/`
-  files (they can run in parallel worktrees; the merge verifies it).
+  files (they can run in parallel worktrees; `run` re-checks independence
+  before fanning out, and the merge verifies it).
 - If it's one indivisible change spanning several files, that's one Plan.
 
-Decide this now; the `plan-critic` will challenge a Plan whose scope is wrong.
+Decide this now; the `plan-critic` (step 5) will challenge a Plan whose scope is
+wrong.
 
 ### 3. Surface empirical bets as open questions
 
@@ -75,18 +77,33 @@ error that stops reproducing. Concrete and checkable, not "it works".>
 ```
 
 Omit any section that would only restate another. No placeholders, no `TBD`: the
-`plan-critic` rejects them and a rejection escalates before any worktree spawns.
+`plan-critic` rejects them at admission, next.
 
-### 5. Confirm — the hand-off
+### 5. Admit — `plan-critic`
+
+Submit the finished Plan to the `plan-critic` agent (Task tool,
+`subagent_type: plan-critic`). Give it a **constructed brief**: the Plan text,
+the list of open changes (other `.plans/**/*.md` — slugs nest — and existing
+`hone/*` worktrees), and the relevant existing Decisions/Notes, never your own
+transcript. It returns structured findings and an `ADMIT`/`REJECT` verdict.
+
+**If it rejects** (placeholder, contradiction, ambiguity, wrong scope, collision
+with an open change, or contract churn): this is the moment to fix it — the
+human is still here. Present the findings, revise the Plan with the human (they
+own it), and resubmit the revised Plan. Never hand off a rejected Plan:
+`/hone:run` executes unattended and trusts that admission happened here.
+
+### 6. Confirm — the hand-off
 
 Close with an explicit hand-off. The Plan file is easy to lose track of: it
 lives in a hidden dot-directory, it is gitignored (so `git status` won't list
 it), and the slug you derived may differ from the name the user typed. State
 all of that plainly:
 
-> Plan written to `.plans/<slug>.md` — on disk in your checkout, on your current
-> branch. It won't show in `git status` (`.plans/` is gitignored by design; the
-> Plan is ephemeral and consolidate deletes it).
+> Plan written to `.plans/<slug>.md` and admitted by the `plan-critic` — on disk
+> in your checkout, on your current branch. It won't show in `git status`
+> (`.plans/` is gitignored by design; the Plan is ephemeral and consolidate
+> deletes it).
 > [I named it `<slug>` rather than `<what-you-typed>` to mirror `src/`.]
 > [Open question added to `docs/open-questions.md`.]
 > Run `/hone:run <slug>` to build, verify, consolidate, review, and land it, or

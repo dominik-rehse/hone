@@ -1,6 +1,6 @@
 ---
 name: run
-description: "Execute one or more Plans unattended through the hone loop: admission, worktree, build (test-first), verify, consolidate, /code-review, land. Confirms each step by its artifacts, never a subagent's report; proceeds without checking in and stops only when blocked-unresolvable, genuinely ambiguous, or done, leaving the worktree as evidence. Invoke with /hone:run [change | --all]."
+description: "Execute one or more Plans unattended through the hone loop: worktree, build (test-first), verify, consolidate, /code-review, land. Confirms each step by its artifacts, never a subagent's report; proceeds without checking in and stops only when blocked-unresolvable, genuinely ambiguous, or done, leaving the worktree as evidence. Invoke with /hone:run [change | --all]."
 argument-hint: "[change-name | --all]"
 disable-model-invocation: true
 ---
@@ -28,25 +28,15 @@ gate can't verify anything.
 ## The loop, per Plan
 
 Run these steps in order. **Do not skip a step, and do not proceed past a step
-whose artifact does not confirm it.** The three points at which you stop and
-escalate are marked; on any of them, leave the worktree in place as evidence and
-report. Never disable a gate to get past it.
+whose artifact does not confirm it.** The two points at which you stop and
+escalate are marked; on either of them, leave the worktree in place as evidence
+and report. Never disable a gate to get past it.
 
-### 1. Admission — `plan-critic`
+Admission already happened: the `plan-critic` admitted the Plan at `/hone:plan`,
+with the human present to revise a rejection. Do not re-run it here; spawn the
+worktree and build.
 
-Before spawning anything, submit the Plan to the `plan-critic` agent (Task tool,
-`subagent_type: plan-critic`). Give it a **constructed brief**: the Plan text,
-the list of open changes (other `.plans/**/*.md` — slugs nest — and existing
-`hone/*` worktrees),
-and the relevant existing Decisions/Notes, never your own transcript. It returns
-structured findings.
-
-**If it rejects** (placeholder, contradiction, ambiguity, wrong scope, or
-collision with an open change): **stop and escalate** to the human with the
-findings. Do not spawn a worktree, do not "fix" the Plan yourself; the human owns
-the Plan. This is stop-point 1.
-
-### 2. Worktree
+### 1. Worktree
 
 Spawn an isolated worktree and work in it for every step below:
 
@@ -58,7 +48,7 @@ That creates `.worktrees/<change>` on branch `hone/<change>` and prints its path
 `cd "$WT"`. All build/verify/consolidate work happens here; the primary tree is a
 merge target and the `guard` will block durable edits made in it.
 
-### 3. Build — red → green, serial
+### 2. Build — red → green, serial
 
 Implement the Plan test-first, one behaviour at a time. The `guard` enforces the
 order, so work with it:
@@ -88,7 +78,7 @@ body still notes the discovery; the fix just doesn't hide in an unrelated diff.
 Where the Plan names a critical path, prefer a **property test** for any
 universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
 
-### 4. Verify
+### 3. Verify
 
 - **gate**: run `scripts/run-tests.sh --all` and, if present,
   `scripts/typecheck.sh` and `scripts/lint.sh`. All must be green. (The Stop-hook
@@ -111,9 +101,9 @@ critical path named in the Plan"). An unstated skip is indistinguishable from a
 forgotten check, and this receipt is what a later audit of the transcript reads.
 
 If verify cannot go green and you have exhausted the fix, **stop and escalate**
-(stop-point 2), leaving the worktree as evidence.
+(stop-point 1), leaving the worktree as evidence.
 
-### 5. Consolidate — route residue, prune, delete the Plan
+### 4. Consolidate — route residue, prune, delete the Plan
 
 This is the only step that writes `docs/` and the only step that prunes tests.
 Route each piece of durable residue to where it can't rot, applying the **cut
@@ -138,7 +128,7 @@ for deletion: a Decision restating code, a Note drifting into a spec, a
 redundant test, an abstraction not earning its keep. Apply its accepted findings
 (more pruning), or record why not.
 
-### 6. Review — native `/code-review`
+### 5. Review — native `/code-review`
 
 Run Claude Code's `/code-review` on the finished change (the worktree diff)
 **once** — it is multi-agent (parallel finders plus a verification pass) and the
@@ -159,9 +149,9 @@ Triage its findings against the Plan:
   the conversation is lost to the next cycle.
 
 If the review surfaces something that makes the change genuinely ambiguous or
-wrong to land, **stop and escalate** (stop-point 3).
+wrong to land, **stop and escalate** (stop-point 2).
 
-### 7. Land
+### 6. Land
 
 Commit in the worktree, then merge into the primary tree and verify there:
 
@@ -187,14 +177,33 @@ Confirm to the user: what landed, the Decisions/Notes written, what was deleted
 
 ## `--all` — many changes at once
 
-Parallelism is `run` over several Plans, not a special mode. For each ready Plan,
-run steps 1–6 in its own worktree (these are independent and may proceed
-concurrently). Then **land them one at a time** through step 7:
+Parallelism is `run` over several Plans, not a special mode — and it is never
+assumed. **Check independence first, before spawning any worktree.** Each
+`plan-critic` ran at plan time, before later Plans existed; this is the first
+moment the whole set is visible, so the cross-check is yours.
 
-- Independence was the human's judgement; the **merge verifies it**. A merge
-  collision on a shared type, Decision, or Note *disproves* independence: fold
-  that seam into one serial change and flag it for a Decision-level look. Do not
-  force the merge.
+Read every ready Plan and compare them pairwise: the files and areas each
+expects to change (its *Notes for the loop*, its *What*, a quick look at
+`src/`), any shared type or persistent contract (a DB schema, a public API, a
+wire or file format), and any Decision or Note more than one would touch. Then
+partition:
+
+- **Disjoint Plans** run in parallel: steps 1–5 each in its own worktree,
+  concurrently.
+- **Overlapping Plans** run sequentially: order them (foundation first — the
+  Plan the others build on), and run each fully through step 6 before starting
+  the next, so the later change builds on the landed result instead of fighting
+  it at the merge. Sequencing is your call; it needs no escalation.
+
+State the partition and its reason before starting ("`a` and `b` are disjoint —
+parallel; `c` touches the same schema as `a` — after `a` lands").
+
+Then **land them one at a time** through step 6:
+
+- The upfront check is a judgment; the **merge verifies it**. A merge collision
+  on a shared type, Decision, or Note means the check missed a seam: fold it
+  into one serial change and flag it for a Decision-level look. Do not force
+  the merge.
 - After all merges, run one **global consolidate pass** (a `consolidate-critic`
   over the combined result) to catch cross-change duplication no single worktree
   could see.

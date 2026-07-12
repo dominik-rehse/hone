@@ -44,8 +44,9 @@ does nothing.
 - `/hone:plan <change>`: author `.plans/<change>.md`, the one hand-written
   artifact (what, why, how you'll know it works).
 - `/hone:run <change>`: execute that Plan through the loop and land it green.
-  `/hone:run --all` runs every ready Plan, each in its own worktree, landed one at
-  a time.
+  `/hone:run --all` runs every ready Plan, landed one at a time — after checking
+  the set for independence: disjoint Plans run in parallel worktrees, overlapping
+  ones sequentially.
 
 Everything after the Plan is automatic. `run` proceeds unattended and stops only
 when blocked with no resolution, genuinely ambiguous, or done. On a stop it leaves
@@ -65,7 +66,8 @@ Three hooks run the laws, from `hooks/`:
   matching `src/` area, a merged `hone/*` branch land forgot to delete, or a
   change about to land that deletes nothing.
 
-Two refute-first critics fill the judgment slots: `plan-critic` (admission) and
+Two refute-first critics fill the judgment slots: `plan-critic` (admission, at
+the end of `/hone:plan`, with the human present to revise a rejection) and
 `consolidate-critic` (residue). Review reuses Claude Code's native `/code-review`.
 
 ## Off-switch and markers
