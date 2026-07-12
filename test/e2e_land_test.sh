@@ -81,5 +81,19 @@ bash "$WSH" remove "$WT" || die "worktree remove"
 [ -d "$WT" ] && die "worktree still present" || step "worktree removed"
 git show-ref --verify --quiet refs/heads/hone/mathx-add && die "merged branch should be deleted with its worktree" || step "merged branch hone/mathx-add deleted"
 
+echo "== 7. add from inside a sibling worktree: anchors to the main tree =="
+# An orchestrator's cwd drifts into change A's worktree before starting change B.
+# `add B` must land at <main_root>/.worktrees/B (not nested under A) and branch
+# off the primary HEAD (not A's unlanded commit).
+WT_A=$(bash "$WSH" add sib-a) || die "worktree add sib-a"
+( cd "$WT_A" && git commit -q --allow-empty -m "wip: A only, unlanded" ) || die "commit in A"
+WT_B=$(cd "$WT_A" && bash "$WSH" add sib-b) || die "worktree add sib-b from inside A"
+[ "$WT_B" = "$REPO/.worktrees/sib-b" ] || die "sib-b nested/misplaced: $WT_B"
+step "sib-b at main tree, not nested under A"
+base=$(git merge-base main hone/sib-b)
+[ "$base" = "$(git rev-parse main)" ] || die "sib-b based off A's HEAD, not primary"
+step "sib-b branched off the primary, not A's unlanded HEAD"
+bash "$WSH" remove "$WT_B" >/dev/null 2>&1; bash "$WSH" remove "$WT_A" >/dev/null 2>&1
+
 echo
 echo "e2e land path: PASS"

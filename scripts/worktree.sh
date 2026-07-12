@@ -35,7 +35,15 @@ cmd_add() {
     [ -n "$change" ] || { echo "hone worktree: add needs a change name." >&2; return 2; }
     git rev-parse --git-dir >/dev/null 2>&1 || { echo "hone worktree: not a git repository." >&2; return 2; }
 
-    local path="$PWD/.worktrees/$change"
+    # Anchor to the MAIN tree, not cwd: an orchestrator's shell cwd may sit inside
+    # a sibling change's linked worktree, which would otherwise nest the new
+    # worktree under it and branch off that sibling's unlanded HEAD. `git -C
+    # "$main_root" … HEAD` resolves both the path and the base in the primary
+    # checkout. Same provenance anchor cmd_remove uses.
+    local main_root
+    main_root=$(git -C "$(git rev-parse --git-common-dir 2>/dev/null)/.." rev-parse --show-toplevel 2>/dev/null)
+
+    local path="$main_root/.worktrees/$change"
     local branch="hone/$change"
     [ -e "$path" ] && { echo "hone worktree: $path already exists — resume it or remove it first." >&2; return 2; }
     if git show-ref --verify --quiet "refs/heads/$branch"; then
@@ -43,8 +51,8 @@ cmd_add() {
         return 2
     fi
 
-    mkdir -p "$PWD/.worktrees"
-    git worktree add -q -b "$branch" "$path" HEAD || { echo "hone worktree: 'git worktree add' failed." >&2; return 2; }
+    mkdir -p "$main_root/.worktrees"
+    git -C "$main_root" worktree add -q -b "$branch" "$path" HEAD || { echo "hone worktree: 'git worktree add' failed." >&2; return 2; }
     printf '%s\n' "$path"
 }
 
