@@ -68,7 +68,7 @@ Three hooks run the laws, from `hooks/`:
 
 Two refute-first critics fill the judgment slots: `plan-critic` (admission, at
 the end of `/hone:plan`, with the human present to revise a rejection) and
-`consolidate-critic` (residue). Review reuses Claude Code's native `/code-review`.
+`consolidate-critic` (residue). Review reuses Claude Code's built-in `/code-review`.
 
 ## Off-switch and markers
 

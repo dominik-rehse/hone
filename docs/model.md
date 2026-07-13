@@ -213,7 +213,7 @@ flowchart TD
   - *consolidate*: route durable residue (a type, a Decision, a Note, a closed
     question), prune redundant tests, delete the Plan; `consolidate-critic`
     reviews.
-  - *review*: Claude Code's native `/code-review` on the finished change.
+  - *review*: Claude Code's built-in `/code-review` on the finished change.
   - *land*: commit, merge into the primary tree, re-run the whole suite there,
     remove the worktree.
 
@@ -273,9 +273,11 @@ returning structured findings.
   human present rather than escalated mid-run.
 - `consolidate-critic`: Decision restating code? Note drifting into a spec?
   redundant test? abstraction earning its keep?
-- `/code-review`: Claude Code's native command for correctness plus what to
-  delete; already multi-agent (parallel finders + a verification pass), so the
-  loop reuses it rather than shipping its own reviewer.
+- `/code-review`: Claude Code's built-in workflow-backed command for correctness
+  plus what to delete; already multi-agent (parallel finders + a verification
+  pass), so the loop reuses it rather than shipping its own reviewer. The loop
+  invokes it as a skill so it reads the worktree diff; it must not fall through
+  to a marketplace `code-review` plugin, which is GitHub-PR-shaped.
 
 These critics are the only judgment inside the loop; together with the
 mechanical checks they are the whole trust foundation. The human's judgment

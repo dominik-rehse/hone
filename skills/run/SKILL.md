@@ -138,6 +138,14 @@ the Plan text (still in hand — the file is gone) along with the diff, so the
 reviewer can tell a violation of the Plan's stated stance from the stance
 itself.
 
+Invoke it as a skill — call the Skill tool with `code-review` and pass the brief
+as its args. Do **not** locate, read, or execute a command file on disk: hone
+relies on the built-in workflow-backed review that reads the local diff, and a
+disk search can instead surface a marketplace `code-review` plugin that is
+GitHub-PR-shaped (it wants a PR number and `gh pr comment`) and does not fit a
+worktree. Reaching that decoy makes the review balk or hand-roll a substitute
+instead of running the intended one.
+
 Triage its findings against the Plan:
 
 - **Apply** confirmed findings with red-green cycles (never a fix without a
