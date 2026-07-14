@@ -79,6 +79,13 @@ echo "$(bg 'git commit --no-verify -m x')" | grep -q '"deny"' && ok "--no-verify
 echo "$(bg 'touch .hone-off')" | grep -q '"deny"' && ok "touch .hone-off denied" || bad "touch .hone-off should be denied"
 echo "$(bg 'sed -i s/x/y/ scripts/run-tests.sh')" | grep -q '"ask"' && ok "editing run-tests.sh escalated" || bad "editing adapter should ask"
 echo "$(bg 'ls -la')" | grep -q 'permissionDecision' && bad "benign command should pass silently" || ok "benign command passes"
+# A HEAD-move in the primary tree races other sessions → ask; the same op inside
+# a linked worktree is isolated → silent.
+echo "$(bg 'git checkout some-commit')" | grep -q '"ask"' && ok "git checkout in primary tree escalated" || bad "checkout in primary should ask"
+echo "$(bg 'git stash push -- IDEAS.md')" | grep -q '"ask"' && ok "git stash in primary tree escalated" || bad "stash in primary should ask"
+echo "$(bg 'git reset --hard HEAD^')" | grep -q '"ask"' && ok "git reset --hard in primary tree escalated" || bad "hard reset in primary should ask"
+bgwt() { echo "{\"tool_input\":{\"command\":\"$1\"}}" | (cd "$WT" && bash "$BASH_GUARD"); }
+echo "$(bgwt 'git checkout -- src/auth/login.ts')" | grep -q '"ask"' && bad "HEAD-move inside a worktree should not ask" || ok "HEAD-move allowed inside a worktree"
 
 echo "== gate: blocks a red suite, passes a green one =="
 # Adapter that fails; make src dirty so the gate runs.
@@ -152,6 +159,9 @@ echo "== worktree.sh add/landable/remove =="
 rm -f "$REPO/.hone-nag-enforce"
 WSH="$PLUGIN_ROOT/scripts/worktree.sh"
 (cd "$REPO" && bash "$WSH" add feature-x >/dev/null) && [ -d "$REPO/.worktrees/feature-x" ] && ok "worktree add created .worktrees/feature-x" || bad "worktree add failed"
+# The worktree is the claim: a second add of the same change is "already claimed"
+# (exit 4), distinct from a usage/real error (2), so a run knows to skip it.
+(cd "$REPO" && bash "$WSH" add feature-x >/dev/null 2>&1); [ $? -eq 4 ] && ok "second add of a claimed change exits 4" || bad "re-add of a claimed change should exit 4"
 (cd "$REPO/.worktrees/feature-x" && echo y > src_x && git add -A && git commit -qm x)
 out=$(cd "$REPO" && bash "$WSH" landable) && echo "$out" | grep -q "feature-x" && ok "landable lists the ahead worktree" || bad "landable should list feature-x"
 (cd "$REPO" && bash "$WSH" remove "$REPO/.worktrees/feature-x") && [ ! -d "$REPO/.worktrees/feature-x" ] && ok "worktree remove cleaned up" || bad "worktree remove failed"

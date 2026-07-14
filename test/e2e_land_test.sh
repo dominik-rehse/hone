@@ -71,15 +71,67 @@ echo "== 4. commit in the worktree =="
 (cd "$WT" && git add -A && git commit -qm "feat(mathx): add()") || die "commit"
 step "committed on branch hone/mathx-add"
 
-echo "== 5. land: merge to primary + re-verify =="
-git merge --no-ff -q hone/mathx-add -m "merge: mathx-add" || die "merge"
-bash scripts/run-tests.sh >/dev/null 2>&1 || die "suite red in primary after merge"
-step "merged and suite green in the primary tree"
+echo "== 5. land: merge + re-verify + remove, under the lock =="
+# `land` does the whole tail: lock → merge --no-ff → run-tests.sh --all → remove.
+bash "$WSH" land mathx-add >/dev/null 2>&1 || die "land failed on a green change"
+git log --oneline -1 | grep -q "Merge branch 'hone/mathx-add'" || die "merge commit not on the primary tree"
+bash scripts/run-tests.sh >/dev/null 2>&1 || die "suite red in primary after land"
+[ -d "$WT" ] && die "worktree still present after land" || step "landed, verified, and worktree removed"
+git show-ref --verify --quiet refs/heads/hone/mathx-add && die "merged branch should be deleted at land" || step "merged branch hone/mathx-add deleted"
 
-echo "== 6. remove the worktree =="
-bash "$WSH" remove "$WT" || die "worktree remove"
-[ -d "$WT" ] && die "worktree still present" || step "worktree removed"
-git show-ref --verify --quiet refs/heads/hone/mathx-add && die "merged branch should be deleted with its worktree" || step "merged branch hone/mathx-add deleted"
+echo "== 5b. land rolls back a regression, leaving the trunk green =="
+# A change that passes on its own branch but breaks the suite once merged. `land`
+# must merge, see red, roll the merge back, and keep the worktree as evidence.
+WT_R=$(bash "$WSH" add mathx-regress) || die "worktree add mathx-regress"
+# Its test asserts a NEW contract (mul), but it also rewrites add() to break the
+# already-landed add test — so the branch is green alone, red after merge.
+cat > "$WT_R/src/mathx/mul.test.js" <<'EOF'
+const {mul} = require("./mul.js");
+if (mul(2,3) !== 6) throw new Error("mul broken");
+EOF
+cat > "$WT_R/src/mathx/mul.js" <<'EOF'
+exports.mul = (a, b) => a * b;
+EOF
+cat > "$WT_R/src/mathx/add.js" <<'EOF'
+exports.add = (a, b) => a + b + 1;
+EOF
+# Broaden the adapter to run BOTH test files so --all catches the regression.
+cat > "$WT_R/scripts/run-tests.sh" <<'EOF'
+#!/bin/bash
+case "${1:-}" in --all|--unit) shift ;; esac
+node -e '
+  const {add} = require("./src/mathx/add.js");
+  const {mul} = require("./src/mathx/mul.js");
+  if (add(2,3) !== 5) { console.error("add regressed"); process.exit(1); }
+  if (mul(2,3) !== 6) { console.error("mul broken"); process.exit(1); }
+' 2>/dev/null
+EOF
+(cd "$WT_R" && git add -A && git commit -qm "feat(mathx): mul() [breaks add]")
+PRE=$(git rev-parse HEAD)
+bash "$WSH" land mathx-regress >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 6 ] || die "land should exit 6 on a post-merge regression (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "regressing merge should be rolled back — HEAD moved"
+bash scripts/run-tests.sh >/dev/null 2>&1 || die "trunk left red after a rolled-back land"
+git show-ref --verify --quiet refs/heads/hone/mathx-regress || die "branch should survive a failed land as evidence"
+[ -d "$WT_R" ] || die "worktree should survive a failed land as evidence"
+step "regression merged, rolled back, trunk green, evidence kept"
+bash "$WSH" remove "$WT_R" >/dev/null 2>&1; git branch -D hone/mathx-regress >/dev/null 2>&1
+
+echo "== 5c. land serializes: a held lock makes a concurrent land wait =="
+if command -v flock >/dev/null 2>&1; then
+  LOCK="$(git rev-parse --git-common-dir)/hone-land.lock"
+  ( flock 8; sleep 3; ) 8>"$LOCK" &   # hold the land lock ~3s
+  HOLDER=$!
+  sleep 0.3                            # let the holder acquire it first
+  # A land with a 1s wait must give up (exit 5) while the lock is held, instead
+  # of interleaving its merge with the holder's critical section.
+  HONE_LAND_LOCK_TIMEOUT=1 bash "$WSH" land whatever >/dev/null 2>&1; rc=$?
+  [ "$rc" -eq 5 ] || die "land under a held lock should time out with exit 5 (got $rc)"
+  wait "$HOLDER" 2>/dev/null
+  step "concurrent land waited on the lock, then timed out (exit 5)"
+else
+  step "SKIP lock test: flock not available"
+fi
 
 echo "== 7. add from inside a sibling worktree: anchors to the main tree =="
 # An orchestrator's cwd drifts into change A's worktree before starting change B.

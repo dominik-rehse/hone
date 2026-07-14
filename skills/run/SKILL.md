@@ -48,6 +48,12 @@ That creates `.worktrees/<change>` on branch `hone/<change>` and prints its path
 `cd "$WT"`. All build/verify/consolidate work happens here; the primary tree is a
 merge target and the `guard` will block durable edits made in it.
 
+The worktree **is the change's claim**, and the add is atomic: if it exits **4**,
+this change is already claimed — another `run` (in another session) owns it, or a
+crashed run left it behind. Do **not** adopt that worktree: a single named change
+**stops** and reports it (the human resumes leftover work by hand); under `--all`
+it is **skipped** (below). Only exit 0 means you own this change and may proceed.
+
 ### 2. Build — red → green, serial
 
 Implement the Plan test-first, one behaviour at a time. The `guard` enforces the
@@ -161,7 +167,7 @@ wrong to land, **stop and escalate** (stop-point 2).
 
 ### 6. Land
 
-Commit in the worktree, then merge into the primary tree and verify there:
+Commit in the worktree, then hand the merge to `worktree.sh land`:
 
 1. In `$WT`: `git add -A && git commit` with a Conventional Commits message. The
    Decision(s) this change governs land in **this same commit** as the code.
@@ -171,14 +177,31 @@ Commit in the worktree, then merge into the primary tree and verify there:
    (pruned tests, dead code, deleted doc lines) — or `Cut: nothing`, with the
    reason, when there genuinely was nothing; the nag flags a zero-deletion
    change, and this line is its answer.
-2. From the primary tree, merge the branch (`git merge --no-ff hone/<change>`).
-3. **Re-run the whole suite in the primary tree**: `scripts/run-tests.sh --all`.
-   Green confirms the merge; this is the confirmation, not the merge succeeding.
-4. Remove the worktree:
-   `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" remove "$WT"`.
-   That also deletes the merged `hone/<change>` branch and sweeps empty parent
-   dirs; confirm the branch is gone (`git branch --list 'hone/<change>'` prints
-   nothing) — a surviving branch means the merge didn't take.
+2. From the primary tree, land the branch:
+
+   ```bash
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" land <change>
+   ```
+
+   That takes the **land lock**, so it is safe even when another `run` is
+   landing into the same primary tree at the same time — it waits its turn
+   instead of interleaving. Under the lock it merges `--no-ff`, **re-runs the
+   whole suite** in the primary tree (green confirms the merge — the
+   confirmation is the suite, not the merge succeeding), and on green removes
+   the worktree and deletes the branch. Read its exit:
+   - **0** — landed and green.
+   - **6** — the merge regressed the trunk; `land` rolled it back (the primary
+     tree is left green) and kept the worktree as evidence. **Stop and
+     escalate** (this is stop-point 1 surfacing at land).
+   - **2** — a merge conflict (aborted, tree restored) means the `--all`
+     independence check missed a seam: fold this change in serially and flag it
+     for a Decision-level look. Do not force the merge.
+
+   Never merge by hand, and never move the primary tree's HEAD
+   (`git checkout`/`switch`/`stash`/`reset`) to investigate — that races every
+   other session sharing the tree, and the `bash-guard` will stop you. The
+   primary tree stays on the trunk as a merge target; do any investigation in a
+   throwaway `git worktree add --detach` scratch tree.
 
 Confirm to the user: what landed, the Decisions/Notes written, what was deleted
 (the Plan, and any pruned tests; every cycle removes something).
@@ -206,12 +229,20 @@ partition:
 State the partition and its reason before starting ("`a` and `b` are disjoint —
 parallel; `c` touches the same schema as `a` — after `a` lands").
 
+A change whose `add` exits **4** is already claimed by another `run` sharing this
+repo — **skip it** and note the skip in the partition report; never adopt its
+worktree. This is what keeps two concurrent `/hone:run` invocations from both
+building the same Plan: the worktree is a single atomic claim.
+
 Then **land them one at a time** through step 6:
 
+- Lands are serialized by the land lock even across sessions, so `worktree.sh
+  land` never interleaves two merges; within this run, still drive them one at a
+  time so each builds on the last landed result.
 - The upfront check is a judgment; the **merge verifies it**. A merge collision
-  on a shared type, Decision, or Note means the check missed a seam: fold it
-  into one serial change and flag it for a Decision-level look. Do not force
-  the merge.
+  on a shared type, Decision, or Note (`land` exit 2) means the check missed a
+  seam: fold it into one serial change and flag it for a Decision-level look. Do
+  not force the merge.
 - After all merges, run one **global consolidate pass** (a `consolidate-critic`
   over the combined result) to catch cross-change duplication no single worktree
   could see.

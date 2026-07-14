@@ -61,4 +61,18 @@ if echo "$CMD" | grep -Eq "(>>?|tee|sed -i|cp |mv |install |ln -s|chmod|chattr|r
     decision ask "command appears to modify a protected hone artifact (the test adapter, a hook, or settings). Confirm this is an intended, legitimate change before allowing it."
 fi
 
+# 3. A HEAD-moving git op in the PRIMARY tree → ask. The primary tree is a merge
+# target kept on the trunk; landing goes through `worktree.sh land`, which
+# serializes the merge under a lock. Moving the shared HEAD by hand (a checkout
+# to investigate, a stash, a hard reset) races every other session that shares
+# this tree — the exact collision this guards. Investigation belongs in a
+# throwaway `git worktree add --detach`. git-dir == common-dir ⇔ the hook's cwd
+# is the primary tree, not a linked worktree (whose git-dir sits under
+# .git/worktrees/), so the rule never fires inside a worktree where HEAD-moves
+# are safely isolated.
+if [ "$(git rev-parse --git-dir 2>/dev/null)" = "$(git rev-parse --git-common-dir 2>/dev/null)" ] \
+   && echo "$CMD" | grep -Eq '(^|[^A-Za-z_])git[[:space:]]+((checkout|switch|stash)([[:space:]]|$)|reset[^|;&]*--(hard|merge|keep))'; then
+    decision ask "command moves HEAD in the primary tree (git checkout/switch/stash/reset). The primary tree stays on the trunk as a merge target — investigate in a 'git worktree add --detach' scratch tree, and land via 'worktree.sh land'. Confirm before allowing."
+fi
+
 exit 0
