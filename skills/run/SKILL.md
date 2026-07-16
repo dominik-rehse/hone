@@ -86,12 +86,18 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
 
 ### 3. Verify
 
-- **gate**: run `scripts/run-tests.sh --all` and, if present,
-  `scripts/typecheck.sh` and `scripts/lint.sh`. All must be green. (The Stop-hook
-  gate also enforces this; running it here is how *you* confirm, from the output,
-  not from having intended it. On a clean, committed `hone/<change>` branch the
-  gate itself escalates to `--all`, so an integration regression can't merge on a
-  green unit tier alone; while the tree is dirty it runs the fast unit tier.)
+- **gate**: run the full suite through the serialized wrapper —
+  `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" verify` — never the adapter
+  bare with `--all`. Full-suite runs share one cross-session lock with land:
+  e2e tiers are load-sensitive, so a suite racing another session's suite or
+  land produces phantom flakes and spurious rollbacks, and the wrapper waits
+  its turn instead. (Per-file and unit-tier runs during build need no wrapper.)
+  Then, if present, `scripts/typecheck.sh` and `scripts/lint.sh`. All must be
+  green. (The Stop-hook gate also enforces this; running it here is how *you*
+  confirm, from the output, not from having intended it. On a clean, committed
+  `hone/<change>` branch the gate itself escalates to `--all` under the same
+  lock, so an integration regression can't merge on a green unit tier alone;
+  while the tree is dirty it runs the fast unit tier.)
 - **nag**: no leftover Plan yet (that's consolidate), but check Notes you touched
   are within size and 1:1 with an area.
 - **mutation check on critical paths only**. For a critical path the Plan names,
@@ -123,9 +129,13 @@ type, it already became one at build):
 - a resolved empirical bet → **close** its `docs/open-questions.md` entry;
 - redundant tests the change revealed → **prune** them (deduplication is a real
   output of this step, not an afterthought).
-- **delete `.plans/<change>.md`.** The Plan has done its job. A nested slug
-  leaves empty parent dirs behind — remove those too
-  (`rmdir -p .plans/<area> 2>/dev/null`).
+- **delete `.plans/<change>.md` — in the primary tree.** `.plans/` is
+  gitignored, so it exists only there; the worktree checkout has no copy and an
+  `rm` from `$WT` fails on a path that was never here. Use `rm -f` from the
+  primary tree and tolerate the file already being gone (a parallel run's
+  cleanup may have raced you — that is not lost work). The Plan has done its
+  job. A nested slug leaves empty parent dirs behind — remove those too
+  (`rmdir -p .plans/<area> 2>/dev/null`, also in the primary tree).
 
 Then submit the change to the `consolidate-critic` agent (Task tool,
 `subagent_type: consolidate-critic`) with a constructed brief: the diff, the
@@ -162,8 +172,16 @@ Triage its findings against the Plan:
   dismissed) as a `docs/open-questions.md` entry. A decline that lives only in
   the conversation is lost to the next cycle.
 
+Triage is yours — never pause to ask how many findings to apply; `run` is
+unattended and a scope question is not a genuine fork. The default: apply every
+confirmed finding inside the Plan's scope, and record out-of-scope ones
+durably as follow-up material (a `docs/open-questions.md` entry, or a note in
+the landing commit body suggesting a future Plan) rather than expanding the
+change or blocking on a human.
+
 If the review surfaces something that makes the change genuinely ambiguous or
-wrong to land, **stop and escalate** (stop-point 2).
+wrong to land — not merely large or out of scope — **stop and escalate**
+(stop-point 2).
 
 ### 6. Land
 
