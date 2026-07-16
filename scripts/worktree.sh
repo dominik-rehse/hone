@@ -23,6 +23,16 @@
 #       Exit: 0 landed · 2 usage/not-a-repo/detached/conflict · 5 lock timeout ·
 #       6 post-merge regression (rolled back).
 #
+#   worktree.sh verify
+#       Run the full suite (scripts/run-tests.sh --all) in the current tree,
+#       serialized under the SAME lock as land. e2e tiers are load-sensitive:
+#       two concurrent full suites poison each other's signal (phantom flakes),
+#       and a suite racing a land's re-verify produces spurious rollbacks — so
+#       every full-suite run shares the one lock. This is the sanctioned way to
+#       run --all by hand; never invoke the adapter bare for a full run. The
+#       fast unit tier needs no lock and no wrapper. Exit: the adapter's exit ·
+#       2 usage/not-a-repo/no-adapter · 5 lock timeout.
+#
 #   worktree.sh landable
 #       Print "<worktree-path>\t<branch>" for every linked worktree on a branch
 #       ahead of the current (primary) branch: the fan-in set for land. Excludes
@@ -114,6 +124,21 @@ cmd_landable() {
         if [ "${ahead:-0}" -gt 0 ]; then printf '%s\t%s\n' "$path" "$branch"; any=1; fi
     done < <(parse_worktrees "$(git worktree list --porcelain 2>/dev/null)" "$primary")
     [ "$any" -eq 1 ] || { echo "hone worktree: no worktree is ahead of $target." >&2; return 1; }
+}
+
+cmd_verify() {
+    git rev-parse --git-dir >/dev/null 2>&1 || { echo "hone worktree: not a git repository." >&2; return 2; }
+    [ -f "scripts/run-tests.sh" ] || { echo "hone worktree: no scripts/run-tests.sh adapter here — run setup.sh first." >&2; return 2; }
+    command -v flock >/dev/null 2>&1 || { echo "hone worktree: 'flock' not found — cannot serialize the full suite across sessions; install util-linux." >&2; return 2; }
+
+    local lock timeout
+    lock="$(git rev-parse --git-common-dir 2>/dev/null)/hone-land.lock"
+    timeout="${HONE_LAND_LOCK_TIMEOUT:-600}"
+    # Land's lock, on purpose: a full suite must never overlap another full
+    # suite OR a land's merge/re-verify. One lock makes both exclusions hold.
+    exec 9>"$lock" || { echo "hone worktree: cannot open the suite lock at $lock." >&2; return 2; }
+    flock -w "$timeout" 9 || { echo "hone worktree: another session held the suite lock for >${timeout}s (a land or full-suite run); retry." >&2; return 5; }
+    bash scripts/run-tests.sh --all
 }
 
 cmd_land() {
@@ -221,9 +246,10 @@ main() {
     case "$sub" in
         add)      cmd_add "$@" ;;
         landable) cmd_landable "$@" ;;
+        verify)   cmd_verify "$@" ;;
         land)     cmd_land "$@" ;;
         remove)   cmd_remove "$@" ;;
-        *) echo "usage: worktree.sh {add <change>|landable|land <change>|remove <worktree-path>}" >&2; return 2 ;;
+        *) echo "usage: worktree.sh {add <change>|landable|verify|land <change>|remove <worktree-path>}" >&2; return 2 ;;
     esac
 }
 

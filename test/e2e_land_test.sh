@@ -133,6 +133,40 @@ else
   step "SKIP lock test: flock not available"
 fi
 
+echo "== 5d. verify + gate --all share the suite lock =="
+if command -v flock >/dev/null 2>&1; then
+  LOCK="$(git rev-parse --git-common-dir)/hone-land.lock"
+  # verify is the sanctioned manual full-suite run: green here, serialized below.
+  bash "$WSH" verify >/dev/null 2>&1 || die "verify should run the suite green"
+  step "verify runs the full suite (green)"
+  ( flock 8; sleep 3; ) 8>"$LOCK" &   # hold the suite lock ~3s
+  HOLDER=$!
+  sleep 0.3
+  HONE_LAND_LOCK_TIMEOUT=1 bash "$WSH" verify >/dev/null 2>&1; rc=$?
+  [ "$rc" -eq 5 ] || die "verify under a held lock should time out with exit 5 (got $rc)"
+  wait "$HOLDER" 2>/dev/null
+  step "concurrent verify waited on the lock, then timed out (exit 5)"
+  # The gate's --all tier (clean hone/* branch, the pre-land moment) takes the
+  # same lock: while another suite is live it blocks the stop instead of
+  # running red under contention.
+  WT_G=$(bash "$WSH" add gate-lock) || die "worktree add gate-lock"
+  ( cd "$WT_G" && git commit -q --allow-empty -m "wip: pre-land" ) || die "commit in gate-lock"
+  ( flock 8; sleep 3; ) 8>"$LOCK" &
+  HOLDER=$!
+  sleep 0.3
+  out=$(cd "$WT_G" && echo '{}' | HONE_SUITE_LOCK_TIMEOUT=1 bash "$GATE")
+  echo "$out" | grep -q '"decision":"block"' || die "gate --all under a held suite lock should block the stop"
+  echo "$out" | grep -q "another session is running the full suite" || die "gate block should name the live suite as the reason"
+  wait "$HOLDER" 2>/dev/null
+  # Lock free again → the gate runs --all and passes green.
+  out=$(cd "$WT_G" && echo '{}' | bash "$GATE")
+  echo "$out" | grep -q '"decision":"block"' && die "gate should pass once the suite lock is free"
+  step "gate --all blocks while a suite is live, passes when the lock frees"
+  bash "$WSH" remove "$WT_G" >/dev/null 2>&1; git branch -D hone/gate-lock >/dev/null 2>&1
+else
+  step "SKIP suite-lock tests: flock not available"
+fi
+
 echo "== 7. add from inside a sibling worktree: anchors to the main tree =="
 # An orchestrator's cwd drifts into change A's worktree before starting change B.
 # `add B` must land at <main_root>/.worktrees/B (not nested under A) and branch

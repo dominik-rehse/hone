@@ -75,6 +75,21 @@ run_step() {
     ran+="${ran:+, }$label"
 }
 
+# The full tier shares land's lock (<git-common-dir>/hone-land.lock): e2e tiers
+# are load-sensitive, so a --all racing another session's suite or a land's
+# re-verify poisons both signals (phantom flakes, spurious land rollbacks).
+# Short wait only — if a suite is live, blocking the stop with "retry" beats
+# running red under contention. The unit tier stays lock-free: it is the
+# per-Stop inner loop and must stay cheap. Without flock, degrade to running
+# unserialized rather than not at all.
+if [ "$TIER" = "--all" ] && command -v flock >/dev/null 2>&1; then
+    SUITE_LOCK="$(git rev-parse --git-common-dir 2>/dev/null)/hone-land.lock"
+    if { exec 9>"$SUITE_LOCK"; } 2>/dev/null; then
+        flock -w "${HONE_SUITE_LOCK_TIMEOUT:-30}" 9 || \
+            block "another session is running the full suite (a land or verify holds the suite lock) — wait and re-verify rather than racing it; do not run the suite concurrently."
+    fi
+fi
+
 run_step "tests ($TIER)" bash "$ADAPTER" "$TIER"
 [ -f "scripts/typecheck.sh" ] && run_step "type-check" bash "scripts/typecheck.sh"
 [ -f "scripts/lint.sh" ] && run_step "lint" bash "scripts/lint.sh"
