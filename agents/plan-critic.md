@@ -45,7 +45,14 @@ what they must resolve before the loop runs unattended against it.
   are not independent even without a file collision: they should merge, or be
   sequenced with the contract settled entirely in the first. Flag narrowness
   only when the wider space is already knowable — don't demand speculative
-  generality.
+  generality. A Plan that changes a schema must also state whether the
+  existing data is worth preserving: backfill and migration design hinge on
+  that answer, so a schema-touching Plan silent on it is ambiguous — reject,
+  and name the question ("is existing data preserved or disposable?") for the
+  human to answer. And before you propose any migration mechanics of your own,
+  read the project's declared schema-management policy in the Decisions/Notes
+  you were handed; never suggest mechanics that contradict it (e.g.
+  hand-editing generated migration files).
 
 ## Output
 

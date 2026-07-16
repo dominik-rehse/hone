@@ -52,6 +52,13 @@ dialect, an SDK's headless behaviour, a library on this runtime), record it in
 Distinct from a *decision already made* (that's a Decision, written at
 consolidate). Don't invent questions to fill the file.
 
+One question is never an open question — it goes to the human, now: if the
+change touches a persistent schema (a migration, a stored format), ask **"is
+the existing data worth preserving?"** before any migration design, and record
+the answer in the Plan's *Notes for the loop*. Everything downstream hinges on
+it — disposable data collapses backfill design into drop-and-recreate — and the
+`plan-critic` rejects a schema-touching Plan that leaves it unstated.
+
 ### 4. Write `.plans/<slug>.md`
 
 Keep it to what an unattended loop needs and no more:
