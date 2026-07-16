@@ -2,10 +2,15 @@
 # Stop-hook nag (Claude Code). The soft counterpart to the gate: cheap,
 # deterministic hygiene checks that keep the durable layer from silently growing.
 #
-#   1. Leftover Plan   — a .plans/<change>.md with no matching .worktrees/<change>.
-#      A Plan is deleted at consolidate; one left behind with no in-flight
-#      worktree means the change landed (or was abandoned) without cleanup.
-#      (A Plan whose worktree still exists is active work — not flagged.)
+#   1. Leftover Plan   — a .plans/<change>.md whose change has LANDED: no
+#      worktree, plus positive evidence the change concluded — the merge commit
+#      land writes (its fixed -m format makes the grep exact) or a surviving
+#      fully-merged hone/<change> branch. Consolidate should have deleted it.
+#      "No worktree" alone is NOT evidence: that is the normal plan→run gap
+#      (hone authors Plans first and runs them later, often from another
+#      session), and flagging it nags every queued Plan into alarm fatigue.
+#      Pending Plans get at most one aggregate advisory line. (A Plan whose
+#      worktree still exists is active work — not flagged either way.)
 #      <change> may be nested (auth/refresh-token): the plan skill derives
 #      slugs mirroring src/, so the scan must recurse.
 #   2. Oversized Note  — a docs/notes/<area>.md over the size cap (a Note is a
@@ -52,14 +57,28 @@ add_finding()  { findings+="- $1"$'\n'; }
 add_advisory() { advisory+="- $1"$'\n'; }
 
 # 1. Leftover Plan. Recurse: slugs are nested (.plans/<area>/<change>.md).
+# Flag only on landed evidence (see the header); otherwise count as pending.
 if [ -d ".plans" ]; then
+    pending=0
     while IFS= read -r plan; do
         change=${plan#.plans/}
         change=${change%.md}
-        if [ ! -d ".worktrees/$change" ]; then
-            add_finding "${plan} has no .worktrees/${change} — if the change landed, consolidate should have deleted the Plan; delete it (git keeps the history)."
+        [ -d ".worktrees/$change" ] && continue   # active work
+        landed=""
+        if git rev-parse --git-dir >/dev/null 2>&1; then
+            if [ -n "$(git log --fixed-strings --grep="Merge branch 'hone/${change}'" -n 1 --format=%H 2>/dev/null)" ]; then
+                landed="its landing merge commit is in history"
+            elif git branch --merged HEAD --format='%(refname:short)' 2>/dev/null | grep -qxF "hone/$change"; then
+                landed="branch hone/${change} is fully merged"
+            fi
+        fi
+        if [ -n "$landed" ]; then
+            add_finding "${plan} survived its landing (${landed}) — consolidate should have deleted the Plan; delete it (git keeps the history)."
+        else
+            pending=$((pending+1))
         fi
     done < <(find .plans -type f -name '*.md' 2>/dev/null)
+    [ "$pending" -gt 0 ] && add_advisory "${pending} Plan(s) pending run in .plans/ — normal while queued; /hone:run picks them up."
 fi
 
 # 2. Oversized Note.

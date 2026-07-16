@@ -124,18 +124,37 @@ out=$(cd "$REPO" && echo '{}' | bash "$GATE")
 echo "$out" | grep -q '"decision":"block"' && bad "dirty tree should run the unit tier (pass), not --all" || ok "dirty tree runs the unit tier (loop stays fast)"
 git -C "$REPO" checkout -q -- src/auth/login.ts
 
-echo "== nag: leftover Plan, oversized Note, orphan Note =="
-echo "# Plan" > "$REPO/.plans/ghost.md"   # no matching worktree
+echo "== nag: leftover Plan (landed evidence only), oversized Note, orphan Note =="
+# No worktree and no landed evidence = the normal plan→run gap: pending, not
+# stale. No per-Plan finding; one aggregate advisory line instead.
+echo "# Plan" > "$REPO/.plans/ghost.md"
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "ghost.md has no .worktrees" && ok "leftover Plan flagged" || bad "should flag leftover Plan"
+echo "$out" | grep -q "ghost.md" && bad "pending Plan should not be flagged by name" || ok "pending Plan (no landed evidence) not flagged"
+echo "$out" | grep -q "1 Plan(s) pending run" && ok "pending Plans surface as one aggregate advisory" || bad "should emit an aggregate pending-Plans advisory"
 
-# Nested slug (the plan skill derives <area>/<change> mirroring src/).
+# Evidence 1: land's merge commit in HEAD's history → the finding fires.
+git -C "$REPO" commit -q --allow-empty -m "Merge branch 'hone/ghost'"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q ".plans/ghost.md survived its landing" && ok "Plan with landing merge commit flagged" || bad "should flag Plan whose merge commit is in history"
+
+# Evidence 2: a surviving fully-merged hone/<change> branch.
+echo "# Plan" > "$REPO/.plans/ghost2.md"
+git -C "$REPO" branch hone/ghost2 HEAD
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q ".plans/ghost2.md survived its landing" && ok "Plan with fully-merged surviving branch flagged" || bad "should flag Plan whose merged branch survives"
+git -C "$REPO" branch -d hone/ghost2 >/dev/null 2>&1
+rm -f "$REPO/.plans/ghost2.md"
+
+# Nested slug (the plan skill derives <area>/<change> mirroring src/): the
+# recursive scan still finds it, evidence rules unchanged.
 mkdir -p "$REPO/.plans/auth"
-echo "# Plan" > "$REPO/.plans/auth/ghost-nested.md"   # no matching worktree
+echo "# Plan" > "$REPO/.plans/auth/ghost-nested.md"
+git -C "$REPO" commit -q --allow-empty -m "Merge branch 'hone/auth/ghost-nested'"
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q ".plans/auth/ghost-nested.md has no .worktrees/auth/ghost-nested" && ok "nested leftover Plan flagged" || bad "should flag nested leftover Plan"
+echo "$out" | grep -q ".plans/auth/ghost-nested.md survived its landing" && ok "nested landed Plan flagged" || bad "should flag nested landed Plan"
 
-# A nested Plan whose worktree exists is active work — not flagged.
+# A nested Plan whose worktree exists is active work — not flagged even with
+# landed evidence in history.
 mkdir -p "$REPO/.worktrees/auth/ghost-nested"
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "ghost-nested" && bad "nested Plan with live worktree should not be flagged" || ok "nested Plan with live worktree not flagged"
