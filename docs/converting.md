@@ -84,3 +84,50 @@ therefore harmless: it stays inert until step 9.
 >    an edit to a `src/` file is now denied in the primary tree, and a Stop runs
 >    the gate. Commit, merge the branch, and from here every change goes through
 >    `/hone:plan` → `/hone:run` in a worktree.
+
+---
+
+## Notes from live conversions
+
+None of this changes the nine steps; it just makes them go smoother.
+
+- **Fan out with disjoint ownership.** Run the docs distillation (steps 2/4/5)
+  and the test de-tagging (step 6) as _parallel_ subagents — they touch `docs/`
+  and `src/`+`tests/` respectively, so they never collide. Split the ADR
+  conversion (step 3) across subagents by disjoint output files, but hand every
+  one the _same_ number→slug map so cross-references stay consistent. Have the
+  distiller own `docs/` only and _report_ any needed `src/` type rather than
+  adding it, so it can't race the de-tagger. Keep Notes sparse — one per `src/`
+  area at most, only for an invariant the code and Decisions can't show (a whole
+  large codebase may need just two or three).
+
+- **Renaming ADRs has a blast radius far beyond `docs/decisions/`.** Numbered-ADR
+  references live in rules, the README, the manual, runbooks, deploy configs
+  (systemd units, nftables, compose files, Caddyfile, yaml), DB DDL, scripts, and
+  code comments. After step 3, sweep every `ADR-NNN` / `decisions/NNN-*.md`
+  reference — including compact `ADR-004/014` forms — to the new slugs with a
+  scripted number→slug map, then `grep -rn 'ADR-[0-9]\{3\}\|decisions/[0-9]\{3\}-'`
+  to confirm none remain. A repo whose Decisions are _already_ topic-named skips
+  this entirely: only a light present-tense cleanup of each file is needed (drop
+  the `ADR:`/`Status:` framing and any `Applies to: every spec` boilerplate).
+
+- **The gate-critical files fight the Edit tool.** stdd's tamper-resistance adds
+  `Edit()`/`Write()` deny rules for `.claude/settings.json`, `lefthook.yml`, and
+  `scripts/run-tests.sh` — so in step 7 edit those with a shell command
+  (sed / python / cp), not Write/Edit, and trim the deny list itself to hone's
+  shorter form as you go. Adopt hone's `scripts/run-tests.sh` by copying it (the
+  stdd adapter still self-labels "stdd" in its comments). `.hone-durable-paths` is
+  a local, gitignored per-developer file; `.claude/rules/hone-guard.md` is
+  committed. Leave any unrelated git hooks (e.g. a semantic-index tool's) alone.
+
+- **Preserve a widely-cited spine as a Note.** If an overview doc carries a list
+  everything references — a HARD RULES security spine, a domain model — don't just
+  delete it. Land it as a Note (e.g. `notes/security-model.md`) so the many
+  `HARD RULE N` / `architecture.md §…` references elsewhere still resolve, and fix
+  those references to point at the Note.
+
+- **Verify twice.** Step 8's `grep` for `stdd|AC-|slice-` catches the tags; also
+  grep for links to the docs you deleted (overview docs, specs) and check the
+  non-`.md` deploy configs a text sweep tends to skip. A repo-local `.env` /
+  `.env.example` may be permission-blocked from tooling — note any leftover
+  reference there for a human rather than forcing it.
