@@ -154,13 +154,37 @@ the Plan text (still in hand — the file is gone) along with the diff, so the
 reviewer can tell a violation of the Plan's stated stance from the stance
 itself.
 
-Invoke it as a skill — call the Skill tool with `code-review` and pass the brief
-as its args. Do **not** locate, read, or execute a command file on disk: hone
-relies on the built-in workflow-backed review that reads the local diff, and a
-disk search can instead surface a marketplace `code-review` plugin that is
-GitHub-PR-shaped (it wants a PR number and `gh pr comment`) and does not fit a
-worktree. Reaching that decoy makes the review balk or hand-roll a substitute
-instead of running the intended one.
+The built-in `/code-review` is now **user-invocation-only** (`disable-model-invocation`):
+the Skill tool refuses it — `Skill code-review cannot be used with Skill tool due
+to disable-model-invocation` — as does every other model-invocation path (a
+SlashCommand tool, a subagent). When you hit that, do **not** hand-roll a
+substitute reviewer; that silently abandons the native multi-agent review
+(parallel finders plus a verification pass) this step exists to reuse.
+
+The flag blocks the *model* from invoking the command, not a *user*. A slash
+command in a print-mode (`-p`) prompt is a user invocation, so run the genuine
+native reviewer unattended by nesting a headless Claude Code. Write the brief to
+a file, then invoke it with the worktree as the working directory so the
+command's own `git diff` sees the local change:
+
+```
+claude -p "/code-review $(cat <brief-file>)" \
+  --add-dir <worktree> \
+  --allowedTools "Task Agent Read Grep Glob Bash(git *)" \
+  --model opus --effort high \
+  --output-format json
+```
+
+Read the review from `.result` of the JSON envelope and feed it into the triage
+below. The `--allowedTools` allowlist lets the reviewer's finders fan out
+without granting full `bypassPermissions` (a trivial diff reviews cleanly even
+in the default mode, but the heavy fan-out wants its tools). Do **not** locate,
+read, or execute a command file on disk, and do not add a marketplace
+`code-review` plugin to the path: that plugin is GitHub-PR-shaped (it wants a PR
+number and `gh pr comment`) and does not fit a worktree. A literal
+`/code-review` in the nested session resolves deterministically to the built-in
+command — but a fuzzy skill lookup or disk search can still land on the decoy
+and make the review balk.
 
 Triage its findings against the Plan:
 

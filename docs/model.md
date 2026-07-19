@@ -275,9 +275,11 @@ returning structured findings.
   redundant test? abstraction earning its keep?
 - `/code-review`: Claude Code's built-in workflow-backed command for correctness
   plus what to delete; already multi-agent (parallel finders + a verification
-  pass), so the loop reuses it rather than shipping its own reviewer. The loop
-  invokes it as a skill so it reads the worktree diff; it must not fall through
-  to a marketplace `code-review` plugin, which is GitHub-PR-shaped.
+  pass), so the loop reuses it rather than shipping its own reviewer. Model
+  invocation of the command is now disabled, so the loop runs it as an explicit
+  user invocation in a nested headless Claude Code (a print-mode `/code-review`)
+  reading the worktree diff; it must not fall through to a marketplace
+  `code-review` plugin, which is GitHub-PR-shaped.
 
 These critics are the only judgment inside the loop; together with the
 mechanical checks they are the whole trust foundation. The human's judgment

@@ -16,9 +16,16 @@ Add the plugin and enable it in your project's `.claude/settings.json`:
 
 ```json
 {
-  "enabledPlugins": { "hone@hone": true }
+  "enabledPlugins": { "hone@hone": true },
+  "permissions": { "allow": ["Bash(claude -p:*)"] }
 }
 ```
+
+The `permissions.allow` entry lets `run`'s review step invoke the native
+`/code-review` in a nested headless Claude Code. Claude Code now disables model
+invocation of that command, so hone runs it as a print-mode user turn
+(`claude -p "/code-review …"`); without the rule that nested call is gated and
+`run` can't stay unattended.
 
 Then, once per project, install the test adapter and the durable-docs skeleton:
 
