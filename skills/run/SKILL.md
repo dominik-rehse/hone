@@ -97,7 +97,11 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
   confirm, from the output, not from having intended it. On a clean, committed
   `hone/<change>` branch the gate itself escalates to `--all` under the same
   lock, so an integration regression can't merge on a green unit tier alone;
-  while the tree is dirty it runs the fast unit tier.)
+  while the tree is dirty it runs the fast unit tier.) A full suite can outlast
+  the ~2m foreground Bash timeout, which kills it regardless of any inner
+  `timeout`; run the gate — and any long build or verify command — in your Bash
+  tool's background mode and poll it to completion, never in the foreground where
+  a kill reads as a spurious failure.
 - **nag**: no leftover Plan yet (that's consolidate), but check Notes you touched
   are within size and 1:1 with an area.
 - **mutation check on critical paths only**. For a critical path the Plan names,
@@ -185,8 +189,15 @@ claude -p "/code-review $(cat <brief-file>)" \
   --output-format json > <out-file> 2>&1
 ```
 
-Read the review from `.result` of the JSON envelope in `<out-file>` once it
-lands, and feed it into the triage below. The `--allowedTools` allowlist lets the reviewer's finders fan out
+That JSON envelope **is this step's artifact** — the proof the native reviewer
+ran, exactly as the diff proves build and the gate output proves verify. Before
+you trust any finding, confirm the envelope is real: `<out-file>` parses as JSON
+with `is_error: false`, `subtype: success`, and a `session_id`. If it is missing,
+truncated, an error envelope, or absent because you produced findings some other
+way, the native review **did not happen** — that is a step failure to fix by
+running the nested call, never a pass to review around. Only once the envelope
+confirms do you read the review from its `.result` and feed it into the triage
+below. The `--allowedTools` allowlist lets the reviewer's finders fan out
 without granting full `bypassPermissions` (a trivial diff reviews cleanly even
 in the default mode, but the heavy fan-out wants its tools). Do **not** locate,
 read, or execute a command file on disk, and do not add a marketplace
