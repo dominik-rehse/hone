@@ -7,7 +7,7 @@
         {
             "name": "hone",
             "source": "./",
-            "version": "0.8.2",
+            "version": "0.9.0",
             "description": "hone is a development model where a human writes a short Plan and an automated, worktree-native loop then builds, verifies, consolidates, reviews, and lands each change unattended. Only rot-proof durable truth survives in the repo, and every cycle deletes something. Enforced by a PreToolUse guard, a Stop-hook gate and nag, and two refute-first critics."
         }
     ]
