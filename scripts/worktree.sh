@@ -178,7 +178,7 @@ cmd_land() {
         echo "hone worktree: merging $branch conflicted — the independence check missed a seam. Primary tree restored; branch kept. Fold this change in serially." >&2
         return 2
     fi
-    if ! ( cd "$main_root" && scripts/run-tests.sh --all >/dev/null 2>&1 ); then
+    if ! ( cd "$main_root" && bash scripts/run-tests.sh --all >/dev/null 2>&1 ); then
         # Green would confirm the merge; red means it regressed the trunk. Roll
         # the merge back so the shared tree is left green for the next lander;
         # the worktree/branch survive for investigation.
