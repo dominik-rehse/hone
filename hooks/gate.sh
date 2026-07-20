@@ -11,8 +11,13 @@
 #   - Clean tree on a hone/<change> worktree branch (work committed, about to
 #     land) → the full --ALL tier, including integration/e2e. This is the moment a
 #     change is about to merge, so an integration regression that a green unit
-#     tier would miss is caught mechanically here rather than trusting the run
-#     skill's prose --all step.
+#     tier would miss is caught here rather than trusting the run skill's prose
+#     --all step. This is a BACKSTOP, not the authoritative pre-merge check: a Stop
+#     hook is bounded by its hooks.json timeout (600s), and a suite that outruns it
+#     is killed and reads as a non-block — i.e. it fails OPEN. The authoritative
+#     --all runs inside `worktree.sh land`, under the land lock, after the merge:
+#     that one gates the trunk and rolls back on red. Keep the suite within the
+#     hook timeout to keep this backstop meaningful.
 #   - Clean tree on any other branch → nothing in flight, no-op.
 #   - No git → the unit tier (can't tell what's in flight; adapter presence
 #     already scopes this to hone projects).

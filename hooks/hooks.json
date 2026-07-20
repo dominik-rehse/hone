@@ -42,7 +42,7 @@
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/gate.sh\"",
-            "timeout": 120,
+            "timeout": 600,
             "statusMessage": "hone gate: running tests, type-check, lint..."
           },
           {
