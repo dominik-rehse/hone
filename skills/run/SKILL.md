@@ -157,26 +157,36 @@ itself.
 The built-in `/code-review` is now **user-invocation-only** (`disable-model-invocation`):
 the Skill tool refuses it — `Skill code-review cannot be used with Skill tool due
 to disable-model-invocation` — as does every other model-invocation path (a
-SlashCommand tool, a subagent). When you hit that, do **not** hand-roll a
-substitute reviewer; that silently abandons the native multi-agent review
-(parallel finders plus a verification pass) this step exists to reuse.
+SlashCommand tool, a subagent). The refusal is **expected**, not a dead end: when
+you see it, your one and only next move is the nested `claude -p` call below.
+Do **not** hand-roll a substitute reviewer — no `Workflow`, no fan-out of
+`Agent`/`Task` finders, no "faithful equivalent" or "same multi-agent shape"
+you assemble yourself. Every one of those silently abandons the native review
+(parallel finders plus a verification pass) this step exists to reuse, and is a
+step failure even when it produces findings. The Skill tool is not your only path
+to the command; a `claude -p` user turn is.
 
 The flag blocks the *model* from invoking the command, not a *user*. A slash
 command in a print-mode (`-p`) prompt is a user invocation, so run the genuine
 native reviewer unattended by nesting a headless Claude Code. Write the brief to
 a file, then invoke it with the worktree as the working directory so the
-command's own `git diff` sees the local change:
+command's own `git diff` sees the local change. The multi-agent fan-out takes
+several minutes — longer than the foreground Bash timeout, which kills it at ~2
+minutes regardless of any inner `timeout` — so **run it in the background** (your
+Bash tool's background mode, not a shell `&`, which the harness won't keep
+alive), redirect the JSON to an output file, and poll that file until the run
+finishes:
 
 ```
 claude -p "/code-review $(cat <brief-file>)" \
   --add-dir <worktree> \
   --allowedTools "Task Agent Read Grep Glob Bash(git *)" \
   --model opus --effort high \
-  --output-format json
+  --output-format json > <out-file> 2>&1
 ```
 
-Read the review from `.result` of the JSON envelope and feed it into the triage
-below. The `--allowedTools` allowlist lets the reviewer's finders fan out
+Read the review from `.result` of the JSON envelope in `<out-file>` once it
+lands, and feed it into the triage below. The `--allowedTools` allowlist lets the reviewer's finders fan out
 without granting full `bypassPermissions` (a trivial diff reviews cleanly even
 in the default mode, but the heavy fan-out wants its tools). Do **not** locate,
 read, or execute a command file on disk, and do not add a marketplace
