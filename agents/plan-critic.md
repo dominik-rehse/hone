@@ -3,6 +3,7 @@ name: plan-critic
 description: Admission critic for a hone Plan. Runs once at the end of /hone:plan, in constructed context, before the Plan is handed to /hone:run. Prompted to refute; it hunts placeholders, contradictions, ambiguity, wrong scope, and collision with an open change, and returns structured findings. Read-only.
 tools: Read, Grep, Glob
 model: sonnet
+color: cyan
 ---
 
 # plan-critic

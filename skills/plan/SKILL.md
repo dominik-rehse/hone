@@ -41,8 +41,8 @@ review can't hold it; too small and you multiply merge overhead on shared files.
   before fanning out, and the merge verifies it).
 - If it's one indivisible change spanning several files, that's one Plan.
 
-Decide this now; the `plan-critic` (step 5) will challenge a Plan whose scope is
-wrong.
+Decide this now; the `plan-critic` (the admission critic run at step 5) will
+challenge a Plan whose scope is wrong.
 
 ### 3. Surface empirical bets as open questions
 

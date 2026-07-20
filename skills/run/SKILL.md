@@ -27,10 +27,17 @@ gate can't verify anything.
 
 ## The loop, per Plan
 
+Three hooks enforce the laws as you work: the `guard` (PreToolUse — test-first,
+and no durable edits in the primary tree), the `gate` (Stop — the suite,
+type-check, and lint stay green), and the `nag` (Stop, advisory — Plan and Note
+hygiene).
+
 Run these steps in order. **Do not skip a step, and do not proceed past a step
-whose artifact does not confirm it.** The two points at which you stop and
-escalate are marked; on either of them, leave the worktree in place as evidence
-and report. Never disable a gate to get past it.
+whose artifact does not confirm it.** Two points stop and escalate — verify can't
+go green (stop-point 1) and review finds the change ambiguous (stop-point 2); the
+third way to stop is simply *done* (see *The three ways to stop*). On an escalating
+stop, leave the worktree in place as evidence and report. Never disable a gate to
+get past it.
 
 Admission already happened: the `plan-critic` admitted the Plan at `/hone:plan`,
 with the human present to revise a rejection. Do not re-run it here; spawn the
@@ -86,22 +93,25 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
 
 ### 3. Verify
 
-- **gate**: run the full suite through the serialized wrapper —
-  `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" verify` — never the adapter
-  bare with `--all`. Full-suite runs share one cross-session lock with land:
-  e2e tiers are load-sensitive, so a suite racing another session's suite or
-  land produces phantom flakes and spurious rollbacks, and the wrapper waits
-  its turn instead. (Per-file and unit-tier runs during build need no wrapper.)
-  Then, if present, `scripts/typecheck.sh` and `scripts/lint.sh`. All must be
-  green. (The Stop-hook gate also enforces this; running it here is how *you*
-  confirm, from the output, not from having intended it. On a clean, committed
-  `hone/<change>` branch the gate itself escalates to `--all` under the same
-  lock, so an integration regression can't merge on a green unit tier alone;
-  while the tree is dirty it runs the fast unit tier.) A full suite can outlast
-  the ~2m foreground Bash timeout, which kills it regardless of any inner
-  `timeout`; run the gate — and any long build or verify command — in your Bash
-  tool's background mode and poll it to completion, never in the foreground where
-  a kill reads as a spurious failure.
+- **gate** — the full suite, plus type-check and lint, all green:
+  - Run the full suite through the serialized wrapper:
+    `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" verify`. Never run the
+    adapter bare with `--all`: full-suite runs share one cross-session lock with
+    land, because e2e tiers are load-sensitive and a suite racing another
+    session's suite or land produces phantom flakes and spurious rollbacks. The
+    wrapper waits its turn. (Per-file and unit-tier runs during build need no
+    wrapper.)
+  - Then run `scripts/typecheck.sh` and `scripts/lint.sh` if present. All must be
+    green.
+  - Running the gate here is how *you* confirm from the output, not from having
+    intended it. The Stop-hook gate enforces the same suite independently: on a
+    clean, committed `hone/<change>` branch it escalates to `--all` under the same
+    lock (so an integration regression can't merge on a green unit tier alone);
+    while the tree is dirty it runs the fast unit tier.
+  - A full suite can outlast the ~2m foreground Bash timeout, which kills it
+    regardless of any inner `timeout`. Run the gate — and any long build or verify
+    command — in your Bash tool's background mode and poll it to completion, never
+    in the foreground where a kill reads as a spurious failure.
 - **nag**: no leftover Plan yet (that's consolidate), but check Notes you touched
   are within size and 1:1 with an area.
 - **mutation check on critical paths only**. For a critical path the Plan names,
@@ -150,36 +160,24 @@ redundant test, an abstraction not earning its keep. Apply its accepted findings
 
 ### 5. Review — native `/code-review`
 
-Run Claude Code's `/code-review` on the finished change (the worktree diff)
-**once** — it is multi-agent (parallel finders plus a verification pass) and the
-loop's most expensive step, so it runs a single time and hone reuses it rather
-than shipping a reviewer. Like the critics, it gets a constructed brief: pass
-the Plan text (still in hand — the file is gone) along with the diff, so the
-reviewer can tell a violation of the Plan's stated stance from the stance
-itself.
+Run Claude Code's built-in `/code-review` on the finished change (the worktree
+diff) **once** — it is multi-agent (parallel finders plus a verification pass) and
+the loop's most expensive step, so it runs a single time and hone reuses it rather
+than shipping a reviewer. Give it a constructed brief: pass the Plan text (still in
+hand — the file is gone) along with the diff, so the reviewer can tell a violation
+of the Plan's stated stance from the stance itself.
 
-The built-in `/code-review` is now **user-invocation-only** (`disable-model-invocation`):
-the Skill tool refuses it — `Skill code-review cannot be used with Skill tool due
-to disable-model-invocation` — as does every other model-invocation path (a
-SlashCommand tool, a subagent). The refusal is **expected**, not a dead end: when
-you see it, your one and only next move is the nested `claude -p` call below.
-Do **not** hand-roll a substitute reviewer — no `Workflow`, no fan-out of
-`Agent`/`Task` finders, no "faithful equivalent" or "same multi-agent shape"
-you assemble yourself. Every one of those silently abandons the native review
-(parallel finders plus a verification pass) this step exists to reuse, and is a
-step failure even when it produces findings. The Skill tool is not your only path
-to the command; a `claude -p` user turn is.
-
-The flag blocks the *model* from invoking the command, not a *user*. A slash
-command in a print-mode (`-p`) prompt is a user invocation, so run the genuine
-native reviewer unattended by nesting a headless Claude Code. Write the brief to
-a file, then invoke it with the worktree as the working directory so the
-command's own `git diff` sees the local change. The multi-agent fan-out takes
-several minutes — longer than the foreground Bash timeout, which kills it at ~2
-minutes regardless of any inner `timeout` — so **run it in the background** (your
-Bash tool's background mode, not a shell `&`, which the harness won't keep
-alive), redirect the JSON to an output file, and poll that file until the run
-finishes:
+The command is **user-invocation-only** (`disable-model-invocation`): the Skill
+tool, a SlashCommand tool, and subagents all refuse it. That refusal is
+**expected** — do **not** hand-roll a substitute reviewer (no `Workflow`, no
+fan-out of `Agent`/`Task` finders); each one silently abandons the native review
+this step reuses and is a step failure even when it produces findings. A slash
+command in a print-mode (`-p`) prompt is a *user* invocation, so run the genuine
+reviewer by nesting a headless Claude Code. Write the brief to a file, then invoke
+it with the worktree as the working directory so the command's own `git diff` sees
+the local change. Run it in the background (your Bash tool's background mode, not a
+shell `&`) and poll the output file — the fan-out outlasts the ~2m foreground
+timeout:
 
 ```
 claude -p "/code-review $(cat <brief-file>)" \
@@ -189,23 +187,17 @@ claude -p "/code-review $(cat <brief-file>)" \
   --output-format json > <out-file> 2>&1
 ```
 
-That JSON envelope **is this step's artifact** — the proof the native reviewer
-ran, exactly as the diff proves build and the gate output proves verify. Before
-you trust any finding, confirm the envelope is real: `<out-file>` parses as JSON
-with `is_error: false`, `subtype: success`, and a `session_id`. If it is missing,
-truncated, an error envelope, or absent because you produced findings some other
-way, the native review **did not happen** — that is a step failure to fix by
-running the nested call, never a pass to review around. Only once the envelope
-confirms do you read the review from its `.result` and feed it into the triage
-below. The `--allowedTools` allowlist lets the reviewer's finders fan out
-without granting full `bypassPermissions` (a trivial diff reviews cleanly even
-in the default mode, but the heavy fan-out wants its tools). Do **not** locate,
-read, or execute a command file on disk, and do not add a marketplace
-`code-review` plugin to the path: that plugin is GitHub-PR-shaped (it wants a PR
-number and `gh pr comment`) and does not fit a worktree. A literal
-`/code-review` in the nested session resolves deterministically to the built-in
-command — but a fuzzy skill lookup or disk search can still land on the decoy
-and make the review balk.
+That JSON envelope **is this step's artifact**. Before you trust any finding,
+confirm it is real: `<out-file>` parses as JSON with `is_error: false`,
+`subtype: success`, and a `session_id`. If it is missing, truncated, an error
+envelope, or absent because you produced findings some other way, the native
+review **did not happen** — fix it by running the nested call, never review around
+it. Only once the envelope confirms do you read the review from its `.result` and
+feed it into the triage below.
+
+The full rationale — why the refusal happens, why a hand-rolled substitute fails
+the step, the envelope-validation details, and the marketplace-plugin decoy to
+avoid — lives in `references/code-review.md`. Read it if this step misbehaves.
 
 Triage its findings against the Plan:
 

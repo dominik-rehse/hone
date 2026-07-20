@@ -17,7 +17,15 @@ Add the plugin and enable it in your project's `.claude/settings.json`:
 ```json
 {
   "enabledPlugins": { "hone@hone": true },
-  "permissions": { "allow": ["Bash(claude -p:*)"] }
+  "permissions": {
+    "allow": ["Bash(claude -p:*)"],
+    "deny": [
+      "Write(./scripts/run-tests.sh)", "Edit(./scripts/run-tests.sh)",
+      "Write(./scripts/typecheck.sh)", "Edit(./scripts/typecheck.sh)",
+      "Write(./scripts/lint.sh)", "Edit(./scripts/lint.sh)",
+      "Write(./.claude/settings.json)", "Edit(./.claude/settings.json)"
+    ]
+  }
 }
 ```
 
@@ -26,6 +34,13 @@ The `permissions.allow` entry lets `run`'s review step invoke the native
 invocation of that command, so hone runs it as a print-mode user turn
 (`claude -p "/code-review …"`); without the rule that nested call is gated and
 `run` can't stay unattended.
+
+The `permissions.deny` entries are the file-tool half of hone's tamper
+resistance (see *Tamper resistance* below). The `bash-guard` only closes the
+*shell* routes around the gate; the `guard` protects `src/`, `tests/`, `docs/`,
+and `db/` but **not** the gate's own machinery. These rules stop `Write`/`Edit`
+from mutating the test adapter or settings directly. Extend the list to any
+other adapter or config your project treats as protected.
 
 Then, once per project, install the test adapter and the durable-docs skeleton:
 
@@ -95,9 +110,10 @@ All gitignored, per-developer, never checked in:
 
 A `Bash` `PreToolUse` guard escalates or denies shell commands that would disable
 the gate (`--no-verify`, `core.hooksPath`, creating `.hone-off`) or mutate a
-protected artifact (the test adapter, a hook, settings). Pair it with
-`Write`/`Edit` deny-rules in `.claude/settings.json` for the file tools. This
-deters and makes tampering attributable; it is not a sandbox.
+protected artifact (the test adapter, a hook, settings). It closes only the
+*shell* routes; the `Write`/`Edit` deny-rules in the *Install* block close the
+file-tool routes. Together they deter and make tampering attributable; it is not
+a sandbox.
 
 ## Adopting hone in an existing spec-driven repo
 
