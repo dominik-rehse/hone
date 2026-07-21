@@ -143,13 +143,12 @@ type, it already became one at build):
 - a resolved empirical bet → **close** its `docs/open-questions.md` entry;
 - redundant tests the change revealed → **prune** them (deduplication is a real
   output of this step, not an afterthought).
-- **delete `.plans/<change>.md` — in the primary tree.** `.plans/` is
-  gitignored, so it exists only there; the worktree checkout has no copy and an
-  `rm` from `$WT` fails on a path that was never here. Use `rm -f` from the
-  primary tree and tolerate the file already being gone (a parallel run's
-  cleanup may have raced you — that is not lost work). The Plan has done its
-  job. A nested slug leaves empty parent dirs behind — remove those too
-  (`rmdir -p .plans/<area> 2>/dev/null`, also in the primary tree).
+- **delete `.plans/<change>.md` with `git rm`, here in the worktree.** The Plan
+  is tracked and committed on the trunk, so the worktree checked it out; remove
+  it as part of this change — `git rm .plans/<change>.md` from `$WT` — and the
+  landing merge carries the deletion back to the primary tree. git history keeps
+  the Plan; the working tree does not. The Plan has done its job. (Already gone,
+  because you git-rm'd it earlier? Fine — do not re-add it.)
 
 Then submit the change to the `consolidate-critic` agent (Task tool,
 `subagent_type: consolidate-critic`) with a constructed brief: the diff, the

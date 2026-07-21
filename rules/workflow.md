@@ -18,7 +18,8 @@ unrepresentable), *code* and behaviour-named *tests* in `src/<area>/`,
 present-tense *Decisions* (`docs/decisions/<topic>.md`), small per-area *Notes*
 (`docs/notes/<area>.md`), and git history. Never write a durable line an agent
 could recover from the code, and if it can be a type, make it a type, not prose.
-Everything else (the Plan) is ephemeral and deleted at consolidate.
+Everything else (the Plan) is committed at `plan` but removed at consolidate —
+git history keeps it, the working tree does not.
 
 Invariants the hooks enforce: the primary tree is a merge target, never a
 workspace (`guard`); no production code without a failing test (`guard`); the

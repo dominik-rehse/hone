@@ -73,7 +73,7 @@ therefore harmless: it stays inert until step 9.
 >    (all `.stdd-*` — including the `.stdd-off` from step 0 — the precommit gate,
 >    and the guard/audit wiring). The hone plugin is already installed (the
 >    prerequisite above); keep or rename the test adapter to hone's `gate`
->    contract, and `mkdir -p src` plus create the gitignored `.plans/`. Leave
+>    contract, and `mkdir -p src` plus create the tracked `.plans/`. Leave
 >    `.hone-off` in place for now — step 9 removes it.
 >
 > 8. **Verify.** Full suite green; type-check clean; `grep -rn 'stdd\|AC-\|slice-'`

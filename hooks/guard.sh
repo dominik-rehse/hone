@@ -5,8 +5,9 @@
 #   1. The primary tree is a merge target, never a workspace. A Write/Edit to a
 #      durable committed artifact (src/, tests/, docs/, db/, plus any paths the
 #      project lists in .hone-durable-paths) in the PRIMARY git tree is denied —
-#      that work belongs in a worktree, landed by a merge. The ephemeral
-#      hand-written Plan (.plans/) and local config are exempt.
+#      that work belongs in a worktree, landed by a merge. The hand-written Plan
+#      (.plans/) — tracked, but authored and committed here in the primary tree —
+#      and local config are exempt.
 #
 #   2. No production code without a failing test. Creating a NEW non-test file
 #      under src/ is denied unless a test file for it already exists. Test files

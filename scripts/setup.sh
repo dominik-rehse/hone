@@ -4,8 +4,8 @@
 #   bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"
 #
 # It installs the one test adapter (scripts/run-tests.sh) from the language
-# template, gitignores the ephemeral artifacts (.plans/, .worktrees/, markers),
-# and creates the durable docs skeleton. It does NOT touch source, tests, or any
+# template, gitignores the ephemeral artifacts (.worktrees/, markers), and
+# creates the durable docs skeleton. It does NOT touch source, tests, or any
 # existing adapter — an install that would overwrite scripts/run-tests.sh stops
 # and tells you to diff instead. The optional type-check and lint adapters
 # (scripts/typecheck.sh, scripts/lint.sh) are yours to add; the gate runs them
@@ -43,11 +43,17 @@ else
     echo "hone setup: installed scripts/run-tests.sh (from $TEMPLATE)."
 fi
 
-# 2. Gitignore the ephemeral artifacts.
+# 2. Gitignore the ephemeral artifacts. NOT .plans/: a Plan is committable now —
+# it lands in git history, and consolidate removes it with a git rm the landing
+# merge carries — so a prior setup's .plans/ ignore is stripped if present.
 touch .gitignore
-for entry in ".plans/" ".worktrees/" ".hone-off" ".hone-test-globs" ".hone-durable-paths" ".hone-gate-enforce" ".hone-nag-enforce"; do
+for entry in ".worktrees/" ".hone-off" ".hone-test-globs" ".hone-durable-paths" ".hone-gate-enforce" ".hone-nag-enforce"; do
     grep -qxF "$entry" .gitignore || printf '%s\n' "$entry" >> .gitignore
 done
+if grep -qxF ".plans/" .gitignore; then
+    grep -vxF ".plans/" .gitignore > .gitignore.hone-tmp && mv .gitignore.hone-tmp .gitignore
+    echo "hone setup: removed .plans/ from .gitignore — Plans are tracked now."
+fi
 echo "hone setup: ensured ephemeral artifacts are gitignored."
 
 # 3. Durable docs skeleton (empty dirs are fine; the loop fills them), plus the

@@ -69,10 +69,13 @@ flowchart TD
   Closed or deleted, never grown.
 - *Git history*: what changed and why now.
 
-*Ephemeral — gitignored:*
+*Ephemeral — tracked, but removed at consolidate:*
 
 - *Plan*: `.plans/<change>.md`. The per-change brief: what, why, how I'll know
-  it works. The only hand-written artifact; deleted at consolidate.
+  it works. The only hand-written artifact; committed at `plan` (so the run's
+  worktree inherits it off the trunk), then `git rm`'d at consolidate — the
+  landing merge carries the deletion, git history keeps the Plan, the working
+  tree does not.
 
 *Enforcement — config, not docs:*
 
@@ -379,7 +382,7 @@ repo/  (primary tree — a merge target, never worked in)
 │                                #               thing.py/test_thing.py, ...
 ├── docs/{decisions/, notes/, open-questions.md}
 ├── scripts/run-tests.sh         # the test adapter (installed by setup.sh)
-├── .plans/<change>.md           # gitignored — the one hand-written artifact
+├── .plans/<change>.md           # tracked — hand-written; git-rm'd at consolidate
 ├── .worktrees/<change>/         # gitignored — one per in-flight change
 └── .claude/settings.json        # enables the plugin; deny-rules protect gates
 ```
@@ -399,13 +402,16 @@ W = writes · M = amends · P = prunes/deletes · R = reads · — = untouched
 
 | Operation   | .plans/ | code | tests | decisions/ | notes/ | open-q | .git |
 |-------------|---------|------|-------|------------|--------|--------|------|
-| plan        | W       | —    | —     | —          | —      | (W)    | —    |
+| plan        | W       | —    | —     | —          | —      | (W)    | W    |
 | build       | R       | W    | W     | —          | —      | —      | —    |
 | verify      | —       | R    | R     | R          | R      | R      | —    |
 | consolidate | P       | —    | P     | W/M        | W/M    | M      | —    |
 | land        | —       | —    | —     | —          | —      | —      | W    |
 
-(W): only when the Plan surfaces a new open question.
+(W) on open-q: only when the Plan surfaces a new open question. plan's `.git` W
+is the Plan commit on the trunk (so the run's worktree inherits it); consolidate's
+`.plans/` P is a `git rm` staged in the worktree that land's commit and merge
+carry back to the primary tree.
 
 ## Invariants
 
@@ -417,6 +423,8 @@ W = writes · M = amends · P = prunes/deletes · R = reads · — = untouched
    correspondence and size checks; the *carving* of areas is judged by
    `/code-review`.
 3. Every `docs/` write passes the cut test (principle 3).
-4. The primary tree is written only by *land*, a merge; `guard` blocks direct
-   source edits there, so no half-built change ever sits in the tree everything
-   merges into.
+4. The primary tree's durable artifacts are written only by *land*, a merge;
+   `guard` blocks direct source edits there, so no half-built change ever sits
+   in the tree everything merges into. The one hand-authored exception is the
+   Plan (`.plans/`, outside `guard`'s perimeter), committed there at *plan* so
+   the run's worktree inherits it and land's merge can remove it.

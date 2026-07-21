@@ -100,17 +100,31 @@ human is still here. Present the findings, revise the Plan with the human (they
 own it), and resubmit the revised Plan. Never hand off a rejected Plan:
 `/hone:run` executes unattended and trusts that admission happened here.
 
-### 6. Confirm — the hand-off
+### 6. Commit the admitted Plan
 
-Close with an explicit hand-off. The Plan file is easy to lose track of: it
-lives in a hidden dot-directory, it is gitignored (so `git status` won't list
-it), and the slug you derived may differ from the name the user typed. State
-all of that plainly:
+The Plan is a tracked artifact. Commit it now — only once admitted — to the
+current branch:
 
-> Plan written to `.plans/<slug>.md` and admitted by the `plan-critic` — on disk
-> in your checkout, on your current branch. It won't show in `git status`
-> (`.plans/` is gitignored by design; the Plan is ephemeral and consolidate
-> deletes it).
+```bash
+git add .plans/<slug>.md
+git commit -m "chore(plan): <slug>"
+```
+
+Two reasons it must be committed here, not left loose: `/hone:run` builds its
+worktree off the trunk's HEAD, so the Plan has to be on HEAD for the run to see
+it; and committing it is what lets consolidate remove it cleanly — a `git rm`
+inside the worktree that the landing merge carries back to the primary tree —
+instead of an out-of-band delete of an untracked file (which the unattended run
+cannot perform). Commit nothing but the Plan; the loop owns every other artifact.
+
+### 7. Confirm — the hand-off
+
+Close with an explicit hand-off. The slug you derived may differ from the name
+the user typed, so state it plainly:
+
+> Plan written to `.plans/<slug>.md`, admitted by the `plan-critic`, and committed
+> on `<branch>`. It is tracked — it shows in `git log`, not as an untracked file;
+> the change's landing merge removes it from the tree, and git history keeps it.
 > [I named it `<slug>` rather than `<what-you-typed>` to mirror `src/`.]
 > [Open question added to `docs/open-questions.md`.]
 > Run `/hone:run <slug>` to build, verify, consolidate, review, and land it, or

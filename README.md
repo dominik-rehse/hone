@@ -49,7 +49,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"
 ```
 
 `setup.sh` picks a test-adapter template for your ecosystem, gitignores the
-ephemeral artifacts (`.plans/`, `.worktrees/`, the markers), and creates
+ephemeral artifacts (`.worktrees/` and the markers — Plans are tracked), and creates
 `docs/decisions/`, `docs/notes/`, `docs/open-questions.md`, and `src/`. Add the
 optional `scripts/typecheck.sh` and `scripts/lint.sh` where your language has
 them; the gate runs each when present. The adapter contract is
@@ -64,7 +64,8 @@ does nothing.
 ## Use
 
 - `/hone:plan <change>`: author `.plans/<change>.md`, the one hand-written
-  artifact (what, why, how you'll know it works).
+  artifact (what, why, how you'll know it works), and commit it — it is tracked,
+  and the change's landing merge later removes it (git history keeps it).
 - `/hone:run <change>`: execute that Plan through the loop and land it green.
   `/hone:run --all` runs every ready Plan, landed one at a time — after checking
   the set for independence: disjoint Plans run in parallel worktrees, overlapping
