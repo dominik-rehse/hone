@@ -1,7 +1,7 @@
 {
     "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
     "name": "hone",
-    "version": "0.15.3",
+    "version": "0.16.0",
     "description": "hone is a development model where a human writes a short Plan and an automated loop then builds, verifies, consolidates, reviews, and lands each change unattended in a git worktree; a scheduled garden loop (/hone:garden) cuts staleness between changes. The repo keeps only durable truth that cannot go stale, and every cycle deletes something. Enforced by a PreToolUse guard, a Stop-hook gate and nag, two fault-finding critics, and default-on land gates for irreversible changes (authority) and real-environment proof.",
     "author": {
         "name": "Dominik Rehse"
