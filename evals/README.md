@@ -33,9 +33,11 @@ and error a call (which scores as an empty verdict).
 ## Cases
 
 `plan-critic`: `clean-scoped` (ADMIT), `placeholder-tbd`, `two-changes`
-(scope), `collision`. `consolidate-critic`: `lean-change` (CLEAN),
+(scope), `collision`, `proof-altitude` (a user-level claim whose only proof is a
+unit assertion). `consolidate-critic`: `lean-change` (CLEAN),
 `decision-restates-code`, `note-drift`, `single-caller-generic`
-(over-abstraction).
+(over-abstraction), `garden-stale-decision` (a Decision whose governed code is
+gone, surfaced by a garden pass).
 
 ## Extending
 

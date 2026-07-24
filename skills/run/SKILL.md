@@ -329,3 +329,10 @@ Then **land them one at a time** through step 6:
 On 1 or 2, leave the worktree in place as evidence and escalate with the specific
 blocker. Never disable, weaken, or route around a gate to proceed: an escalated
 stop is a correct outcome, a forced pass is not.
+
+When the opt-in land gates are on, a change can also stop at land for a reason
+that is neither a failure nor a fork: the authority gate (`.hone-require-grant`,
+exit 8) awaits your scoped grant for a consequential change, and the proof gate
+(`.hone-proof-enforce`, exit 7) awaits real-environment proof the loop cannot give.
+Both are stops reserved to you by design — escalate and wait; never self-grant or
+self-attest.

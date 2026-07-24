@@ -123,6 +123,13 @@ All gitignored, per-developer, never checked in:
 - `.hone-grant/<change>`: the scoped authorization for one consequential change.
   You create it (its text — who/when/why — lands in the merge commit body);
   delete it to revoke. Directory-ignored, per-developer.
+- `.hone-proof-enforce`: turn on the *proof gate*. Off by default. When present,
+  `land` refuses a change whose Plan declared `Proof: real-environment` unless it
+  is discharged (`scripts/proof.sh` green, or a `.hone-proof/<change>`
+  attestation).
+- `.hone-proof/<change>`: your attestation that the real-environment check for one
+  change ran (a browser journey, a canary). Discharges that change's proof
+  obligation. Directory-ignored, per-developer.
 
 ## Tamper resistance
 
@@ -144,6 +151,16 @@ unattended as always; a dropped column is not. Turn the gate on with
 diff and refuses a consequential change (exit 8, worktree kept as evidence) until
 you record a scoped grant at `.hone-grant/<change>`, whose text lands in the merge
 commit body. Left off, hone lands every green change unattended.
+
+## Proof boundary (opt-in)
+
+hone's checks prove *assertions* — the suite, types, lint, a fuzzed property, a
+seeded mutant — all hermetic and pre-merge. A green check never proves a
+real-environment outcome: a browser journey, a canary, deployed health. For a
+change whose claim lives there, a Plan declares `Proof: real-environment`; with
+`.hone-proof-enforce` on, `land` refuses it (exit 7, worktree kept) until it is
+discharged by a real-environment adapter (`scripts/proof.sh`) or your attestation
+(`.hone-proof/<change>`). Off by default, so undeployed work is never slowed.
 
 ## Adopting hone in an existing spec-driven repo
 

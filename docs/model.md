@@ -159,6 +159,7 @@ flowchart TD
     rev -.->|"Findings to fix"| fix
     fix --> land
     rev -.->|"Needs a decision<br/>only you can make"| stop
+    land -.->|"Consequential or real-environment:<br/>awaits your grant or proof<br/>(opt-in gates)"| stop
     stop --> esc
     esc -.->|"You revise the Plan<br/>and re-run"| planFile
 
@@ -314,9 +315,9 @@ is *categorically* incapable of settling its claim). With the proof gate on
 change may not land on the assertion suite alone: it is discharged by a
 real-environment adapter (`scripts/proof.sh`, which checks the deployed system,
 not the tree) or a human attestation (`.hone-proof/<change>`), and otherwise land
-refuses (exit 7) and the run escalates. This adds a third escalation reason to the
-two on the loop diagram, faithful to *escalate, never force*: proof the loop
-cannot give is handed back, not faked.
+refuses (exit 7) and the run escalates — a land-time escalation the loop diagram
+shows alongside the authority gate, faithful to *escalate, never force*: proof the
+loop cannot give is handed back, not faked.
 
 ### Property-based tests (build-time)
 
@@ -478,18 +479,24 @@ W = writes · M = amends · P = prunes/deletes · R = reads · — = untouched
 | verify      | —       | R    | R     | R          | R      | R      | —    |
 | consolidate | P       | —    | P     | W/M        | W/M    | M      | —    |
 | land        | —       | —    | —     | —          | —      | —      | W    |
+| garden      | P       | P    | P     | P          | P      | P      | W    |
 
 (W) on open-q: only when the Plan surfaces a new open question. plan's `.git` W
 is the Plan commit on the trunk (so the run's worktree inherits it); consolidate's
 `.plans/` P is a `git rm` staged in the worktree that land's commit and merge
-carry back to the primary tree.
+carry back to the primary tree. *garden* is not part of the plan→run change; it is
+the standalone maintenance loop, deletion-only (every column it touches is a prune)
+and landing its cuts through the same merge (`.git` W). It never writes durable
+prose — a stale doc it can only cut, never edit.
 
 ## Invariants
 
-1. Code and tests are written only by *build* (and pruned only by
-   *consolidate*); `docs/` is written only by *consolidate*;
-   `.plans/` deleted only by *consolidate*. Work-in-progress cannot leak into
-   durable truth: the structural cure for the spec pile.
+1. Code and tests are written only by *build*, and durable artifacts are pruned
+   only by *consolidate* — or, between changes, by the standalone *garden* pass,
+   its deletion-only counterpart (never by *build*, *verify*, or *land*). `docs/`
+   prose is written only by *consolidate*; `.plans/` deleted only by
+   *consolidate*. Work-in-progress cannot leak into durable truth: the structural
+   cure for the spec pile.
 2. A Note is optional, 1:1 with an existing area, and size-capped, held by the
    correspondence and size checks; the *carving* of areas is judged by
    `/code-review`.

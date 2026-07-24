@@ -58,8 +58,10 @@ run covered — a silent scope is indistinguishable from a scan that found nothi
 Split every finding two ways:
 
 - **Mechanical cut** — the removal is obvious and the suite can prove it safe: a
-  dead symbol, a redundant test, a resolved question, a leftover branch, a
-  dangling `Governs:` path to fix or a Note to delete. These `garden` executes.
+  dead symbol, a redundant test, a resolved question, a leftover branch, a stale
+  Note or Decision whose `Governs:` path is gone. These `garden` executes. It only
+  *cuts*, never edits: a durable doc that should point at moved code (not be
+  deleted) is a `run` change, so escalate it — don't rewrite prose here.
 - **Judgment** — the removal turns on *why* a durable line exists: is this
   Decision restating code, or does it carry rationale the code can't show? Does
   this Note's invariant still hold? These go to the `consolidate-critic`, never
