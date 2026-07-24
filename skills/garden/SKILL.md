@@ -13,8 +13,8 @@ Input: $ARGUMENTS
 own residue. But rot also accumulates *between* changes — a Decision whose code
 moved, a Note nobody re-derived, a test made redundant by a later change, an open
 question running code already settled. Nothing in the change-triggered loop looks
-at the repo as a whole. `garden` is that standing look: it runs the same loop, on
-a schedule rather than a Plan, and its unit of work is a **cut**, not a feature.
+at the repo as a whole. `garden` is that standing look: it runs the same loop on a
+schedule, driven by a scan instead of a Plan, and its unit of work is a **cut**.
 
 `garden` writes no new behaviour. Every garden change is **deletion-only**, and
 the gate's suite is the proof a cut is safe: a deletion that keeps the suite green
@@ -115,8 +115,8 @@ rationale to hit a quota.
 
 Close with the ledger: each cut landed (and its `Cut:` line), each finding
 abandoned because the suite went red (with what it revealed depends on it), and
-each judgment item deferred to a human. A garden run that cut nothing is a valid,
-honest outcome — say so; do not manufacture a cut to look busy. Silent truncation
+each judgment item deferred to a human. A garden run that cut nothing is a valid
+outcome — say so; do not manufacture a cut to look busy. Silent truncation
 (a scan that stopped early, a cut skipped without a reason) reads as "clean" when
 it isn't, so name every skip.
 
@@ -125,8 +125,8 @@ it isn't, so name every skip.
 `garden` is unbounded work over a whole repo, so cap it: scan fully, but land the
 highest-confidence cuts first and stop at a sensible batch rather than churning
 dozens of merges in one run. What you defer is named in the report and picked up
-next run. The loop is meant to run **often and small** — a scheduled trickle of
-cuts — not a periodic reckoning.
+next run. The loop is meant to run **often and small**: a scheduled trickle of
+cuts.
 
 ## Scheduling
 

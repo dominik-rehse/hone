@@ -308,7 +308,7 @@ journey, a canary, deployed health, behaviour a user actually observes. For a
 change whose claim lives at that altitude, "landed, tested, reviewed" is not
 "proven", and pretending otherwise is the trap.
 
-So the boundary is named, not hidden. A Plan whose proof is user- or ops-level
+So hone states the boundary explicitly. A Plan whose proof is user- or ops-level
 declares `Proof: real-environment` (the `plan-critic` rejects a Plan whose proof
 is *categorically* incapable of settling its claim). The proof gate is on by
 default (disable with `.hone-proof-off` for undeployed work), so such a
@@ -429,7 +429,7 @@ is safe — a deletion that stays green was dead, one that reddens was load-bear
 and is abandoned. The judgment calls (is this Decision stale, or load-bearing
 rationale?) go to the `consolidate-critic`, repo-wide; durable rationale is never
 cut by machine on a hunch, and anything only a human can settle is logged or
-escalated, not guessed. Run it often and small — a trickle of cuts, not a periodic
+escalated to a human. Run it often and small — a trickle of cuts, not a periodic
 reckoning. hone owns the loop, not the timer: the schedule is the project's
 existing cron/CI invoking a print-mode `/hone:garden`.
 
