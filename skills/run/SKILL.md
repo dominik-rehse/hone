@@ -250,6 +250,12 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    - **2** — a merge conflict (aborted, tree restored) means the `--all`
      independence check missed a seam: fold this change in serially and flag it
      for a Decision-level look. Do not force the merge.
+   - **8** — the authority gate (`.hone-require-grant`) classified this as a
+     *consequential* change (destructive SQL, a `db/` deletion, a
+     `.hone-consequential-paths` match) and found no `.hone-grant/<change>`. The
+     merge did not happen; the worktree is kept. **Stop and escalate** — this
+     needs the human's scoped grant, not a workaround. Never create the grant
+     yourself: authority is theirs to give.
 
    Never merge by hand, and never move the primary tree's HEAD
    (`git checkout`/`switch`/`stash`/`reset`) to investigate — that races every

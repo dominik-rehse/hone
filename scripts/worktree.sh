@@ -20,8 +20,14 @@
 #       leaves the primary tree clean and green (a conflict is aborted, a
 #       post-merge regression is rolled back) with the worktree/branch kept as
 #       evidence. Run from the primary tree, after committing in the worktree.
+#       Authority gate (opt-in via .hone-require-grant): a CONSEQUENTIAL change
+#       (destructive SQL, a db/ deletion, or a .hone-consequential-paths match)
+#       may not merge without a scoped grant at .hone-grant/<change>; without it
+#       land refuses BEFORE the merge and keeps the worktree as evidence. The
+#       grant's text rides into the merge commit body, so the authorization
+#       lives in durable history rather than a chat.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached/conflict · 5 lock timeout ·
-#       6 post-merge regression (rolled back).
+#       6 post-merge regression (rolled back) · 8 ungranted consequential change.
 #
 #   worktree.sh verify
 #       Run the full suite (scripts/run-tests.sh --all) in the current tree,
@@ -141,6 +147,38 @@ cmd_verify() {
     bash scripts/run-tests.sh --all
 }
 
+# Classify a branch about to land as CONSEQUENTIAL — an effectively irreversible
+# or high-blast-radius change — printing one reason line per signal (empty output
+# = reversible). Reversibility is the axis: a bad reversible merge is undone with
+# `git revert`; a dropped column is not. Only consulted when .hone-require-grant
+# is present (see cmd_land), so a project whose changes are all reversible
+# (undeployed software, disposable dev data) is never gated. Signals: destructive
+# SQL in a migration or db/ file, a deletion under db/, and any path glob the
+# project lists in .hone-consequential-paths. Git pathspecs do the matching.
+land_consequential() {
+    local root="$1" branch="$2" base reasons=""
+    base=$(git -C "$root" merge-base HEAD "$branch" 2>/dev/null)
+    [ -n "$base" ] || return 0
+    if git -C "$root" diff "$base" "$branch" -- db ':(glob)**/migrations/**' 2>/dev/null \
+        | grep -E '^\+' | grep -qiE 'DROP[[:space:]]+(TABLE|COLUMN)|TRUNCATE|DELETE[[:space:]]+FROM|ALTER[[:space:]].+DROP'; then
+        reasons+="  - destructive SQL (DROP/TRUNCATE/DELETE/ALTER…DROP) in a migration or db/ file"$'\n'
+    fi
+    if git -C "$root" diff --diff-filter=D --name-only "$base" "$branch" -- db 2>/dev/null | grep -q .; then
+        reasons+="  - a file under db/ is deleted"$'\n'
+    fi
+    if [ -f "$root/.hone-consequential-paths" ]; then
+        local pat
+        while IFS= read -r pat; do
+            [ -n "$pat" ] || continue
+            case "$pat" in \#*) continue ;; esac
+            if git -C "$root" diff --name-only "$base" "$branch" -- ":(glob)$pat" 2>/dev/null | grep -q .; then
+                reasons+="  - touches a consequential path: $pat"$'\n'
+            fi
+        done < "$root/.hone-consequential-paths"
+    fi
+    printf '%s' "$reasons"
+}
+
 cmd_land() {
     local change="${1:-}"
     [ -n "$change" ] || { echo "hone worktree: land needs a change name." >&2; return 2; }
@@ -169,8 +207,40 @@ cmd_land() {
     git -C "$main_root" symbolic-ref -q HEAD >/dev/null || {
         echo "hone worktree: the primary tree is in detached HEAD — restore it to the trunk before landing." >&2; return 2; }
 
+    # Authority gate (opt-in via .hone-require-grant): a CONSEQUENTIAL change needs
+    # a scoped human grant before it may merge. Capability (guard/bash-guard) is
+    # "can the agent act"; this is the separate contract — "may it, for this
+    # irreversible act". Checked BEFORE the merge so an ungranted consequential
+    # change never touches the trunk. The grant is scoped (one change), revocable
+    # (delete the file), auditable (its text lands in the merge body below), and
+    # recoverable (the worktree stays until it is granted).
+    local grant_note=""
+    if [ -f "$main_root/.hone-require-grant" ]; then
+        local reasons grant
+        reasons=$(land_consequential "$main_root" "$branch")
+        if [ -n "$reasons" ]; then
+            grant="$main_root/.hone-grant/$change"
+            if [ ! -f "$grant" ]; then
+                {
+                    echo "hone worktree: $branch is a CONSEQUENTIAL change and has no authority grant:"
+                    printf '%s' "$reasons"
+                    echo "Review the diff. If you authorize it, record who/when/why in a file at"
+                    echo "  .hone-grant/$change  (gitignored, per-developer)"
+                    echo "then re-run land. The worktree is kept as evidence until then."
+                } >&2
+                return 8
+            fi
+            grant_note=$(cat "$grant" 2>/dev/null)
+        fi
+    fi
+
     local pre; pre=$(git -C "$main_root" rev-parse HEAD)
-    if ! git -C "$main_root" merge --no-ff "$branch" -m "Merge branch '$branch'" >/dev/null 2>&1; then
+    local -a merge_args=(merge --no-ff "$branch" -m "Merge branch '$branch'")
+    # The grant's text becomes a second commit paragraph — the authorization is
+    # then in git history. The first line stays "Merge branch 'hone/<change>'" so
+    # the nag's landed-Plan grep still matches.
+    [ -n "$grant_note" ] && merge_args+=(-m "Authorized (consequential change):"$'\n'"$grant_note")
+    if ! git -C "$main_root" "${merge_args[@]}" >/dev/null 2>&1; then
         # A conflict means the independence check missed a seam. Restore the
         # shared tree so the next lander starts clean; the branch stays as
         # evidence to fold in serially.

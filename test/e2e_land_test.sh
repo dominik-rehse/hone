@@ -167,6 +167,43 @@ else
   step "SKIP suite-lock tests: flock not available"
 fi
 
+echo "== 5e. authority gate (.hone-require-grant): consequential changes need a grant =="
+touch "$REPO/.hone-require-grant"
+# (a) A reversible change lands freely even with the gate on.
+WT_OK=$(bash "$WSH" add rev-change) || die "worktree add rev-change"
+echo "// harmless" > "$WT_OK/src/mathx/notes.js"
+(cd "$WT_OK" && git add -A && git commit -qm "chore(mathx): a reversible note")
+bash "$WSH" land rev-change >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "a reversible change should land freely with the gate on (got $rc)"
+step "reversible change lands without a grant"
+# (b) A consequential change (destructive SQL in a migration) is refused BEFORE the merge.
+WT_C=$(bash "$WSH" add db-drop) || die "worktree add db-drop"
+mkdir -p "$WT_C/db/migrations"
+echo "DROP TABLE legacy_sessions;" > "$WT_C/db/migrations/0002_drop.sql"
+(cd "$WT_C" && git add -A && git commit -qm "feat(db): drop legacy_sessions")
+PRE=$(git rev-parse HEAD)
+bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 8 ] || die "consequential land without a grant should exit 8 (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "ungranted consequential change must not touch the trunk"
+[ -d "$WT_C" ] || die "worktree should survive an ungranted consequential land as evidence"
+step "consequential change without a grant refused (exit 8), trunk untouched"
+# (c) With a scoped grant, it lands and the authorization is recorded in history.
+mkdir -p "$REPO/.hone-grant"
+echo "approved by t@t.t: legacy_sessions is unused" > "$REPO/.hone-grant/db-drop"
+bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "granted consequential land should succeed (got $rc)"
+git log --format=%B -1 | grep -q "legacy_sessions is unused" || die "grant text should be recorded in the merge commit body"
+step "granted consequential change landed, authorization recorded in history"
+# (d) The gate is off entirely without the marker — the same change lands unattended.
+rm -f "$REPO/.hone-require-grant" "$REPO/.hone-grant/db-drop"
+WT_C2=$(bash "$WSH" add db-drop2) || die "worktree add db-drop2"
+mkdir -p "$WT_C2/db/migrations"
+echo "DROP TABLE more_legacy;" > "$WT_C2/db/migrations/0003_drop.sql"
+(cd "$WT_C2" && git add -A && git commit -qm "feat(db): drop more_legacy")
+bash "$WSH" land db-drop2 >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "consequential change should land freely when the gate is off (got $rc)"
+step "without .hone-require-grant, a consequential change lands unattended"
+
 echo "== 7. add from inside a sibling worktree: anchors to the main tree =="
 # An orchestrator's cwd drifts into change A's worktree before starting change B.
 # `add B` must land at <main_root>/.worktrees/B (not nested under A) and branch

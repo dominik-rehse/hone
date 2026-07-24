@@ -107,6 +107,16 @@ All gitignored, per-developer, never checked in:
 - `.hone-durable-paths`: extend the guard's durable perimeter beyond
   `src/ tests/ docs/ db/` (one entry per line, `#` comments): a directory
   (`deploy/`) or an exact file (`tsconfig.json`). Extends, never shrinks.
+- `.hone-require-grant`: turn on the *authority gate*. Off by default — an
+  undeployed project whose changes are all reversible never sees it. When
+  present, `land` refuses a *consequential* change (destructive SQL, a `db/`
+  deletion, or a `.hone-consequential-paths` match) until a scoped grant exists.
+- `.hone-consequential-paths`: extend what counts as consequential beyond the
+  built-in signals (one path glob per line, `#` comments). Only consulted when
+  `.hone-require-grant` is present.
+- `.hone-grant/<change>`: the scoped authorization for one consequential change.
+  You create it (its text — who/when/why — lands in the merge commit body);
+  delete it to revoke. Directory-ignored, per-developer.
 
 ## Tamper resistance
 
@@ -116,6 +126,18 @@ protected artifact (the test adapter, a hook, settings). It closes only the
 *shell* routes; the `Write`/`Edit` deny-rules in the *Install* block close the
 file-tool routes. Together they deter and make tampering attributable; it is not
 a sandbox.
+
+## Authority (opt-in)
+
+Tamper resistance is a *capability* boundary — what the agent may touch.
+*Authority* is a separate contract — whether an unattended merge of a *consequential*,
+effectively irreversible change (a destructive migration, a `db/` deletion) may
+land without a human's say-so. A reversible change is `git revert`-able and lands
+unattended as always; a dropped column is not. Turn the gate on with
+`.hone-require-grant` (see *Off-switch and markers*): `land` then classifies the
+diff and refuses a consequential change (exit 8, worktree kept as evidence) until
+you record a scoped grant at `.hone-grant/<change>`, whose text lands in the merge
+commit body. Left off, hone lands every green change unattended.
 
 ## Adopting hone in an existing spec-driven repo
 

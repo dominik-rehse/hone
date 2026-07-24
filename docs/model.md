@@ -319,6 +319,29 @@ JS/TS; mutmut or cosmic-ray for Python), so check before relying on it.
 Both are *verification independent of the author*: the writer can game its own
 examples and its own self-review, but not a fuzzed property or a seeded mutant.
 
+## Authority
+
+Capability and authority are separate contracts. The `guard` and `bash-guard`
+answer *can the agent act* — where it may write, which shell routes stay open.
+Authority answers a question deliberately *not* delegated to the model: *may an
+unattended merge land this consequential act at all.* The axis is reversibility.
+A reversible change — a logic bug, a wrong refactor — is `git revert`-able, so its
+cost is bounded and it lands unattended, as the vast majority do. An *irreversible*
+one — a dropped column, a destructive backfill, a truncate — is not undone by
+reverting the merge; the data is already gone. For that subset, green-and-reviewed
+is necessary but not sufficient.
+
+The authority gate is opt-in (`.hone-require-grant`), off by default so an
+undeployed project with disposable data is never slowed. When on, `land`
+classifies the diff mechanically — destructive SQL in a migration or `db/` file, a
+`db/` deletion, any `.hone-consequential-paths` glob — and a consequential change
+may not merge without a *scoped grant* the human writes at `.hone-grant/<change>`:
+scoped (one change), revocable (delete the file), auditable (its text lands in the
+merge commit body), recoverable (the worktree stays as evidence until it is
+granted). No grant → `land` refuses before the merge (exit 8) and the run escalates.
+It extends `bash-guard`'s escalate-on-consequential-shell-op instinct to the one
+consequential act the loop performs itself: the merge.
+
 ## Types and abstractions
 
 Anything expressible as a type belongs in a type, not prose: an interface, a
