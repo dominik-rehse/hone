@@ -256,8 +256,8 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
      tree is left green) and kept the worktree as evidence. **Stop and
      escalate** (this is stop-point 1 surfacing at land).
    - **2**: a merge conflict (aborted, tree restored) means the `--all`
-     independence check missed a seam: fold this change in serially and flag it
-     for a Decision-level look. Do not force the merge.
+     independence check missed an overlap: fold this change in serially and
+     flag it for a Decision-level look. Do not force the merge.
    - **7**: the proof gate (on by default; `.hone-proof-off` disables it) found a
      `Proof: real-environment` change whose proof is still missing (no green
      `scripts/proof.sh`, no `.hone-proof/<change>` sign-off). The merge did not
@@ -315,9 +315,9 @@ Then **land them one at a time** through step 6:
   land` never interleaves two merges; within this run, still drive them one at a
   time so each builds on the last landed result.
 - The upfront check is a judgment; the **merge verifies it**. A merge collision
-  on a shared type, Decision, or Note (`land` exit 2) means the check missed a
-  seam: fold it into one serial change and flag it for a Decision-level look. Do
-  not force the merge.
+  on a shared type, Decision, or Note (`land` exit 2) means the check missed an
+  overlap: fold it into one serial change and flag it for a Decision-level
+  look. Do not force the merge.
 - After all merges, run one **global consolidate pass** (a `consolidate-critic`
   over the combined result) to catch cross-change duplication no single worktree
   could see.

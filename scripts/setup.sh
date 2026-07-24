@@ -1,10 +1,10 @@
 #!/bin/bash
-# hone project setup. Idempotent. Run once in a project that adopts hone:
+# hone project setup. Safe to run again. Run once in a project that adopts hone:
 #
 #   bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"
 #
 # It installs the one test adapter (scripts/run-tests.sh) from the language
-# template, gitignores the ephemeral artifacts (.worktrees/, markers), and
+# template, gitignores the temporary artifacts (.worktrees/, markers), and
 # creates the durable docs skeleton. It does NOT touch source, tests, or any
 # existing adapter. An install that would overwrite scripts/run-tests.sh stops
 # and tells you to diff instead. The optional type-check and lint adapters
@@ -43,7 +43,7 @@ else
     echo "hone setup: installed scripts/run-tests.sh (from $TEMPLATE)."
 fi
 
-# 2. Gitignore the ephemeral artifacts. NOT .plans/: a Plan is committable now.
+# 2. Gitignore the temporary artifacts. NOT .plans/: a Plan is committable now.
 # It lands in git history, and consolidate removes it with a git rm the landing
 # merge carries, so a prior setup's .plans/ ignore is stripped if present.
 touch .gitignore

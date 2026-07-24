@@ -407,8 +407,8 @@ at a time, not a special mode. Three rules:
   landing before the next starts, so the later change builds on the landed
   result.
 - *Independence is verified at the merge.* A merge collision on a shared type
-  or Note means the upfront check missed a seam: that seam becomes one serial
-  change and a Decision-level reconsideration. After all merges, a *global
+  or Note means the upfront check missed an overlap: the colliding changes
+  become one serial change and a Decision-level reconsideration. After all merges, a *global
   consolidate pass* catches cross-change duplication no single worktree could
   see.
 

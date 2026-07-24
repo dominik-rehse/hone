@@ -1,13 +1,13 @@
 #!/bin/bash
 # Eval harness for hone's judgment prose: the two critic agents and, by
 # extension, the behaviour-shaping rule. The critics and the injected rule are
-# the one part of the trust foundation that can rot silently (unverified prose),
+# the one part of the trust foundation that can go stale silently (unverified prose),
 # so this pins them to a suite of cases with known-good verdicts.
 #
 # Each case is a directory under evals/<critic>/<case>/ with:
 #   brief.md   — the constructed brief handed to the critic (self-contained;
 #                no file reads needed, mirroring the loop's constructed context)
-#   expected   — line 1: the expected verdict token (ADMIT|REJECT for
+#   expected   — line 1: the expected verdict token (APPROVE|REJECT for
 #                plan-critic; CLEAN|CUTS for consolidate-critic). Any further
 #                non-empty lines are substrings the critic's findings must
 #                mention (e.g. a category like `collision`), each checked.
@@ -43,7 +43,7 @@ while [ $# -gt 0 ]; do
 done
 
 # The verdict tokens a critic may emit; field 1 is "clean/admit", field 2 "flagged".
-verdict_re() { case "$1" in plan-critic) echo 'ADMIT|REJECT';; consolidate-critic) echo 'CLEAN|CUTS';; esac; }
+verdict_re() { case "$1" in plan-critic) echo 'APPROVE|REJECT';; consolidate-critic) echo 'CLEAN|CUTS';; esac; }
 
 # Strip YAML frontmatter from an agent .md, leaving the system prompt body.
 strip_fm() {

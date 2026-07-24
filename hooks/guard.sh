@@ -80,8 +80,8 @@ esac
 # (schema and migrations are as durable as code), plus any project-specific
 # paths listed in .hone-durable-paths (one per line, # comments allowed):
 # a directory prefix (`deploy/`) or an exact file (`tsconfig.json`). Unlike
-# .hone-test-globs, the file EXTENDS the defaults: the built-in perimeter
-# can grow, never shrink.
+# .hone-test-globs, the file EXTENDS the defaults: the built-in protected
+# set can grow, never shrink.
 is_durable() {
     case "$1" in
         src/*|tests/*|docs/*|db/*) return 0 ;;

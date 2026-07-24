@@ -51,7 +51,7 @@ for f in "$SOURCE_DIR"/*.md; do
 done
 
 # A hone project carries durable artifacts (docs/decisions, docs/notes) or the
-# ephemeral .plans/ but no test adapter → the gate can't run. Point at setup.
+# temporary .plans/ but no test adapter → the gate can't run. Point at setup.
 looks_like_hone=false
 if [ -d "$PROJECT_DIR/docs/decisions" ] || [ -d "$PROJECT_DIR/docs/notes" ] || [ -d "$PROJECT_DIR/.plans" ]; then
     looks_like_hone=true

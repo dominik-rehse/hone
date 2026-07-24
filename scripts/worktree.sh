@@ -20,20 +20,20 @@
 #       leaves the primary tree clean and green (a conflict is aborted, a
 #       post-merge regression is rolled back) with the worktree/branch kept as
 #       evidence. Run from the primary tree, after committing in the worktree.
-#       Authority gate (on by default; disable with .hone-authority-off): a
-#       CONSEQUENTIAL change (destructive SQL, a db/ deletion, or a
+#       Authority gate (on by default; disable with .hone-authority-off): an
+#       IRREVERSIBLE change (destructive SQL, a db/ deletion, or a
 #       .hone-consequential-paths match) may not merge without a scoped grant at
 #       .hone-grant/<change>; without it land refuses BEFORE the merge and keeps
 #       the worktree as evidence. The grant's text rides into the merge commit
 #       body, so the authorization lives in durable history rather than a chat.
 #       Proof gate (on by default; disable with .hone-proof-off): a change whose
 #       Plan declared real-environment proof (a `Proof: real-environment` trailer
-#       on a branch commit) may not land on the gate's assertion-level suite
-#       alone; it must be discharged by scripts/proof.sh (green) or an attestation
-#       at .hone-proof/<change>, else land refuses BEFORE the merge.
+#       on a branch commit) may not land on the test suite alone; the proof
+#       must come from scripts/proof.sh (green) or a human sign-off at
+#       .hone-proof/<change>, else land refuses BEFORE the merge.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached/conflict · 5 lock timeout ·
-#       6 post-merge regression (rolled back) · 7 real-environment proof not
-#       discharged · 8 ungranted consequential change.
+#       6 post-merge regression (rolled back) · 7 real-environment proof
+#       missing · 8 ungranted irreversible change.
 #
 #   worktree.sh verify
 #       Run the full suite (scripts/run-tests.sh --all) in the current tree,
@@ -153,7 +153,7 @@ cmd_verify() {
     bash scripts/run-tests.sh --all
 }
 
-# Classify a branch about to land as CONSEQUENTIAL (an effectively irreversible
+# Classify a branch about to land as IRREVERSIBLE (an effectively irreversible
 # or high-blast-radius change), printing one reason line per signal (empty output
 # = reversible). Reversibility is the axis: a bad reversible merge is undone with
 # `git revert`; a dropped column is not. Consulted whenever the authority gate is
@@ -228,10 +228,10 @@ cmd_land() {
         echo "hone worktree: the primary tree is in detached HEAD — restore it to the trunk before landing." >&2; return 2; }
 
     # Authority gate (on by default; disable with .hone-authority-off): a
-    # CONSEQUENTIAL change needs a scoped human grant before it may merge.
+    # IRREVERSIBLE change needs a scoped human grant before it may merge.
     # Capability (guard/bash-guard) is "can the agent act"; this is the separate
     # contract: "may it, for this irreversible act". Checked BEFORE the merge so
-    # an ungranted consequential change never touches the trunk. The grant is
+    # an ungranted irreversible change never touches the trunk. The grant is
     # scoped (one change), revocable (delete the file), auditable (its text lands
     # in the merge body below), and recoverable (the worktree stays until granted).
     local grant_note=""
@@ -257,13 +257,13 @@ cmd_land() {
     # Proof gate (on by default; disable with .hone-proof-off): a change whose Plan
     # declared real-environment proof cannot land on the gate's assertion-level
     # suite alone. A green check proves only its assertion, not a browser journey
-    # or deployed health. Discharge it with a real-environment adapter
+    # or deployed health. Prove it with a real-environment adapter
     # (scripts/proof.sh, which checks the real environment, not the working tree)
-    # or a human attestation (.hone-proof/<change>); otherwise land refuses before
+    # or a human sign-off (.hone-proof/<change>); otherwise land refuses before
     # the merge and escalates. A change with no such declaration is never gated.
     if [ ! -f "$main_root/.hone-proof-off" ] && [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
         if [ -f "$main_root/.hone-proof/$change" ]; then
-            : # human attested the real-environment check ran
+            : # human signed off that the real-environment check ran
         elif [ -f "$main_root/scripts/proof.sh" ]; then
             if ! ( cd "$main_root" && bash scripts/proof.sh ); then
                 echo "hone worktree: $branch declares real-environment proof and scripts/proof.sh failed — the change is not proven in the real environment. Worktree kept as evidence." >&2
@@ -288,11 +288,11 @@ cmd_land() {
     # the nag's landed-Plan grep still matches.
     [ -n "$grant_note" ] && merge_args+=(-m "Authorized (irreversible change):"$'\n'"$grant_note")
     if ! git -C "$main_root" "${merge_args[@]}" >/dev/null 2>&1; then
-        # A conflict means the independence check missed a seam. Restore the
+        # A conflict means the independence check missed an overlap. Restore the
         # shared tree so the next lander starts clean; the branch stays as
         # evidence to fold in serially.
         git -C "$main_root" merge --abort 2>/dev/null
-        echo "hone worktree: merging $branch conflicted — the independence check missed a seam. Primary tree restored; branch kept. Fold this change in serially." >&2
+        echo "hone worktree: merging $branch conflicted — the independence check missed an overlap. Primary tree restored; branch kept. Fold this change in serially." >&2
         return 2
     fi
     if ! ( cd "$main_root" && bash scripts/run-tests.sh --all >/dev/null 2>&1 ); then

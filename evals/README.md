@@ -18,7 +18,7 @@ bash evals/run.sh --model opus          # override the judge model
 
 Each case is `evals/<critic>/<case>/` with a self-contained `brief.md` (the
 constructed context the loop would hand the critic) and an `expected` file whose
-first line is the verdict token (`ADMIT`/`REJECT`, or `CLEAN`/`CUTS`) and whose
+first line is the verdict token (`APPROVE`/`REJECT`, or `CLEAN`/`CUTS`) and whose
 further lines are substrings the findings must mention. The runner puts the
 agent's own body in the system slot (as a real subagent runs it) and the brief in
 the user turn, calls `claude -p` headless, and compares.
@@ -32,7 +32,7 @@ and error a call (which scores as an empty verdict).
 
 ## Cases
 
-`plan-critic`: `clean-scoped` (ADMIT), `placeholder-tbd`, `two-changes`
+`plan-critic`: `clean-scoped` (APPROVE), `placeholder-tbd`, `two-changes`
 (scope), `collision`, `proof-altitude` (a user-level claim whose only proof is a
 unit assertion). `consolidate-critic`: `lean-change` (CLEAN),
 `decision-restates-code`, `note-drift`, `single-caller-generic`

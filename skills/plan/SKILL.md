@@ -95,7 +95,7 @@ Submit the finished Plan to the `plan-critic` agent (Task tool,
 `subagent_type: plan-critic`). Give it a **constructed brief**: the Plan text,
 the list of open changes (other `.plans/**/*.md` — slugs nest — and existing
 `hone/*` worktrees), and the relevant existing Decisions/Notes, never your own
-transcript. It returns structured findings and an `ADMIT`/`REJECT` verdict.
+transcript. It returns structured findings and an `APPROVE`/`REJECT` verdict.
 
 **If it rejects** (placeholder, contradiction, ambiguity, wrong scope, collision
 with an open change, or contract churn): this is the moment to fix it, while the
@@ -106,7 +106,7 @@ own it), and resubmit the revised Plan. Never hand off a rejected Plan:
 ### 6. Commit the approved Plan
 
 The Plan is a tracked artifact. Commit it now (only once the critic returns
-`ADMIT`) to the current branch:
+`APPROVE`) to the current branch:
 
 ```bash
 git add .plans/<slug>.md

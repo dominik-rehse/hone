@@ -42,7 +42,8 @@ what they must resolve before the loop runs unattended against it.
   Note/Decision's territory?
 - **Collision with an open change.** Given the other open Plans/worktrees in the
   brief, would this change fight one of them on the same `src/` files, type,
-  Decision, or Note? If so it is not independent; say which change and which seam.
+  Decision, or Note? If so it is not independent; say which change and which
+  shared file or contract they collide on.
 - **Contract churn.** Does the Plan touch a **persistent contract**: a DB
   schema or migration, a public API, a wire or file format? If so, is the
   value-space it admits complete, or will a foreseeable follow-up rewrite the
@@ -68,7 +69,7 @@ Return structured findings, most-severe first. For each: a category
 `contract-churn`), the
 specific location in the Plan, why it blocks an unattended run, and the concrete
 question or split the human must resolve. End with a one-line verdict:
-`ADMIT` or `REJECT`.
+`APPROVE` or `REJECT`.
 
 Calibration. A `REJECT` must cite at least one **specific, named finding** from
 the categories above: a placeholder you can quote, a fork you can state as two
@@ -76,6 +77,6 @@ concrete builds, a collision you can name by file and change. A general sense
 that the Plan "could say more" is **not** grounds for rejection. The unattended
 loop fills reasonable implementation detail, and the tests are the durable record
 of behaviour, so a Plan does not need to pre-specify them. When every category
-comes up empty, the verdict is `ADMIT`. That is the expected result for a
+comes up empty, the verdict is `APPROVE`. That is the expected result for a
 well-formed Plan, not a failure to look hard enough. Do not soften a real
-objection to reach `ADMIT`, and do not manufacture one to reach `REJECT`.
+objection to reach `APPROVE`, and do not manufacture one to reach `REJECT`.

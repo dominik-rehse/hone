@@ -23,7 +23,7 @@
 #      reference is mechanical proof the doc drifted. Only path-shaped tokens
 #      (containing "/") are checked (exact and unfoolable); symbol-level drift
 #      stays the consolidate-critic's judgment call. This is the mechanical half
-#      of catching the one rot the model warns can pass silently (unverified
+#      of catching the one staleness the model warns can pass silently (unverified
 #      prose): a hook, not a once-run critic.
 #   4. Change that cuts nothing: on a clean hone/<change> branch (committed,
 #      about to land), the branch's whole diff against its merge base has zero
