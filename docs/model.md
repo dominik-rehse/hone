@@ -409,13 +409,36 @@ at a time, not a special mode. Three rules:
 overlapping ones, and lands them all through the same conservative
 merge-and-verify stage.
 
+## Continuous maintenance
+
+`plan → run` cuts a change's residue at the point of change. But rot also
+accumulates *between* changes, across the parts nothing is currently touching: a
+Decision whose code moved, a Note nobody re-derived, a test a later change made
+redundant, an open question running code already settled. *What is not being
+changed is not managed* holds for abstractions (judged reactively); it leaves a
+gap for the durable layer as a whole, which no diff-scoped hook can see.
+
+`garden` (`/hone:garden`) is the standing loop that closes it: it scans the whole
+repo for that drift and lands the safe cuts through the *same* worktree loop, one
+at a time. Two properties keep it honest. It is **deletion-only** — a garden
+change removes and never adds, so it can only shrink the surface, extending
+principle 4 (*every cycle removes something*) from a per-change habit to a
+scheduled one. And it is **self-verifying**: the gate's suite is the proof a cut
+is safe — a deletion that stays green was dead, one that reddens was load-bearing
+and is abandoned. The judgment calls (is this Decision stale, or load-bearing
+rationale?) go to the `consolidate-critic`, repo-wide; durable rationale is never
+cut by machine on a hunch, and anything only a human can settle is logged or
+escalated, not guessed. Run it often and small — a trickle of cuts, not a periodic
+reckoning. hone owns the loop, not the timer: the schedule is the project's
+existing cron/CI invoking a print-mode `/hone:garden`.
+
 ## Filetree
 
 ```
 hone/                            # the plugin — the machinery (installs once)
 ├── .claude-plugin/plugin.json
 ├── rules/workflow.md            # lean always-on trigger, injected at session start
-├── skills/{plan,run}/SKILL.md   # /hone:plan, /hone:run
+├── skills/{plan,run,garden}/SKILL.md   # /hone:plan, /hone:run, /hone:garden
 ├── hooks/                       # the laws
 │   ├── {guard,gate,nag}.sh + hooks.json
 │   ├── bash-guard.sh            # tamper resistance for the gate

@@ -70,6 +70,12 @@ does nothing.
   `/hone:run --all` runs every ready Plan, landed one at a time — after checking
   the set for independence: disjoint Plans run in parallel worktrees, overlapping
   ones sequentially.
+- `/hone:garden`: the continuous-maintenance loop. Scans the whole repo for
+  durable-layer drift between changes (orphan Notes, broken `Governs:` links,
+  redundant tests, dead code, stale open questions) and lands the safe cuts —
+  deletion-only, each proven safe by the suite — through the same worktree loop.
+  Meant to run often and small, on whatever schedule the project already has (a
+  print-mode `claude -p "/hone:garden"`).
 
 Everything after the Plan is automatic. `run` proceeds unattended and stops only
 when blocked with no resolution, genuinely ambiguous, or done. On a stop it leaves

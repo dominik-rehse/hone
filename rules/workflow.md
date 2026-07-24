@@ -21,8 +21,13 @@ could recover from the code, and if it can be a type, make it a type, not prose.
 Everything else (the Plan) is committed at `plan` but removed at consolidate —
 git history keeps it, the working tree does not.
 
+A third command, `/hone:garden`, runs the same loop on a schedule to cut
+durable-layer drift between changes — deletion-only, each cut proven safe by the
+suite. It is maintenance, not a Plan.
+
 Invariants the hooks enforce: the primary tree is a merge target, never a
 workspace (`guard`); no production code without a failing test (`guard`); the
 suite, type-check, and lint stay green (`gate`); Plans and Notes stay small and
 owned (`nag`). `docs/` is written only at consolidate; code and tests only at
-build. The detail lives in the `plan` and `run` skills, loaded when invoked.
+build. The detail lives in the `plan`, `run`, and `garden` skills, loaded when
+invoked.
