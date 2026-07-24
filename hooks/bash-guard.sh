@@ -4,7 +4,7 @@
 # Tamper resistance for hone's enforcement. The Write/Edit deny rules in
 # settings.json stop the file tools; this closes the obvious SHELL routes around
 # them and around the gate. The threat model is a friction-avoiding agent that
-# takes an open path, not an adversary — so this is a DETERRENT, not a sandbox:
+# takes an open path, not an adversary, so this is a DETERRENT, not a sandbox:
 # multi-step obfuscation (write-a-script-then-run-it, `python -c`, base64) can
 # still evade string matching. It deters and makes tampering attributable.
 #
@@ -26,7 +26,7 @@ cd "$PROJECT_ROOT" || exit 0
 decision() { hone_pretool_decision "$1" "hone bash-guard: $2"; exit 0; }
 
 # Sabotage tokens, defined ONCE and shared by both scan paths so they can't drift.
-# HARD_TOKENS always mean "disable the gate wholesale" — sabotage on any path.
+# HARD_TOKENS always mean "disable the gate wholesale": sabotage on any path.
 # MARKER_TOKENS are context-dependent: CREATING .hone-off disables hone (denied
 # via the constructs below), but reading or REMOVING a marker is legitimate, so
 # a bare mention only escalates on the fail-closed backstop, never auto-denies.
@@ -65,7 +65,7 @@ fi
 # target kept on the trunk; landing goes through `worktree.sh land`, which
 # serializes the merge under a lock. Moving the shared HEAD by hand (a checkout
 # to investigate, a stash, a hard reset) races every other session that shares
-# this tree — the exact collision this guards. Investigation belongs in a
+# this tree: the exact collision this guards. Investigation belongs in a
 # throwaway `git worktree add --detach`. git-dir == common-dir ⇔ the hook's cwd
 # is the primary tree, not a linked worktree (whose git-dir sits under
 # .git/worktrees/), so the rule never fires inside a worktree where HEAD-moves

@@ -8,7 +8,7 @@
 #       print its absolute path. The worktree+branch ARE the change's claim:
 #       creation is atomic (git makes the branch ref), so of two runs racing on
 #       one change exactly one wins. Refuses if the worktree or branch already
-#       exists — another run owns it, or it is leftover evidence to resume by
+#       exists: another run owns it, or it is leftover evidence to resume by
 #       hand. Exit: 0 created · 4 already claimed · 2 usage/not-a-repo/failed.
 #
 #   worktree.sh land <change>
@@ -39,7 +39,7 @@
 #       Run the full suite (scripts/run-tests.sh --all) in the current tree,
 #       serialized under the SAME lock as land. e2e tiers are load-sensitive:
 #       two concurrent full suites poison each other's signal (phantom flakes),
-#       and a suite racing a land's re-verify produces spurious rollbacks — so
+#       and a suite racing a land's re-verify produces spurious rollbacks, so
 #       every full-suite run shares the one lock. This is the sanctioned way to
 #       run --all by hand; never invoke the adapter bare for a full run. The
 #       fast unit tier needs no lock and no wrapper. Exit: the adapter's exit ·
@@ -84,7 +84,7 @@ cmd_add() {
     local branch="hone/$change"
     # The worktree/branch is the change's claim. "Already exists" is exit 4
     # (claimed), distinct from a real failure (2), so a `run` can tell "another
-    # run owns this — skip it" from "something broke".
+    # run owns this, skip it" from "something broke".
     [ -e "$path" ] && { echo "hone worktree: $path already exists — another run owns this change, or it is leftover evidence to resume by hand." >&2; return 4; }
     if git show-ref --verify --quiet "refs/heads/$branch"; then
         echo "hone worktree: branch $branch already exists — another run owns this change, or it is leftover evidence to resume by hand." >&2
@@ -108,7 +108,7 @@ cmd_add() {
 
 # Parse `git worktree list --porcelain` (passed as $1), printing "<path>\t<branch>"
 # for each worktree on a branch, excluding the primary at $2 and detached/bare
-# entries. Pure text transform — no git, no cwd — so it is unit-testable.
+# entries. Pure text transform (no git, no cwd), so it is unit-testable.
 parse_worktrees() {
     local porcelain="$1" primary="$2"
     printf '%s\n' "$porcelain" | awk -v primary="$primary" '
@@ -153,11 +153,11 @@ cmd_verify() {
     bash scripts/run-tests.sh --all
 }
 
-# Classify a branch about to land as CONSEQUENTIAL — an effectively irreversible
-# or high-blast-radius change — printing one reason line per signal (empty output
+# Classify a branch about to land as CONSEQUENTIAL (an effectively irreversible
+# or high-blast-radius change), printing one reason line per signal (empty output
 # = reversible). Reversibility is the axis: a bad reversible merge is undone with
 # `git revert`; a dropped column is not. Consulted whenever the authority gate is
-# on (the default; disabled by .hone-authority-off — see cmd_land), so a project
+# on (the default; disabled by .hone-authority-off, see cmd_land), so a project
 # whose changes are all reversible is never gated in practice. Signals: destructive
 # SQL in a migration or db/ file, a deletion under db/, and any path glob the
 # project lists in .hone-consequential-paths. Git pathspecs do the matching.
@@ -185,11 +185,11 @@ land_consequential() {
     printf '%s' "$reasons"
 }
 
-# Print non-empty if the branch declares real-environment proof — a `Proof:
+# Print non-empty if the branch declares real-environment proof, a `Proof:
 # real-environment` trailer in any of its commit messages (the run skill copies
 # the Plan's proof class there). Consulted whenever the proof gate is on (the
 # default; disabled by .hone-proof-off). A change with no such trailer is
-# assertion-class: the gate's suite already proves it, and it is never gated here —
+# assertion-class: the gate's suite already proves it, and it is never gated here,
 # so a project that never declares real-environment proof is unaffected regardless.
 land_proof_required() {
     local root="$1" branch="$2" base
@@ -218,7 +218,7 @@ cmd_land() {
     # process and auto-released if it dies (so a killed land leaves no stale
     # lock). A concurrent land waits up to $timeout rather than interleaving on
     # the shared HEAD/index/worktree. Everything that reads or moves the primary
-    # tree lives inside the lock — checking outside it would be a TOCTOU race.
+    # tree lives inside the lock. Checking outside it would be a TOCTOU race.
     exec 9>"$lock" || { echo "hone worktree: cannot open the land lock at $lock." >&2; return 2; }
     flock -w "$timeout" 9 || { echo "hone worktree: another land held the lock for >${timeout}s; retry." >&2; return 5; }
 
@@ -230,7 +230,7 @@ cmd_land() {
     # Authority gate (on by default; disable with .hone-authority-off): a
     # CONSEQUENTIAL change needs a scoped human grant before it may merge.
     # Capability (guard/bash-guard) is "can the agent act"; this is the separate
-    # contract — "may it, for this irreversible act". Checked BEFORE the merge so
+    # contract: "may it, for this irreversible act". Checked BEFORE the merge so
     # an ungranted consequential change never touches the trunk. The grant is
     # scoped (one change), revocable (delete the file), auditable (its text lands
     # in the merge body below), and recoverable (the worktree stays until granted).
@@ -256,7 +256,7 @@ cmd_land() {
 
     # Proof gate (on by default; disable with .hone-proof-off): a change whose Plan
     # declared real-environment proof cannot land on the gate's assertion-level
-    # suite alone — a green check proves only its assertion, not a browser journey
+    # suite alone. A green check proves only its assertion, not a browser journey
     # or deployed health. Discharge it with a real-environment adapter
     # (scripts/proof.sh, which checks the real environment, not the working tree)
     # or a human attestation (.hone-proof/<change>); otherwise land refuses before
@@ -283,7 +283,7 @@ cmd_land() {
 
     local pre; pre=$(git -C "$main_root" rev-parse HEAD)
     local -a merge_args=(merge --no-ff "$branch" -m "Merge branch '$branch'")
-    # The grant's text becomes a second commit paragraph — the authorization is
+    # The grant's text becomes a second commit paragraph. The authorization is
     # then in git history. The first line stays "Merge branch 'hone/<change>'" so
     # the nag's landed-Plan grep still matches.
     [ -n "$grant_note" ] && merge_args+=(-m "Authorized (consequential change):"$'\n'"$grant_note")
@@ -313,7 +313,7 @@ cmd_remove() {
     [ -n "$wt" ] || { echo "hone worktree: remove needs a worktree path." >&2; return 2; }
     git rev-parse --git-dir >/dev/null 2>&1 || { echo "hone worktree: not a git repository." >&2; return 2; }
 
-    # The MAIN tree's root — the common git dir's parent — so provenance is stable
+    # The MAIN tree's root (the common git dir's parent), so provenance is stable
     # even when this runs from inside a linked worktree.
     local main_root here
     main_root=$(git -C "$(git rev-parse --git-common-dir 2>/dev/null)/.." rev-parse --show-toplevel 2>/dev/null)
@@ -333,7 +333,7 @@ cmd_remove() {
     git worktree prune
 
     # Land hygiene 1: a landed change's branch goes with its worktree. `-d`
-    # (not -D) so an unmerged branch — abandoned or unlanded work — survives as
+    # (not -D) so an unmerged branch (abandoned or unlanded work) survives as
     # evidence rather than being destroyed.
     case "$branch" in
         hone/*)

@@ -3,7 +3,7 @@
 # be green. Runs the project's one test adapter (scripts/run-tests.sh) and, where
 # the language has them, the optional type-check and lint adapters
 # (scripts/typecheck.sh, scripts/lint.sh). Any failure BLOCKS the stop so the
-# model fixes it before finishing the turn — it never disables a gate to proceed.
+# model fixes it before finishing the turn. It never disables a gate to proceed.
 #
 # Which tier runs depends on where the work sits:
 #   - Uncommitted src/tests changes → the fast UNIT tier. This is the red-green
@@ -14,15 +14,15 @@
 #     tier would miss is caught here rather than trusting the run skill's prose
 #     --all step. This is a BACKSTOP, not the authoritative pre-merge check: a Stop
 #     hook is bounded by its hooks.json timeout (600s), and a suite that outruns it
-#     is killed and reads as a non-block — i.e. it fails OPEN. The authoritative
+#     is killed and reads as a non-block, i.e. it fails OPEN. The authoritative
 #     --all runs inside `worktree.sh land`, under the land lock, after the merge:
 #     that one gates the trunk and rolls back on red. Keep the suite within the
 #     hook timeout to keep this backstop meaningful.
 #   - Clean tree on any other branch → nothing in flight, no-op.
 #   - No git → the unit tier (can't tell what's in flight; adapter presence
 #     already scopes this to hone projects).
-# (Adapters that express tier selection elsewhere — e.g. the Node template runs
-# the project's own "test" script — treat --unit and --all alike; the escalation
+# (Adapters that express tier selection elsewhere, e.g. the Node template runs
+# the project's own "test" script, treat --unit and --all alike; the escalation
 # only bites where the adapter distinguishes tiers.)
 #
 # Absent the adapter the gate is a no-op, so a project that has not adopted hone
@@ -46,7 +46,7 @@ cd "$PROJECT_ROOT" || exit 0
 [ -f ".hone-off" ] && exit 0
 
 ADAPTER="scripts/run-tests.sh"
-[ -f "$ADAPTER" ] || exit 0   # project has no hone test adapter — not gated
+[ -f "$ADAPTER" ] || exit 0   # project has no hone test adapter, not gated
 
 # Pick the tier by where the work sits (see the header). A bare Q&A turn on a
 # clean, non-change tree has nothing to verify and exits early.
@@ -83,7 +83,7 @@ run_step() {
 # The full tier shares land's lock (<git-common-dir>/hone-land.lock): e2e tiers
 # are load-sensitive, so a --all racing another session's suite or a land's
 # re-verify poisons both signals (phantom flakes, spurious land rollbacks).
-# Short wait only — if a suite is live, blocking the stop with "retry" beats
+# Short wait only: if a suite is live, blocking the stop with "retry" beats
 # running red under contention. The unit tier stays lock-free: it is the
 # per-Stop inner loop and must stay cheap. Without flock, degrade to running
 # unserialized rather than not at all.

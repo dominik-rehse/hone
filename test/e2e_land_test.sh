@@ -84,7 +84,7 @@ echo "== 5b. land rolls back a regression, leaving the trunk green =="
 # must merge, see red, roll the merge back, and keep the worktree as evidence.
 WT_R=$(bash "$WSH" add mathx-regress) || die "worktree add mathx-regress"
 # Its test asserts a NEW contract (mul), but it also rewrites add() to break the
-# already-landed add test — so the branch is green alone, red after merge.
+# already-landed add test, so the branch is green alone, red after merge.
 cat > "$WT_R/src/mathx/mul.test.js" <<'EOF'
 const {mul} = require("./mul.js");
 if (mul(2,3) !== 6) throw new Error("mul broken");
@@ -168,7 +168,7 @@ else
 fi
 
 echo "== 5e. authority gate (on by default): consequential changes need a grant =="
-# (a) A reversible change lands freely — the gate only bites consequential diffs.
+# (a) A reversible change lands freely. The gate only bites consequential diffs.
 WT_OK=$(bash "$WSH" add rev-change) || die "worktree add rev-change"
 echo "// harmless" > "$WT_OK/src/mathx/notes.js"
 (cd "$WT_OK" && git add -A && git commit -qm "chore(mathx): a reversible note")
@@ -176,7 +176,7 @@ bash "$WSH" land rev-change >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a reversible change should land freely (got $rc)"
 step "reversible change lands without a grant"
 # (b) A consequential change (destructive SQL in a migration) is refused BEFORE the
-# merge — by default, no marker needed.
+# merge, by default. No marker needed.
 WT_C=$(bash "$WSH" add db-drop) || die "worktree add db-drop"
 mkdir -p "$WT_C/db/migrations"
 echo "DROP TABLE legacy_sessions;" > "$WT_C/db/migrations/0002_drop.sql"
@@ -194,7 +194,7 @@ bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "granted consequential land should succeed (got $rc)"
 git log --format=%B -1 | grep -q "legacy_sessions is unused" || die "grant text should be recorded in the merge commit body"
 step "granted consequential change landed, authorization recorded in history"
-# (d) .hone-authority-off disables the gate — the same change lands unattended.
+# (d) .hone-authority-off disables the gate: the same change lands unattended.
 touch "$REPO/.hone-authority-off"; rm -f "$REPO/.hone-grant/db-drop"
 WT_C2=$(bash "$WSH" add db-drop2) || die "worktree add db-drop2"
 mkdir -p "$WT_C2/db/migrations"
@@ -213,7 +213,7 @@ echo "// assertion-class" > "$WT_A2/src/mathx/plain.js"
 bash "$WSH" land assert-change >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "an assertion-class change should land (got $rc)"
 step "assertion-class change lands (no Proof: trailer, not gated)"
-# (b) A real-environment change with no discharge is refused before the merge — by default.
+# (b) A real-environment change with no discharge is refused before the merge, by default.
 WT_P=$(bash "$WSH" add ui-flow) || die "worktree add ui-flow"
 echo "// browser flow" > "$WT_P/src/mathx/flow.js"
 (cd "$WT_P" && git add -A && git commit -qm "feat(mathx): checkout flow
@@ -254,7 +254,7 @@ bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 7 ] || die "a red scripts/proof.sh should keep a real-environment change out (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "a failed proof must not touch the trunk"
 step "real-environment change with a red scripts/proof.sh refused (exit 7)"
-# (f) .hone-proof-off disables the gate — the same undischarged change lands.
+# (f) .hone-proof-off disables the gate: the same undischarged change lands.
 rm -f "$REPO/scripts/proof.sh"; touch "$REPO/.hone-proof-off"
 bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a real-environment change should land when .hone-proof-off is set (got $rc)"

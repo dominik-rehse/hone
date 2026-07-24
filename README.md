@@ -4,7 +4,7 @@ A Claude Code plugin that refines a codebase by cutting. A human writes a short 
 builds, verifies, consolidates, reviews, and lands each change unattended. Only
 rot-proof durable truth survives in the repo, and every cycle deletes something.
 
-*To hone is to sharpen a blade by grinding material away — refinement through
+*To hone is to sharpen a blade by grinding material away: refinement through
 removal.*
 
 The full model (artifacts, the loop, the checkers, the invariants) lives in
@@ -49,7 +49,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"
 ```
 
 `setup.sh` picks a test-adapter template for your ecosystem, gitignores the
-ephemeral artifacts (`.worktrees/` and the markers — Plans are tracked), and creates
+ephemeral artifacts (`.worktrees/` and the markers, though Plans are tracked), and creates
 `docs/decisions/`, `docs/notes/`, `docs/open-questions.md`, and `src/`. Add the
 optional `scripts/typecheck.sh` and `scripts/lint.sh` where your language has
 them; the gate runs each when present. The adapter contract is
@@ -58,22 +58,22 @@ them; the gate runs each when present. The adapter contract is
 hone assumes a `src/<area>/` layout: the guard requires a failing test before new
 code under `src/`, the nag maps each Note to a `src/<area>/`, and the gate watches
 `src/` and `tests/` for work in flight. Keep production code under `src/` (Python
-packages too — `src/<pkg>/` is a supported layout), or that enforcement silently
+packages too: `src/<pkg>/` is a supported layout), or that enforcement silently
 does nothing.
 
 ## Use
 
 - `/hone:plan <change>`: author `.plans/<change>.md`, the one hand-written
-  artifact (what, why, how you'll know it works), and commit it — it is tracked,
+  artifact (what, why, how you'll know it works), and commit it. It is tracked,
   and the change's landing merge later removes it (git history keeps it).
 - `/hone:run <change>`: execute that Plan through the loop and land it green.
-  `/hone:run --all` runs every ready Plan, landed one at a time — after checking
+  `/hone:run --all` runs every ready Plan, landed one at a time. It first checks
   the set for independence: disjoint Plans run in parallel worktrees, overlapping
   ones sequentially.
 - `/hone:garden`: the continuous-maintenance loop. Scans the whole repo for
   durable-layer drift between changes (orphan Notes, broken `Governs:` links,
-  redundant tests, dead code, stale open questions) and lands the safe cuts —
-  deletion-only, each proven safe by the suite — through the same worktree loop.
+  redundant tests, dead code, stale open questions) and lands the safe cuts
+  (deletion-only, each proven safe by the suite) through the same worktree loop.
   Meant to run often and small, on whatever schedule the project already has (a
   print-mode `claude -p "/hone:garden"`).
 
@@ -112,19 +112,19 @@ All gitignored, per-developer, never checked in:
   language whose tests don't match `*.test.* *.spec.* *_test.* *_spec.*`.
 - `.hone-durable-paths`: extend the guard's durable perimeter beyond
   `src/ tests/ docs/ db/` (one entry per line, `#` comments): a directory
-  (`deploy/`) or an exact file (`tsconfig.json`). Extends, never shrinks.
+  (`deploy/`) or an exact file (`tsconfig.json`). It only extends the perimeter.
 - `.hone-authority-off`: turn *off* the *authority gate* (on by default). With it
   present, `land` stops requiring a grant and lands a *consequential* change
   (destructive SQL, a `db/` deletion, or a `.hone-consequential-paths` match)
-  unattended — for undeployed work whose data is disposable.
+  unattended, for undeployed work whose data is disposable.
 - `.hone-consequential-paths`: extend what counts as consequential beyond the
   built-in signals (one path glob per line, `#` comments).
 - `.hone-grant/<change>`: the scoped authorization for one consequential change.
-  You create it (its text — who/when/why — lands in the merge commit body);
+  You create it (its text, who/when/why, lands in the merge commit body);
   delete it to revoke. Directory-ignored, per-developer.
 - `.hone-proof-off`: turn *off* the *proof gate* (on by default). With it present,
   a change whose Plan declared `Proof: real-environment` lands on the assertion
-  suite alone — for undeployed software.
+  suite alone, for undeployed software.
 - `.hone-proof/<change>`: your attestation that the real-environment check for one
   change ran (a browser journey, a canary). Discharges that change's proof
   obligation. Directory-ignored, per-developer.
@@ -140,8 +140,8 @@ a sandbox.
 
 ## Authority
 
-Tamper resistance is a *capability* boundary — what the agent may touch.
-*Authority* is a separate contract — whether an unattended merge of a *consequential*,
+Tamper resistance is a *capability* boundary: what the agent may touch.
+*Authority* is a separate contract, about whether an unattended merge of a *consequential*,
 effectively irreversible change (a destructive migration, a `db/` deletion) may
 land without a human's say-so. A reversible change is `git revert`-able and lands
 unattended; a dropped column is not. The gate is **on by default**: `land`
@@ -152,8 +152,8 @@ lands in the merge commit body. Turn it off with `.hone-authority-off` (see
 
 ## Proof boundary
 
-hone's checks prove *assertions* — the suite, types, lint, a fuzzed property, a
-seeded mutant — all hermetic and pre-merge. A green check never proves a
+hone's checks prove *assertions* (the suite, types, lint, a fuzzed property, a
+seeded mutant), all hermetic and pre-merge. A green check never proves a
 real-environment outcome: a browser journey, a canary, deployed health. For a
 change whose claim lives there, a Plan declares `Proof: real-environment`, and
 `land` refuses it (exit 7, worktree kept) until it is discharged by a

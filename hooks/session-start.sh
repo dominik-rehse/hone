@@ -62,7 +62,7 @@ if [ "$looks_like_hone" = true ] && [ ! -f "$PROJECT_DIR/scripts/run-tests.sh" ]
 fi
 
 # hone keys its enforcement off a src/<area>/ layout. A hone project with no src/
-# means the guard, gate, and nag silently do nothing — surface that instead of
+# means the guard, gate, and nag silently do nothing. Surface that instead of
 # leaving it a silent gap.
 if [ "$looks_like_hone" = true ] && [ ! -d "$PROJECT_DIR/src" ]; then
     echo "hone: no src/ directory found. hone's guard, gate, and nag key off a src/<area>/ layout; without it they do nothing. Put code under src/ (Python packages too: src/<pkg>/), or run scripts/setup.sh to create it." >&2

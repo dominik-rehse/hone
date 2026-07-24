@@ -52,11 +52,11 @@ dialect, an SDK's headless behaviour, a library on this runtime), record it in
 Distinct from a *decision already made* (that's a Decision, written at
 consolidate). Don't invent questions to fill the file.
 
-One question is never an open question — it goes to the human, now: if the
+One question is never an open question; it goes to the human, now. If the
 change touches a persistent schema (a migration, a stored format), ask **"is
 the existing data worth preserving?"** before any migration design, and record
 the answer in the Plan's *Notes for the loop*. Everything downstream hinges on
-it — disposable data collapses backfill design into drop-and-recreate — and the
+it (disposable data collapses backfill design into drop-and-recreate), and the
 `plan-critic` rejects a schema-touching Plan that leaves it unstated.
 
 ### 4. Write `.plans/<slug>.md`
@@ -98,14 +98,14 @@ the list of open changes (other `.plans/**/*.md` — slugs nest — and existing
 transcript. It returns structured findings and an `ADMIT`/`REJECT` verdict.
 
 **If it rejects** (placeholder, contradiction, ambiguity, wrong scope, collision
-with an open change, or contract churn): this is the moment to fix it — the
+with an open change, or contract churn): this is the moment to fix it, while the
 human is still here. Present the findings, revise the Plan with the human (they
 own it), and resubmit the revised Plan. Never hand off a rejected Plan:
 `/hone:run` executes unattended and trusts that admission happened here.
 
 ### 6. Commit the admitted Plan
 
-The Plan is a tracked artifact. Commit it now — only once admitted — to the
+The Plan is a tracked artifact. Commit it now (only once admitted) to the
 current branch:
 
 ```bash
@@ -115,8 +115,8 @@ git commit -m "chore(plan): <slug>"
 
 Two reasons it must be committed here, not left loose: `/hone:run` builds its
 worktree off the trunk's HEAD, so the Plan has to be on HEAD for the run to see
-it; and committing it is what lets consolidate remove it cleanly — a `git rm`
-inside the worktree that the landing merge carries back to the primary tree —
+it; and committing it is what lets consolidate remove it cleanly (a `git rm`
+inside the worktree that the landing merge carries back to the primary tree)
 instead of an out-of-band delete of an untracked file (which the unattended run
 cannot perform). Commit nothing but the Plan; the loop owns every other artifact.
 
@@ -126,7 +126,7 @@ Close with an explicit hand-off. The slug you derived may differ from the name
 the user typed, so state it plainly:
 
 > Plan written to `.plans/<slug>.md`, admitted by the `plan-critic`, and committed
-> on `<branch>`. It is tracked — it shows in `git log`, not as an untracked file;
+> on `<branch>`. It is tracked: it shows in `git log`, not as an untracked file;
 > the change's landing merge removes it from the tree, and git history keeps it.
 > [I named it `<slug>` rather than `<what-you-typed>` to mirror `src/`.]
 > [Open question added to `docs/open-questions.md`.]

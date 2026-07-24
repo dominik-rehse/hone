@@ -1,5 +1,5 @@
 ---
-description: "hone: a human writes a short Plan; an automated worktree-native loop builds, verifies, consolidates, reviews, and lands each change. Only rot-proof durable truth survives; every cycle deletes something."
+description: "hone: a human writes a short Plan, then an automated worktree-native loop builds, verifies, consolidates, reviews, and lands each change. Only rot-proof durable truth survives, and every cycle deletes something."
 ---
 
 # hone workflow
@@ -17,13 +17,13 @@ Durable truth lives only where it can't rot: *types* (make illegal states
 unrepresentable), *code* and behaviour-named *tests* in `src/<area>/`,
 present-tense *Decisions* (`docs/decisions/<topic>.md`), small per-area *Notes*
 (`docs/notes/<area>.md`), and git history. Never write a durable line an agent
-could recover from the code, and if it can be a type, make it a type, not prose.
-Everything else (the Plan) is committed at `plan` but removed at consolidate —
-git history keeps it, the working tree does not.
+could recover from the code, and if something can be a type, make it a type
+instead of prose. Everything else (the Plan) is committed at `plan` but removed
+at consolidate: git history keeps it, the working tree does not.
 
 A third command, `/hone:garden`, runs the same loop on a schedule to cut
-durable-layer drift between changes — deletion-only, each cut proven safe by the
-suite. It is maintenance, not a Plan.
+durable-layer drift between changes. It only deletes, and the suite proves each
+cut safe. It is maintenance, not a Plan.
 
 Invariants the hooks enforce: the primary tree is a merge target, never a
 workspace (`guard`); no production code without a failing test (`guard`); the

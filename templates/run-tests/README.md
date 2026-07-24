@@ -24,8 +24,8 @@ The gate also runs `scripts/typecheck.sh` and `scripts/lint.sh` *if they exist*
 running `eslint` or `ruff`. There is no template: they are one line each and
 project-specific.
 
-`typecheck.sh` must cover **everything the repo compiles** — `src/`, `tests/`,
-`scripts/`, tooling — not just production code. A tsconfig whose `include`
+`typecheck.sh` must cover **everything the repo compiles** (`src/`, `tests/`,
+`scripts/`, tooling), not only production code. A tsconfig whose `include`
 stops at `src/` makes the gate's green overstate what was checked: type errors
 hide in exactly the code no test exercises (dev servers, deploy tooling) and
 surface as broken tooling long after they landed.
@@ -36,8 +36,8 @@ surface as broken tooling long after they landed.
 change against the **real environment** (a browser journey, a canary, deployed
 health), not the working tree. It runs only when a change declared
 `Proof: real-environment` (the proof gate is on by default; `.hone-proof-off`
-disables it), and only then at land — a green suite proves its assertions, not that the deployed
-system behaves. Exit `0` = proven. There is no template: what "the real
+disables it), and only then at land. A green suite proves its assertions, not
+that the deployed system behaves. Exit `0` = proven. There is no template: what "the real
 environment" means is project-specific (a Playwright run against a preview URL, a
 `curl` of a canary's health endpoint). Absent it, a real-environment change is
 discharged instead by a human attestation at `.hone-proof/<change>`.

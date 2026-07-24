@@ -27,14 +27,14 @@ gate can't verify anything.
 
 ## The loop, per Plan
 
-Three hooks enforce the laws as you work: the `guard` (PreToolUse — test-first,
-and no durable edits in the primary tree), the `gate` (Stop — the suite,
-type-check, and lint stay green), and the `nag` (Stop, advisory — Plan and Note
+Three hooks enforce the laws as you work: the `guard` (PreToolUse: test-first,
+and no durable edits in the primary tree), the `gate` (Stop: the suite,
+type-check, and lint stay green), and the `nag` (Stop, advisory: Plan and Note
 hygiene).
 
 Run these steps in order. **Do not skip a step, and do not proceed past a step
-whose artifact does not confirm it.** Two points stop and escalate — verify can't
-go green (stop-point 1) and review finds the change ambiguous (stop-point 2); the
+whose artifact does not confirm it.** Two points stop and escalate: verify can't
+go green (stop-point 1) and review finds the change ambiguous (stop-point 2). The
 third way to stop is simply *done* (see *The three ways to stop*). On an escalating
 stop, leave the worktree in place as evidence and report. Never disable a gate to
 get past it.
@@ -56,7 +56,7 @@ That creates `.worktrees/<change>` on branch `hone/<change>` and prints its path
 merge target and the `guard` will block durable edits made in it.
 
 The worktree **is the change's claim**, and the add is atomic: if it exits **4**,
-this change is already claimed — another `run` (in another session) owns it, or a
+this change is already claimed: another `run` (in another session) owns it, or a
 crashed run left it behind. Do **not** adopt that worktree: a single named change
 **stops** and reports it (the human resumes leftover work by hand); under `--all`
 it is **skipped** (below). Only exit 0 means you own this change and may proceed.
@@ -84,8 +84,8 @@ fix the root cause. Never fix first and add a confirming test after.
 
 An **unrelated defect discovered en route** (broken tooling, a latent bug the
 Plan never mentioned) does not ride inside the change's commit. Fix it with its
-own red-green cycle and its **own commit on the branch**, honestly typed — or,
-if it is substantial, stop and escalate for its own Plan. The landing commit's
+own red-green cycle and its **own commit on the branch**, honestly typed; if it
+is substantial, stop and escalate for its own Plan. The landing commit's
 body still notes the discovery; the fix just doesn't hide in an unrelated diff.
 
 Where the Plan names a critical path, prefer a **property test** for any
@@ -93,7 +93,7 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
 
 ### 3. Verify
 
-- **gate** — the full suite, plus type-check and lint, all green:
+- **gate**: the full suite, plus type-check and lint, all green:
   - Run the full suite through the serialized wrapper:
     `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" verify`. Never run the
     adapter bare with `--all`: full-suite runs share one cross-session lock with
@@ -109,8 +109,8 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
     lock (so an integration regression can't merge on a green unit tier alone);
     while the tree is dirty it runs the fast unit tier.
   - A full suite can outlast the ~2m foreground Bash timeout, which kills it
-    regardless of any inner `timeout`. Run the gate — and any long build or verify
-    command — in your Bash tool's background mode and poll it to completion, never
+    regardless of any inner `timeout`. Run the gate (and any long build or verify
+    command) in your Bash tool's background mode and poll it to completion, never
     in the foreground where a kill reads as a spurious failure.
 - **nag**: no leftover Plan yet (that's consolidate), but check Notes you touched
   are within size and 1:1 with an area.
@@ -121,8 +121,8 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
   mutant means a hollow test; close the gap with another red-green cycle. Skip it
   for non-critical or UI changes; never gate a trivial change on it.
 
-Close verify by stating each check's outcome — tests, type-check, lint,
-mutation — including any skip **with its reason** ("mutation: skipped — no
+Close verify by stating each check's outcome (tests, type-check, lint,
+mutation), including any skip **with its reason** ("mutation: skipped — no
 critical path named in the Plan"). An unstated skip is indistinguishable from a
 forgotten check, and this receipt is what a later audit of the transcript reads.
 
@@ -145,10 +145,10 @@ type, it already became one at build):
   output of this step, not an afterthought).
 - **delete `.plans/<change>.md` with `git rm`, here in the worktree.** The Plan
   is tracked and committed on the trunk, so the worktree checked it out; remove
-  it as part of this change — `git rm .plans/<change>.md` from `$WT` — and the
+  it as part of this change (`git rm .plans/<change>.md` from `$WT`), and the
   landing merge carries the deletion back to the primary tree. git history keeps
   the Plan; the working tree does not. The Plan has done its job. (Already gone,
-  because you git-rm'd it earlier? Fine — do not re-add it.)
+  because you git-rm'd it earlier? Fine, do not re-add it.)
 
 Then submit the change to the `consolidate-critic` agent (Task tool,
 `subagent_type: consolidate-critic`) with a constructed brief: the diff, the
@@ -160,23 +160,23 @@ redundant test, an abstraction not earning its keep. Apply its accepted findings
 ### 5. Review — native `/code-review`
 
 Run Claude Code's built-in `/code-review` on the finished change (the worktree
-diff) **once** — it is multi-agent (parallel finders plus a verification pass) and
+diff) **once**: it is multi-agent (parallel finders plus a verification pass) and
 the loop's most expensive step, so it runs a single time and hone reuses it rather
 than shipping a reviewer. Give it a constructed brief: pass the Plan text (still in
-hand — the file is gone) along with the diff, so the reviewer can tell a violation
+hand, the file is gone) along with the diff, so the reviewer can tell a violation
 of the Plan's stated stance from the stance itself.
 
 The command is **user-invocation-only** (`disable-model-invocation`): the Skill
 tool, a SlashCommand tool, and subagents all refuse it. That refusal is
-**expected** — do **not** hand-roll a substitute reviewer (no `Workflow`, no
+**expected**: do **not** hand-roll a substitute reviewer (no `Workflow`, no
 fan-out of `Agent`/`Task` finders); each one silently abandons the native review
 this step reuses and is a step failure even when it produces findings. A slash
 command in a print-mode (`-p`) prompt is a *user* invocation, so run the genuine
 reviewer by nesting a headless Claude Code. Write the brief to a file, then invoke
 it with the worktree as the working directory so the command's own `git diff` sees
 the local change. Run it in the background (your Bash tool's background mode, not a
-shell `&`) and poll the output file — the fan-out outlasts the ~2m foreground
-timeout:
+shell `&`) and poll the output file, because the fan-out outlasts the ~2m
+foreground timeout:
 
 ```
 claude -p "/code-review $(cat <brief-file>)" \
@@ -190,25 +190,25 @@ That JSON envelope **is this step's artifact**. Before you trust any finding,
 confirm it is real: `<out-file>` parses as JSON with `is_error: false`,
 `subtype: success`, and a `session_id`. If it is missing, truncated, an error
 envelope, or absent because you produced findings some other way, the native
-review **did not happen** — fix it by running the nested call, never review around
+review **did not happen**: fix it by running the nested call, never review around
 it. Only once the envelope confirms do you read the review from its `.result` and
 feed it into the triage below.
 
-The full rationale — why the refusal happens, why a hand-rolled substitute fails
-the step, the envelope-validation details, and the marketplace-plugin decoy to
-avoid — lives in `references/code-review.md`. Read it if this step misbehaves.
+The full rationale lives in `references/code-review.md`: why the refusal happens,
+why a hand-rolled substitute fails the step, the envelope-validation details, and
+the marketplace-plugin decoy to avoid. Read it if this step misbehaves.
 
 Triage its findings against the Plan:
 
 - **Apply** confirmed findings with red-green cycles (never a fix without a
   test); those fixes are re-gated by `verify`, not by a second review.
 - **Decline** a confirmed finding only when it contradicts the Plan's explicit
-  stance or falls outside the change's scope — and record every decline
+  stance or falls outside the change's scope. Record every decline
   durably, in the landing commit's body or (for a real defect deferred, not
   dismissed) as a `docs/open-questions.md` entry. A decline that lives only in
   the conversation is lost to the next cycle.
 
-Triage is yours — never pause to ask how many findings to apply; `run` is
+Triage is yours; never pause to ask how many findings to apply. `run` is
 unattended and a scope question is not a genuine fork. The default: apply every
 confirmed finding inside the Plan's scope, and record out-of-scope ones
 durably as follow-up material (a `docs/open-questions.md` entry, or a note in
@@ -216,7 +216,7 @@ the landing commit body suggesting a future Plan) rather than expanding the
 change or blocking on a human.
 
 If the review surfaces something that makes the change genuinely ambiguous or
-wrong to land — not merely large or out of scope — **stop and escalate**
+wrong to land (not merely large or out of scope), **stop and escalate**
 (stop-point 2).
 
 ### 6. Land
@@ -228,7 +228,7 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    The **type follows the dominant durable artifact**: a change that alters the
    behaviour of `deploy/` or `scripts/` is never `docs:`, whatever prose rode
    along. The body carries a **`Cut:` line** naming what consolidate removed
-   (pruned tests, dead code, deleted doc lines) — or `Cut: nothing`, with the
+   (pruned tests, dead code, deleted doc lines), or `Cut: nothing`, with the
    reason, when there genuinely was nothing; the nag flags a zero-deletion
    change, and this line is its answer. If the Plan declared `Proof:
    real-environment`, carry that same **`Proof: real-environment` line** in the
@@ -241,33 +241,33 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    ```
 
    That takes the **land lock**, so it is safe even when another `run` is
-   landing into the same primary tree at the same time — it waits its turn
+   landing into the same primary tree at the same time: it waits its turn
    instead of interleaving. Under the lock it merges `--no-ff`, **re-runs the
-   whole suite** in the primary tree (green confirms the merge — the
+   whole suite** in the primary tree (green confirms the merge: the
    confirmation is the suite, not the merge succeeding), and on green removes
    the worktree and deletes the branch. Read its exit:
-   - **0** — landed and green.
-   - **6** — the merge regressed the trunk; `land` rolled it back (the primary
+   - **0**: landed and green.
+   - **6**: the merge regressed the trunk; `land` rolled it back (the primary
      tree is left green) and kept the worktree as evidence. **Stop and
      escalate** (this is stop-point 1 surfacing at land).
-   - **2** — a merge conflict (aborted, tree restored) means the `--all`
+   - **2**: a merge conflict (aborted, tree restored) means the `--all`
      independence check missed a seam: fold this change in serially and flag it
      for a Decision-level look. Do not force the merge.
-   - **7** — the proof gate (on by default; `.hone-proof-off` disables it) found a
+   - **7**: the proof gate (on by default; `.hone-proof-off` disables it) found a
      `Proof: real-environment` change with no discharge (no green `scripts/proof.sh`, no
      `.hone-proof/<change>` attestation). The merge did not happen; the worktree
-     is kept. **Stop and escalate** — the real-environment check is out of the
-     loop's boundary; the human runs the journey/canary and attests it. Never
+     is kept. **Stop and escalate**, because the real-environment check is out of
+     the loop's boundary; the human runs the journey/canary and attests it. Never
      attest it yourself.
-   - **8** — the authority gate (on by default; `.hone-authority-off` disables it)
+   - **8**: the authority gate (on by default; `.hone-authority-off` disables it)
      classified this as a *consequential* change (destructive SQL, a `db/` deletion, a
      `.hone-consequential-paths` match) and found no `.hone-grant/<change>`. The
-     merge did not happen; the worktree is kept. **Stop and escalate** — this
+     merge did not happen; the worktree is kept. **Stop and escalate**: this
      needs the human's scoped grant, not a workaround. Never create the grant
      yourself: authority is theirs to give.
 
    Never merge by hand, and never move the primary tree's HEAD
-   (`git checkout`/`switch`/`stash`/`reset`) to investigate — that races every
+   (`git checkout`/`switch`/`stash`/`reset`) to investigate: that races every
    other session sharing the tree, and the `bash-guard` will stop you. The
    primary tree stays on the trunk as a merge target; do any investigation in a
    throwaway `git worktree add --detach` scratch tree.
@@ -277,7 +277,7 @@ Confirm to the user: what landed, the Decisions/Notes written, what was deleted
 
 ## `--all` — many changes at once
 
-Parallelism is `run` over several Plans, not a special mode — and it is never
+Parallelism is `run` over several Plans, not a special mode, and it is never
 assumed. **Check independence first, before spawning any worktree.** Each
 `plan-critic` ran at plan time, before later Plans existed; this is the first
 moment the whole set is visible, so the cross-check is yours.
@@ -290,16 +290,16 @@ partition:
 
 - **Disjoint Plans** run in parallel: steps 1–5 each in its own worktree,
   concurrently.
-- **Overlapping Plans** run sequentially: order them (foundation first — the
+- **Overlapping Plans** run sequentially: order them (foundation first: the
   Plan the others build on), and run each fully through step 6 before starting
   the next, so the later change builds on the landed result instead of fighting
   it at the merge. Sequencing is your call; it needs no escalation.
 
-State the partition and its reason before starting ("`a` and `b` are disjoint —
-parallel; `c` touches the same schema as `a` — after `a` lands").
+State the partition and its reason before starting ("`a` and `b` are disjoint:
+parallel; `c` touches the same schema as `a`: after `a` lands").
 
 A change whose `add` exits **4** is already claimed by another `run` sharing this
-repo — **skip it** and note the skip in the partition report; never adopt its
+repo: **skip it** and note the skip in the partition report; never adopt its
 worktree. This is what keeps two concurrent `/hone:run` invocations from both
 building the same Plan: the worktree is a single atomic claim.
 
@@ -333,6 +333,6 @@ stop is a correct outcome, a forced pass is not.
 The land gates (on by default) add a stop that is neither a failure nor a fork:
 the authority gate (exit 8) awaits your scoped grant for a consequential change,
 and the proof gate (exit 7) awaits real-environment proof the loop cannot give.
-Both are stops reserved to you by design — escalate and wait; never self-grant or
+Both are stops reserved to you by design: escalate and wait; never self-grant or
 self-attest. (A project can disable either with `.hone-authority-off` /
 `.hone-proof-off`.)

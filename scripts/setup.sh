@@ -6,7 +6,7 @@
 # It installs the one test adapter (scripts/run-tests.sh) from the language
 # template, gitignores the ephemeral artifacts (.worktrees/, markers), and
 # creates the durable docs skeleton. It does NOT touch source, tests, or any
-# existing adapter — an install that would overwrite scripts/run-tests.sh stops
+# existing adapter. An install that would overwrite scripts/run-tests.sh stops
 # and tells you to diff instead. The optional type-check and lint adapters
 # (scripts/typecheck.sh, scripts/lint.sh) are yours to add; the gate runs them
 # when present.
@@ -43,9 +43,9 @@ else
     echo "hone setup: installed scripts/run-tests.sh (from $TEMPLATE)."
 fi
 
-# 2. Gitignore the ephemeral artifacts. NOT .plans/: a Plan is committable now —
-# it lands in git history, and consolidate removes it with a git rm the landing
-# merge carries — so a prior setup's .plans/ ignore is stripped if present.
+# 2. Gitignore the ephemeral artifacts. NOT .plans/: a Plan is committable now.
+# It lands in git history, and consolidate removes it with a git rm the landing
+# merge carries, so a prior setup's .plans/ ignore is stripped if present.
 touch .gitignore
 for entry in ".worktrees/" ".hone-off" ".hone-test-globs" ".hone-durable-paths" ".hone-gate-enforce" ".hone-nag-enforce" ".hone-authority-off" ".hone-consequential-paths" ".hone-grant/" ".hone-proof-off" ".hone-proof/"; do
     grep -qxF "$entry" .gitignore || printf '%s\n' "$entry" >> .gitignore
@@ -60,7 +60,7 @@ echo "hone setup: ensured ephemeral artifacts are gitignored."
 # src/ root. hone's enforcement keys off a src/<area>/ layout: the guard requires
 # a test before code under src/, the nag maps each Note to a src/<area>/, and the
 # gate watches src/ and tests/ for work in flight. Code must live under src/ for
-# these to apply — Python packages included (src/<pkg>/ is a supported layout).
+# these to apply, Python packages included (src/<pkg>/ is a supported layout).
 mkdir -p docs/decisions docs/notes .plans src
 [ -f docs/open-questions.md ] || printf '# Open questions\n\nEmpirical bets only running code settles. Close or delete each entry once resolved; never grow it.\n' > docs/open-questions.md
 echo "hone setup: created docs/decisions, docs/notes, docs/open-questions.md, .plans/, src/."

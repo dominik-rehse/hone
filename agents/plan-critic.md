@@ -30,7 +30,7 @@ what they must resolve before the loop runs unattended against it.
   claim (a browser flow, a deployed behaviour, an integration a user observes)
   but the only proof named is a unit assertion that cannot settle it. A green
   check proves only its assertion, so name the mismatch and require either a real
-  proof or an explicit `Proof: real-environment` line — flag this only when the
+  proof or an explicit `Proof: real-environment` line. Flag this only when the
   proof is *categorically* incapable of settling the claim, not merely thin.
 - **Ambiguity.** A requirement a reasonable builder could satisfy two materially
   different ways. Distinguish a genuine fork (reject: the human must pick) from
@@ -43,7 +43,7 @@ what they must resolve before the loop runs unattended against it.
 - **Collision with an open change.** Given the other open Plans/worktrees in the
   brief, would this change fight one of them on the same `src/` files, type,
   Decision, or Note? If so it is not independent; say which change and which seam.
-- **Contract churn.** Does the Plan touch a **persistent contract** — a DB
+- **Contract churn.** Does the Plan touch a **persistent contract**: a DB
   schema or migration, a public API, a wire or file format? If so, is the
   value-space it admits complete, or will a foreseeable follow-up rewrite the
   same contract ("expose three of the SDK's five levels" begs the question;
@@ -51,10 +51,10 @@ what they must resolve before the loop runs unattended against it.
   *other* open Plans touch the same contract? Adjacent Plans on one contract
   are not independent even without a file collision: they should merge, or be
   sequenced with the contract settled entirely in the first. Flag narrowness
-  only when the wider space is already knowable — don't demand speculative
+  only when the wider space is already knowable; don't demand speculative
   generality. A Plan that changes a schema must also state whether the
   existing data is worth preserving: backfill and migration design hinge on
-  that answer, so a schema-touching Plan silent on it is ambiguous — reject,
+  that answer, so a schema-touching Plan silent on it is ambiguous; reject,
   and name the question ("is existing data preserved or disposable?") for the
   human to answer. And before you propose any migration mechanics of your own,
   read the project's declared schema-management policy in the Decisions/Notes

@@ -2,42 +2,42 @@
 # Stop-hook nag (Claude Code). The soft counterpart to the gate: cheap,
 # deterministic hygiene checks that keep the durable layer from silently growing.
 #
-#   1. Leftover Plan   — a .plans/<change>.md whose change has LANDED: no
-#      worktree, plus positive evidence the change concluded — the merge commit
+#   1. Leftover Plan: a .plans/<change>.md whose change has LANDED: no
+#      worktree, plus positive evidence the change concluded. The merge commit
 #      land writes (its fixed -m format makes the grep exact) or a surviving
 #      fully-merged hone/<change> branch. Consolidate should have deleted it.
 #      "No worktree" alone is NOT evidence: that is the normal plan→run gap
 #      (hone authors Plans first and runs them later, often from another
 #      session), and flagging it nags every queued Plan into alarm fatigue.
 #      Pending Plans get at most one aggregate advisory line. (A Plan whose
-#      worktree still exists is active work — not flagged either way.)
+#      worktree still exists is active work, not flagged either way.)
 #      <change> may be nested (auth/refresh-token): the plan skill derives
 #      slugs mirroring src/, so the scan must recurse.
-#   2. Oversized Note  — a docs/notes/<area>.md over the size cap (a Note is a
+#   2. Oversized Note: a docs/notes/<area>.md over the size cap (a Note is a
 #      map + one invariant, not a spec: half a screen).
-#   3. Orphan Note     — a docs/notes/<area>.md with no corresponding src/<area>/.
+#   3. Orphan Note: a docs/notes/<area>.md with no corresponding src/<area>/.
 #      Notes are 1:1 with an existing area.
-#   6. Broken Governs link — a Decision or Note declaring `Governs: <path>` whose
+#   6. Broken Governs link: a Decision or Note declaring `Governs: <path>` whose
 #      path no longer exists. The optional `Governs:` line pins durable prose to
 #      the code it explains: when the code moves or is deleted, the dangling
 #      reference is mechanical proof the doc drifted. Only path-shaped tokens
-#      (containing "/") are checked — exact and unfoolable; symbol-level drift
+#      (containing "/") are checked (exact and unfoolable); symbol-level drift
 #      stays the consolidate-critic's judgment call. This is the mechanical half
 #      of catching the one rot the model warns can pass silently (unverified
 #      prose): a hook, not a once-run critic.
-#   4. Change that cuts nothing — on a clean hone/<change> branch (committed,
+#   4. Change that cuts nothing: on a clean hone/<change> branch (committed,
 #      about to land), the branch's whole diff against its merge base has zero
 #      deletions. "Every cycle removes something" is the model's principle 4;
 #      a purely additive change means consolidate pruned nothing. This check
 #      stays advisory even under .hone-nag-enforce: a hard rule here would
 #      incentivize token deletions, so the finding names the principle and
 #      leaves the judgment to consolidate.
-#   5. Landed branch left behind — in the PRIMARY tree, a hone/* branch fully
+#   5. Landed branch left behind: in the PRIMARY tree, a hone/* branch fully
 #      merged into HEAD with no worktree attached. Land removes the worktree;
 #      the merged branch should go with it (git branch -d) or they accumulate
 #      one per change, forever.
 #
-# Default: ADVISORY — prints to stderr and exits 0 (never blocks). Create an
+# Default: ADVISORY. Prints to stderr and exits 0 (never blocks). Create an
 # empty .hone-nag-enforce to make the findings BLOCK the stop instead. Disabled
 # entirely by .hone-off.
 
@@ -52,7 +52,7 @@ cd "$PROJECT_ROOT" || exit 0
 
 [ -f ".hone-off" ] && exit 0
 
-# Note size cap: lines. "Half a screen" — a Note past this has drifted toward a
+# Note size cap: lines. "Half a screen". A Note past this has drifted toward a
 # spec and should be cut or split.
 NOTE_MAX_LINES=40
 
@@ -163,7 +163,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
         attached=$(git worktree list --porcelain 2>/dev/null | sed -n 's|^branch refs/heads/||p')
         while IFS= read -r b; do
             [ -n "$b" ] || continue
-            printf '%s\n' "$attached" | grep -qxF "$b" && continue   # a live worktree — active work
+            printf '%s\n' "$attached" | grep -qxF "$b" && continue   # a live worktree, active work
             add_finding "branch ${b} is fully merged and has no worktree — land should have deleted it (git branch -d ${b})."
         done < <(git branch --merged HEAD --format='%(refname:short)' 2>/dev/null | grep '^hone/')
     fi

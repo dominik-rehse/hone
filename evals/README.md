@@ -1,4 +1,4 @@
-# Evals — pinning the judgment prose
+# Evals: pinning the judgment prose
 
 The two critics and the injected `rules/workflow.md` are behaviour-shaping prose
 doing real judgment work, and unverified prose is the one part of hone's trust

@@ -1,6 +1,6 @@
-# hone — a development model for AI-written codebases
+# hone: a development model for AI-written codebases
 
-*To hone is to sharpen a blade by grinding material away — refinement through
+*To hone is to sharpen a blade by grinding material away: refinement through
 removal.* hone is a development model for codebases where an AI agent is a primary
 writer *and* reader. It enforces the discipline of test-driven work but carries no
 rot-prone corpus: there is no hand-maintained per-feature specification pile. It
@@ -24,7 +24,7 @@ nothing forces to stay in step with the code.
 2. *Durable truth lives only where it can't rot.* Everything else is disposable.
 3. *The cut test.* Never write a durable line an agent could recover from the
    code, and if it can be a type, it is a type, not prose.
-4. *Deletion is routine.* Every cycle removes something, counterbalancing a
+4. *Deletion is routine.* Every cycle removes something; it counterbalances a
    machine that otherwise only adds.
 5. *The human plans; automation executes.* After the Plan, the loop runs
    unattended: hooks enforce the laws, critics fill the judgment slots, and it
@@ -34,8 +34,8 @@ nothing forces to stay in step with the code.
 
 ## Artifacts
 
-At consolidate, each piece of durable residue is routed by a fixed test — cut
-first, then type, then the smallest doc that fits:
+At consolidate, each piece of durable residue is routed by a fixed test (cut
+first, then type, then the smallest doc that fits):
 
 ```mermaid
 flowchart TD
@@ -49,7 +49,7 @@ flowchart TD
     kind -->|"A bet only running<br/>code can settle"| oq["Log it in<br/>open-questions.md"]
 ```
 
-*Durable — committed, survive the change:*
+*Durable (committed, survive the change):*
 
 - *Types / schemas*: static types (TS; Python under mypy/pyright) and
   boundary/data schemas (Zod, Pydantic, JSON Schema, the DB schema). The
@@ -73,15 +73,15 @@ flowchart TD
   Closed or deleted, never grown.
 - *Git history*: what changed and why now.
 
-*Ephemeral — tracked, but removed at consolidate:*
+*Ephemeral (tracked, but removed at consolidate):*
 
 - *Plan*: `.plans/<change>.md`. The per-change brief: what, why, how I'll know
   it works. The only hand-written artifact; committed at `plan` (so the run's
-  worktree inherits it off the trunk), then `git rm`'d at consolidate — the
-  landing merge carries the deletion, git history keeps the Plan, the working
-  tree does not.
+  worktree inherits it off the trunk), then `git rm`'d at consolidate:
+  the landing merge carries the deletion, git history keeps the Plan, the
+  working tree does not.
 
-*Enforcement — config, not docs:*
+*Enforcement (config, not docs):*
 
 - *guard*: no production code without a failing test; no durable edits
   (`src/`, `tests/`, `docs/`, `db/`, plus `.hone-durable-paths` extensions) in
@@ -213,7 +213,7 @@ flowchart TD
   reviewer could reject one part while approving its neighbor. It ends with
   *admission*: `plan-critic` checks placeholders, contradictions, ambiguity,
   scope, and collision with an open change, and a rejection is revised with the
-  human on the spot — the one moment they are guaranteed present — so no flawed
+  human on the spot (the one moment they are guaranteed present), so no flawed
   Plan is handed off.
 - *run* (`/hone:run`): per Plan, in a fresh worktree:
   - *build*: red-green: type, failing test, then code; `guard` enforces the
@@ -274,8 +274,8 @@ computable.
 *Judgment.* Subagents, only where no hook can answer. Each gets a *constructed*
 brief (the diff, the Plan, the relevant Decisions and Notes), never the writer's
 transcript; inheriting the writer's context is not independent review. It is
-prompted to *refute and argue for deletion* rather than approve, and runs *once*,
-returning structured findings.
+prompted to *refute and argue for deletion* rather than approve, runs *once*,
+and returns structured findings.
 
 - `plan-critic`: placeholders, contradictions, ambiguity, scope; belongs in an
   existing area? Runs inside `/hone:plan`, so a rejection is revised with the
@@ -302,7 +302,7 @@ unverified prose is the one part of the trust foundation that can rot silently.
 ### The proof boundary (land-time)
 
 hone's checks prove *assertions*: the suite, types, lint, a fuzzed property, a
-seeded mutant — all hermetic, pre-merge, in-repo. That is the boundary. A green
+seeded mutant. All are hermetic, pre-merge, in-repo. That is the boundary. A green
 check proves only its assertion, never a real-environment outcome: a browser
 journey, a canary, deployed health, behaviour a user actually observes. For a
 change whose claim lives at that altitude, "landed, tested, reviewed" is not
@@ -315,8 +315,8 @@ default (disable with `.hone-proof-off` for undeployed work), so such a
 change may not land on the assertion suite alone: it is discharged by a
 real-environment adapter (`scripts/proof.sh`, which checks the deployed system,
 not the tree) or a human attestation (`.hone-proof/<change>`), and otherwise land
-refuses (exit 7) and the run escalates — a land-time escalation the loop diagram
-shows alongside the authority gate, faithful to *escalate, never force*: proof the
+refuses (exit 7) and the run escalates. The loop diagram shows this land-time
+escalation alongside the authority gate, faithful to *escalate, never force*: proof the
 loop cannot give is handed back, not faked.
 
 ### Property-based tests (build-time)
@@ -325,8 +325,8 @@ A property states a rule once (`parse(serialize(x)) == x`) and a fuzzer
 hammers it, so the writer cannot game inputs it does not pick. *Use* for
 modules with a universal invariant: parsers, serializers, pure transforms,
 especially on critical paths. *Skip* where no universal rule exists: UI,
-orchestration, glue. Complements, never replaces, example tests that pin
-specific behavior.
+orchestration, glue. It complements example tests that pin specific behavior; it
+does not replace them.
 
 ### Mutation tests (verify-time)
 
@@ -343,19 +343,19 @@ examples and its own self-review, but not a fuzzed property or a seeded mutant.
 ## Authority
 
 Capability and authority are separate contracts. The `guard` and `bash-guard`
-answer *can the agent act* — where it may write, which shell routes stay open.
+answer *can the agent act*: where it may write, which shell routes stay open.
 Authority answers a question deliberately *not* delegated to the model: *may an
 unattended merge land this consequential act at all.* The axis is reversibility.
-A reversible change — a logic bug, a wrong refactor — is `git revert`-able, so its
+A reversible change (a logic bug, a wrong refactor) is `git revert`-able, so its
 cost is bounded and it lands unattended, as the vast majority do. An *irreversible*
-one — a dropped column, a destructive backfill, a truncate — is not undone by
+one (a dropped column, a destructive backfill, a truncate) is not undone by
 reverting the merge; the data is already gone. For that subset, green-and-reviewed
 is necessary but not sufficient.
 
 The authority gate is on by default (disable with `.hone-authority-off` for an
 undeployed project with disposable data). `land`
-classifies the diff mechanically — destructive SQL in a migration or `db/` file, a
-`db/` deletion, any `.hone-consequential-paths` glob — and a consequential change
+classifies the diff mechanically (destructive SQL in a migration or `db/` file, a
+`db/` deletion, any `.hone-consequential-paths` glob), and a consequential change
 may not merge without a *scoped grant* the human writes at `.hone-grant/<change>`:
 scoped (one change), revocable (delete the file), auditable (its text lands in the
 merge commit body), recoverable (the worktree stays as evidence until it is
@@ -395,8 +395,8 @@ at a time, not a special mode. Three rules:
   last; the unit of parallelism is the change, never the cycles inside it.
 - *Independence is checked before fan-out, never assumed.* Each `plan-critic`
   ran at plan time, before later Plans existed, so `run` compares the complete
-  set first — expected files and areas, shared types and persistent contracts,
-  Decisions and Notes more than one Plan would touch — and partitions:
+  set first (expected files and areas, shared types and persistent contracts,
+  Decisions and Notes more than one Plan would touch) and partitions:
   disjoint Plans fan out in parallel; overlapping Plans run sequentially, each
   landing before the next starts, so the later change builds on the landed
   result.
@@ -421,15 +421,15 @@ gap for the durable layer as a whole, which no diff-scoped hook can see.
 
 `garden` (`/hone:garden`) is the standing loop that closes it: it scans the whole
 repo for that drift and lands the safe cuts through the *same* worktree loop, one
-at a time. Two properties keep it honest. It is **deletion-only** — a garden
+at a time. Two properties keep it honest. It is **deletion-only**: a garden
 change removes and never adds, so it can only shrink the surface, extending
 principle 4 (*every cycle removes something*) from a per-change habit to a
 scheduled one. And it is **self-verifying**: the gate's suite is the proof a cut
-is safe — a deletion that stays green was dead, one that reddens was load-bearing
+is safe. A deletion that stays green was dead, one that reddens was load-bearing
 and is abandoned. The judgment calls (is this Decision stale, or load-bearing
 rationale?) go to the `consolidate-critic`, repo-wide; durable rationale is never
 cut by machine on a hunch, and anything only a human can settle is logged or
-escalated to a human. Run it often and small — a trickle of cuts, not a periodic
+escalated to a human. Run it often and small: a trickle of cuts, not a periodic
 reckoning. hone owns the loop, not the timer: the schedule is the project's
 existing cron/CI invoking a print-mode `/hone:garden`.
 
@@ -487,12 +487,12 @@ is the Plan commit on the trunk (so the run's worktree inherits it); consolidate
 carry back to the primary tree. *garden* is not part of the plan→run change; it is
 the standalone maintenance loop, deletion-only (every column it touches is a prune)
 and landing its cuts through the same merge (`.git` W). It never writes durable
-prose — a stale doc it can only cut, never edit.
+prose: a stale doc it can only cut, never edit.
 
 ## Invariants
 
 1. Code and tests are written only by *build*, and durable artifacts are pruned
-   only by *consolidate* — or, between changes, by the standalone *garden* pass,
+   only by *consolidate*, or between changes by the standalone *garden* pass,
    its deletion-only counterpart (never by *build*, *verify*, or *land*). `docs/`
    prose is written only by *consolidate*; `.plans/` deleted only by
    *consolidate*. Work-in-progress cannot leak into durable truth: the structural

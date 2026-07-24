@@ -1,5 +1,5 @@
 #!/bin/bash
-# Eval harness for hone's judgment prose — the two critic agents and, by
+# Eval harness for hone's judgment prose: the two critic agents and, by
 # extension, the behaviour-shaping rule. The critics and the injected rule are
 # the one part of the trust foundation that can rot silently (unverified prose),
 # so this pins them to a suite of cases with known-good verdicts.
@@ -126,7 +126,7 @@ score_critic() {
         done
         # No verdict token from ANY vote means every call failed (network, rate
         # limit, bad --model) or returned garbage. That is an infrastructure
-        # failure, NOT a clean pass — fail loudly so a dead harness can't green a
+        # failure, NOT a clean pass. Fail loudly so a dead harness can't green a
         # clean-expected case by falling through to the clean verdict.
         if [ $((c_flag + c_clean)) -eq 0 ]; then
             printf '  FAIL  %-28s → no verdict from %s call(s) — model/API failure?\n' "$name" "$VOTES"

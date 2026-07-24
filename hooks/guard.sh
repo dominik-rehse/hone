@@ -4,9 +4,9 @@
 #
 #   1. The primary tree is a merge target, never a workspace. A Write/Edit to a
 #      durable committed artifact (src/, tests/, docs/, db/, plus any paths the
-#      project lists in .hone-durable-paths) in the PRIMARY git tree is denied —
-#      that work belongs in a worktree, landed by a merge. The hand-written Plan
-#      (.plans/) — tracked, but authored and committed here in the primary tree —
+#      project lists in .hone-durable-paths) in the PRIMARY git tree is denied.
+#      That work belongs in a worktree, landed by a merge. The hand-written Plan
+#      (.plans/), tracked but authored and committed here in the primary tree,
 #      and local config are exempt.
 #
 #   2. No production code without a failing test. Creating a NEW non-test file
@@ -28,7 +28,7 @@ set -uo pipefail
 . "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
 
 # Resolve the project root from the git worktree we are actually in (the hook's
-# cwd), so the guard is correct inside a linked worktree — including a
+# cwd), so the guard is correct inside a linked worktree, including a
 # worktree-isolated subagent, whose cwd is the worktree while CLAUDE_PROJECT_DIR
 # stays pinned to the parent. Fall back to CLAUDE_PROJECT_DIR, then cwd.
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
@@ -63,7 +63,7 @@ FILE_PATH=$(hone_extract_field "$INPUT" file_path)
 
 FILE_PATH="${FILE_PATH#./}"
 # `-s` normalizes lexically (collapses ./ and ../) WITHOUT resolving symlinks,
-# so a write under a symlinked `src` stays under src/ and is still gated — and a
+# so a write under a symlinked `src` stays under src/ and is still gated. A
 # symlink pointing outside the project is treated lexically as in-project and
 # gated, rather than resolved away and silently allowed (fail-closed).
 case "$FILE_PATH" in
@@ -73,14 +73,14 @@ esac
 
 case "$TARGET_PATH" in
     "$PROJECT_DIR"/*) REL="${TARGET_PATH#"$PROJECT_DIR"/}" ;;
-    *) exit 0 ;;  # outside the project — not ours to guard
+    *) exit 0 ;;  # outside the project, not ours to guard
 esac
 
 # A durable committed artifact is anything under src/, tests/, docs/, or db/
 # (schema and migrations are as durable as code), plus any project-specific
 # paths listed in .hone-durable-paths (one per line, # comments allowed):
 # a directory prefix (`deploy/`) or an exact file (`tsconfig.json`). Unlike
-# .hone-test-globs, the file EXTENDS the defaults — the built-in perimeter
+# .hone-test-globs, the file EXTENDS the defaults: the built-in perimeter
 # can grow, never shrink.
 is_durable() {
     case "$1" in
@@ -113,7 +113,7 @@ fi
 
 # Rule 2: no new production code in src/ without a failing test.
 [[ "$REL" == src/* ]] || exit 0
-[ -e "$TARGET_PATH" ] && exit 0   # editing an existing src/ file — its test was required at creation
+[ -e "$TARGET_PATH" ] && exit 0   # editing an existing src/ file (its test was required at creation)
 
 TEST_GLOBS=()
 while IFS= read -r _g; do

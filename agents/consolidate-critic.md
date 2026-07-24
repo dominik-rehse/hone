@@ -58,14 +58,14 @@ coverage or truth survives without it. These are NOT findings, and none of them
 downgrades a change from `CLEAN`:
 
 - unease that the change "could be leaner" with nothing specific to point at;
-- a small pure helper with a single caller (that is fine — rule of three, not
+- a small pure helper with a single caller (that is fine, rule of three, not
   rule of one; it is not an over-abstraction);
 - an example test sitting alongside a property test or a golden/characterization
-  test — these are **complementary**, not redundant (a property test hammers an
+  test; these are **complementary**, not redundant (a property test hammers an
   invariant; example and golden tests pin specific behaviour), so proposing to cut
   one for the other is a wrong cut, not a finding;
 - a Decision or Note that genuinely carries why/intent the code can't show.
 
 Keep the deletion bias for what truly fails the cut test, but a genuinely lean
-change earns an honest `CLEAN`, and that is a correct, expected result — not a
+change earns an honest `CLEAN`, and that is a correct, expected result, not a
 failure to look hard enough. Do not manufacture a marginal cut to avoid `CLEAN`.

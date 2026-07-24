@@ -38,7 +38,7 @@ out=$(guard_write "src/auth/login.ts" "$REPO")
 denied "$out" && ok "new src/ file in primary tree denied" || bad "should deny new src/ in primary tree"
 
 # 2. A test file is always allowed (RED artifact), even in the primary tree?
-#    No — rule 1 blocks durable edits in the primary tree, and tests/ is durable.
+#    No: rule 1 blocks durable edits in the primary tree, and tests/ is durable.
 out=$(guard_write "src/auth/login.test.ts" "$REPO")
 denied "$out" && ok "test file in primary tree denied (durable, merge-only)" || bad "should deny durable test in primary tree"
 
@@ -153,7 +153,7 @@ git -C "$REPO" commit -q --allow-empty -m "Merge branch 'hone/auth/ghost-nested'
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q ".plans/auth/ghost-nested.md survived its landing" && ok "nested landed Plan flagged" || bad "should flag nested landed Plan"
 
-# A nested Plan whose worktree exists is active work — not flagged even with
+# A nested Plan whose worktree exists is active work, not flagged even with
 # landed evidence in history.
 mkdir -p "$REPO/.worktrees/auth/ghost-nested"
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
@@ -242,7 +242,7 @@ git -C "$REPO" branch hone/landed-ghost HEAD
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "hone/landed-ghost is fully merged and has no worktree" && ok "leftover merged branch flagged" || bad "should flag a merged hone/* branch with no worktree"
 git -C "$REPO" branch -d hone/landed-ghost >/dev/null 2>&1
-# A branch attached to a live worktree (hone/auth-login) is active work — check
+# A branch attached to a live worktree (hone/auth-login) is active work. Check
 # it was NOT flagged in the run above.
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "hone/auth-login is fully merged" && bad "branch with live worktree should not be flagged" || ok "branch with live worktree not flagged"

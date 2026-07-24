@@ -1,6 +1,6 @@
 #!/bin/bash
 # Shared helpers for hone's hooks. SOURCED by guard.sh, bash-guard.sh, gate.sh,
-# and nag.sh — never executed directly. Defines functions only; no side effects
+# and nag.sh, never executed directly. Defines functions only; no side effects
 # at source time. Keeping the JSON emit/escape and the stdin-field parse in one
 # place stops the four hooks from drifting (they had already diverged).
 

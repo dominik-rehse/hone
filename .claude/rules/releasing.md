@@ -4,8 +4,8 @@ description: "Maintainer rule for the hone repo: every substantial change bumps 
 
 # Releasing hone
 
-Every substantial change — a feature, or a behavior change to the workflow,
-skills, hooks, or critic prompts — must be followed by a version bump. Typo and
+Every substantial change (a feature, or a behavior change to the workflow,
+skills, hooks, or critic prompts) must be followed by a version bump. Typo and
 comment-level fixes need none.
 
 hone is a distributed Claude Code plugin; consumers only pick up changes through

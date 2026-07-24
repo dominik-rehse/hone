@@ -12,7 +12,7 @@ distillation; each spec is independent.
 One manual prerequisite: install and enable the hone plugin in Claude Code
 (`/plugin marketplace add dominik-rehse/hone`, then install `hone@hone`) before
 running this. Everything else is automated in the steps below, including the
-enforcement sequencing — the migration is a one-time rewrite of the primary tree,
+enforcement sequencing. The migration is a one-time rewrite of the primary tree,
 so it runs with *both* enforcement layers off (neither methodology's loop applies
 to a bulk rewrite). Step 0 silences stdd and keeps hone dormant with a `.hone-off`
 marker; step 9 flips hone on once the suite is green. Enabling the plugin early is
@@ -30,7 +30,7 @@ therefore harmless: it stays inert until step 9.
 > 0. **Silence enforcement, then branch.** Create a branch for the migration.
 >    Then `touch .stdd-off` and `touch .hone-off`. stdd's audit and guard would
 >    fight the spec deletions and tag stripping below; hone's guard forbids
->    editing `src/`, `tests/`, or `docs/` in the primary tree — which is exactly
+>    editing `src/`, `tests/`, or `docs/` in the primary tree, which is exactly
 >    what this bulk rewrite does, since it is not a `plan → run` worktree cycle.
 >    Both markers are gitignored, so the migration runs unenforced, like a spike,
 >    and you keep the suite green by hand.
@@ -42,8 +42,8 @@ therefore harmless: it stays inert until step 9.
 >
 > 2. **Distill specs, then delete them.** Classify each `docs/specs/*.md`:
 >    (a) a work-batch or fix spec (names like `*-review-fixes`, `*-pass`,
->    `*-audit-fixes`) — its behavior already lives in code and tests; delete it
->    outright. (b) a feature spec — extract only durable truth the code cannot
+>    `*-audit-fixes`): its behavior already lives in code and tests; delete it
+>    outright. (b) a feature spec, where you extract only durable truth the code cannot
 >    show: an intent or invariant → a **Note** (`docs/notes/<area>.md`, ≤ ~half a
 >    screen, one per `src/` area); a decision + why → a **Decision** (step 3); a
 >    shape or constraint expressible as a **type** → make it a type in `src/`.
@@ -74,11 +74,11 @@ therefore harmless: it stays inert until step 9.
 >    later hone cycle, not part of conversion.)
 >
 > 7. **Swap the machinery.** Remove the stdd markers, hooks, and scripts
->    (all `.stdd-*` — including the `.stdd-off` from step 0 — the precommit gate,
+>    (all `.stdd-*`, including the `.stdd-off` from step 0; the precommit gate,
 >    and the guard/audit wiring). The hone plugin is already installed (the
 >    prerequisite above); keep or rename the test adapter to hone's `gate`
 >    contract, and `mkdir -p src` plus create the tracked `.plans/`. Leave
->    `.hone-off` in place for now — step 9 removes it.
+>    `.hone-off` in place for now; step 9 removes it.
 >
 > 8. **Verify.** Full suite green; type-check clean; `grep -rn 'stdd\|AC-\|slice-'`
 >    and reconcile every leftover; confirm no `docs/specs/` remains.
@@ -96,12 +96,12 @@ therefore harmless: it stays inert until step 9.
 None of this changes the nine steps; it just makes them go smoother.
 
 - **Fan out with disjoint ownership.** Run the docs distillation (steps 2/4/5)
-  and the test de-tagging (step 6) as _parallel_ subagents — they touch `docs/`
+  and the test de-tagging (step 6) as _parallel_ subagents, since they touch `docs/`
   and `src/`+`tests/` respectively, so they never collide. Split the ADR
   conversion (step 3) across subagents by disjoint output files, but hand every
   one the _same_ number→slug map so cross-references stay consistent. Have the
   distiller own `docs/` only and _report_ any needed `src/` type rather than
-  adding it, so it can't race the de-tagger. Keep Notes sparse — one per `src/`
+  adding it, so it can't race the de-tagger. Keep Notes sparse, one per `src/`
   area at most, only for an invariant the code and Decisions can't show (a whole
   large codebase may need just two or three).
 
@@ -109,7 +109,7 @@ None of this changes the nine steps; it just makes them go smoother.
   references live in rules, the README, the manual, runbooks, deploy configs
   (systemd units, nftables, compose files, Caddyfile, yaml), DB DDL, scripts, and
   code comments. After step 3, sweep every `ADR-NNN` / `decisions/NNN-*.md`
-  reference — including compact `ADR-004/014` forms — to the new slugs with a
+  reference (including compact `ADR-004/014` forms) to the new slugs with a
   scripted number→slug map, then `grep -rn 'ADR-[0-9]\{3\}\|decisions/[0-9]\{3\}-'`
   to confirm none remain. A repo whose Decisions are _already_ topic-named skips
   this entirely: only a light present-tense cleanup of each file is needed (drop
@@ -117,7 +117,7 @@ None of this changes the nine steps; it just makes them go smoother.
 
 - **The gate-critical files fight the Edit tool.** stdd's tamper-resistance adds
   `Edit()`/`Write()` deny rules for `.claude/settings.json`, `lefthook.yml`, and
-  `scripts/run-tests.sh` — so in step 7 edit those with a shell command
+  `scripts/run-tests.sh`, so in step 7 edit those with a shell command
   (sed / python / cp), not Write/Edit, and trim the deny list itself to hone's
   shorter form as you go. Adopt hone's `scripts/run-tests.sh` by copying it (the
   stdd adapter still self-labels "stdd" in its comments). `.hone-durable-paths` is
@@ -125,7 +125,7 @@ None of this changes the nine steps; it just makes them go smoother.
   committed. Leave any unrelated git hooks (e.g. a semantic-index tool's) alone.
 
 - **Preserve a widely-cited spine as a Note.** If an overview doc carries a list
-  everything references — a HARD RULES security spine, a domain model — don't just
+  everything references (a HARD RULES security spine, a domain model), don't just
   delete it. Land it as a Note (e.g. `notes/security-model.md`) so the many
   `HARD RULE N` / `architecture.md §…` references elsewhere still resolve, and fix
   those references to point at the Note.
@@ -133,21 +133,21 @@ None of this changes the nine steps; it just makes them go smoother.
 - **Verify twice.** Step 8's `grep` for `stdd|AC-|slice-` catches the tags; also
   grep for links to the docs you deleted (overview docs, specs) and check the
   non-`.md` deploy configs a text sweep tends to skip. A repo-local `.env` /
-  `.env.example` may be permission-blocked from tooling — note any leftover
+  `.env.example` may be permission-blocked from tooling, so note any leftover
   reference there for a human rather than forcing it.
 
 ## Upgrading an existing hone repository
 
 A repo already on hone moves to the current version in two mechanical steps. The
 new land gates are **on by default**, so read step 3 before you next land a
-consequential or real-environment change — they will start gating automatically,
+consequential or real-environment change. They will start gating automatically,
 which is the point, but an undeployed repo will want to switch them off.
 
 1. **Take the new plugin version.** hone is distributed through the marketplace,
    so update it there; the loop and hooks pick the change up automatically.
 
 2. **Re-run setup.** `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` is
-   idempotent — it leaves your adapter, docs, and `.plans/` untouched and only
+   idempotent: it leaves your adapter, docs, and `.plans/` untouched and only
    appends the new marker entries to `.gitignore` (`.hone-authority-off`,
    `.hone-consequential-paths`, `.hone-grant/`, `.hone-proof-off`,
    `.hone-proof/`), so those per-developer files never get committed once you
@@ -160,11 +160,11 @@ which is the point, but an undeployed repo will want to switch them off.
    until it is discharged by `scripts/proof.sh` or a `.hone-proof/<change>`
    attestation (exit 7). If the repo is undeployed with disposable data, switch
    them off with `.hone-authority-off` and/or `.hone-proof-off`; otherwise leave
-   them on — they now protect every land without further setup.
+   them on, since they now protect every land without further setup.
 
 Two more capabilities are additive and cost nothing until used:
 
-- **`Governs:` links** (no marker — live as soon as you write them). Add a
+- **`Governs:` links** (no marker; they go live as soon as you write them). Add a
   `Governs:` line to a Decision or Note naming the `src/` path it explains, and
   the nag flags it when that path later disappears: mechanical proof the prose
   drifted. Add them opportunistically, at the next change that touches each doc;
