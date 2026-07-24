@@ -1,20 +1,20 @@
 ---
-description: "hone: a human writes a short Plan, then an automated worktree-native loop builds, verifies, consolidates, reviews, and lands each change. Only rot-proof durable truth survives, and every cycle deletes something."
+description: "hone: a human writes a short Plan, then an automated loop builds, verifies, consolidates, reviews, and lands each change in a git worktree. Only durable truth that cannot go stale survives, and every cycle deletes something."
 ---
 
 # hone workflow
 
 Every change runs `plan → run`. A human authors `.plans/<change>.md` (the one
-hand-written artifact; use `/hone:plan`, which ends with `plan-critic`
-admission while the human is present). Then `/hone:run` executes it unattended
+hand-written artifact; use `/hone:plan`, which ends with the `plan-critic`
+check while the human is present). Then `/hone:run` executes it unattended
 in a git worktree: build (test-first) → verify → consolidate →
 `/code-review` → land (merge to the primary tree, re-run the suite, remove the
 worktree). It proceeds without checking in and stops only when blocked with no
 resolution, genuinely ambiguous, or done. On a stop it leaves the worktree as
 evidence and escalates, and never disables a gate.
 
-Durable truth lives only where it can't rot: *types* (make illegal states
-unrepresentable), *code* and behaviour-named *tests* in `src/<area>/`,
+Durable truth lives only where it can't go stale: *types* (make invalid states
+impossible to express), *code* and behaviour-named *tests* in `src/<area>/`,
 present-tense *Decisions* (`docs/decisions/<topic>.md`), small per-area *Notes*
 (`docs/notes/<area>.md`), and git history. Never write a durable line an agent
 could recover from the code, and if something can be a type, make it a type

@@ -2,10 +2,11 @@
 
 *To hone is to sharpen a blade by grinding material away: refinement through
 removal.* hone is a development model for codebases where an AI agent is a primary
-writer *and* reader. It enforces the discipline of test-driven work but carries no
-rot-prone corpus: there is no hand-maintained per-feature specification pile. It
-refines the codebase by cutting: only rot-proof truth survives, and every cycle
-removes something. Language-agnostic; examples use TypeScript and Python.
+writer *and* reader. It enforces the discipline of test-driven work but keeps no
+pile of prose that goes stale: there is no hand-maintained per-feature
+specification pile. It refines the codebase by cutting: only truth that cannot
+go stale survives, and every cycle removes something. Language-agnostic;
+examples use TypeScript and Python.
 
 ## The problem
 
@@ -14,14 +15,15 @@ Hand-maintained, per-feature behavioral specs serve two tenses at once: the
 and the *permanent* description (how the system behaves today). Every batch of work
 mints a new file and criteria are only ever added, so truth for one feature
 scatters across many files and the pile grows without bound. Hand-maintained
-behavioral prose always rots. It is a second copy of the system's behaviour that
-nothing forces to stay in step with the code.
+behavioral prose always goes stale. It is a second copy of the system's
+behaviour that nothing forces to stay in step with the code.
 
 ## Principles
 
 1. *Discipline without a corpus.* Test-first is enforced; nothing maintains a
    permanent pile of per-feature specs.
-2. *Durable truth lives only where it can't rot.* Everything else is disposable.
+2. *Durable truth lives only where it can't go stale.* Everything else is
+   disposable.
 3. *The cut test.* Never write a durable line an agent could recover from the
    code, and if it can be a type, it is a type, not prose.
 4. *Deletion is routine.* Every cycle removes something; it counterbalances a
@@ -34,12 +36,12 @@ nothing forces to stay in step with the code.
 
 ## Artifacts
 
-At consolidate, each piece of durable residue is routed by a fixed test (cut
-first, then type, then the smallest doc that fits):
+At consolidate, everything a change leaves behind that is worth keeping is
+routed by a fixed test (cut first, then type, then the smallest doc that fits):
 
 ```mermaid
 flowchart TD
-    r["Durable residue: what a change<br/>leaves behind that is worth keeping"] --> cut{"Could an agent recover<br/>it from the code?"}
+    r["What a change leaves behind<br/>that is worth keeping"] --> cut{"Could an agent recover<br/>it from the code?"}
     cut -->|"Yes, the code<br/>already carries it"| drop["Cut it.<br/>Write nothing"]
     cut -->|"No, nothing forces<br/>it to survive"| shape{"Can it be expressed<br/>as a type?"}
     shape -->|"Yes, it is a shape<br/>or a constraint"| type["Make it a type<br/>or a schema"]
@@ -65,7 +67,7 @@ flowchart TD
   in the same commit as the code it governs. May carry an optional `Governs:`
   line naming the `src/` paths it explains; the nag checks those paths still
   exist, so the prose is *mechanically* pinned to the code rather than left to
-  rot silently (the one failure mode a checker can otherwise never see).
+  go stale silently (the one failure mode a checker can otherwise never see).
 - *Note*: `docs/notes/<area>.md`. Per-area map + its one invariant, pointing
   at the Decision and the key types. Optional, 1:1 with an area, size-capped. Its
   key-type/Decision pointers can be a `Governs:` line, checked the same way.
@@ -73,7 +75,7 @@ flowchart TD
   Closed or deleted, never grown.
 - *Git history*: what changed and why now.
 
-*Ephemeral (tracked, but removed at consolidate):*
+*Temporary (tracked, but removed at consolidate):*
 
 - *Plan*: `.plans/<change>.md`. The per-change brief: what, why, how I'll know
   it works. The only hand-written artifact; committed at `plan` (so the run's
@@ -118,9 +120,9 @@ flowchart LR
     class landed result;
 ```
 
-*In full.* Nodes are colored by actor: *user command* (amber), *deterministic*
-mechanical step (teal), *stochastic* model step (violet); the dashed
-parallelogram is
+*In full.* Nodes are colored by actor: *user command* (amber), *mechanical*
+step (teal; scripted, same result every time), *model* step (violet; a judgment
+call, so its outcome can vary); the dashed parallelogram is
 the Plan, the one hand-written artifact. Work starts with a command: `/hone:plan`
 takes your sketch and writes `.plans/<change>.md` with you; then `/hone:run`
 launches everything downstream (`/hone:run --all` fans out over many Plans). Each
@@ -178,7 +180,7 @@ repeating unit. It is shown in full once:
 
 ```mermaid
 flowchart TD
-    ty["Types first:<br/>shape and constraints as types,<br/>illegal states made unrepresentable"]
+    ty["Types first:<br/>shape and constraints as types,<br/>invalid states impossible to express"]
     red["Red: write one failing test for<br/>an observable behaviour, then run it"]
     q1{"Does it fail for<br/>the right reason?"}
     disc["Discard and rewrite it:<br/>a test that passes now was<br/>written after the code"]
@@ -211,25 +213,25 @@ flowchart TD
 - *plan* (`/hone:plan`): author `.plans/<change>.md`. The only manual step. Size
   a change to the smallest unit worth its own review gate: split only where a
   reviewer could reject one part while approving its neighbor. It ends with
-  *admission*: `plan-critic` checks placeholders, contradictions, ambiguity,
-  scope, and collision with an open change, and a rejection is revised with the
-  human on the spot (the one moment they are guaranteed present), so no flawed
-  Plan is handed off.
+  the *Plan check*: `plan-critic` looks for placeholders, contradictions,
+  ambiguity, wrong scope, and collision with an open change, and a rejection is
+  revised with the human on the spot (the one moment they are guaranteed
+  present), so no flawed Plan is handed off.
 - *run* (`/hone:run`): per Plan, in a fresh worktree:
   - *build*: red-green: type, failing test, then code; `guard` enforces the
     order.
   - *verify*: `gate` and `nag`, plus a mutation check on critical paths.
-  - *consolidate*: route durable residue (a type, a Decision, a Note, a closed
-    question), prune redundant tests, delete the Plan; `consolidate-critic`
-    reviews.
+  - *consolidate*: sort what the change leaves behind into its home (a type, a
+    Decision, a Note, a closed question), prune redundant tests, delete the
+    Plan; `consolidate-critic` reviews.
   - *review*: Claude Code's built-in `/code-review` on the finished change.
   - *land*: commit, merge into the primary tree, re-run the whole suite there,
     remove the worktree.
 
 Every step's completion is confirmed by its artifacts (the diff, the gate
 output), never by a subagent's report that it finished. A failed check is not a
-stop, and only the `build`⇄`verify` cycle loops: a red gate or a surviving mutant
-sends the agent back to `build` for another red-green cycle, as many times as it
+stop, and only the `build`⇄`verify` cycle loops: a red gate or a planted bug the
+tests miss sends the agent back to `build` for another red-green cycle, as many times as it
 takes to go green. The model checks each change *once* per slot: `plan-critic`
 (at `/hone:plan`), `consolidate-critic`, and the expensive `/code-review`; their findings are
 applied or auto-fixed in place, and a review fix is a red-green cycle re-gated by
@@ -239,8 +241,8 @@ decline is recorded durably (the landing commit's body, or an open question for
 a deferred defect), never left in the conversation alone. The agent self-corrects in the worktree and
 escalates only at the two stop-points on the diagram: verify can't go green once
 the fix is exhausted, or review finds the change genuinely ambiguous. (A flawed
-Plan never reaches `run`: admission rejects it inside `/hone:plan`, where the
-human is present to revise it.) On a stop it leaves the worktree in place as evidence; the
+Plan never reaches `run`: the Plan check rejects it inside `/hone:plan`, where
+the human is present to revise it.) On a stop it leaves the worktree in place as evidence; the
 human revises the Plan and re-runs (or abandons the change), never disabling a
 gate to proceed. The Plan is the sole re-entry point: the human does not hand-fix
 code mid-loop.
@@ -259,7 +261,7 @@ Two kinds of checker; choosing the wrong kind is the main failure.
 flowchart TD
     q{"Is the question<br/>computable?"}
     q -->|"Yes, a deterministic<br/>answer exists"| mech["Mechanical check: a hook or<br/>a mutation run. Always runs,<br/>and cannot be fooled"]
-    q -->|"No, it takes<br/>a judgment call"| judge["Judgment check: a critic subagent<br/>with a constructed brief, prompted<br/>to refute. Runs once"]
+    q -->|"No, it takes<br/>a judgment call"| judge["Judgment check: a critic subagent<br/>with a constructed brief, prompted<br/>to find fault. Runs once"]
 
     classDef deterministic fill:#99f6e4,stroke:#0f766e,color:#042f2e;
     classDef stochastic fill:#ddd6fe,stroke:#6d28d9,color:#2e1065;
@@ -267,15 +269,15 @@ flowchart TD
     class judge stochastic;
 ```
 
-*Mechanical.* Deterministic, no model calls, unfoolable, always run: the hooks
-above plus mutation testing. Prefer mechanical wherever the question is
-computable.
+*Mechanical.* Scripted, no model calls, the same result every time, cannot be
+fooled, always run: the hooks above plus mutation testing. Prefer mechanical
+wherever the question is computable.
 
 *Judgment.* Subagents, only where no hook can answer. Each gets a *constructed*
 brief (the diff, the Plan, the relevant Decisions and Notes), never the writer's
 transcript; inheriting the writer's context is not independent review. It is
-prompted to *refute and argue for deletion* rather than approve, runs *once*,
-and returns structured findings.
+prompted to *find fault and argue for deletion* rather than approve, runs
+*once*, and returns structured findings.
 
 - `plan-critic`: placeholders, contradictions, ambiguity, scope; belongs in an
   existing area? Runs inside `/hone:plan`, so a rejection is revised with the
@@ -297,32 +299,35 @@ sits before (the Plan) and after (auditing the merged result).
 The critic prompts and the injected `rules/workflow.md` are themselves
 behavior-shaping prose doing real judgment work. Check them against evals (a
 suite of past changes with known-good verdicts) rather than assuming they hold;
-unverified prose is the one part of the trust foundation that can rot silently.
+unverified prose is the one part of the trust foundation that can go stale
+silently.
 
 ### The proof boundary (land-time)
 
-hone's checks prove *assertions*: the suite, types, lint, a fuzzed property, a
-seeded mutant. All are hermetic, pre-merge, in-repo. That is the boundary. A green
-check proves only its assertion, never a real-environment outcome: a browser
-journey, a canary, deployed health, behaviour a user actually observes. For a
-change whose claim lives at that altitude, "landed, tested, reviewed" is not
-"proven", and pretending otherwise is the trap.
+hone's checks (the suite, types, lint, property tests, mutation checks) all run
+inside the repo, before the merge, needing nothing from the outside world. That
+is the boundary. A green check proves only what it asserts, never a
+real-environment outcome: a browser journey, a canary, deployed health,
+behaviour a user actually observes. For a change whose claim lives at that
+level, "landed, tested, reviewed" is not "proven", and pretending otherwise is
+the trap.
 
 So hone states the boundary explicitly. A Plan whose proof is user- or ops-level
 declares `Proof: real-environment` (the `plan-critic` rejects a Plan whose proof
 is *categorically* incapable of settling its claim). The proof gate is on by
 default (disable with `.hone-proof-off` for undeployed work), so such a
-change may not land on the assertion suite alone: it is discharged by a
-real-environment adapter (`scripts/proof.sh`, which checks the deployed system,
-not the tree) or a human attestation (`.hone-proof/<change>`), and otherwise land
+change may not land on the test suite alone: the requirement is met by a
+real-environment check (`scripts/proof.sh`, which checks the deployed system,
+not the tree) or a human sign-off (`.hone-proof/<change>`), and otherwise land
 refuses (exit 7) and the run escalates. The loop diagram shows this land-time
 escalation alongside the authority gate, faithful to *escalate, never force*: proof the
 loop cannot give is handed back, not faked.
 
 ### Property-based tests (build-time)
 
-A property states a rule once (`parse(serialize(x)) == x`) and a fuzzer
-hammers it, so the writer cannot game inputs it does not pick. *Use* for
+A property test states a rule once (`parse(serialize(x)) == x`) and the runner
+then tries it against hundreds of random inputs, so the writer cannot game
+inputs it does not pick. *Use* for
 modules with a universal invariant: parsers, serializers, pure transforms,
 especially on critical paths. *Skip* where no universal rule exists: UI,
 orchestration, glue. It complements example tests that pin specific behavior; it
@@ -330,47 +335,48 @@ does not replace them.
 
 ### Mutation tests (verify-time)
 
-Seed small bugs and check a test catches them: the unfoolable judge of hollow
-tests, which matters because the same agent wrote the code and the tests. *Use*
+Mutation testing plants small bugs on purpose and checks that a test catches
+each one: the one judge of empty tests that cannot be fooled, which matters
+because the same agent wrote the code and the tests. *Use*
 diff-scoped and budget-capped, on critical paths only. *Skip* whole-suite runs
 (cost, noise) and UI behavior; it audits the tests, not the code, and never
 gates a trivial change. Runner maturity varies by ecosystem (StrykerJS for
 JS/TS; mutmut or cosmic-ray for Python), so check before relying on it.
 
 Both are *verification independent of the author*: the writer can game its own
-examples and its own self-review, but not a fuzzed property or a seeded mutant.
+examples and its own self-review, but not random inputs or a planted bug.
 
 ## Authority
 
-Capability and authority are separate contracts. The `guard` and `bash-guard`
+Capability and authority are separate questions. The `guard` and `bash-guard`
 answer *can the agent act*: where it may write, which shell routes stay open.
 Authority answers a question deliberately *not* delegated to the model: *may an
-unattended merge land this consequential act at all.* The axis is reversibility.
-A reversible change (a logic bug, a wrong refactor) is `git revert`-able, so its
-cost is bounded and it lands unattended, as the vast majority do. An *irreversible*
-one (a dropped column, a destructive backfill, a truncate) is not undone by
-reverting the merge; the data is already gone. For that subset, green-and-reviewed
-is necessary but not sufficient.
+unattended merge land this irreversible act at all.* The axis is reversibility.
+A reversible change (a logic bug, a wrong refactor) can be undone with
+`git revert`, so its cost is bounded and it lands unattended, as the vast
+majority do. An *irreversible* one (a dropped column, a destructive backfill, a
+truncate) is not undone by reverting the merge; the data is already gone. For
+that subset, green-and-reviewed is necessary but not sufficient.
 
 The authority gate is on by default (disable with `.hone-authority-off` for an
 undeployed project with disposable data). `land`
 classifies the diff mechanically (destructive SQL in a migration or `db/` file, a
-`db/` deletion, any `.hone-consequential-paths` glob), and a consequential change
+`db/` deletion, any `.hone-consequential-paths` glob), and an irreversible change
 may not merge without a *scoped grant* the human writes at `.hone-grant/<change>`:
 scoped (one change), revocable (delete the file), auditable (its text lands in the
 merge commit body), recoverable (the worktree stays as evidence until it is
 granted). No grant → `land` refuses before the merge (exit 8) and the run escalates.
-It extends `bash-guard`'s escalate-on-consequential-shell-op instinct to the one
-consequential act the loop performs itself: the merge.
+`bash-guard` already escalates risky shell commands to the human; this gate does
+the same for the one irreversible act the loop performs itself: the merge.
 
 ## Types and abstractions
 
 Anything expressible as a type belongs in a type, not prose: an interface, a
-constraint, an illegal state made unrepresentable (a discriminated union in TS,
-a `Literal` in Python). Types carry *shape and constraint*; behavior stays in
-tests, *why* in Decisions.
+constraint, an invalid state made impossible to express (a discriminated union
+in TS, a `Literal` in Python). Types carry *shape and constraint*; behavior
+stays in tests, *why* in Decisions.
 
-Their failure mode is over-abstraction, not rot, and no checker flags it: a
+Their failure mode is over-abstraction, not staleness, and no checker flags it: a
 type checker verifies a type is correct, never that it is wise. (Where checking
 is opt-in, as with mypy or pyright, adopting it is a deliberate choice; the
 discipline matters more, not less.) So abstractions are judged *reactively, at
@@ -412,12 +418,13 @@ merge-and-verify stage.
 
 ## Continuous maintenance
 
-`plan → run` cuts a change's residue at the point of change. But rot also
-accumulates *between* changes, across the parts nothing is currently touching: a
-Decision whose code moved, a Note nobody re-derived, a test a later change made
-redundant, an open question running code already settled. *What is not being
-changed is not managed* holds for abstractions (judged reactively); it leaves a
-gap for the durable layer as a whole, which no diff-scoped hook can see.
+`plan → run` cuts what a change leaves behind at the point of change. But
+staleness also accumulates *between* changes, across the parts nothing is
+currently touching: a Decision whose code moved, a Note nobody re-derived, a
+test a later change made redundant, an open question running code already
+settled. *What is not being changed is not managed* holds for abstractions
+(judged reactively); it leaves a gap for the durable layer as a whole, which no
+diff-scoped hook can see.
 
 `garden` (`/hone:garden`) is the standing loop that closes it: it scans the whole
 repo for that drift and lands the safe cuts through the *same* worktree loop, one
@@ -504,5 +511,5 @@ prose: a stale doc it can only cut, never edit.
 4. The primary tree's durable artifacts are written only by *land*, a merge;
    `guard` blocks direct source edits there, so no half-built change ever sits
    in the tree everything merges into. The one hand-authored exception is the
-   Plan (`.plans/`, outside `guard`'s perimeter), committed there at *plan* so
+   Plan (`.plans/`, a path `guard` does not protect), committed there at *plan* so
    the run's worktree inherits it and land's merge can remove it.

@@ -39,9 +39,9 @@ third way to stop is simply *done* (see *The three ways to stop*). On an escalat
 stop, leave the worktree in place as evidence and report. Never disable a gate to
 get past it.
 
-Admission already happened: the `plan-critic` admitted the Plan at `/hone:plan`,
-with the human present to revise a rejection. Do not re-run it here; spawn the
-worktree and build.
+The Plan check already happened: the `plan-critic` approved the Plan at
+`/hone:plan`, with the human present to revise a rejection. Do not re-run it
+here; spawn the worktree and build.
 
 ### 1. Worktree
 
@@ -67,7 +67,8 @@ Implement the Plan test-first, one behaviour at a time. The `guard` enforces the
 order, so work with it:
 
 - **Type first.** Anything expressible as a type (a shape, a constraint, an
-  illegal state made unrepresentable) is a type, not prose or a runtime check.
+  invalid state made impossible to express) is a type, not prose or a runtime
+  check.
 - **Red.** Write one failing test that pins an observable behaviour from the
   Plan's *How I'll know it works*. Run it via `scripts/run-tests.sh <file>` and
   **watch it fail for the right reason.** A test that passes on first run is
@@ -115,10 +116,12 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
 - **nag**: no leftover Plan yet (that's consolidate), but check Notes you touched
   are within size and 1:1 with an area.
 - **mutation check on critical paths only**. For a critical path the Plan names,
-  seed-and-catch: run your ecosystem's mutation runner (StrykerJS for JS/TS;
+  run a mutation check (it plants small bugs on purpose and confirms a test
+  catches each one) with your ecosystem's runner (StrykerJS for JS/TS;
   mutmut or cosmic-ray for Python), **diff-scoped and budget-capped**, isolated so
-  it never touches the tree. It audits the *tests*, not the code. A surviving
-  mutant means a hollow test; close the gap with another red-green cycle. Skip it
+  it never touches the tree. It audits the *tests*, not the code. A planted bug
+  no test catches means a test that checks too little; close the gap with
+  another red-green cycle. Skip it
   for non-critical or UI changes; never gate a trivial change on it.
 
 Close verify by stating each check's outcome (tests, type-check, lint,
@@ -129,18 +132,20 @@ forgotten check, and this receipt is what a later audit of the transcript reads.
 If verify cannot go green and you have exhausted the fix, **stop and escalate**
 (stop-point 1), leaving the worktree as evidence.
 
-### 4. Consolidate — route residue, prune, delete the Plan
+### 4. Consolidate — sort the leftovers, prune, delete the Plan
 
 This is the only step that writes `docs/` and the only step that prunes tests.
-Route each piece of durable residue to where it can't rot, applying the **cut
-test** (never write a line an agent could recover from the code; if it can be a
-type, it already became one at build):
+Sort everything the change leaves behind that is worth keeping into the place
+where it can't go stale, applying the **cut test** (never write a line an agent
+could recover from the code; if it can be a type, it already became one at
+build):
 
 - an intent or invariant the code can't show → a **Note** (`docs/notes/<area>.md`,
   a map + one invariant, size-capped, 1:1 with an area);
 - a decision + why (and a rejected alternative, if load-bearing) → a **Decision**
   (`docs/decisions/<topic>.md`, present-tense, one per topic, edited in place);
-- a resolved empirical bet → **close** its `docs/open-questions.md` entry;
+- an assumption running code has now settled → **close** its
+  `docs/open-questions.md` entry;
 - redundant tests the change revealed → **prune** them (deduplication is a real
   output of this step, not an afterthought).
 - **delete `.plans/<change>.md` with `git rm`, here in the worktree.** The Plan
@@ -254,13 +259,14 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
      independence check missed a seam: fold this change in serially and flag it
      for a Decision-level look. Do not force the merge.
    - **7**: the proof gate (on by default; `.hone-proof-off` disables it) found a
-     `Proof: real-environment` change with no discharge (no green `scripts/proof.sh`, no
-     `.hone-proof/<change>` attestation). The merge did not happen; the worktree
+     `Proof: real-environment` change whose proof is still missing (no green
+     `scripts/proof.sh`, no `.hone-proof/<change>` sign-off). The merge did not
+     happen; the worktree
      is kept. **Stop and escalate**, because the real-environment check is out of
-     the loop's boundary; the human runs the journey/canary and attests it. Never
-     attest it yourself.
+     the loop's boundary; the human runs the journey/canary and signs it off.
+     Never sign it off yourself.
    - **8**: the authority gate (on by default; `.hone-authority-off` disables it)
-     classified this as a *consequential* change (destructive SQL, a `db/` deletion, a
+     classified this as an *irreversible* change (destructive SQL, a `db/` deletion, a
      `.hone-consequential-paths` match) and found no `.hone-grant/<change>`. The
      merge did not happen; the worktree is kept. **Stop and escalate**: this
      needs the human's scoped grant, not a workaround. Never create the grant
@@ -331,8 +337,8 @@ blocker. Never disable, weaken, or route around a gate to proceed: an escalated
 stop is a correct outcome, a forced pass is not.
 
 The land gates (on by default) add a stop that is neither a failure nor a fork:
-the authority gate (exit 8) awaits your scoped grant for a consequential change,
+the authority gate (exit 8) awaits your scoped grant for an irreversible change,
 and the proof gate (exit 7) awaits real-environment proof the loop cannot give.
-Both are stops reserved to you by design: escalate and wait; never self-grant or
-self-attest. (A project can disable either with `.hone-authority-off` /
-`.hone-proof-off`.)
+Both are stops reserved to you by design: escalate and wait; never write the
+grant or the sign-off yourself. (A project can disable either with
+`.hone-authority-off` / `.hone-proof-off`.)

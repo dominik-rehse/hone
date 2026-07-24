@@ -1,6 +1,6 @@
 ---
 name: plan
-description: "Author the ephemeral Plan for one change: .plans/<change>.md, the only hand-written artifact. Guides sizing a change to the smallest unit worth its own review gate, states what, why, and how you'll know it works, then submits it to the plan-critic for admission while the human is still present to revise. Does not write code, tests, or docs. Invoke with /hone:plan <change-name-or-sketch>."
+description: "Author the temporary Plan for one change: .plans/<change>.md, the only hand-written artifact. Guides sizing a change to the smallest unit worth its own review gate, states what, why, and how you'll know it works, then submits it to the plan-critic for approval while the human is still present to revise. Does not write code, tests, or docs. Invoke with /hone:plan <change-name-or-sketch>."
 argument-hint: "[change-name-or-sketch]"
 disable-model-invocation: true
 ---
@@ -17,7 +17,7 @@ accretes acceptance-criteria bookkeeping; the tests are the durable record of
 behaviour.
 
 This command helps a human write that brief. It writes **only** `.plans/<change>.md`
-(and, when the change rests on an empirical bet, an entry in
+(and, when the change rests on an untested assumption, an entry in
 `docs/open-questions.md`). It does not write code, tests, or other docs.
 
 ## Task
@@ -41,10 +41,10 @@ review can't hold it; too small and you multiply merge overhead on shared files.
   before fanning out, and the merge verifies it).
 - If it's one indivisible change spanning several files, that's one Plan.
 
-Decide this now; the `plan-critic` (the admission critic run at step 5) will
+Decide this now; the `plan-critic` (the Plan checker run at step 5) will
 challenge a Plan whose scope is wrong.
 
-### 3. Surface empirical bets as open questions
+### 3. Surface untested assumptions as open questions
 
 If the change rests on an assumption only running code can settle (a driver's
 dialect, an SDK's headless behaviour, a library on this runtime), record it in
@@ -87,9 +87,9 @@ line; otherwise the proof is assertion-level and the gate's suite covers it.>
 ```
 
 Omit any section that would only restate another. No placeholders, no `TBD`: the
-`plan-critic` rejects them at admission, next.
+`plan-critic` rejects them at the check, next.
 
-### 5. Admit — `plan-critic`
+### 5. Check — `plan-critic`
 
 Submit the finished Plan to the `plan-critic` agent (Task tool,
 `subagent_type: plan-critic`). Give it a **constructed brief**: the Plan text,
@@ -101,12 +101,12 @@ transcript. It returns structured findings and an `ADMIT`/`REJECT` verdict.
 with an open change, or contract churn): this is the moment to fix it, while the
 human is still here. Present the findings, revise the Plan with the human (they
 own it), and resubmit the revised Plan. Never hand off a rejected Plan:
-`/hone:run` executes unattended and trusts that admission happened here.
+`/hone:run` executes unattended and trusts that this check happened here.
 
-### 6. Commit the admitted Plan
+### 6. Commit the approved Plan
 
-The Plan is a tracked artifact. Commit it now (only once admitted) to the
-current branch:
+The Plan is a tracked artifact. Commit it now (only once the critic returns
+`ADMIT`) to the current branch:
 
 ```bash
 git add .plans/<slug>.md
@@ -125,7 +125,7 @@ cannot perform). Commit nothing but the Plan; the loop owns every other artifact
 Close with an explicit hand-off. The slug you derived may differ from the name
 the user typed, so state it plainly:
 
-> Plan written to `.plans/<slug>.md`, admitted by the `plan-critic`, and committed
+> Plan written to `.plans/<slug>.md`, approved by the `plan-critic`, and committed
 > on `<branch>`. It is tracked: it shows in `git log`, not as an untracked file;
 > the change's landing merge removes it from the tree, and git history keeps it.
 > [I named it `<slug>` rather than `<what-you-typed>` to mirror `src/`.]

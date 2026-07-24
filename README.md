@@ -1,8 +1,9 @@
 # hone
 
-A Claude Code plugin that refines a codebase by cutting. A human writes a short Plan; an automated, worktree-native loop then
-builds, verifies, consolidates, reviews, and lands each change unattended. Only
-rot-proof durable truth survives in the repo, and every cycle deletes something.
+A Claude Code plugin that refines a codebase by cutting. A human writes a short
+Plan; an automated loop then builds, verifies, consolidates, reviews, and lands
+each change unattended, working in an isolated git worktree. The repo keeps only
+truth that cannot go stale, and every cycle deletes something.
 
 *To hone is to sharpen a blade by grinding material away: refinement through
 removal.*
@@ -49,7 +50,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"
 ```
 
 `setup.sh` picks a test-adapter template for your ecosystem, gitignores the
-ephemeral artifacts (`.worktrees/` and the markers, though Plans are tracked), and creates
+temporary artifacts (`.worktrees/` and the markers, though Plans are tracked), and creates
 `docs/decisions/`, `docs/notes/`, `docs/open-questions.md`, and `src/`. Add the
 optional `scripts/typecheck.sh` and `scripts/lint.sh` where your language has
 them; the gate runs each when present. The adapter contract is
@@ -87,8 +88,8 @@ Three hooks run the laws, from `hooks/`:
 
 - *guard* (`PreToolUse`): no production code without a failing test, and no direct
   edits to `src/`, `tests/`, `docs/`, or `db/` in the primary tree (that work
-  belongs in a worktree, landed by a merge). `.hone-durable-paths` extends the
-  perimeter with project-specific paths.
+  belongs in a worktree, landed by a merge). `.hone-durable-paths` adds
+  project-specific paths to the protected set.
 - *gate* (`Stop`): the test suite, plus type-check and lint where present, stay
   green. A failure blocks the turn.
 - *nag* (`Stop`, advisory): a leftover Plan, an oversized Note, a Note with no
@@ -96,9 +97,11 @@ Three hooks run the laws, from `hooks/`:
   merged `hone/*` branch land forgot to delete, or a change about to land that
   deletes nothing.
 
-Two refute-first critics fill the judgment slots: `plan-critic` (admission, at
-the end of `/hone:plan`, with the human present to revise a rejection) and
-`consolidate-critic` (residue). Review reuses Claude Code's built-in `/code-review`.
+Two critics, each prompted to find fault rather than approve, fill the judgment
+slots: `plan-critic` (checks the Plan at the end of `/hone:plan`, with the human
+present to revise a rejection) and `consolidate-critic` (checks what a change
+leaves behind in docs and tests). Review reuses Claude Code's built-in
+`/code-review`.
 
 ## Off-switch and markers
 
@@ -110,24 +113,26 @@ All gitignored, per-developer, never checked in:
 - `.hone-nag-enforce`: make the nag's findings block instead of warn.
 - `.hone-test-globs`: override the test-file basename globs (one per line) for a
   language whose tests don't match `*.test.* *.spec.* *_test.* *_spec.*`.
-- `.hone-durable-paths`: extend the guard's durable perimeter beyond
+- `.hone-durable-paths`: extend the set of paths the guard protects beyond
   `src/ tests/ docs/ db/` (one entry per line, `#` comments): a directory
-  (`deploy/`) or an exact file (`tsconfig.json`). It only extends the perimeter.
+  (`deploy/`) or an exact file (`tsconfig.json`). It only ever adds paths,
+  never removes them.
 - `.hone-authority-off`: turn *off* the *authority gate* (on by default). With it
-  present, `land` stops requiring a grant and lands a *consequential* change
+  present, `land` stops requiring a grant and lands an *irreversible* change
   (destructive SQL, a `db/` deletion, or a `.hone-consequential-paths` match)
-  unattended, for undeployed work whose data is disposable.
-- `.hone-consequential-paths`: extend what counts as consequential beyond the
+  unattended, for undeployed work whose data is disposable. (The marker files
+  call an irreversible change "consequential".)
+- `.hone-consequential-paths`: extend what counts as irreversible beyond the
   built-in signals (one path glob per line, `#` comments).
-- `.hone-grant/<change>`: the scoped authorization for one consequential change.
+- `.hone-grant/<change>`: the scoped authorization for one irreversible change.
   You create it (its text, who/when/why, lands in the merge commit body);
   delete it to revoke. Directory-ignored, per-developer.
 - `.hone-proof-off`: turn *off* the *proof gate* (on by default). With it present,
-  a change whose Plan declared `Proof: real-environment` lands on the assertion
-  suite alone, for undeployed software.
-- `.hone-proof/<change>`: your attestation that the real-environment check for one
-  change ran (a browser journey, a canary). Discharges that change's proof
-  obligation. Directory-ignored, per-developer.
+  a change whose Plan declared `Proof: real-environment` lands on the test suite
+  alone, for undeployed software.
+- `.hone-proof/<change>`: your sign-off that the real-environment check for one
+  change ran (a browser journey, a canary). It satisfies that change's proof
+  requirement. Directory-ignored, per-developer.
 
 ## Tamper resistance
 
@@ -140,32 +145,32 @@ a sandbox.
 
 ## Authority
 
-Tamper resistance is a *capability* boundary: what the agent may touch.
-*Authority* is a separate contract, about whether an unattended merge of a *consequential*,
-effectively irreversible change (a destructive migration, a `db/` deletion) may
-land without a human's say-so. A reversible change is `git revert`-able and lands
-unattended; a dropped column is not. The gate is **on by default**: `land`
-classifies the diff and refuses a consequential change (exit 8, worktree kept as
-evidence) until you record a scoped grant at `.hone-grant/<change>`, whose text
-lands in the merge commit body. Turn it off with `.hone-authority-off` (see
-*Off-switch and markers*) for undeployed work whose data is disposable.
+Tamper resistance answers what the agent *can* touch. *Authority* is a separate
+question: may an unattended merge land an *irreversible* change (a destructive
+migration, a `db/` deletion) without a human's say-so? A reversible change can
+be undone with `git revert` and lands unattended; a dropped column cannot be.
+The gate is **on by default**: `land` classifies the diff and refuses an
+irreversible change (exit 8, worktree kept as evidence) until you record a
+scoped grant at `.hone-grant/<change>`, whose text lands in the merge commit
+body. Turn it off with `.hone-authority-off` (see *Off-switch and markers*) for
+undeployed work whose data is disposable.
 
 ## Proof boundary
 
-hone's checks prove *assertions* (the suite, types, lint, a fuzzed property, a
-seeded mutant), all hermetic and pre-merge. A green check never proves a
-real-environment outcome: a browser journey, a canary, deployed health. For a
-change whose claim lives there, a Plan declares `Proof: real-environment`, and
-`land` refuses it (exit 7, worktree kept) until it is discharged by a
-real-environment adapter (`scripts/proof.sh`) or your attestation
+All of hone's checks (the suite, types, lint, property tests, mutation checks)
+run inside the repo, before the merge, needing nothing from the outside world.
+A green check never proves a real-environment outcome: a browser journey, a
+canary, deployed health. For a change whose claim lives there, a Plan declares
+`Proof: real-environment`, and `land` refuses it (exit 7, worktree kept) until
+a real-environment check passes (`scripts/proof.sh`) or you sign it off
 (`.hone-proof/<change>`). This gate is **on by default** for any change that
-declares real-environment proof; turn it off with `.hone-proof-off` for undeployed
-work.
+declares real-environment proof; turn it off with `.hone-proof-off` for
+undeployed work.
 
 ## Adopting hone in an existing spec-driven repo
 
 [`docs/converting.md`](docs/converting.md) is a migration prompt: run it inside a
-repo built on a growing spec/acceptance-criteria corpus to distill the durable
-residue into types, Decisions, and Notes, delete the rest, and adopt the plan→run
+repo built on a growing spec/acceptance-criteria corpus to distill what is worth
+keeping into types, Decisions, and Notes, delete the rest, and adopt the plan→run
 loop without changing runtime behaviour. Its final section is a shorter checklist
 for upgrading a repo already on an earlier hone version to the current one.

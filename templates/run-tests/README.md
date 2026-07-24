@@ -4,7 +4,8 @@
 language-agnostic. Install it with `scripts/setup.sh` (which picks a template
 here) or copy a template and adapt it. It must honour this contract:
 
-- `run-tests.sh` runs the *unit* tier: every hermetic, fast test. This is what
+- `run-tests.sh` runs the *unit* tier: every fast test that needs nothing
+  outside the repo (no network, no DB, no browser). This is what
   the `gate` runs and what the build loop's refactor step re-runs.
 - `run-tests.sh --all` runs *every* tier, including slow or external
   integration/e2e tests (network, DB, browser). Run at land.
@@ -39,5 +40,5 @@ health), not the working tree. It runs only when a change declared
 disables it), and only then at land. A green suite proves its assertions, not
 that the deployed system behaves. Exit `0` = proven. There is no template: what "the real
 environment" means is project-specific (a Playwright run against a preview URL, a
-`curl` of a canary's health endpoint). Absent it, a real-environment change is
-discharged instead by a human attestation at `.hone-proof/<change>`.
+`curl` of a canary's health endpoint). Without it, a real-environment change
+instead needs a human sign-off at `.hone-proof/<change>`.

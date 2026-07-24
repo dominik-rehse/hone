@@ -8,7 +8,7 @@ Add cursor-based pagination to the list endpoint.
 - src/api/list.test.ts: tests for first page, next page, last page (nextCursor
   null), and limit clamping to 100.
 
-## Durable residue produced by this change
+## What this change left behind (durable layer)
 - New Decision docs/decisions/pagination.md, full text:
 
   > # Pagination

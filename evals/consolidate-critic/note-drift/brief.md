@@ -8,7 +8,7 @@ Prorate a mid-cycle plan change.
 - src/billing/proration.test.ts: upgrade mid-cycle, downgrade mid-cycle, switch
   on the boundary day, and a same-plan no-op.
 
-## Durable residue produced by this change
+## What this change left behind (durable layer)
 - docs/notes/billing.md was expanded to (now 34 lines):
 
   > # Billing

@@ -1,6 +1,6 @@
 ---
 name: garden
-description: "Run hone's continuous-maintenance loop: scan the whole repo for durable-layer drift between changes (orphan/oversized Notes, broken Governs links, redundant tests, dead code, stale open questions), then land the safe cuts one at a time through the same worktree loop. Deletion-only: every garden change removes something and the suite proves the cut safe. Escalates judgment calls instead of forcing them. Invoke with /hone:garden, or on a schedule."
+description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, broken Governs links, redundant tests, dead code, stale open questions), then land the safe cuts one at a time through the same worktree loop. Deletion-only: every garden change removes something and the suite proves the cut safe. Escalates judgment calls instead of forcing them. Invoke with /hone:garden, or on a schedule."
 argument-hint: "[area-or-scope]"
 disable-model-invocation: true
 ---
@@ -10,7 +10,7 @@ disable-model-invocation: true
 Input: $ARGUMENTS
 
 `plan → run` refines the codebase *at the point of change*: each change cuts its
-own residue. But rot also accumulates *between* changes: a Decision whose code
+own leftovers. But staleness also accumulates *between* changes: a Decision whose code
 moved, a Note nobody re-derived, a test made redundant by a later change, an open
 question running code already settled. Nothing in the change-triggered loop looks
 at the repo as a whole. `garden` is that standing look: it runs the same loop on a

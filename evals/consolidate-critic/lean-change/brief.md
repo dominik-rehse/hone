@@ -9,7 +9,7 @@ Escape CSV fields per RFC 4180.
 - src/export/csv.test.ts: example tests for each special char; a property test
   `parse(toCsv(rows)) == rows`; a golden-file test.
 
-## Durable residue produced by this change
+## What this change left behind (durable layer)
 - No new Decision (the RFC-4180 choice is self-evident from the code and the
   property test; there was no alternative worth recording).
 - docs/notes/export.md unchanged (still: "Export area serializes records to CSV;

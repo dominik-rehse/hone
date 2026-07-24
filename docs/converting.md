@@ -50,9 +50,9 @@ therefore harmless: it stays inert until step 9.
 >    Give each Note and Decision a `Governs:` line naming the `src/` path it
 >    explains, so the nag flags it if that code later moves. Then delete the spec.
 >    Do not preserve acceptance criteria, checkboxes, or
->    per-criterion prose. Git keeps the history. Never delete a spec before its
->    residue is captured; if the residue is ambiguous, leave the spec and flag it
->    for a human.
+>    per-criterion prose. Git keeps the history. Never delete a spec before what
+>    is worth keeping has been captured; if that is ambiguous, leave the spec
+>    and flag it for a human.
 >
 > 3. **Convert ADRs to Decisions.** `docs/decisions/adr-NNN-*.md` are append-only
 >    with superseded chains. Collapse each topic into one present-tense
@@ -139,26 +139,26 @@ None of this changes the nine steps; it just makes them go smoother.
 ## Upgrading an existing hone repository
 
 A repo already on hone moves to the current version in two mechanical steps. The
-new land gates are **on by default**, so read step 3 before you next land a
-consequential or real-environment change. They will start gating automatically,
+new land gates are **on by default**, so read step 3 before you next land an
+irreversible or real-environment change. They will start gating automatically,
 which is the point, but an undeployed repo will want to switch them off.
 
 1. **Take the new plugin version.** hone is distributed through the marketplace,
    so update it there; the loop and hooks pick the change up automatically.
 
 2. **Re-run setup.** `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` is
-   idempotent: it leaves your adapter, docs, and `.plans/` untouched and only
+   safe to run again: it leaves your adapter, docs, and `.plans/` untouched and only
    appends the new marker entries to `.gitignore` (`.hone-authority-off`,
    `.hone-consequential-paths`, `.hone-grant/`, `.hone-proof-off`,
    `.hone-proof/`), so those per-developer files never get committed once you
    start using them.
 
-3. **Decide on the default-on land gates.** From now on `land` refuses a
-   *consequential* change (destructive SQL, a `db/` deletion, or a
+3. **Decide on the default-on land gates.** From now on `land` refuses an
+   *irreversible* change (destructive SQL, a `db/` deletion, or a
    `.hone-consequential-paths` match) without a scoped `.hone-grant/<change>`
    (exit 8), and refuses a change whose Plan declares `Proof: real-environment`
-   until it is discharged by `scripts/proof.sh` or a `.hone-proof/<change>`
-   attestation (exit 7). If the repo is undeployed with disposable data, switch
+   until `scripts/proof.sh` passes or a `.hone-proof/<change>`
+   sign-off exists (exit 7). If the repo is undeployed with disposable data, switch
    them off with `.hone-authority-off` and/or `.hone-proof-off`; otherwise leave
    them on, since they now protect every land without further setup.
 

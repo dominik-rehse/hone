@@ -178,7 +178,7 @@ land_consequential() {
             [ -n "$pat" ] || continue
             case "$pat" in \#*) continue ;; esac
             if git -C "$root" diff --name-only "$base" "$branch" -- ":(glob)$pat" 2>/dev/null | grep -q .; then
-                reasons+="  - touches a consequential path: $pat"$'\n'
+                reasons+="  - touches a path listed in .hone-consequential-paths: $pat"$'\n'
             fi
         done < "$root/.hone-consequential-paths"
     fi
@@ -242,7 +242,7 @@ cmd_land() {
             grant="$main_root/.hone-grant/$change"
             if [ ! -f "$grant" ]; then
                 {
-                    echo "hone worktree: $branch is a CONSEQUENTIAL change and has no authority grant:"
+                    echo "hone worktree: $branch is an IRREVERSIBLE change and has no authority grant:"
                     printf '%s' "$reasons"
                     echo "Review the diff. If you authorize it, record who/when/why in a file at"
                     echo "  .hone-grant/$change  (gitignored, per-developer)"
@@ -271,10 +271,10 @@ cmd_land() {
             fi
         else
             {
-                echo "hone worktree: $branch declares real-environment proof, which the gate's suite cannot give (a green check proves only its assertion)."
-                echo "Discharge it one of two ways, then re-run land:"
+                echo "hone worktree: $branch declares real-environment proof, which the test suite cannot give (a green suite proves nothing about the deployed system)."
+                echo "Prove it one of two ways, then re-run land:"
                 echo "  - add scripts/proof.sh (a real-environment check: a journey, a canary, deployed health), or"
-                echo "  - run the check yourself and attest it in a file at .hone-proof/$change (gitignored)."
+                echo "  - run the check yourself and record your sign-off in a file at .hone-proof/$change (gitignored)."
                 echo "The worktree is kept as evidence until then."
             } >&2
             return 7
@@ -286,7 +286,7 @@ cmd_land() {
     # The grant's text becomes a second commit paragraph. The authorization is
     # then in git history. The first line stays "Merge branch 'hone/<change>'" so
     # the nag's landed-Plan grep still matches.
-    [ -n "$grant_note" ] && merge_args+=(-m "Authorized (consequential change):"$'\n'"$grant_note")
+    [ -n "$grant_note" ] && merge_args+=(-m "Authorized (irreversible change):"$'\n'"$grant_note")
     if ! git -C "$main_root" "${merge_args[@]}" >/dev/null 2>&1; then
         # A conflict means the independence check missed a seam. Restore the
         # shared tree so the next lander starts clean; the branch stays as

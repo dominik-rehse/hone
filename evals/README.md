@@ -2,7 +2,7 @@
 
 The two critics and the injected `rules/workflow.md` are behaviour-shaping prose
 doing real judgment work, and unverified prose is the one part of hone's trust
-foundation that can rot silently. These evals pin them to cases with known-good
+foundation that can go stale silently. These evals pin them to cases with known-good
 verdicts, so a reword that quietly weakens a critic is caught.
 
 ## Run

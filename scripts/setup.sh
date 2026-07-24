@@ -54,7 +54,7 @@ if grep -qxF ".plans/" .gitignore; then
     grep -vxF ".plans/" .gitignore > .gitignore.hone-tmp && mv .gitignore.hone-tmp .gitignore
     echo "hone setup: removed .plans/ from .gitignore — Plans are tracked now."
 fi
-echo "hone setup: ensured ephemeral artifacts are gitignored."
+echo "hone setup: ensured temporary artifacts are gitignored."
 
 # 3. Durable docs skeleton (empty dirs are fine; the loop fills them), plus the
 # src/ root. hone's enforcement keys off a src/<area>/ layout: the guard requires
@@ -62,7 +62,7 @@ echo "hone setup: ensured ephemeral artifacts are gitignored."
 # gate watches src/ and tests/ for work in flight. Code must live under src/ for
 # these to apply, Python packages included (src/<pkg>/ is a supported layout).
 mkdir -p docs/decisions docs/notes .plans src
-[ -f docs/open-questions.md ] || printf '# Open questions\n\nEmpirical bets only running code settles. Close or delete each entry once resolved; never grow it.\n' > docs/open-questions.md
+[ -f docs/open-questions.md ] || printf '# Open questions\n\nAssumptions only running code can settle. Close or delete each entry once resolved; never grow it.\n' > docs/open-questions.md
 echo "hone setup: created docs/decisions, docs/notes, docs/open-questions.md, .plans/, src/."
 
 echo "hone setup: code lives under src/<area>/ — that is where the guard, gate, and nag apply."

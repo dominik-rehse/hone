@@ -11,7 +11,7 @@ Send an email receipt after a successful payment.
   email channel.
 - tests for both.
 
-## Durable residue produced by this change
+## What this change left behind (durable layer)
 - No new Decision.
 - docs/notes/notify.md: "Notify area sends transactional messages; invariant:
   every send is idempotent on the (event-id, channel) key."
