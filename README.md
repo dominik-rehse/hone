@@ -86,8 +86,9 @@ Three hooks run the laws, from `hooks/`:
 - *gate* (`Stop`): the test suite, plus type-check and lint where present, stay
   green. A failure blocks the turn.
 - *nag* (`Stop`, advisory): a leftover Plan, an oversized Note, a Note with no
-  matching `src/` area, a merged `hone/*` branch land forgot to delete, or a
-  change about to land that deletes nothing.
+  matching `src/` area, a Decision/Note whose `Governs:` path no longer exists, a
+  merged `hone/*` branch land forgot to delete, or a change about to land that
+  deletes nothing.
 
 Two refute-first critics fill the judgment slots: `plan-critic` (admission, at
 the end of `/hone:plan`, with the human present to revise a rejection) and

@@ -167,6 +167,17 @@ echo "$out" | grep -q "docs/notes/auth.md is 60 lines" && ok "oversized Note fla
 echo "# orphan" > "$REPO/docs/notes/ghostarea.md"   # no src/ghostarea/
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "docs/notes/ghostarea.md has no src/ghostarea/" && ok "orphan Note flagged" || bad "should flag orphan Note"
+rm -f "$REPO/docs/notes/ghostarea.md"
+
+# Governs link: a Decision pinned to a live path is clean; a dangling path is
+# flagged. src/auth exists in the seed; src/ghost/gone.ts does not.
+printf '# Auth tokens\nGoverns: `src/auth`\n\nWhy rotation is 15m.\n' > "$REPO/docs/decisions/auth.md"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "docs/decisions/auth.md declares Governs" && bad "a live Governs path should not be flagged" || ok "Decision with a live Governs path not flagged"
+printf '# Export format\nGoverns: src/ghost/gone.ts\n\nWhy CSV.\n' > "$REPO/docs/decisions/export.md"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "docs/decisions/export.md declares Governs: src/ghost/gone.ts, which no longer exists" && ok "Decision with a dangling Governs path flagged" || bad "should flag a dangling Governs path"
+rm -f "$REPO/docs/decisions/auth.md" "$REPO/docs/decisions/export.md"
 
 # Enforce marker turns nag into a block.
 touch "$REPO/.hone-nag-enforce"

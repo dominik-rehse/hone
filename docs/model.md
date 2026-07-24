@@ -62,9 +62,13 @@ flowchart TD
   why, plus a rejected-alternatives line when it's load-bearing (to stop a dead
   option being re-proposed). Edited freely when the decision changes; git carries
   the history and the commit message the why-it-changed. One per topic, landing
-  in the same commit as the code it governs.
+  in the same commit as the code it governs. May carry an optional `Governs:`
+  line naming the `src/` paths it explains; the nag checks those paths still
+  exist, so the prose is *mechanically* pinned to the code rather than left to
+  rot silently (the one failure mode a checker can otherwise never see).
 - *Note*: `docs/notes/<area>.md`. Per-area map + its one invariant, pointing
-  at the Decision and the key types. Optional, 1:1 with an area, size-capped.
+  at the Decision and the key types. Optional, 1:1 with an area, size-capped. Its
+  key-type/Decision pointers can be a `Governs:` line, checked the same way.
 - *Open question*: `docs/open-questions.md`. A bet only running code settles.
   Closed or deleted, never grown.
 - *Git history*: what changed and why now.
@@ -84,8 +88,9 @@ flowchart TD
   the primary tree.
 - *gate*: tests green, plus type-check and lint where the language has them
   (one adapter script keeps the hook language-agnostic).
-- *nag*: leftover Plan, oversized Note, orphan Note, a merged `hone/*` branch
-  land forgot to delete, a change about to land that deletes nothing.
+- *nag*: leftover Plan, oversized Note, orphan Note, a Decision/Note with a
+  broken `Governs:` link, a merged `hone/*` branch land forgot to delete, a
+  change about to land that deletes nothing.
 
 ## The loop
 

@@ -17,6 +17,14 @@
 #      map + one invariant, not a spec: half a screen).
 #   3. Orphan Note     — a docs/notes/<area>.md with no corresponding src/<area>/.
 #      Notes are 1:1 with an existing area.
+#   6. Broken Governs link — a Decision or Note declaring `Governs: <path>` whose
+#      path no longer exists. The optional `Governs:` line pins durable prose to
+#      the code it explains: when the code moves or is deleted, the dangling
+#      reference is mechanical proof the doc drifted. Only path-shaped tokens
+#      (containing "/") are checked — exact and unfoolable; symbol-level drift
+#      stays the consolidate-critic's judgment call. This is the mechanical half
+#      of catching the one rot the model warns can pass silently (unverified
+#      prose): a hook, not a once-run critic.
 #   4. Change that cuts nothing — on a clean hone/<change> branch (committed,
 #      about to land), the branch's whole diff against its merge base has zero
 #      deletions. "Every cycle removes something" is the model's principle 4;
@@ -101,6 +109,26 @@ if [ -d "docs/notes" ]; then
             add_finding "${note} has no src/${area}/ — a Note is 1:1 with an existing area (hone assumes a src/<area>/ layout). Rename it to its area, or delete it if the area is gone."
         fi
     done
+fi
+
+# 6. Broken Governs link. A Decision or Note may declare a `Governs:` line naming
+# the src/ paths it explains; a dangling path proves the prose drifted from the
+# code. Path-shaped tokens only (exact existence check); backticks and trailing
+# commas/periods are stripped so `Governs: `src/auth/token.ts`, ...` parses.
+if [ -d "docs/decisions" ] || [ -d "docs/notes" ]; then
+    while IFS= read -r doc; do
+        [ -e "$doc" ] || continue
+        gov=$(grep -im1 '^[[:space:]]*[Gg]overns:' "$doc" 2>/dev/null | sed 's/.*[Gg]overns:[[:space:]]*//')
+        [ -n "$gov" ] || continue
+        gov=${gov//\`/}          # drop backticks
+        gov=${gov//,/ }          # commas → separators
+        for tok in $gov; do
+            tok=${tok%.}         # strip a trailing period
+            case "$tok" in
+                */*) [ -e "$tok" ] || add_finding "${doc} declares Governs: ${tok}, which no longer exists — this durable doc has drifted from the code it governs. Update the reference, or cut the doc if the code is gone." ;;
+            esac
+        done
+    done < <(find docs/decisions docs/notes -type f -name '*.md' 2>/dev/null)
 fi
 
 # 4 + 5 need git.
