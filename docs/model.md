@@ -298,6 +298,26 @@ behavior-shaping prose doing real judgment work. Check them against evals (a
 suite of past changes with known-good verdicts) rather than assuming they hold;
 unverified prose is the one part of the trust foundation that can rot silently.
 
+### The proof boundary (land-time, opt-in)
+
+hone's checks prove *assertions*: the suite, types, lint, a fuzzed property, a
+seeded mutant — all hermetic, pre-merge, in-repo. That is the boundary. A green
+check proves only its assertion, never a real-environment outcome: a browser
+journey, a canary, deployed health, behaviour a user actually observes. For a
+change whose claim lives at that altitude, "landed, tested, reviewed" is not
+"proven", and pretending otherwise is the trap.
+
+So the boundary is named, not hidden. A Plan whose proof is user- or ops-level
+declares `Proof: real-environment` (the `plan-critic` rejects a Plan whose proof
+is *categorically* incapable of settling its claim). With the proof gate on
+(`.hone-proof-enforce`, off by default so undeployed work is never slowed), such a
+change may not land on the assertion suite alone: it is discharged by a
+real-environment adapter (`scripts/proof.sh`, which checks the deployed system,
+not the tree) or a human attestation (`.hone-proof/<change>`), and otherwise land
+refuses (exit 7) and the run escalates. This adds a third escalation reason to the
+two on the loop diagram, faithful to *escalate, never force*: proof the loop
+cannot give is handed back, not faked.
+
 ### Property-based tests (build-time)
 
 A property states a rule once (`parse(serialize(x)) == x`) and a fuzzer

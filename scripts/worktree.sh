@@ -26,8 +26,14 @@
 #       land refuses BEFORE the merge and keeps the worktree as evidence. The
 #       grant's text rides into the merge commit body, so the authorization
 #       lives in durable history rather than a chat.
+#       Proof gate (opt-in via .hone-proof-enforce): a change whose Plan declared
+#       real-environment proof (a `Proof: real-environment` trailer on a branch
+#       commit) may not land on the gate's assertion-level suite alone; it must be
+#       discharged by scripts/proof.sh (green) or an attestation at
+#       .hone-proof/<change>, else land refuses BEFORE the merge.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached/conflict · 5 lock timeout ·
-#       6 post-merge regression (rolled back) · 8 ungranted consequential change.
+#       6 post-merge regression (rolled back) · 7 real-environment proof not
+#       discharged · 8 ungranted consequential change.
 #
 #   worktree.sh verify
 #       Run the full suite (scripts/run-tests.sh --all) in the current tree,
@@ -179,6 +185,20 @@ land_consequential() {
     printf '%s' "$reasons"
 }
 
+# Print non-empty if the branch declares real-environment proof — a `Proof:
+# real-environment` trailer in any of its commit messages (the run skill copies
+# the Plan's proof class there). Only consulted when .hone-proof-enforce is
+# present. A change with no such trailer is assertion-class: the gate's suite
+# already proves it, and it is never gated here — so a project that never declares
+# real-environment proof is unaffected even with the marker on.
+land_proof_required() {
+    local root="$1" branch="$2" base
+    base=$(git -C "$root" merge-base HEAD "$branch" 2>/dev/null)
+    [ -n "$base" ] || return 0
+    git -C "$root" log --format=%B "$base..$branch" 2>/dev/null \
+        | grep -qiE '^[[:space:]]*Proof:[[:space:]]*real-environment' && echo yes
+}
+
 cmd_land() {
     local change="${1:-}"
     [ -n "$change" ] || { echo "hone worktree: land needs a change name." >&2; return 2; }
@@ -231,6 +251,32 @@ cmd_land() {
                 return 8
             fi
             grant_note=$(cat "$grant" 2>/dev/null)
+        fi
+    fi
+
+    # Proof gate (opt-in via .hone-proof-enforce): a change whose Plan declared
+    # real-environment proof cannot land on the gate's assertion-level suite alone
+    # — a green check proves only its assertion, not a browser journey or deployed
+    # health. Discharge it with a real-environment adapter (scripts/proof.sh, which
+    # checks the real environment, not the working tree) or a human attestation
+    # (.hone-proof/<change>); otherwise land refuses before the merge and escalates.
+    if [ -f "$main_root/.hone-proof-enforce" ] && [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
+        if [ -f "$main_root/.hone-proof/$change" ]; then
+            : # human attested the real-environment check ran
+        elif [ -f "$main_root/scripts/proof.sh" ]; then
+            if ! ( cd "$main_root" && bash scripts/proof.sh ); then
+                echo "hone worktree: $branch declares real-environment proof and scripts/proof.sh failed — the change is not proven in the real environment. Worktree kept as evidence." >&2
+                return 7
+            fi
+        else
+            {
+                echo "hone worktree: $branch declares real-environment proof, which the gate's suite cannot give (a green check proves only its assertion)."
+                echo "Discharge it one of two ways, then re-run land:"
+                echo "  - add scripts/proof.sh (a real-environment check: a journey, a canary, deployed health), or"
+                echo "  - run the check yourself and attest it in a file at .hone-proof/$change (gitignored)."
+                echo "The worktree is kept as evidence until then."
+            } >&2
+            return 7
         fi
     fi
 

@@ -204,6 +204,59 @@ bash "$WSH" land db-drop2 >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "consequential change should land freely when the gate is off (got $rc)"
 step "without .hone-require-grant, a consequential change lands unattended"
 
+echo "== 5f. proof gate (.hone-proof-enforce): real-environment changes need a discharge =="
+touch "$REPO/.hone-proof-enforce"
+# (a) An assertion-class change (no Proof: trailer) lands even with the gate on.
+WT_A2=$(bash "$WSH" add assert-change) || die "worktree add assert-change"
+echo "// assertion-class" > "$WT_A2/src/mathx/plain.js"
+(cd "$WT_A2" && git add -A && git commit -qm "chore(mathx): assertion-class change")
+bash "$WSH" land assert-change >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "an assertion-class change should land with the proof gate on (got $rc)"
+step "assertion-class change lands (no Proof: trailer, not gated)"
+# (b) A real-environment change with no discharge is refused before the merge.
+WT_P=$(bash "$WSH" add ui-flow) || die "worktree add ui-flow"
+echo "// browser flow" > "$WT_P/src/mathx/flow.js"
+(cd "$WT_P" && git add -A && git commit -qm "feat(mathx): checkout flow
+
+Proof: real-environment")
+PRE=$(git rev-parse HEAD)
+bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 7 ] || die "an undischarged real-environment change should exit 7 (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "an unproven real-environment change must not touch the trunk"
+step "real-environment change without a discharge refused (exit 7), trunk untouched"
+# (c) A human attestation discharges it and it lands.
+mkdir -p "$REPO/.hone-proof"
+echo "ran the browser journey against staging 2026-07-24 — ok" > "$REPO/.hone-proof/ui-flow"
+bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "an attested real-environment change should land (got $rc)"
+step "attested real-environment change landed"
+rm -f "$REPO/.hone-proof/ui-flow"
+# (d) A green scripts/proof.sh also discharges it.
+WT_P2=$(bash "$WSH" add ui-flow2) || die "worktree add ui-flow2"
+echo "// second flow" > "$WT_P2/src/mathx/flow2.js"
+(cd "$WT_P2" && git add -A && git commit -qm "feat(mathx): second flow
+
+Proof: real-environment")
+printf '#!/bin/bash\nexit 0\n' > "$REPO/scripts/proof.sh"   # a real-env check that passes
+bash "$WSH" land ui-flow2 >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "a green scripts/proof.sh should discharge the proof (got $rc)"
+step "real-environment change discharged by a green scripts/proof.sh"
+# (e) A red scripts/proof.sh keeps it out (exit 7).
+rm -f "$REPO/scripts/proof.sh"
+WT_P3=$(bash "$WSH" add ui-flow3) || die "worktree add ui-flow3"
+echo "// third flow" > "$WT_P3/src/mathx/flow3.js"
+(cd "$WT_P3" && git add -A && git commit -qm "feat(mathx): third flow
+
+Proof: real-environment")
+printf '#!/bin/bash\nexit 1\n' > "$REPO/scripts/proof.sh"   # a real-env check that fails
+PRE=$(git rev-parse HEAD)
+bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 7 ] || die "a red scripts/proof.sh should keep a real-environment change out (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a failed proof must not touch the trunk"
+step "real-environment change with a red scripts/proof.sh refused (exit 7)"
+rm -f "$REPO/scripts/proof.sh" "$REPO/.hone-proof-enforce"
+bash "$WSH" remove "$WT_P3" >/dev/null 2>&1; git branch -D hone/ui-flow3 >/dev/null 2>&1
+
 echo "== 7. add from inside a sibling worktree: anchors to the main tree =="
 # An orchestrator's cwd drifts into change A's worktree before starting change B.
 # `add B` must land at <main_root>/.worktrees/B (not nested under A) and branch

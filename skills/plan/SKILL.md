@@ -75,6 +75,9 @@ Keep it to what an unattended loop needs and no more:
 ## How I'll know it works
 <The observable proof: the behaviour a test will pin, the end-to-end check, the
 error that stops reproducing. Concrete and checkable, not "it works".>
+<If the claim is user- or ops-level and no in-repo test can settle it (a browser
+journey, a canary, deployed health), say so and add a `Proof: real-environment`
+line; otherwise the proof is assertion-level and the gate's suite covers it.>
 
 ## Notes for the loop (optional)
 - <Critical path? Name it: it earns a mutation check and maybe a property test.>

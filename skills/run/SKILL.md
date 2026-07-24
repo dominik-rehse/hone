@@ -230,7 +230,10 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    along. The body carries a **`Cut:` line** naming what consolidate removed
    (pruned tests, dead code, deleted doc lines) — or `Cut: nothing`, with the
    reason, when there genuinely was nothing; the nag flags a zero-deletion
-   change, and this line is its answer.
+   change, and this line is its answer. If the Plan declared `Proof:
+   real-environment`, carry that same **`Proof: real-environment` line** in the
+   body: it is how land's proof gate (`.hone-proof-enforce`) knows an
+   assertion-level suite is not enough for this change.
 2. From the primary tree, land the branch:
 
    ```bash
@@ -250,6 +253,12 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    - **2** — a merge conflict (aborted, tree restored) means the `--all`
      independence check missed a seam: fold this change in serially and flag it
      for a Decision-level look. Do not force the merge.
+   - **7** — the proof gate (`.hone-proof-enforce`) found a `Proof:
+     real-environment` change with no discharge (no green `scripts/proof.sh`, no
+     `.hone-proof/<change>` attestation). The merge did not happen; the worktree
+     is kept. **Stop and escalate** — the real-environment check is out of the
+     loop's boundary; the human runs the journey/canary and attests it. Never
+     attest it yourself.
    - **8** — the authority gate (`.hone-require-grant`) classified this as a
      *consequential* change (destructive SQL, a `db/` deletion, a
      `.hone-consequential-paths` match) and found no `.hone-grant/<change>`. The

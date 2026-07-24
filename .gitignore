@@ -9,3 +9,5 @@
 .hone-require-grant
 .hone-consequential-paths
 .hone-grant/
+.hone-proof-enforce
+.hone-proof/

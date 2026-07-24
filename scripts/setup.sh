@@ -47,7 +47,7 @@ fi
 # it lands in git history, and consolidate removes it with a git rm the landing
 # merge carries — so a prior setup's .plans/ ignore is stripped if present.
 touch .gitignore
-for entry in ".worktrees/" ".hone-off" ".hone-test-globs" ".hone-durable-paths" ".hone-gate-enforce" ".hone-nag-enforce" ".hone-require-grant" ".hone-consequential-paths" ".hone-grant/"; do
+for entry in ".worktrees/" ".hone-off" ".hone-test-globs" ".hone-durable-paths" ".hone-gate-enforce" ".hone-nag-enforce" ".hone-require-grant" ".hone-consequential-paths" ".hone-grant/" ".hone-proof-enforce" ".hone-proof/"; do
     grep -qxF "$entry" .gitignore || printf '%s\n' "$entry" >> .gitignore
 done
 if grep -qxF ".plans/" .gitignore; then
