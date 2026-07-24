@@ -232,8 +232,8 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    reason, when there genuinely was nothing; the nag flags a zero-deletion
    change, and this line is its answer. If the Plan declared `Proof:
    real-environment`, carry that same **`Proof: real-environment` line** in the
-   body: it is how land's proof gate (`.hone-proof-enforce`) knows an
-   assertion-level suite is not enough for this change.
+   body: it is how land's proof gate (on by default) knows an assertion-level
+   suite is not enough for this change.
 2. From the primary tree, land the branch:
 
    ```bash
@@ -253,14 +253,14 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    - **2** — a merge conflict (aborted, tree restored) means the `--all`
      independence check missed a seam: fold this change in serially and flag it
      for a Decision-level look. Do not force the merge.
-   - **7** — the proof gate (`.hone-proof-enforce`) found a `Proof:
-     real-environment` change with no discharge (no green `scripts/proof.sh`, no
+   - **7** — the proof gate (on by default; `.hone-proof-off` disables it) found a
+     `Proof: real-environment` change with no discharge (no green `scripts/proof.sh`, no
      `.hone-proof/<change>` attestation). The merge did not happen; the worktree
      is kept. **Stop and escalate** — the real-environment check is out of the
      loop's boundary; the human runs the journey/canary and attests it. Never
      attest it yourself.
-   - **8** — the authority gate (`.hone-require-grant`) classified this as a
-     *consequential* change (destructive SQL, a `db/` deletion, a
+   - **8** — the authority gate (on by default; `.hone-authority-off` disables it)
+     classified this as a *consequential* change (destructive SQL, a `db/` deletion, a
      `.hone-consequential-paths` match) and found no `.hone-grant/<change>`. The
      merge did not happen; the worktree is kept. **Stop and escalate** — this
      needs the human's scoped grant, not a workaround. Never create the grant
@@ -330,9 +330,9 @@ On 1 or 2, leave the worktree in place as evidence and escalate with the specifi
 blocker. Never disable, weaken, or route around a gate to proceed: an escalated
 stop is a correct outcome, a forced pass is not.
 
-When the opt-in land gates are on, a change can also stop at land for a reason
-that is neither a failure nor a fork: the authority gate (`.hone-require-grant`,
-exit 8) awaits your scoped grant for a consequential change, and the proof gate
-(`.hone-proof-enforce`, exit 7) awaits real-environment proof the loop cannot give.
+The land gates (on by default) add a stop that is neither a failure nor a fork:
+the authority gate (exit 8) awaits your scoped grant for a consequential change,
+and the proof gate (exit 7) awaits real-environment proof the loop cannot give.
 Both are stops reserved to you by design — escalate and wait; never self-grant or
-self-attest.
+self-attest. (A project can disable either with `.hone-authority-off` /
+`.hone-proof-off`.)

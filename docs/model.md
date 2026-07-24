@@ -159,7 +159,7 @@ flowchart TD
     rev -.->|"Findings to fix"| fix
     fix --> land
     rev -.->|"Needs a decision<br/>only you can make"| stop
-    land -.->|"Consequential or real-environment:<br/>awaits your grant or proof<br/>(opt-in gates)"| stop
+    land -.->|"Consequential or real-environment:<br/>awaits your grant or proof<br/>(default-on land gates)"| stop
     stop --> esc
     esc -.->|"You revise the Plan<br/>and re-run"| planFile
 
@@ -299,7 +299,7 @@ behavior-shaping prose doing real judgment work. Check them against evals (a
 suite of past changes with known-good verdicts) rather than assuming they hold;
 unverified prose is the one part of the trust foundation that can rot silently.
 
-### The proof boundary (land-time, opt-in)
+### The proof boundary (land-time)
 
 hone's checks prove *assertions*: the suite, types, lint, a fuzzed property, a
 seeded mutant — all hermetic, pre-merge, in-repo. That is the boundary. A green
@@ -310,8 +310,8 @@ change whose claim lives at that altitude, "landed, tested, reviewed" is not
 
 So the boundary is named, not hidden. A Plan whose proof is user- or ops-level
 declares `Proof: real-environment` (the `plan-critic` rejects a Plan whose proof
-is *categorically* incapable of settling its claim). With the proof gate on
-(`.hone-proof-enforce`, off by default so undeployed work is never slowed), such a
+is *categorically* incapable of settling its claim). The proof gate is on by
+default (disable with `.hone-proof-off` for undeployed work), so such a
 change may not land on the assertion suite alone: it is discharged by a
 real-environment adapter (`scripts/proof.sh`, which checks the deployed system,
 not the tree) or a human attestation (`.hone-proof/<change>`), and otherwise land
@@ -352,8 +352,8 @@ one — a dropped column, a destructive backfill, a truncate — is not undone b
 reverting the merge; the data is already gone. For that subset, green-and-reviewed
 is necessary but not sufficient.
 
-The authority gate is opt-in (`.hone-require-grant`), off by default so an
-undeployed project with disposable data is never slowed. When on, `land`
+The authority gate is on by default (disable with `.hone-authority-off` for an
+undeployed project with disposable data). `land`
 classifies the diff mechanically — destructive SQL in a migration or `db/` file, a
 `db/` deletion, any `.hone-consequential-paths` glob — and a consequential change
 may not merge without a *scoped grant* the human writes at `.hone-grant/<change>`:

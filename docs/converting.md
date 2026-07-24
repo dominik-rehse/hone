@@ -138,39 +138,37 @@ None of this changes the nine steps; it just makes them go smoother.
 
 ## Upgrading an existing hone repository
 
-A repo already on hone needs almost nothing to move to the current version: the
-new capabilities are additive and every gate is off by default. A repo that
-adopts none behaves exactly as before, now on the current plugin. Do the two
-mechanical steps once, then take the opt-in pieces only where they earn their
-keep.
+A repo already on hone moves to the current version in two mechanical steps. The
+new land gates are **on by default**, so read step 3 before you next land a
+consequential or real-environment change — they will start gating automatically,
+which is the point, but an undeployed repo will want to switch them off.
 
 1. **Take the new plugin version.** hone is distributed through the marketplace,
    so update it there; the loop and hooks pick the change up automatically.
 
 2. **Re-run setup.** `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` is
    idempotent — it leaves your adapter, docs, and `.plans/` untouched and only
-   appends the new marker entries to `.gitignore` (`.hone-require-grant`,
-   `.hone-consequential-paths`, `.hone-grant/`, `.hone-proof-enforce`,
+   appends the new marker entries to `.gitignore` (`.hone-authority-off`,
+   `.hone-consequential-paths`, `.hone-grant/`, `.hone-proof-off`,
    `.hone-proof/`), so those per-developer files never get committed once you
    start using them.
 
-Then adopt, à la carte:
+3. **Decide on the default-on land gates.** From now on `land` refuses a
+   *consequential* change (destructive SQL, a `db/` deletion, or a
+   `.hone-consequential-paths` match) without a scoped `.hone-grant/<change>`
+   (exit 8), and refuses a change whose Plan declares `Proof: real-environment`
+   until it is discharged by `scripts/proof.sh` or a `.hone-proof/<change>`
+   attestation (exit 7). If the repo is undeployed with disposable data, switch
+   them off with `.hone-authority-off` and/or `.hone-proof-off`; otherwise leave
+   them on — they now protect every land without further setup.
+
+Two more capabilities are additive and cost nothing until used:
 
 - **`Governs:` links** (no marker — live as soon as you write them). Add a
   `Governs:` line to a Decision or Note naming the `src/` path it explains, and
   the nag flags it when that path later disappears: mechanical proof the prose
   drifted. Add them opportunistically, at the next change that touches each doc;
   no upfront sweep.
-- **The authority gate** (`.hone-require-grant`). Turn it on if the repo carries
-  irreversible operations — destructive migrations, `db/` deletions. `land` then
-  refuses such a change without a scoped `.hone-grant/<change>`; list any extra
-  consequential paths in `.hone-consequential-paths`. Leave it off for undeployed
-  work with disposable data.
-- **The proof gate** (`.hone-proof-enforce`). Turn it on if the repo ships to a
-  real environment and some changes' claims are user- or ops-level. Mark those
-  Plans `Proof: real-environment` and discharge them at land with
-  `scripts/proof.sh` or a `.hone-proof/<change>` attestation. Leave it off while
-  the software is undeployed.
 - **The garden loop** (`/hone:garden`). Point your existing cron/CI at a
   print-mode `claude -p "/hone:garden"` to cut durable-layer drift between changes
   on a schedule. Start it once the durable layer is large enough to be worth

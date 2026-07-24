@@ -113,20 +113,18 @@ All gitignored, per-developer, never checked in:
 - `.hone-durable-paths`: extend the guard's durable perimeter beyond
   `src/ tests/ docs/ db/` (one entry per line, `#` comments): a directory
   (`deploy/`) or an exact file (`tsconfig.json`). Extends, never shrinks.
-- `.hone-require-grant`: turn on the *authority gate*. Off by default — an
-  undeployed project whose changes are all reversible never sees it. When
-  present, `land` refuses a *consequential* change (destructive SQL, a `db/`
-  deletion, or a `.hone-consequential-paths` match) until a scoped grant exists.
+- `.hone-authority-off`: turn *off* the *authority gate* (on by default). With it
+  present, `land` stops requiring a grant and lands a *consequential* change
+  (destructive SQL, a `db/` deletion, or a `.hone-consequential-paths` match)
+  unattended — for undeployed work whose data is disposable.
 - `.hone-consequential-paths`: extend what counts as consequential beyond the
-  built-in signals (one path glob per line, `#` comments). Only consulted when
-  `.hone-require-grant` is present.
+  built-in signals (one path glob per line, `#` comments).
 - `.hone-grant/<change>`: the scoped authorization for one consequential change.
   You create it (its text — who/when/why — lands in the merge commit body);
   delete it to revoke. Directory-ignored, per-developer.
-- `.hone-proof-enforce`: turn on the *proof gate*. Off by default. When present,
-  `land` refuses a change whose Plan declared `Proof: real-environment` unless it
-  is discharged (`scripts/proof.sh` green, or a `.hone-proof/<change>`
-  attestation).
+- `.hone-proof-off`: turn *off* the *proof gate* (on by default). With it present,
+  a change whose Plan declared `Proof: real-environment` lands on the assertion
+  suite alone — for undeployed software.
 - `.hone-proof/<change>`: your attestation that the real-environment check for one
   change ran (a browser journey, a canary). Discharges that change's proof
   obligation. Directory-ignored, per-developer.
@@ -140,27 +138,29 @@ protected artifact (the test adapter, a hook, settings). It closes only the
 file-tool routes. Together they deter and make tampering attributable; it is not
 a sandbox.
 
-## Authority (opt-in)
+## Authority
 
 Tamper resistance is a *capability* boundary — what the agent may touch.
 *Authority* is a separate contract — whether an unattended merge of a *consequential*,
 effectively irreversible change (a destructive migration, a `db/` deletion) may
 land without a human's say-so. A reversible change is `git revert`-able and lands
-unattended as always; a dropped column is not. Turn the gate on with
-`.hone-require-grant` (see *Off-switch and markers*): `land` then classifies the
-diff and refuses a consequential change (exit 8, worktree kept as evidence) until
-you record a scoped grant at `.hone-grant/<change>`, whose text lands in the merge
-commit body. Left off, hone lands every green change unattended.
+unattended; a dropped column is not. The gate is **on by default**: `land`
+classifies the diff and refuses a consequential change (exit 8, worktree kept as
+evidence) until you record a scoped grant at `.hone-grant/<change>`, whose text
+lands in the merge commit body. Turn it off with `.hone-authority-off` (see
+*Off-switch and markers*) for undeployed work whose data is disposable.
 
-## Proof boundary (opt-in)
+## Proof boundary
 
 hone's checks prove *assertions* — the suite, types, lint, a fuzzed property, a
 seeded mutant — all hermetic and pre-merge. A green check never proves a
 real-environment outcome: a browser journey, a canary, deployed health. For a
-change whose claim lives there, a Plan declares `Proof: real-environment`; with
-`.hone-proof-enforce` on, `land` refuses it (exit 7, worktree kept) until it is
-discharged by a real-environment adapter (`scripts/proof.sh`) or your attestation
-(`.hone-proof/<change>`). Off by default, so undeployed work is never slowed.
+change whose claim lives there, a Plan declares `Proof: real-environment`, and
+`land` refuses it (exit 7, worktree kept) until it is discharged by a
+real-environment adapter (`scripts/proof.sh`) or your attestation
+(`.hone-proof/<change>`). This gate is **on by default** for any change that
+declares real-environment proof; turn it off with `.hone-proof-off` for undeployed
+work.
 
 ## Adopting hone in an existing spec-driven repo
 

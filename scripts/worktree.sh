@@ -20,17 +20,17 @@
 #       leaves the primary tree clean and green (a conflict is aborted, a
 #       post-merge regression is rolled back) with the worktree/branch kept as
 #       evidence. Run from the primary tree, after committing in the worktree.
-#       Authority gate (opt-in via .hone-require-grant): a CONSEQUENTIAL change
-#       (destructive SQL, a db/ deletion, or a .hone-consequential-paths match)
-#       may not merge without a scoped grant at .hone-grant/<change>; without it
-#       land refuses BEFORE the merge and keeps the worktree as evidence. The
-#       grant's text rides into the merge commit body, so the authorization
-#       lives in durable history rather than a chat.
-#       Proof gate (opt-in via .hone-proof-enforce): a change whose Plan declared
-#       real-environment proof (a `Proof: real-environment` trailer on a branch
-#       commit) may not land on the gate's assertion-level suite alone; it must be
-#       discharged by scripts/proof.sh (green) or an attestation at
-#       .hone-proof/<change>, else land refuses BEFORE the merge.
+#       Authority gate (on by default; disable with .hone-authority-off): a
+#       CONSEQUENTIAL change (destructive SQL, a db/ deletion, or a
+#       .hone-consequential-paths match) may not merge without a scoped grant at
+#       .hone-grant/<change>; without it land refuses BEFORE the merge and keeps
+#       the worktree as evidence. The grant's text rides into the merge commit
+#       body, so the authorization lives in durable history rather than a chat.
+#       Proof gate (on by default; disable with .hone-proof-off): a change whose
+#       Plan declared real-environment proof (a `Proof: real-environment` trailer
+#       on a branch commit) may not land on the gate's assertion-level suite
+#       alone; it must be discharged by scripts/proof.sh (green) or an attestation
+#       at .hone-proof/<change>, else land refuses BEFORE the merge.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached/conflict · 5 lock timeout ·
 #       6 post-merge regression (rolled back) · 7 real-environment proof not
 #       discharged · 8 ungranted consequential change.
@@ -156,9 +156,9 @@ cmd_verify() {
 # Classify a branch about to land as CONSEQUENTIAL — an effectively irreversible
 # or high-blast-radius change — printing one reason line per signal (empty output
 # = reversible). Reversibility is the axis: a bad reversible merge is undone with
-# `git revert`; a dropped column is not. Only consulted when .hone-require-grant
-# is present (see cmd_land), so a project whose changes are all reversible
-# (undeployed software, disposable dev data) is never gated. Signals: destructive
+# `git revert`; a dropped column is not. Consulted whenever the authority gate is
+# on (the default; disabled by .hone-authority-off — see cmd_land), so a project
+# whose changes are all reversible is never gated in practice. Signals: destructive
 # SQL in a migration or db/ file, a deletion under db/, and any path glob the
 # project lists in .hone-consequential-paths. Git pathspecs do the matching.
 land_consequential() {
@@ -187,10 +187,10 @@ land_consequential() {
 
 # Print non-empty if the branch declares real-environment proof — a `Proof:
 # real-environment` trailer in any of its commit messages (the run skill copies
-# the Plan's proof class there). Only consulted when .hone-proof-enforce is
-# present. A change with no such trailer is assertion-class: the gate's suite
-# already proves it, and it is never gated here — so a project that never declares
-# real-environment proof is unaffected even with the marker on.
+# the Plan's proof class there). Consulted whenever the proof gate is on (the
+# default; disabled by .hone-proof-off). A change with no such trailer is
+# assertion-class: the gate's suite already proves it, and it is never gated here —
+# so a project that never declares real-environment proof is unaffected regardless.
 land_proof_required() {
     local root="$1" branch="$2" base
     base=$(git -C "$root" merge-base HEAD "$branch" 2>/dev/null)
@@ -227,15 +227,15 @@ cmd_land() {
     git -C "$main_root" symbolic-ref -q HEAD >/dev/null || {
         echo "hone worktree: the primary tree is in detached HEAD — restore it to the trunk before landing." >&2; return 2; }
 
-    # Authority gate (opt-in via .hone-require-grant): a CONSEQUENTIAL change needs
-    # a scoped human grant before it may merge. Capability (guard/bash-guard) is
-    # "can the agent act"; this is the separate contract — "may it, for this
-    # irreversible act". Checked BEFORE the merge so an ungranted consequential
-    # change never touches the trunk. The grant is scoped (one change), revocable
-    # (delete the file), auditable (its text lands in the merge body below), and
-    # recoverable (the worktree stays until it is granted).
+    # Authority gate (on by default; disable with .hone-authority-off): a
+    # CONSEQUENTIAL change needs a scoped human grant before it may merge.
+    # Capability (guard/bash-guard) is "can the agent act"; this is the separate
+    # contract — "may it, for this irreversible act". Checked BEFORE the merge so
+    # an ungranted consequential change never touches the trunk. The grant is
+    # scoped (one change), revocable (delete the file), auditable (its text lands
+    # in the merge body below), and recoverable (the worktree stays until granted).
     local grant_note=""
-    if [ -f "$main_root/.hone-require-grant" ]; then
+    if [ ! -f "$main_root/.hone-authority-off" ]; then
         local reasons grant
         reasons=$(land_consequential "$main_root" "$branch")
         if [ -n "$reasons" ]; then
@@ -254,13 +254,14 @@ cmd_land() {
         fi
     fi
 
-    # Proof gate (opt-in via .hone-proof-enforce): a change whose Plan declared
-    # real-environment proof cannot land on the gate's assertion-level suite alone
-    # — a green check proves only its assertion, not a browser journey or deployed
-    # health. Discharge it with a real-environment adapter (scripts/proof.sh, which
-    # checks the real environment, not the working tree) or a human attestation
-    # (.hone-proof/<change>); otherwise land refuses before the merge and escalates.
-    if [ -f "$main_root/.hone-proof-enforce" ] && [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
+    # Proof gate (on by default; disable with .hone-proof-off): a change whose Plan
+    # declared real-environment proof cannot land on the gate's assertion-level
+    # suite alone — a green check proves only its assertion, not a browser journey
+    # or deployed health. Discharge it with a real-environment adapter
+    # (scripts/proof.sh, which checks the real environment, not the working tree)
+    # or a human attestation (.hone-proof/<change>); otherwise land refuses before
+    # the merge and escalates. A change with no such declaration is never gated.
+    if [ ! -f "$main_root/.hone-proof-off" ] && [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
         if [ -f "$main_root/.hone-proof/$change" ]; then
             : # human attested the real-environment check ran
         elif [ -f "$main_root/scripts/proof.sh" ]; then

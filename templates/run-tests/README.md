@@ -34,9 +34,9 @@ surface as broken tooling long after they landed.
 
 `scripts/proof.sh` is a *different* adapter from the test tiers: it proves a
 change against the **real environment** (a browser journey, a canary, deployed
-health), not the working tree. It runs only when the proof gate is on
-(`.hone-proof-enforce`) and the change declared `Proof: real-environment`, and
-only then at land — a green suite proves its assertions, not that the deployed
+health), not the working tree. It runs only when a change declared
+`Proof: real-environment` (the proof gate is on by default; `.hone-proof-off`
+disables it), and only then at land — a green suite proves its assertions, not that the deployed
 system behaves. Exit `0` = proven. There is no template: what "the real
 environment" means is project-specific (a Playwright run against a preview URL, a
 `curl` of a canary's health endpoint). Absent it, a real-environment change is

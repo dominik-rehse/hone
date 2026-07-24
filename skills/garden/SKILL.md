@@ -95,7 +95,7 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" land garden/<slug>
 
 Read the land exit as `run` does (0 landed; 6 regressed and rolled back → the cut
 was unsafe, treat as red above; 2 conflict → another change owns this seam, defer;
-7/8 → an opt-in gate wants a human, escalate). Independent cuts may run in parallel
+7/8 → a land gate wants a human, escalate). Independent cuts may run in parallel
 worktrees; land them one at a time.
 
 ## 4. Judgment — the consolidate-critic, repo-wide

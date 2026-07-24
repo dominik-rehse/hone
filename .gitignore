@@ -6,8 +6,8 @@
 .hone-test-globs
 .hone-gate-enforce
 .hone-nag-enforce
-.hone-require-grant
+.hone-authority-off
 .hone-consequential-paths
 .hone-grant/
-.hone-proof-enforce
+.hone-proof-off
 .hone-proof/
