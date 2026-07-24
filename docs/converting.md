@@ -2,7 +2,9 @@
 
 This is a migration prompt. It is the one place in hone that names *stdd*, the
 spec-and-test methodology hone descends from, because it operates on a repository
-still laid out that way. Run it **inside the target repo** (for example one with
+still laid out that way. The final section, *Upgrading an existing hone
+repository*, instead moves a repo already on an earlier hone version to the
+current one. Run it **inside the target repo** (for example one with
 60+ specs and 500+ acceptance criteria), with this plugin's
 [`docs/model.md`](model.md) readable. Use subagents for the bulk per-spec
 distillation; each spec is independent.
@@ -45,7 +47,9 @@ therefore harmless: it stays inert until step 9.
 >    show: an intent or invariant → a **Note** (`docs/notes/<area>.md`, ≤ ~half a
 >    screen, one per `src/` area); a decision + why → a **Decision** (step 3); a
 >    shape or constraint expressible as a **type** → make it a type in `src/`.
->    Then delete the spec. Do not preserve acceptance criteria, checkboxes, or
+>    Give each Note and Decision a `Governs:` line naming the `src/` path it
+>    explains, so the nag flags it if that code later moves. Then delete the spec.
+>    Do not preserve acceptance criteria, checkboxes, or
 >    per-criterion prose. Git keeps the history. Never delete a spec before its
 >    residue is captured; if the residue is ambiguous, leave the spec and flag it
 >    for a human.
@@ -131,3 +135,43 @@ None of this changes the nine steps; it just makes them go smoother.
   non-`.md` deploy configs a text sweep tends to skip. A repo-local `.env` /
   `.env.example` may be permission-blocked from tooling — note any leftover
   reference there for a human rather than forcing it.
+
+## Upgrading an existing hone repository
+
+A repo already on hone needs almost nothing to move to the current version: the
+new capabilities are additive and every gate is off by default. A repo that
+adopts none behaves exactly as before, now on the current plugin. Do the two
+mechanical steps once, then take the opt-in pieces only where they earn their
+keep.
+
+1. **Take the new plugin version.** hone is distributed through the marketplace,
+   so update it there; the loop and hooks pick the change up automatically.
+
+2. **Re-run setup.** `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` is
+   idempotent — it leaves your adapter, docs, and `.plans/` untouched and only
+   appends the new marker entries to `.gitignore` (`.hone-require-grant`,
+   `.hone-consequential-paths`, `.hone-grant/`, `.hone-proof-enforce`,
+   `.hone-proof/`), so those per-developer files never get committed once you
+   start using them.
+
+Then adopt, à la carte:
+
+- **`Governs:` links** (no marker — live as soon as you write them). Add a
+  `Governs:` line to a Decision or Note naming the `src/` path it explains, and
+  the nag flags it when that path later disappears: mechanical proof the prose
+  drifted. Add them opportunistically, at the next change that touches each doc;
+  no upfront sweep.
+- **The authority gate** (`.hone-require-grant`). Turn it on if the repo carries
+  irreversible operations — destructive migrations, `db/` deletions. `land` then
+  refuses such a change without a scoped `.hone-grant/<change>`; list any extra
+  consequential paths in `.hone-consequential-paths`. Leave it off for undeployed
+  work with disposable data.
+- **The proof gate** (`.hone-proof-enforce`). Turn it on if the repo ships to a
+  real environment and some changes' claims are user- or ops-level. Mark those
+  Plans `Proof: real-environment` and discharge them at land with
+  `scripts/proof.sh` or a `.hone-proof/<change>` attestation. Leave it off while
+  the software is undeployed.
+- **The garden loop** (`/hone:garden`). Point your existing cron/CI at a
+  print-mode `claude -p "/hone:garden"` to cut durable-layer drift between changes
+  on a schedule. Start it once the durable layer is large enough to be worth
+  gardening.

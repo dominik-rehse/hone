@@ -167,4 +167,5 @@ discharged by a real-environment adapter (`scripts/proof.sh`) or your attestatio
 [`docs/converting.md`](docs/converting.md) is a migration prompt: run it inside a
 repo built on a growing spec/acceptance-criteria corpus to distill the durable
 residue into types, Decisions, and Notes, delete the rest, and adopt the plan→run
-loop without changing runtime behaviour.
+loop without changing runtime behaviour. Its final section is a shorter checklist
+for upgrading a repo already on an earlier hone version to the current one.
