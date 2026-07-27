@@ -224,42 +224,77 @@ bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 7 ] || die "an undischarged real-environment change should exit 7 by default (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "an unproven real-environment change must not touch the trunk"
 step "real-environment change without a discharge refused by default (exit 7), trunk untouched"
-# (c) A human attestation discharges it and it lands.
+# (c) A sign-off that names no commit does not discharge it: an unbound
+# attestation would outlive the code it attested.
 mkdir -p "$REPO/.hone-proof"
-echo "ran the browser journey against staging 2026-07-24 — ok" > "$REPO/.hone-proof/ui-flow"
+echo "ran the browser journey against staging — ok" > "$REPO/.hone-proof/ui-flow"
+PRE=$(git rev-parse HEAD)
 bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
-[ "$rc" -eq 0 ] || die "an attested real-environment change should land (got $rc)"
-step "attested real-environment change landed"
+[ "$rc" -eq 7 ] || die "a sign-off naming no commit should not discharge the proof (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "an unbound sign-off must not touch the trunk"
+step "sign-off naming no commit refused (exit 7)"
+# (d) A sign-off bound to an EARLIER commit stops discharging once the branch moves.
+echo "$(git rev-parse hone/ui-flow) — journey ok" > "$REPO/.hone-proof/ui-flow"
+echo "// revised after the sign-off" >> "$WT_P/src/mathx/flow.js"
+(cd "$WT_P" && git add -A && git commit -qm "fixup(mathx): revise the flow")
+PRE=$(git rev-parse HEAD)
+bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 7 ] || die "a sign-off for an earlier commit should not discharge a newer tip (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a stale sign-off must not touch the trunk"
+step "sign-off bound to an earlier commit refused after the branch moved (exit 7)"
+# (e) A sign-off naming the current tip (short SHA counts) discharges it.
+git rev-parse --short hone/ui-flow > "$REPO/.hone-proof/ui-flow"
+bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "a sign-off naming the branch tip should discharge the proof (got $rc)"
+step "sign-off naming the current tip landed (short SHA accepted)"
 rm -f "$REPO/.hone-proof/ui-flow"
-# (d) A green scripts/proof.sh also discharges it.
+# (f) A green scripts/proof.sh also discharges it — and runs in the change's
+# worktree, told which change it is, so it can reach the code under test. The
+# adapter is tracked, so the worktree checkout carries it.
+cat > "$REPO/scripts/proof.sh" <<'PROOF'
+#!/bin/bash
+{ echo "arg=$1"; echo "cwd=$PWD"; echo "change=$HONE_CHANGE"; echo "branch=$HONE_BRANCH"
+  echo "worktree=$HONE_WORKTREE"; echo "main=$HONE_MAIN_ROOT"; } > "$HONE_MAIN_ROOT/proof-context"
+# The code under test must be reachable from here, or this proves nothing.
+[ -f "$PWD/src/mathx/flow2.js" ] || exit 1
+exit 0
+PROOF
+git add scripts/proof.sh && git commit -qm "chore: add a passing proof adapter"
 WT_P2=$(bash "$WSH" add ui-flow2) || die "worktree add ui-flow2"
 echo "// second flow" > "$WT_P2/src/mathx/flow2.js"
 (cd "$WT_P2" && git add -A && git commit -qm "feat(mathx): second flow
 
 Proof: real-environment")
-printf '#!/bin/bash\nexit 0\n' > "$REPO/scripts/proof.sh"   # a real-env check that passes
 bash "$WSH" land ui-flow2 >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a green scripts/proof.sh should discharge the proof (got $rc)"
-step "real-environment change discharged by a green scripts/proof.sh"
-# (e) A red scripts/proof.sh keeps it out (exit 7).
-rm -f "$REPO/scripts/proof.sh"
+grep -qx "arg=ui-flow2" "$REPO/proof-context" || die "proof.sh must get the change name as \$1"
+grep -qx "change=ui-flow2" "$REPO/proof-context" || die "proof.sh must get HONE_CHANGE"
+grep -qx "branch=hone/ui-flow2" "$REPO/proof-context" || die "proof.sh must get HONE_BRANCH"
+grep -qx "cwd=$REPO/.worktrees/ui-flow2" "$REPO/proof-context" || die "proof.sh must run in the change's worktree"
+grep -qx "worktree=$REPO/.worktrees/ui-flow2" "$REPO/proof-context" || die "proof.sh must get HONE_WORKTREE"
+grep -qx "main=$REPO" "$REPO/proof-context" || die "proof.sh must get HONE_MAIN_ROOT"
+step "green scripts/proof.sh discharged it, run in the worktree with the change named"
+rm -f "$REPO/proof-context"
+# (g) A red scripts/proof.sh keeps it out (exit 7).
+printf '#!/bin/bash\nexit 1\n' > "$REPO/scripts/proof.sh"   # a real-env check that fails
+git add scripts/proof.sh && git commit -qm "chore: make the proof adapter fail"
 WT_P3=$(bash "$WSH" add ui-flow3) || die "worktree add ui-flow3"
 echo "// third flow" > "$WT_P3/src/mathx/flow3.js"
 (cd "$WT_P3" && git add -A && git commit -qm "feat(mathx): third flow
 
 Proof: real-environment")
-printf '#!/bin/bash\nexit 1\n' > "$REPO/scripts/proof.sh"   # a real-env check that fails
 PRE=$(git rev-parse HEAD)
 bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 7 ] || die "a red scripts/proof.sh should keep a real-environment change out (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "a failed proof must not touch the trunk"
 step "real-environment change with a red scripts/proof.sh refused (exit 7)"
-# (f) .hone-proof-off disables the gate: the same undischarged change lands.
-rm -f "$REPO/scripts/proof.sh"; touch "$REPO/.hone-proof-off"
+# (h) .hone-proof-off disables the gate: the same change lands, red adapter and all.
+touch "$REPO/.hone-proof-off"
 bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a real-environment change should land when .hone-proof-off is set (got $rc)"
 step "with .hone-proof-off, an undischarged real-environment change lands"
 rm -f "$REPO/.hone-proof-off"
+git rm -q scripts/proof.sh && git commit -qm "chore: drop the proof adapter"
 
 echo "== 7. add from inside a sibling worktree: anchors to the main tree =="
 # An orchestrator's cwd drifts into change A's worktree before starting change B.

@@ -35,10 +35,11 @@ surface as broken tooling long after they landed.
 
 `scripts/proof.sh` is a *different* adapter from the test tiers: it proves a
 change against the **real environment** (a browser journey, a canary, deployed
-health), not the working tree. It runs only when a change declared
-`Proof: real-environment` (the proof gate is on by default; `.hone-proof-off`
-disables it), and only then at land. A green suite proves its assertions, not
-that the deployed system behaves. Exit `0` = proven. There is no template: what "the real
-environment" means is project-specific (a Playwright run against a preview URL, a
-`curl` of a canary's health endpoint). Without it, a real-environment change
-instead needs a human sign-off at `.hone-proof/<change>`.
+health). It runs only when a change declared `Proof: real-environment` (the proof
+gate is on by default; `.hone-proof-off` disables it), and only then at land. A
+green suite proves its assertions, not that the deployed system behaves.
+
+Its contract and templates live in `templates/proof/`: it is invoked as
+`proof.sh <change>` from the change's worktree, so it can reach the code under
+test. Without it, a real-environment change instead needs a human sign-off at
+`.hone-proof/<change>` naming the commit it proved.

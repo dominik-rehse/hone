@@ -131,8 +131,10 @@ All gitignored, per-developer, never checked in:
   a change whose Plan declared `Proof: real-environment` lands on the test suite
   alone, for undeployed software.
 - `.hone-proof/<change>`: your sign-off that the real-environment check for one
-  change ran (a browser journey, a canary). It satisfies that change's proof
-  requirement. Directory-ignored, per-developer.
+  change ran (a browser journey, a canary). It must name the commit it proved
+  (`echo "$(git rev-parse hone/<change>) — what you ran" > .hone-proof/<change>`),
+  so it stops discharging the change once you push more commits.
+  Directory-ignored, per-developer.
 
 ## Tamper resistance
 
@@ -162,10 +164,11 @@ run inside the repo, before the merge, needing nothing from the outside world.
 A green check never proves a real-environment outcome: a browser journey, a
 canary, deployed health. For a change whose claim lives there, a Plan declares
 `Proof: real-environment`, and `land` refuses it (exit 7, worktree kept) until
-a real-environment check passes (`scripts/proof.sh`) or you sign it off
-(`.hone-proof/<change>`). This gate is **on by default** for any change that
-declares real-environment proof; turn it off with `.hone-proof-off` for
-undeployed work.
+a real-environment check passes (`scripts/proof.sh`, invoked as
+`proof.sh <change>` from the change's worktree — see `templates/proof/`) or you
+sign it off (`.hone-proof/<change>`, naming the commit it proved). This gate is
+**on by default** for any change that declares real-environment proof; turn it
+off with `.hone-proof-off` for undeployed work.
 
 ## Adopting hone in an existing spec-driven repo
 

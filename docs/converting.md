@@ -157,8 +157,8 @@ which is the point, but an undeployed repo will want to switch them off.
    *irreversible* change (destructive SQL, a `db/` deletion, or a
    `.hone-consequential-paths` match) without a scoped `.hone-grant/<change>`
    (exit 8), and refuses a change whose Plan declares `Proof: real-environment`
-   until `scripts/proof.sh` passes or a `.hone-proof/<change>`
-   sign-off exists (exit 7). If the repo is undeployed with disposable data, switch
+   until `scripts/proof.sh` passes (see `templates/proof/` for its contract) or a
+   `.hone-proof/<change>` sign-off names the commit it proved (exit 7). If the repo is undeployed with disposable data, switch
    them off with `.hone-authority-off` and/or `.hone-proof-off`; otherwise leave
    them on, since they now protect every land without further setup.
 

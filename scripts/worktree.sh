@@ -28,9 +28,14 @@
 #       body, so the authorization lives in durable history rather than a chat.
 #       Proof gate (on by default; disable with .hone-proof-off): a change whose
 #       Plan declared real-environment proof (a `Proof: real-environment` trailer
-#       on a branch commit) may not land on the test suite alone; the proof
-#       must come from scripts/proof.sh (green) or a human sign-off at
-#       .hone-proof/<change>, else land refuses BEFORE the merge.
+#       on a branch commit) may not land on the test suite alone. Discharge it
+#       either with a green scripts/proof.sh — invoked as `proof.sh <change>`
+#       from the change's WORKTREE (the primary tree still holds the pre-merge
+#       code, so an adapter run there would check the wrong thing), with
+#       HONE_CHANGE/HONE_BRANCH/HONE_WORKTREE/HONE_MAIN_ROOT in its environment
+#       — or with a human sign-off at .hone-proof/<change> that names the commit
+#       it proved, so an attestation cannot outlive the code it attested. Else
+#       land refuses BEFORE the merge.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached/conflict · 5 lock timeout ·
 #       6 post-merge regression (rolled back) · 7 real-environment proof
 #       missing · 8 ungranted irreversible change.
@@ -199,6 +204,19 @@ land_proof_required() {
         | grep -qiE '^[[:space:]]*Proof:[[:space:]]*real-environment' && echo yes
 }
 
+# Print non-empty if the sign-off at .hone-proof/<change> names the commit it
+# proved: any hex token of >=7 chars in the file that prefixes the branch tip (so
+# `git rev-parse --short` works as well as the full SHA). Binding the attestation
+# to a commit is what stops it going stale — unbound, a sign-off written for one
+# commit silently discharges every later commit on the same branch, which is the
+# one failure mode a human gate cannot notice from the inside.
+land_proof_signoff_names_tip() {
+    local file="$1" tip="$2" tok
+    for tok in $(tr 'A-Z' 'a-z' < "$file" 2>/dev/null | grep -oE '[0-9a-f]{7,40}'); do
+        case "$tip" in "$tok"*) echo yes; return 0 ;; esac
+    done
+}
+
 cmd_land() {
     local change="${1:-}"
     [ -n "$change" ] || { echo "hone worktree: land needs a change name." >&2; return 2; }
@@ -258,26 +276,53 @@ cmd_land() {
     # declared real-environment proof cannot land on the gate's assertion-level
     # suite alone. A green check proves only its assertion, not a browser journey
     # or deployed health. Prove it with a real-environment adapter
-    # (scripts/proof.sh, which checks the real environment, not the working tree)
-    # or a human sign-off (.hone-proof/<change>); otherwise land refuses before
-    # the merge and escalates. A change with no such declaration is never gated.
+    # (scripts/proof.sh) or a human sign-off (.hone-proof/<change>); otherwise
+    # land refuses before the merge and escalates. A change with no such
+    # declaration is never gated.
     if [ ! -f "$main_root/.hone-proof-off" ] && [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
-        if [ -f "$main_root/.hone-proof/$change" ]; then
-            : # human signed off that the real-environment check ran
-        elif [ -f "$main_root/scripts/proof.sh" ]; then
-            if ! ( cd "$main_root" && bash scripts/proof.sh ); then
-                echo "hone worktree: $branch declares real-environment proof and scripts/proof.sh failed — the change is not proven in the real environment. Worktree kept as evidence." >&2
+        local tip signoff="$main_root/.hone-proof/$change" discharged=""
+        tip=$(git -C "$main_root" rev-parse "$branch")
+        if [ -f "$signoff" ] && [ -n "$(land_proof_signoff_names_tip "$signoff" "$tip")" ]; then
+            discharged=yes  # human attested this exact commit
+        fi
+        if [ -z "$discharged" ]; then
+            # Run the adapter from the WORKTREE when it is there: that tree holds
+            # the code under test, and it is the adapter version shipped with the
+            # change. The primary tree is still pre-merge here, so an adapter run
+            # against it would prove the old code green and let the new code in on
+            # that strength. Pass the change through, by argument and environment,
+            # so the adapter can address its own instance (a per-change port, DB,
+            # output dir) instead of guessing.
+            local proof_root="$main_root" proof_wt=""
+            [ -d "$wt" ] && { proof_root="$wt"; proof_wt="$wt"; }
+            if [ -f "$proof_root/scripts/proof.sh" ]; then
+                if ! ( cd "$proof_root" \
+                       && HONE_CHANGE="$change" HONE_BRANCH="$branch" \
+                          HONE_WORKTREE="$proof_wt" HONE_MAIN_ROOT="$main_root" \
+                          bash scripts/proof.sh "$change" ); then
+                    echo "hone worktree: $branch declares real-environment proof and scripts/proof.sh failed — the change is not proven in the real environment. Worktree kept as evidence." >&2
+                    return 7
+                fi
+            elif [ -f "$signoff" ]; then
+                {
+                    echo "hone worktree: .hone-proof/$change does not name the commit it proved, so it cannot discharge $branch (tip $tip)."
+                    echo "A sign-off is bound to one commit: this one predates the current tip, or never named a commit at all."
+                    echo "Re-run the real-environment check against this tip, then record it:"
+                    echo "  echo \"\$(git rev-parse $branch) — what you ran, when, the outcome\" > .hone-proof/$change"
+                    echo "The worktree is kept as evidence until then."
+                } >&2
+                return 7
+            else
+                {
+                    echo "hone worktree: $branch declares real-environment proof, which the test suite cannot give (a green suite proves nothing about the deployed system)."
+                    echo "Prove it one of two ways, then re-run land:"
+                    echo "  - add scripts/proof.sh (a real-environment check: a journey, a canary, deployed health), or"
+                    echo "  - run the check yourself and record your sign-off in a file at .hone-proof/$change (gitignored),"
+                    echo "    naming the commit it proved: echo \"\$(git rev-parse $branch) — what you ran\" > .hone-proof/$change"
+                    echo "The worktree is kept as evidence until then."
+                } >&2
                 return 7
             fi
-        else
-            {
-                echo "hone worktree: $branch declares real-environment proof, which the test suite cannot give (a green suite proves nothing about the deployed system)."
-                echo "Prove it one of two ways, then re-run land:"
-                echo "  - add scripts/proof.sh (a real-environment check: a journey, a canary, deployed health), or"
-                echo "  - run the check yourself and record your sign-off in a file at .hone-proof/$change (gitignored)."
-                echo "The worktree is kept as evidence until then."
-            } >&2
-            return 7
         fi
     fi
 

@@ -66,4 +66,5 @@ mkdir -p docs/decisions docs/notes .plans src
 echo "hone setup: created docs/decisions, docs/notes, docs/open-questions.md, .plans/, src/."
 
 echo "hone setup: code lives under src/<area>/ — that is where the guard, gate, and nag apply."
+echo "hone setup: for changes that need real-environment proof, copy a template from $PLUGIN_ROOT/templates/proof/ to scripts/proof.sh (optional; see that dir's README.md)."
 echo "hone setup: done. Author a change with /hone:plan, then /hone:run."

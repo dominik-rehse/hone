@@ -317,9 +317,11 @@ declares `Proof: real-environment` (the `plan-critic` rejects a Plan whose proof
 is *categorically* incapable of settling its claim). The proof gate is on by
 default (disable with `.hone-proof-off` for undeployed work), so such a
 change may not land on the test suite alone: the requirement is met by a
-real-environment check (`scripts/proof.sh`, which checks the deployed system,
-not the tree) or a human sign-off (`.hone-proof/<change>`), and otherwise land
-refuses (exit 7) and the run escalates. The loop diagram shows this land-time
+real-environment check (`scripts/proof.sh`, run from the change's worktree so it
+can reach the code under test; the primary tree is still pre-merge) or a human
+sign-off (`.hone-proof/<change>`, naming the commit it proved so an attestation
+cannot outlive the code it attested), and otherwise land refuses (exit 7) and the
+run escalates. The loop diagram shows this land-time
 escalation alongside the authority gate, faithful to *escalate, never force*: proof the
 loop cannot give is handed back, not faked.
 

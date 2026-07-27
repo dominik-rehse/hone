@@ -259,12 +259,15 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
      independence check missed an overlap: fold this change in serially and
      flag it for a Decision-level look. Do not force the merge.
    - **7**: the proof gate (on by default; `.hone-proof-off` disables it) found a
-     `Proof: real-environment` change whose proof is still missing (no green
-     `scripts/proof.sh`, no `.hone-proof/<change>` sign-off). The merge did not
-     happen; the worktree
+     `Proof: real-environment` change whose proof is still missing: no green
+     `scripts/proof.sh` (invoked as `proof.sh <change>` from the worktree, so it
+     can reach the code under test), and no `.hone-proof/<change>` sign-off
+     naming the current branch tip — a sign-off written for an earlier commit no
+     longer discharges the change. The merge did not happen; the worktree
      is kept. **Stop and escalate**, because the real-environment check is out of
      the loop's boundary; the human runs the journey/canary and signs it off.
-     Never sign it off yourself.
+     Never sign it off yourself, and never write the commit id into a sign-off
+     file to satisfy the check.
    - **8**: the authority gate (on by default; `.hone-authority-off` disables it)
      classified this as an *irreversible* change (destructive SQL, a `db/` deletion, a
      `.hone-consequential-paths` match) and found no `.hone-grant/<change>`. The
