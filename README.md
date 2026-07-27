@@ -66,15 +66,19 @@ does nothing.
 
 - `/hone:plan <change>`: author `.plans/<change>.md`, the one hand-written
   artifact (what, why, how you'll know it works), and commit it. It is tracked,
-  and the change's landing merge later removes it (git history keeps it).
+  and the change's landing merge later removes it (git history keeps it). Where
+  prose would lose the detail, attach a *reference* under `.plans/<change>/` — a
+  fixture, a sample payload, a mockup — and hand the loop the artifact instead of
+  a description of it.
 - `/hone:run <change>`: execute that Plan through the loop and land it green.
   `/hone:run --all` runs every ready Plan, landed one at a time. It first checks
   the set for independence: disjoint Plans run in parallel worktrees, overlapping
   ones sequentially.
 - `/hone:garden`: the continuous-maintenance loop. Scans the whole repo for
   durable-layer drift between changes (orphan Notes, broken `Governs:` links,
-  redundant tests, dead code, stale open questions) and lands the safe cuts
-  (deletion-only, each proven safe by the suite) through the same worktree loop.
+  redundant tests, dead code, stale open questions, and drift in the project's own
+  `CLAUDE.md` and skills) and lands the safe cuts (deletion-only, each proven safe
+  by the suite) through the same worktree loop.
   Meant to run often and small, on whatever schedule the project already has (a
   print-mode `claude -p "/hone:garden"`).
 
@@ -94,8 +98,10 @@ Three hooks run the laws, from `hooks/`:
   green. A failure blocks the turn.
 - *nag* (`Stop`, advisory): a leftover Plan, an oversized Note, a Note with no
   matching `src/` area, a Decision/Note whose `Governs:` path no longer exists, a
-  merged `hone/*` branch land forgot to delete, or a change about to land that
-  deletes nothing.
+  merged `hone/*` branch land forgot to delete, a change about to land that
+  deletes nothing, or a `type: project` entry in the harness's own memory store —
+  that store sits outside the repo, so a decision left there is unreviewed,
+  uncommitted, and invisible to the critics and to `garden`.
 
 Two critics, each prompted to find fault rather than approve, fill the judgment
 slots: `plan-critic` (checks the Plan at the end of `/hone:plan`, with the human

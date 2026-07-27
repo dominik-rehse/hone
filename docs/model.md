@@ -82,6 +82,37 @@ flowchart TD
   worktree inherits it off the trunk), then `git rm`'d at consolidate:
   the landing merge carries the deletion, git history keeps the Plan, the
   working tree does not.
+- *References*: `.plans/<change>/`. Optional files the Plan names because prose
+  carries them badly — a fixture of input/expected rows, a sample payload, a
+  mockup, a format sample. They exist because the gates catch a change that is
+  *unproven*, never one that is *misunderstood*: a Plan with two readings passes
+  the guard, the gate, both critics, and a review reading the same ambiguous
+  prose, then lands green and wrong. An artifact removes the second reading at the
+  point the human is still there. Committed with the Plan (an uncommitted one is
+  invisible inside the worktree); then each is either **promoted at build**, moved
+  beside the test that reads it and thereafter kept honest by the suite, or
+  **deleted at consolidate** with the Plan. Either way `.plans/<change>/` is gone
+  by the merge, so references never become a second prose layer.
+
+*Not durable, whatever it looks like: harness memory.*
+
+The agent harness now keeps its own memory outside the repo (Claude Code writes
+one file per fact under `~/.claude/projects/<project>/memory/`, indexed by a
+`MEMORY.md` loaded into every session). It is a second store of project facts
+running in the same session as the durable layer, and it fails every test the
+durable layer is built on: per-user rather than shared, uncommitted so no merge
+carries it, unreviewed by `/code-review`, unreachable by the `nag`'s `Governs:`
+check and by `garden`'s scan. Nothing forces it to stay in step with the code,
+which is the exact failure mode the model exists to remove.
+
+So the boundary is a stance, not a hook. Memory typed `user`, `feedback`, or
+`reference` (who the human is, how they want to work, where an external resource
+lives) is outside hone's concern and stays useful. Memory typed `project` is the
+overlap: an ongoing goal, a constraint, a decision. That belongs in `docs/` as a
+Decision or a Note, written at consolidate, where a critic can argue for its
+deletion and `garden` can cut it when it goes stale. The `nag` flags a `project`
+memory rather than deleting one: the file is the human's, but a Decision hiding
+there governs nothing.
 
 *Enforcement (config, not docs):*
 
@@ -92,7 +123,8 @@ flowchart TD
   (one adapter script keeps the hook language-agnostic).
 - *nag*: leftover Plan, oversized Note, orphan Note, a Decision/Note with a
   broken `Governs:` link, a merged `hone/*` branch land forgot to delete, a
-  change about to land that deletes nothing.
+  change about to land that deletes nothing, a `project`-typed harness memory
+  holding what belongs in `docs/`.
 
 ## The loop
 
@@ -210,9 +242,10 @@ flowchart TD
     class done deterministic;
 ```
 
-- *plan* (`/hone:plan`): author `.plans/<change>.md`. The only manual step. Size
-  a change to the smallest unit worth its own review gate: split only where a
-  reviewer could reject one part while approving its neighbor. It ends with
+- *plan* (`/hone:plan`): author `.plans/<change>.md`, plus any references the
+  change hinges on that prose would lose. The only manual step. Size a change to
+  the smallest unit worth its own review gate: split only where a reviewer could
+  reject one part while approving its neighbor. It ends with
   the *Plan check*: `plan-critic` looks for placeholders, contradictions,
   ambiguity, wrong scope, and collision with an open change, and a rejection is
   revised with the human on the spot (the one moment they are guaranteed
@@ -280,8 +313,8 @@ prompted to *find fault and argue for deletion* rather than approve, runs
 *once*, and returns structured findings.
 
 - `plan-critic`: placeholders, contradictions, ambiguity, scope; belongs in an
-  existing area? Runs inside `/hone:plan`, so a rejection is revised with the
-  human present rather than escalated mid-run.
+  existing area? is prose carrying data a file should? Runs inside `/hone:plan`,
+  so a rejection is revised with the human present rather than escalated mid-run.
 - `consolidate-critic`: Decision restating code? Note drifting into a spec?
   redundant test? abstraction earning its keep?
 - `/code-review`: Claude Code's built-in workflow-backed command for correctness
@@ -296,11 +329,19 @@ These critics are the only judgment inside the loop; together with the
 mechanical checks they are the whole trust foundation. The human's judgment
 sits before (the Plan) and after (auditing the merged result).
 
-The critic prompts and the injected `rules/workflow.md` are themselves
-behavior-shaping prose doing real judgment work. Check them against evals (a
-suite of past changes with known-good verdicts) rather than assuming they hold;
-unverified prose is the one part of the trust foundation that can go stale
-silently.
+The critic prompts, the `run` skill's own instructions, and the injected
+`rules/workflow.md` are themselves behavior-shaping prose doing real judgment
+work. Nothing type-checks a prompt, so unverified prose is the one part of the
+trust foundation that can go stale silently. Check it against evals (`evals/`: a
+suite of cases with known-good answers — a verdict for each critic, a next action
+for the loop) rather than assuming it holds.
+
+Evals are also what make *cutting* prose safe, and that matters more as the models
+improve: much of what a prompt spells out, a capable model now does on its own, so
+the paragraphs earning their place shrink over time. Which ones those are is an
+empirical question, not a taste one. Trim, re-run, keep what holds. A cut made on
+the belief that the model "probably knows" is a guess about future behaviour, and
+`garden` refuses that guess in any repo without a suite to settle it.
 
 ### The proof boundary (land-time)
 
@@ -449,6 +490,7 @@ hone/                            # the plugin — the machinery (installs once)
 ├── .claude-plugin/plugin.json
 ├── rules/workflow.md            # lean always-on trigger, injected at session start
 ├── skills/{plan,run,garden}/SKILL.md   # /hone:plan, /hone:run, /hone:garden
+│   └── run/references/          # loaded on demand: code-review, land, parallel
 ├── hooks/                       # the laws
 │   ├── {guard,gate,nag}.sh + hooks.json
 │   ├── bash-guard.sh            # tamper resistance for the gate
@@ -456,7 +498,7 @@ hone/                            # the plugin — the machinery (installs once)
 ├── scripts/{worktree,setup}.sh  # worktree add/land/remove; one-time project setup
 ├── agents/{plan-critic,consolidate-critic}.md   # the judgment (review reuses /code-review)
 ├── templates/run-tests/         # the one test-adapter contract, per ecosystem
-└── evals/                       # known-good verdicts for the critics and the rule
+└── evals/                       # known-good answers: critic verdicts, loop actions
 
 repo/  (primary tree — a merge target, never worked in)
 ├── src/<area>/                  # code + tests: thing.ts/thing.test.ts,
@@ -464,6 +506,8 @@ repo/  (primary tree — a merge target, never worked in)
 ├── docs/{decisions/, notes/, open-questions.md}
 ├── scripts/run-tests.sh         # the test adapter (installed by setup.sh)
 ├── .plans/<change>.md           # tracked — hand-written; git-rm'd at consolidate
+├── .plans/<change>/             # tracked — optional references; promoted at
+│                                #   build or git-rm'd at consolidate, never kept
 ├── .worktrees/<change>/         # gitignored — one per in-flight change
 └── .claude/settings.json        # enables the plugin; deny-rules protect gates
 ```
@@ -484,16 +528,19 @@ W = writes · M = amends · P = prunes/deletes · R = reads · — = untouched
 | Operation   | .plans/ | code | tests | decisions/ | notes/ | open-q | .git |
 |-------------|---------|------|-------|------------|--------|--------|------|
 | plan        | W       | —    | —     | —          | —      | (W)    | W    |
-| build       | R       | W    | W     | —          | —      | —      | —    |
+| build       | R/P     | W    | W     | —          | —      | —      | —    |
 | verify      | —       | R    | R     | R          | R      | R      | —    |
 | consolidate | P       | —    | P     | W/M        | W/M    | M      | —    |
 | land        | —       | —    | —     | —          | —      | —      | W    |
 | garden      | P       | P    | P     | P          | P      | P      | W    |
 
-(W) on open-q: only when the Plan surfaces a new open question. plan's `.git` W
-is the Plan commit on the trunk (so the run's worktree inherits it); consolidate's
-`.plans/` P is a `git rm` staged in the worktree that land's commit and merge
-carry back to the primary tree. *garden* is not part of the plan→run change; it is
+(W) on open-q: only when the Plan surfaces a new open question. plan's `.plans/`
+W covers the Plan and any references beside it, and its `.git` W is the commit of
+both on the trunk (so the run's worktree inherits them). build's `.plans/` P is a
+reference promoted out: `git mv`'d beside the test that reads it, which is why the
+move sits at build, the only step that writes tests. consolidate's `.plans/` P is a
+`git rm` of the Plan and every reference build did not promote, staged in the
+worktree so land's commit and merge carry it back to the primary tree. *garden* is not part of the plan→run change; it is
 the standalone maintenance loop, deletion-only (every column it touches is a prune)
 and landing its cuts through the same merge (`.git` W). It never writes durable
 prose: a stale doc it can only cut, never edit.
@@ -503,9 +550,11 @@ prose: a stale doc it can only cut, never edit.
 1. Code and tests are written only by *build*, and durable artifacts are pruned
    only by *consolidate*, or between changes by the standalone *garden* pass,
    its deletion-only counterpart (never by *build*, *verify*, or *land*). `docs/`
-   prose is written only by *consolidate*; `.plans/` deleted only by
-   *consolidate*. Work-in-progress cannot leak into durable truth: the structural
-   cure for the spec pile.
+   prose is written only by *consolidate*. `.plans/` is emptied by exactly two
+   steps: *build* promotes a reference out (a `git mv` into the tests that read
+   it, which is why the move sits at the only step that writes tests), and
+   *consolidate* deletes the Plan and every reference left. Work-in-progress
+   cannot leak into durable truth: the structural cure for the spec pile.
 2. A Note is optional, 1:1 with an existing area, and size-capped, held by the
    correspondence and size checks; the *carving* of areas is judged by
    `/code-review`.
@@ -513,5 +562,6 @@ prose: a stale doc it can only cut, never edit.
 4. The primary tree's durable artifacts are written only by *land*, a merge;
    `guard` blocks direct source edits there, so no half-built change ever sits
    in the tree everything merges into. The one hand-authored exception is the
-   Plan (`.plans/`, a path `guard` does not protect), committed there at *plan* so
-   the run's worktree inherits it and land's merge can remove it.
+   Plan and its references (`.plans/`, a path `guard` does not protect), committed
+   there at *plan* so the run's worktree inherits them and land's merge can remove
+   them.

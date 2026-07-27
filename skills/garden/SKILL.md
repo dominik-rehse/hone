@@ -1,6 +1,6 @@
 ---
 name: garden
-description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, broken Governs links, redundant tests, dead code, stale open questions), then land the safe cuts one at a time through the same worktree loop. Deletion-only: every garden change removes something and the suite proves the cut safe. Escalates judgment calls instead of forcing them. Invoke with /hone:garden, or on a schedule."
+description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, broken Governs links, redundant tests, dead code, stale open questions, drift in the project's own CLAUDE.md and skills), then land the safe cuts one at a time through the same worktree loop. Deletion-only: every garden change removes something and the suite proves the cut safe. Escalates judgment calls instead of forcing them. Invoke with /hone:garden, or on a schedule."
 argument-hint: "[area-or-scope]"
 disable-model-invocation: true
 ---
@@ -47,8 +47,17 @@ see. Collect, don't act yet:
   repo-wide search, not a guess).
 - **Resolved open question**: a `docs/open-questions.md` entry running code has
   already settled.
-- **Leftover artifact**: a landed Plan never deleted; a merged `hone/*` branch
-  land forgot to remove.
+- **Leftover artifact**: a landed Plan never deleted; a `.plans/<change>/`
+  reference directory consolidate never settled; a merged `hone/*` branch land
+  forgot to remove.
+- **Prompt-layer drift**: the project's own instructions to the agent —
+  `CLAUDE.md`, `.claude/rules/`, project skills — describing a gotcha the code no
+  longer has, a command that no longer exists, or a rule the model now follows
+  without being told. This layer accretes exactly like `docs/` and nothing else
+  looks at it. Never cut it mechanically (see step 2).
+- **Stranded harness memory**: a `type: project` memory the `nag` has been
+  flagging. It is not the repo's to delete, so `garden` never touches the file;
+  it reports what belongs in `docs/` so a `run` change can land it there.
 
 State the full list before acting. This scan is the artifact that says what the
 run covered: a silent scope is indistinguishable from a scan that found nothing.
@@ -66,6 +75,21 @@ Split every finding two ways:
   Decision restating code, or does it carry rationale the code can't show? Does
   this Note's invariant still hold? These go to the `consolidate-critic`, never
   auto-deleted. Durable *rationale* is never cut by machine on a hunch.
+
+**Prompt-layer findings are always judgment, never mechanical** — including the
+ones that look obvious. Everything else here rests on the suite proving the cut
+safe, and *no suite proves a prompt cut safe*: delete a paragraph of `CLAUDE.md`
+and every test still passes, because what changed is how an agent behaves next
+time, which nothing in the repo measures. Cutting on green here would be cutting
+on no evidence at all.
+
+So a prompt cut needs its own proof, and there is only one honest kind: a suite of
+cases with known-good answers (as hone pins its own critics and loop instructions
+under `evals/`). If the project has one, run it before and after the cut and land
+only what holds. If it does not, `garden` does not cut this layer: report the
+finding for a human, and propose the eval as its own Plan. An unverified prompt cut
+is a guess about future behaviour, and the whole point of deletion-only is that
+guesses are not required.
 
 ## 3. Cut — one deletion-only change at a time
 

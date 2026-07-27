@@ -33,11 +33,8 @@ type-check, and lint stay green), and the `nag` (Stop, advisory: Plan and Note
 hygiene).
 
 Run these steps in order. **Do not skip a step, and do not proceed past a step
-whose artifact does not confirm it.** Two points stop and escalate: verify can't
-go green (stop-point 1) and review finds the change ambiguous (stop-point 2). The
-third way to stop is simply *done* (see *The three ways to stop*). On an escalating
-stop, leave the worktree in place as evidence and report. Never disable a gate to
-get past it.
+whose artifact does not confirm it.** Where a step can end the run instead of
+feeding the next, *The three ways to stop* at the end says how.
 
 The Plan check already happened: the `plan-critic` approved the Plan at
 `/hone:plan`, with the human present to revise a rejection. Do not re-run it
@@ -62,6 +59,19 @@ crashed run left it behind. Do **not** adopt that worktree: a single named chang
 it is **skipped** (below). Only exit 0 means you own this change and may proceed.
 
 ### 2. Build — red → green, serial
+
+If the Plan has a *References* section, **read every file it names before writing
+anything**. A reference is there because prose would have lost the detail: a
+fixture of input/expected rows, a sample payload, a mockup, an existing schema.
+Where one pins data a test needs, have the test **read the file** rather than
+transcribing its contents into assertions: the transcription is what goes stale.
+Move it into place beside that test as part of the same red-green cycle
+(`git mv .plans/<change>/cases.csv src/export/__fixtures__/cases.csv`) — from then
+on it is a test artifact like any other, and the suite is what keeps it honest.
+
+A named reference that does not exist is a stop, not a thing to invent: the Plan
+step commits references alongside the Plan, so a missing one means the hand-off
+broke.
 
 Implement the Plan test-first, one behaviour at a time. The `guard` enforces the
 order, so work with it:
@@ -154,6 +164,13 @@ build):
   landing merge carries the deletion back to the primary tree. git history keeps
   the Plan; the working tree does not. The Plan has done its job. (Already gone,
   because you git-rm'd it earlier? Fine, do not re-add it.)
+- **`git rm` whatever is left under `.plans/<change>/`.** Build already moved the
+  references the tests read into the tree beside those tests; anything still
+  sitting here only ever communicated intent (a mockup, a sample payload nothing
+  loads) and has done its job exactly as the Plan has. Delete it, and
+  `.plans/<change>/` with it: a surviving reference directory is a new stale-prose
+  layer, which is the thing hone exists to remove. (A reference that named a path
+  already in the repo was never yours and needs nothing.)
 
 Then submit the change to the `consolidate-critic` agent (Task tool,
 `subagent_type: consolidate-critic`) with a constructed brief: the diff, the
@@ -171,17 +188,12 @@ than shipping a reviewer. Give it a constructed brief: pass the Plan text (still
 hand, the file is gone) along with the diff, so the reviewer can tell a violation
 of the Plan's stated stance from the stance itself.
 
-The command is **user-invocation-only** (`disable-model-invocation`): the Skill
+The command is **user-invocation-only** (`disable-model-invocation`), so the Skill
 tool, a SlashCommand tool, and subagents all refuse it. That refusal is
-**expected**: do **not** hand-roll a substitute reviewer (no `Workflow`, no
-fan-out of `Agent`/`Task` finders); each one silently abandons the native review
-this step reuses and is a step failure even when it produces findings. A slash
-command in a print-mode (`-p`) prompt is a *user* invocation, so run the genuine
-reviewer by nesting a headless Claude Code. Write the brief to a file, then invoke
-it with the worktree as the working directory so the command's own `git diff` sees
-the local change. Run it in the background (your Bash tool's background mode, not a
-shell `&`) and poll the output file, because the fan-out outlasts the ~2m
-foreground timeout:
+**expected**, and the nested call below is the one and only next move: a slash
+command in a print-mode (`-p`) prompt is a *user* invocation. Write the brief to a
+file, then run it in your Bash tool's background mode (not a shell `&`) and poll
+the output file, because the fan-out outlasts the ~2m foreground timeout:
 
 ```
 claude -p "/code-review $(cat <brief-file>)" \
@@ -192,33 +204,31 @@ claude -p "/code-review $(cat <brief-file>)" \
 ```
 
 That JSON envelope **is this step's artifact**. Before you trust any finding,
-confirm it is real: `<out-file>` parses as JSON with `is_error: false`,
-`subtype: success`, and a `session_id`. If it is missing, truncated, an error
-envelope, or absent because you produced findings some other way, the native
-review **did not happen**: fix it by running the nested call, never review around
-it. Only once the envelope confirms do you read the review from its `.result` and
-feed it into the triage below.
+confirm `<out-file>` parses as JSON with `is_error: false`, `subtype: success`,
+and a `session_id`. Anything else — missing, truncated, an error envelope, or
+findings you produced some other way — means the native review did not happen.
+Fix that by running the nested call; never review around it, and never hand-roll a
+substitute (no `Workflow`, no fan-out of `Agent`/`Task` finders), which abandons
+the very review this step exists to reuse and fails the step even when it produces
+findings.
 
-The full rationale lives in `references/code-review.md`: why the refusal happens,
-why a hand-rolled substitute fails the step, the envelope-validation details, and
-the marketplace-plugin decoy to avoid. Read it if this step misbehaves.
+`references/code-review.md` carries the rest: why the refusal happens, why a
+substitute fails, the envelope details, and the marketplace-plugin decoy to avoid.
+Read it if this step misbehaves.
 
-Triage its findings against the Plan:
+Triage its findings against the Plan. Triage is yours: `run` is unattended and a
+scope question is not a genuine fork, so never pause to ask how many findings to
+apply.
 
-- **Apply** confirmed findings with red-green cycles (never a fix without a
-  test); those fixes are re-gated by `verify`, not by a second review.
+- **Apply** every confirmed finding inside the Plan's scope, with red-green
+  cycles (never a fix without a test); those fixes are re-gated by `verify`, not
+  by a second review.
 - **Decline** a confirmed finding only when it contradicts the Plan's explicit
-  stance or falls outside the change's scope. Record every decline
-  durably, in the landing commit's body or (for a real defect deferred, not
-  dismissed) as a `docs/open-questions.md` entry. A decline that lives only in
+  stance or falls outside the change's scope, and record the decline **durably**:
+  the landing commit body, or a `docs/open-questions.md` entry for a real defect
+  deferred rather than dismissed. That is how an out-of-scope finding becomes
+  follow-up material instead of expanding the change. A decline that lives only in
   the conversation is lost to the next cycle.
-
-Triage is yours; never pause to ask how many findings to apply. `run` is
-unattended and a scope question is not a genuine fork. The default: apply every
-confirmed finding inside the Plan's scope, and record out-of-scope ones
-durably as follow-up material (a `docs/open-questions.md` entry, or a note in
-the landing commit body suggesting a future Plan) rather than expanding the
-change or blocking on a human.
 
 If the review surfaces something that makes the change genuinely ambiguous or
 wrong to land (not merely large or out of scope), **stop and escalate**
@@ -233,7 +243,8 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    The **type follows the dominant durable artifact**: a change that alters the
    behaviour of `deploy/` or `scripts/` is never `docs:`, whatever prose rode
    along. The body carries a **`Cut:` line** naming what consolidate removed
-   (pruned tests, dead code, deleted doc lines), or `Cut: nothing`, with the
+   (pruned tests, dead code, deleted doc lines, a spent reference), or
+   `Cut: nothing`, with the
    reason, when there genuinely was nothing; the nag flags a zero-deletion
    change, and this line is its answer. If the Plan declared `Proof:
    real-environment`, carry that same **`Proof: real-environment` line** in the
@@ -245,41 +256,21 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" land <change>
    ```
 
-   That takes the **land lock**, so it is safe even when another `run` is
-   landing into the same primary tree at the same time: it waits its turn
-   instead of interleaving. Under the lock it merges `--no-ff`, **re-runs the
-   whole suite** in the primary tree (green confirms the merge: the
-   confirmation is the suite, not the merge succeeding), and on green removes
-   the worktree and deletes the branch. Read its exit:
-   - **0**: landed and green.
-   - **6**: the merge regressed the trunk; `land` rolled it back (the primary
-     tree is left green) and kept the worktree as evidence. **Stop and
-     escalate** (this is stop-point 1 surfacing at land).
-   - **2**: a merge conflict (aborted, tree restored) means the `--all`
-     independence check missed an overlap: fold this change in serially and
-     flag it for a Decision-level look. Do not force the merge.
-   - **7**: the proof gate (on by default; `.hone-proof-off` disables it) found a
-     `Proof: real-environment` change whose proof is still missing: no green
-     `scripts/proof.sh` (invoked as `proof.sh <change>` from the worktree, so it
-     can reach the code under test), and no `.hone-proof/<change>` sign-off
-     naming the current branch tip — a sign-off written for an earlier commit no
-     longer discharges the change. The merge did not happen; the worktree
-     is kept. **Stop and escalate**, because the real-environment check is out of
-     the loop's boundary; the human runs the journey/canary and signs it off.
-     Never sign it off yourself, and never write the commit id into a sign-off
-     file to satisfy the check.
-   - **8**: the authority gate (on by default; `.hone-authority-off` disables it)
-     classified this as an *irreversible* change (destructive SQL, a `db/` deletion, a
-     `.hone-consequential-paths` match) and found no `.hone-grant/<change>`. The
-     merge did not happen; the worktree is kept. **Stop and escalate**: this
-     needs the human's scoped grant, not a workaround. Never create the grant
-     yourself: authority is theirs to give.
+   It takes the land lock (so concurrent runs queue rather than interleave),
+   merges `--no-ff`, re-runs the whole suite in the primary tree, and on green
+   removes the worktree and deletes the branch. Read its exit:
 
-   Never merge by hand, and never move the primary tree's HEAD
-   (`git checkout`/`switch`/`stash`/`reset`) to investigate: that races every
-   other session sharing the tree, and the `bash-guard` will stop you. The
-   primary tree stays on the trunk as a merge target; do any investigation in a
-   throwaway `git worktree add --detach` scratch tree.
+   - **0** — landed and green. Continue.
+   - **6** — the merge regressed the trunk; rolled back, worktree kept. Stop.
+   - **2** — merge conflict; aborted, tree restored. Fold in serially. Stop.
+   - **7** — the proof gate wants real-environment proof only a human can give.
+   - **8** — the authority gate wants a scoped grant for an irreversible change.
+
+   Any non-zero exit: read `references/land.md` before acting on it. It carries
+   what each code means and what discharges it. Three rules hold whatever the
+   code: never merge by hand, never move the primary tree's HEAD to investigate
+   (use a throwaway `git worktree add --detach` scratch tree), and never write the
+   grant or the sign-off yourself — 7 and 8 are reserved to the human by design.
 
 Confirm to the user: what landed, the Decisions/Notes written, what was deleted
 (the Plan, and any pruned tests; every cycle removes something).
@@ -287,43 +278,15 @@ Confirm to the user: what landed, the Decisions/Notes written, what was deleted
 ## `--all` — many changes at once
 
 Parallelism is `run` over several Plans, not a special mode, and it is never
-assumed. **Check independence first, before spawning any worktree.** Each
-`plan-critic` ran at plan time, before later Plans existed; this is the first
-moment the whole set is visible, so the cross-check is yours.
+assumed. **Check independence before spawning any worktree**: each `plan-critic`
+ran before the later Plans existed, so this is the first moment the whole set is
+visible and the cross-check is yours. Partition the set into disjoint Plans (run
+in parallel) and overlapping ones (run sequentially, foundation first), state the
+partition and its reason, then land one at a time. A change whose `add` exits 4 is
+claimed by another run: skip it and say so.
 
-Read every ready Plan and compare them pairwise: the files and areas each
-expects to change (its *Notes for the loop*, its *What*, a quick look at
-`src/`), any shared type or persistent contract (a DB schema, a public API, a
-wire or file format), and any Decision or Note more than one would touch. Then
-partition:
-
-- **Disjoint Plans** run in parallel: steps 1–5 each in its own worktree,
-  concurrently.
-- **Overlapping Plans** run sequentially: order them (foundation first: the
-  Plan the others build on), and run each fully through step 6 before starting
-  the next, so the later change builds on the landed result instead of fighting
-  it at the merge. Sequencing is your call; it needs no escalation.
-
-State the partition and its reason before starting ("`a` and `b` are disjoint:
-parallel; `c` touches the same schema as `a`: after `a` lands").
-
-A change whose `add` exits **4** is already claimed by another `run` sharing this
-repo: **skip it** and note the skip in the partition report; never adopt its
-worktree. This is what keeps two concurrent `/hone:run` invocations from both
-building the same Plan: the worktree is a single atomic claim.
-
-Then **land them one at a time** through step 6:
-
-- Lands are serialized by the land lock even across sessions, so `worktree.sh
-  land` never interleaves two merges; within this run, still drive them one at a
-  time so each builds on the last landed result.
-- The upfront check is a judgment; the **merge verifies it**. A merge collision
-  on a shared type, Decision, or Note (`land` exit 2) means the check missed an
-  overlap: fold it into one serial change and flag it for a Decision-level
-  look. Do not force the merge.
-- After all merges, run one **global consolidate pass** (a `consolidate-critic`
-  over the combined result) to catch cross-change duplication no single worktree
-  could see.
+`references/parallel.md` carries the full comparison checklist, the claim rule,
+and the landing order. Read it whenever the invocation is `--all`.
 
 ## The three ways to stop
 

@@ -21,6 +21,11 @@ could recover from the code, and if something can be a type, make it a type
 instead of prose. Everything else (the Plan) is committed at `plan` but removed
 at consolidate: git history keeps it, the working tree does not.
 
+Memory the harness saves outside the repo is not durable truth. It is per-user,
+unreviewed, uncommitted, and invisible to the hooks, the critics, and `garden`,
+so a Decision or an invariant left there governs nothing. Read it as background;
+when something in it belongs to the codebase, land it through consolidate.
+
 A third command, `/hone:garden`, runs the same loop on a schedule to cut
 durable-layer drift between changes. It only deletes, and the suite proves each
 cut safe. It is maintenance, not a Plan.

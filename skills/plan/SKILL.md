@@ -1,6 +1,6 @@
 ---
 name: plan
-description: "Author the temporary Plan for one change: .plans/<change>.md, the only hand-written artifact. Guides sizing a change to the smallest unit worth its own review gate, states what, why, and how you'll know it works, then submits it to the plan-critic for approval while the human is still present to revise. Does not write code, tests, or docs. Invoke with /hone:plan <change-name-or-sketch>."
+description: "Author the temporary Plan for one change: .plans/<change>.md, the only hand-written artifact, plus any references under .plans/<change>/ that carry what prose would lose. Guides sizing a change to the smallest unit worth its own review gate, states what, why, and how you'll know it works, then submits it to the plan-critic for approval while the human is still present to revise. Does not write code, tests, or docs. Invoke with /hone:plan <change-name-or-sketch>."
 argument-hint: "[change-name-or-sketch]"
 disable-model-invocation: true
 ---
@@ -84,10 +84,37 @@ line; otherwise the proof is assertion-level and the gate's suite covers it.>
 - <A Decision this change makes or changes (topic + the why), for consolidate.>
 - <Files/areas expected to change; whether this is independent of in-flight work.>
 - <Open question OQ-N this change resolves, if any.>
+
+## References (optional)
+- `<path>` — <what it carries, in one line.>
 ```
 
 Omit any section that would only restate another. No placeholders, no `TBD`: the
 `plan-critic` rejects them at the check, next.
+
+### 4a. Attach what prose describes badly
+
+Some things a change hinges on survive prose poorly: a wire or file format, a
+response shape, a table or screen layout, an exact error string, a set of
+escaping or boundary cases. Describing one costs paragraphs and still loses
+detail, and the Plan is deleted at consolidate, so nothing is left to check the
+loop's reading against. Hand over the artifact instead: a file the loop reads
+directly, and often the fixture its first red test consumes.
+
+A reference is a **file that exists**, never prose relocated:
+
+- *Already in the repo* (a type, a golden file, an existing test, a schema):
+  name its path and stop. Do not copy it into the Plan.
+- *Written for this change* (a table of input/expected rows, a sample payload, an
+  HTML mockup of a screen): put it under `.plans/<slug>/`. That directory belongs
+  to the Plan, and it is also the only place you can write one here: `guard`
+  denies writes to `docs/`, `src/`, and `tests/` in the primary tree, which is
+  where `/hone:plan` runs.
+
+Two limits. If you need a paragraph to explain what a reference *means*, it is
+prose wearing a filename: put the point in *What* and drop the file. And a
+reference is not a spec: it pins data the loop would otherwise guess, never the
+acceptance criteria, which stay the tests' job.
 
 ### 5. Check — `plan-critic`
 
@@ -109,7 +136,7 @@ The Plan is a tracked artifact. Commit it now (only once the critic returns
 `APPROVE`) to the current branch:
 
 ```bash
-git add .plans/<slug>.md
+git add .plans/<slug>.md .plans/<slug>/   # the second path only if you wrote references
 git commit -m "chore(plan): <slug>"
 ```
 
@@ -118,7 +145,10 @@ worktree off the trunk's HEAD, so the Plan has to be on HEAD for the run to see
 it; and committing it is what lets consolidate remove it cleanly (a `git rm`
 inside the worktree that the landing merge carries back to the primary tree)
 instead of an out-of-band delete of an untracked file (which the unattended run
-cannot perform). Commit nothing but the Plan; the loop owns every other artifact.
+cannot perform). Both reasons apply to a reference exactly as they do to the
+Plan: an uncommitted reference is invisible inside the worktree, so the build
+fails on a missing file it was told to read. Commit nothing but the Plan and its
+references; the loop owns every other artifact.
 
 ### 7. Confirm — the hand-off
 

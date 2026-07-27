@@ -248,6 +248,46 @@ out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "hone/auth-login is fully merged" && bad "branch with live worktree should not be flagged" || ok "branch with live worktree not flagged"
 
 echo
+echo "== nag: a Plan reference is not a Plan =="
+# .plans/<slug>/ holds the Plan's references. A markdown one must not be counted
+# as a pending Plan of its own (the sibling <slug>.md is the giveaway).
+mkdir -p "$REPO/.plans/withrefs"
+printf '# Plan: withrefs\n' > "$REPO/.plans/withrefs.md"
+printf '| in | out |\n' > "$REPO/.plans/withrefs/cases.md"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "withrefs/cases" && bad "a reference must not be read as a Plan" || ok "markdown reference not counted as a Plan"
+rm -rf "$REPO/.plans/withrefs" "$REPO/.plans/withrefs.md"
+
+echo
+echo "== nag: durable truth stranded in harness memory =="
+# A pristine repo, so the memory finding is the ONLY finding: otherwise the
+# leftover Plans and orphan Notes above would block under .hone-nag-enforce and
+# the advisory-never-blocks assertion would pass for the wrong reason.
+MEMREPO=$(mktemp -d)
+git -C "$MEMREPO" init -q && git -C "$MEMREPO" symbolic-ref HEAD refs/heads/main
+git -C "$MEMREPO" config user.email t@t.t; git -C "$MEMREPO" config user.name t
+echo seed > "$MEMREPO/README.md"
+git -C "$MEMREPO" add -A && git -C "$MEMREPO" commit -qm seed
+# The harness keys its memory dir by the project's absolute path, "/" → "-".
+MEMCFG="$MEMREPO/.memcfg"
+MEMDIR="$MEMCFG/projects/$(cd "$MEMREPO" && pwd -P | tr '/' '-')/memory"
+mkdir -p "$MEMDIR"
+printf -- '---\nname: goal\nmetadata:\n  type: project\n---\n\nship it\n' > "$MEMDIR/goal.md"
+printf -- '---\nname: pref\nmetadata:\n  type: user\n---\n\nplain english\n' > "$MEMDIR/pref.md"
+out=$(cd "$MEMREPO" && CLAUDE_CONFIG_DIR="$MEMCFG" bash "$NAG" </dev/null 2>&1)
+echo "$out" | grep -q "goal.md is a 'type: project' harness memory" && ok "project-typed memory flagged" || bad "should flag a type: project memory"
+echo "$out" | grep -q "pref.md" && bad "user-typed memory should not be flagged" || ok "user-typed memory not flagged"
+# Advisory: it must never block, even under .hone-nag-enforce.
+touch "$MEMREPO/.hone-nag-enforce"
+out=$(cd "$MEMREPO" && CLAUDE_CONFIG_DIR="$MEMCFG" bash "$NAG" </dev/null 2>&1)
+echo "$out" | grep -q '"decision":"block"' && bad "memory finding must stay advisory" || ok "memory finding stays advisory under enforce"
+rm -f "$MEMREPO/.hone-nag-enforce"
+# Fails open: an absent memory dir yields nothing, never a false finding.
+out=$(cd "$MEMREPO" && CLAUDE_CONFIG_DIR="$MEMREPO/.nonexistent" bash "$NAG" </dev/null 2>&1)
+echo "$out" | grep -q "harness memory" && bad "absent memory dir should yield nothing" || ok "absent memory dir fails open"
+rm -rf "$MEMREPO"
+
+echo
 echo "== worktree.sh remove: branch and empty-dir hygiene =="
 # The earlier remove of feature-x (unmerged, ahead) must have KEPT its branch.
 git -C "$REPO" show-ref --verify --quiet refs/heads/hone/feature-x && ok "unmerged branch survives remove (evidence)" || bad "unmerged branch should survive remove"

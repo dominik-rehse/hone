@@ -36,6 +36,13 @@
 #      merged into HEAD with no worktree attached. Land removes the worktree;
 #      the merged branch should go with it (git branch -d) or they accumulate
 #      one per change, forever.
+#   7. Durable truth stranded in harness memory: a `type: project` memory file
+#      under the harness's per-project memory directory. That directory is the
+#      agent harness's own store, outside the repo: per-user, uncommitted,
+#      unreviewed, and invisible to garden, so a decision or constraint left
+#      there governs nothing. Types `user`/`feedback`/`reference` are the
+#      human's own and are not checked. ALWAYS advisory, never blocking: the
+#      file belongs to the human, so hone names it and never touches it.
 #
 # Default: ADVISORY. Prints to stderr and exits 0 (never blocks). Create an
 # empty .hone-nag-enforce to make the findings BLOCK the stop instead. Disabled
@@ -69,6 +76,11 @@ add_advisory() { advisory+="- $1"$'\n'; }
 if [ -d ".plans" ]; then
     pending=0
     while IFS= read -r plan; do
+        # A markdown file inside .plans/<slug>/ is one of the Plan's REFERENCES,
+        # not a Plan: the plan skill puts them in a directory named for the Plan
+        # beside it, so the giveaway is a sibling <dir>.md. Without this, a
+        # reference would be counted as a pending Plan that never runs.
+        [ -f "$(dirname "$plan").md" ] && continue
         change=${plan#.plans/}
         change=${change%.md}
         [ -d ".worktrees/$change" ] && continue   # active work
@@ -129,6 +141,27 @@ if [ -d "docs/decisions" ] || [ -d "docs/notes" ]; then
             esac
         done
     done < <(find docs/decisions docs/notes -type f -name '*.md' 2>/dev/null)
+fi
+
+# 7. Durable truth stranded in harness memory. The harness keys its per-project
+# memory directory by the project's absolute path with "/" replaced by "-". That
+# key is an undocumented harness detail, so this check FAILS OPEN: an absent or
+# renamed directory simply yields nothing, never a false finding. Both the
+# symlink-resolved and the as-given project path are tried, since the harness may
+# have keyed on either.
+MEM_ROOT="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
+if [ -d "$MEM_ROOT" ]; then
+    seen_mem=""
+    for candidate in "$(pwd -P)" "$PROJECT_ROOT"; do
+        mem_dir="$MEM_ROOT/$(printf '%s' "$candidate" | tr '/' '-')/memory"
+        [ -d "$mem_dir" ] || continue
+        case "$seen_mem" in *"|$mem_dir|"*) continue ;; esac
+        seen_mem="$seen_mem|$mem_dir|"
+        while IFS= read -r mem; do
+            [ -n "$mem" ] || continue
+            add_advisory "$(basename "$mem") is a 'type: project' harness memory in ${mem_dir/#$HOME/\~} — that store is per-user, uncommitted, and invisible to the critics and garden, so a decision or constraint there governs nothing. If it belongs to the codebase, land it as a Decision or Note through consolidate."
+        done < <(grep -rlE '^[[:space:]]*type:[[:space:]]*project[[:space:]]*$' "$mem_dir" --include='*.md' 2>/dev/null)
+    done
 fi
 
 # 4 + 5 need git.
