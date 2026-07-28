@@ -79,10 +79,12 @@ pre-land full run waits, default 30).
 All disabled at once by `.hone-off`. A project with no `scripts/run-tests.sh`
 is never gated, and enforcement assumes code lives under `src/<area>/`.
 
-- *guard* (PreToolUse on Write/Edit) — two rules. In the primary tree, no
-  edits to the protected paths at all: that work belongs in a worktree,
-  landed by a merge. Anywhere, no new file under `src/` unless a test for it
-  exists (test files themselves are always writable).
+- *guard* (PreToolUse on Write/Edit) — three rules. Anywhere, no writes into
+  `.hone-grant/` or `.hone-proof/` (sign-offs are the human's) and no new
+  file under `src/` unless a test for it exists (test files themselves are
+  always writable). In the primary tree, no edits to the protected paths at
+  all — including the two policy files — that work belongs in a worktree,
+  landed by a merge.
 - *bash-guard* (PreToolUse on Bash) — tamper resistance. Denies commands that
   would disable the gate (`--no-verify`, `core.hooksPath`, creating
   `.hone-off`) or write a grant or proof sign-off (those are the human's).
@@ -117,13 +119,16 @@ the worktree stays for inspection.
 - *Proof gate (exit 7)* — a commit on the branch carries a
   `Proof: real-environment` trailer (copied from the Plan), meaning no
   in-repo test can prove the change; a browser journey, canary, or deployed
-  check has to. Landing it needs one of: a green `scripts/proof.sh` (see
-  *Adapters*), or your sign-off after running the check yourself:
-  `worktree.sh attest <change> "what you ran"`.
+  check has to. Landing it needs one of: a green run of the *primary tree's*
+  `scripts/proof.sh` (see *Adapters* — the reviewed copy is executed, so a
+  change cannot ship its own green stub), or your sign-off after running the
+  check yourself: `worktree.sh attest <change> "what you ran"`.
 
-The agent never writes a grant or sign-off and never runs the helpers; the
-`bash-guard` denies every route. When a gate fires during an unattended run,
-the run stops and reports — that is the intended behavior, not a failure.
+The agent never writes a grant or sign-off and never runs the helpers: the
+guard denies the file-tool routes and the bash-guard the shell routes (a
+deterrent, not a sandbox). When a gate fires during an unattended run, the
+run stops and reports — that is the intended behavior, not a failure. The
+gate's error message prints the exact helper command with its full path.
 
 ## Exit codes
 
@@ -159,8 +164,10 @@ call them so hone itself stays language-agnostic.
 - `typecheck.sh`, `lint.sh` — optional, one line each, run by the gate when
   present.
 - `proof.sh` — optional; proves a change in the real environment for the
-  proof gate. Invoked as `proof.sh <change>` from the change's worktree.
-  Contract and templates:
+  proof gate. land executes the primary tree's copy, with the change's
+  worktree as the working directory, so a change adding its own `proof.sh`
+  is only trusted after that adapter has landed. Invoked as
+  `proof.sh <change>`. Contract and templates:
   [`templates/proof/README.md`](../templates/proof/README.md).
 
 ## Project layout

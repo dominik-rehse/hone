@@ -61,8 +61,10 @@ fi
 # exits 7 and 8 are reserved to the human: the agent never authorizes an
 # irreversible change or attests a real-environment check, by any route — a
 # file write into .hone-grant/ or .hone-proof/, or the grant/attest helper.
+# The mutating-op list is a superset of rule 2's below (creation verbs plus
+# every mutator), so a token rule 2 treats as a write cannot slip past here.
 if echo "$CMD" | grep -Eq \
-        -e '(touch|install|printf|echo|tee|cp|mv|mkdir|ln)[^|;&]*\.hone-(grant|proof)/' \
+        -e '(touch|install|printf|echo|tee|cp|mv|mkdir|ln|sed -i|rm |truncate|dd|chmod|chattr)[^|;&]*\.hone-(grant|proof)/' \
         -e '>>?[[:space:]]*"?'"'"'?[^[:space:]|;&]*\.hone-(grant|proof)/' \
         -e 'worktree\.sh"?'"'"'?[[:space:]]+(grant|attest)([[:space:]]|$)'; then
     decision deny "command would write an authority grant or a proof sign-off (.hone-grant/, .hone-proof/, or worktree.sh grant/attest). Those are reserved to the human: escalate and wait for them to run it in their own terminal."

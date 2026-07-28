@@ -334,11 +334,11 @@ lives out there, "landed, tested, reviewed" is not "proven".
 So the boundary is stated explicitly: a Plan whose proof is user- or
 ops-level declares `Proof: real-environment` (the `plan-critic` rejects a
 plan whose named proof is categorically unable to settle its claim), and
-`land` refuses such a change (exit 7, worktree kept) until either
-`scripts/proof.sh` — a real-environment check run from the change's worktree
-— passes, or a human runs the check and signs it off. The sign-off names the
-commit it covers, so it expires when new commits are pushed. Mechanics in
-[`reference.md`](reference.md).
+`land` refuses such a change (exit 7, worktree kept) until either the primary
+tree's `scripts/proof.sh` — a reviewed real-environment check, run from the
+change's worktree — passes, or a human runs the check and signs it off. The
+sign-off names the commit it covers, so it expires when new commits are
+pushed. Mechanics in [`reference.md`](reference.md).
 
 ### Property-based tests (build-time)
 
@@ -377,10 +377,11 @@ green-and-reviewed is necessary but not sufficient; a human has to say yes.
 `land` classifies the diff mechanically (destructive SQL, `db/` deletions,
 plus any glob in the committed `.hone-irreversible-paths`) and refuses an
 irreversible change (exit 8, worktree kept) until a grant exists for it. The
-grant is one file for one change, revocable by deleting it, and its text is
-recorded in the merge commit body, so the authorization ends up in history
-rather than in a chat log. The `bash-guard` denies the agent every route to
-writing a grant itself. Mechanics in [`reference.md`](reference.md).
+grant is one file for one change, revocable by deleting it, and its non-empty
+text is recorded in the merge commit body, so the authorization ends up in
+history rather than in a chat log. The guard and bash-guard deny the agent
+the file-tool and shell routes to writing a grant itself. Mechanics in
+[`reference.md`](reference.md).
 
 ## Types and abstractions
 

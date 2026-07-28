@@ -1,6 +1,10 @@
 #!/bin/bash
-# PreToolUse guard for Write/Edit/MultiEdit (Claude Code). Enforces two laws of
-# the hone model, in this order:
+# PreToolUse guard for Write/Edit/MultiEdit (Claude Code). Enforces three laws
+# of the hone model, in this order:
+#
+#   0. A land-gate sign-off (.hone-grant/, .hone-proof/) is the human's and is
+#      never written by the agent, in any tree (bash-guard denies the shell
+#      routes to the same files).
 #
 #   1. The primary tree is a merge target, never a workspace. A Write/Edit to a
 #      durable committed artifact (src/, tests/, docs/, db/, scripts/, plus any
@@ -43,8 +47,13 @@ deny() { hone_pretool_decision deny "hone guard: $*"; exit 0; }
 
 [ -f ".hone-off" ] && exit 0
 
-# Basename globs that identify a test file. These cover the common conventions
-# (jest/vitest, pytest via the prefix patterns added below, Go, Ruby, Elixir).
+# Basename globs that identify a test file by suffix (jest/vitest, Go, Ruby,
+# Elixir). They feed both the "is this file itself a test?" check and the
+# does-a-test-exist candidate search. pytest's prefix convention (test_foo.py)
+# is handled separately in each: a prefix case in the recognition check, and
+# explicit test_<stem>.* candidates in the search (a bare 'test_*' glob here
+# would substitute into a wildcard-free candidate, which the nullglob-based
+# existence check would count as a match for a file that does not exist).
 TEST_GLOBS=('*.test.*' '*.spec.*' '*_test.*' '*_spec.*')
 
 INPUT=$(cat)
@@ -67,15 +76,28 @@ case "$TARGET_PATH" in
     *) exit 0 ;;  # outside the project, not ours to guard
 esac
 
+# Rule 0: the land gates' sign-offs are the human's, in every tree. A grant or
+# proof sign-off written by the agent through the file tools would usurp the
+# gates exactly as a shell write would (bash-guard denies those), so deny the
+# file-tool route too, regardless of primary tree or worktree.
+case "$REL" in
+    .hone-grant/*|.hone-proof/*)
+        deny "$REL is a human sign-off for a land gate. The agent never writes a grant or proof sign-off, by any route — escalate and wait for the human (worktree.sh grant/attest, run in their own terminal)."
+        ;;
+esac
+
 # A durable committed artifact is anything under src/, tests/, docs/, db/
 # (schema and migrations are as durable as code), or scripts/ (the adapters the
-# gate runs live there), plus any project-specific paths listed in the committed
+# gate runs live there), the two policy files themselves (an edit to them
+# widens or shrinks the enforcement perimeter, which is a reviewed change, not
+# a workspace edit), plus any project-specific paths listed in the committed
 # .hone-durable-paths (one per line, # comments allowed): a directory prefix
-# (`deploy/`) or an exact file (`tsconfig.json`). The file EXTENDS the defaults:
-# the built-in protected set can grow, never shrink.
+# (`deploy/`) or an exact file (`tsconfig.json`). The file EXTENDS the
+# defaults: the built-in protected set can grow, never shrink.
 is_durable() {
     case "$1" in
         src/*|tests/*|docs/*|db/*|scripts/*) return 0 ;;
+        .hone-durable-paths|.hone-irreversible-paths|.hone-consequential-paths) return 0 ;;
     esac
     [ -f ".hone-durable-paths" ] || return 1
     local entry
@@ -106,12 +128,14 @@ fi
 [[ "$REL" == src/* ]] || exit 0
 [ -e "$TARGET_PATH" ] && exit 0   # editing an existing src/ file (its test was required at creation)
 
-# Test files are the RED artifact, always allowed.
+# Test files are the RED artifact, always allowed: the suffix conventions,
+# plus pytest's prefix convention (test_foo.py / spec_foo.rb).
 BN=$(basename "$REL")
 for _g in "${TEST_GLOBS[@]}"; do
     # shellcheck disable=SC2254
     case "$BN" in $_g) exit 0 ;; esac
 done
+case "$BN" in test_*|spec_*) exit 0 ;; esac
 
 BASE_NO_EXT=$(echo "$REL" | sed 's/\.[^.]*$//')   # e.g. src/auth/login
 STEM=$(basename "$BASE_NO_EXT")                    # e.g. login

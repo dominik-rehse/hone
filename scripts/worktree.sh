@@ -29,12 +29,13 @@
 #       Proof gate: a change whose Plan declared real-environment proof (a
 #       `Proof: real-environment` trailer on a branch commit) may not land on
 #       the test suite alone. Satisfy it either with a green scripts/proof.sh —
-#       invoked as `proof.sh <change>` from the change's WORKTREE (the primary
-#       tree still holds the pre-merge code, so an adapter run there would check
-#       the wrong thing), with HONE_CHANGE/HONE_BRANCH/HONE_WORKTREE/
-#       HONE_MAIN_ROOT in its environment — or with a human sign-off at
-#       .hone-proof/<change> that names the commit it proved, so a sign-off
-#       cannot outlive the code it attested. Else land refuses BEFORE the merge.
+#       the PRIMARY tree's reviewed copy, executed from the change's WORKTREE
+#       (that tree holds the code under test; running the change's own copy
+#       would let it ship a green stub), with HONE_CHANGE/HONE_BRANCH/
+#       HONE_WORKTREE/HONE_MAIN_ROOT in its environment — or with a human
+#       sign-off at .hone-proof/<change> that names the commit it proved, so a
+#       sign-off cannot outlive the code it attested. Else land refuses BEFORE
+#       the merge.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached · 5 lock timeout ·
 #       6 post-merge regression (rolled back) · 7 real-environment proof
 #       missing · 8 ungranted irreversible change · 9 merge conflict
@@ -89,6 +90,11 @@
 # cwd, matching the hooks).
 
 set -uo pipefail
+
+# This script's own absolute path, for remedy messages: the human runs the
+# grant/attest helpers in their own terminal, where ${CLAUDE_PLUGIN_ROOT} is
+# not set, so a bare "worktree.sh ..." would be a dead end.
+HONE_WSH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/worktree.sh"
 
 cmd_add() {
     local change="${1:-}"
@@ -279,12 +285,21 @@ cmd_land() {
                 echo "hone worktree: $branch is an IRREVERSIBLE change and has no authority grant:"
                 printf '%s' "$reasons"
                 echo "Review the diff. If you authorize it, record who/when/why:"
-                echo "  worktree.sh grant $change \"who/why\"   (writes .hone-grant/$change; gitignored, per-developer)"
+                echo "  bash $HONE_WSH grant $change \"who/why\"   (writes .hone-grant/$change; gitignored, per-developer)"
                 echo "then re-run land. The worktree is kept as evidence until then."
             } >&2
             return 8
         fi
         grant_note=$(cat "$grant" 2>/dev/null)
+        # An empty grant authorizes nothing and would leave no audit trail in
+        # the merge commit body, so it does not open the gate.
+        if ! printf '%s' "$grant_note" | grep -q '[^[:space:]]'; then
+            {
+                echo "hone worktree: .hone-grant/$change is empty — a grant must say who authorized the change, when, and why; that text is the audit trail in the merge commit body."
+                echo "Rewrite it (bash $HONE_WSH grant $change \"who/why\") and re-run land."
+            } >&2
+            return 8
+        fi
     fi
 
     # Proof gate: a change whose Plan declared real-environment proof cannot
@@ -300,20 +315,23 @@ cmd_land() {
             discharged=yes  # human attested this exact commit
         fi
         if [ -z "$discharged" ]; then
-            # Run the adapter from the WORKTREE when it is there: that tree holds
-            # the code under test, and it is the adapter version shipped with the
-            # change. The primary tree is still pre-merge here, so an adapter run
-            # against it would prove the old code green and let the new code in on
-            # that strength. Pass the change through, by argument and environment,
-            # so the adapter can address its own instance (a per-change port, DB,
-            # output dir) instead of guessing.
+            # Execute the PRIMARY tree's copy of the adapter — the reviewed,
+            # already-landed one — so a change cannot ship an always-green
+            # proof.sh of its own and wave itself through the gate. The
+            # working directory is still the change's WORKTREE when it exists:
+            # that tree holds the code under test (the primary tree is still
+            # pre-merge here). A proof.sh that first appears inside the change
+            # itself does not count until it has landed; that first change
+            # needs the human sign-off. Pass the change through, by argument
+            # and environment, so the adapter can address its own instance (a
+            # per-change port, DB, output dir) instead of guessing.
             local proof_root="$main_root" proof_wt=""
             [ -d "$wt" ] && { proof_root="$wt"; proof_wt="$wt"; }
-            if [ -f "$proof_root/scripts/proof.sh" ]; then
+            if [ -f "$main_root/scripts/proof.sh" ]; then
                 if ! ( cd "$proof_root" \
                        && HONE_CHANGE="$change" HONE_BRANCH="$branch" \
                           HONE_WORKTREE="$proof_wt" HONE_MAIN_ROOT="$main_root" \
-                          bash scripts/proof.sh "$change" ); then
+                          bash "$main_root/scripts/proof.sh" "$change" ); then
                     echo "hone worktree: $branch declares real-environment proof and scripts/proof.sh failed — the change is not proven in the real environment. Worktree kept as evidence." >&2
                     return 7
                 fi
@@ -322,7 +340,7 @@ cmd_land() {
                     echo "hone worktree: .hone-proof/$change does not name the commit it proved, so it cannot cover $branch (tip $tip)."
                     echo "A sign-off is bound to one commit: this one predates the current tip, or never named a commit at all."
                     echo "Re-run the real-environment check against this tip, then record it:"
-                    echo "  worktree.sh attest $change \"what you ran and the outcome\"   (stamps the tip commit)"
+                    echo "  bash $HONE_WSH attest $change \"what you ran and the outcome\"   (stamps the tip commit)"
                     echo "The worktree is kept as evidence until then."
                 } >&2
                 return 7
@@ -330,9 +348,9 @@ cmd_land() {
                 {
                     echo "hone worktree: $branch declares real-environment proof, which the test suite cannot give (a green suite proves nothing about the deployed system)."
                     echo "Prove it one of two ways, then re-run land:"
-                    echo "  - add scripts/proof.sh (a real-environment check: a journey, a canary, deployed health), or"
+                    echo "  - add scripts/proof.sh to the primary tree (a real-environment check: a journey, a canary, deployed health), or"
                     echo "  - run the check yourself and record your sign-off:"
-                    echo "      worktree.sh attest $change \"what you ran and the outcome\"   (stamps the tip commit)"
+                    echo "      bash $HONE_WSH attest $change \"what you ran and the outcome\"   (stamps the tip commit)"
                     echo "The worktree is kept as evidence until then."
                 } >&2
                 return 7
@@ -416,9 +434,11 @@ cmd_status() {
             echo "  note: legacy name — rename to .hone-irreversible-paths"
     done
 
-    local plan pending=0
+    local plan change pending=0
     while IFS= read -r plan; do
         [ -f "$(dirname "$plan").md" ] && continue   # a Plan's reference, not a Plan
+        change=${plan#.plans/}; change=${change%.md}
+        [ -d ".worktrees/$change" ] && continue      # mid-run; its worktree is listed below
         echo "- plan pending: $plan"
         pending=$((pending+1))
     done < <(find .plans -type f -name '*.md' 2>/dev/null | sort)
@@ -440,7 +460,7 @@ cmd_status() {
         [ -n "$f" ] && echo "- proof sign-off: $f"
     done < <(find .hone-proof -type f 2>/dev/null | sort)
 
-    if [ -f ".claude/settings.json" ] && grep -qF '"Write(./scripts/run-tests.sh)"' ".claude/settings.json"; then
+    if grep -qsF 'Write(./scripts/run-tests.sh)' .claude/settings.json .claude/settings.local.json; then
         echo "- settings deny rules: present"
     else
         echo "- settings deny rules: MISSING — add the deny list from hone's README to .claude/settings.json"

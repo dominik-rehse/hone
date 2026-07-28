@@ -187,6 +187,12 @@ bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "ungranted irreversible change must not touch the trunk"
 [ -d "$WT_C" ] || die "worktree should survive an ungranted irreversible land as evidence"
 step "irreversible change without a grant refused (exit 8), trunk untouched"
+# (b2) An empty grant authorizes nothing and leaves no audit trail: still 8.
+mkdir -p "$REPO/.hone-grant" && : > "$REPO/.hone-grant/db-drop"
+out=$(bash "$WSH" land db-drop 2>&1); rc=$?
+[ "$rc" -eq 8 ] || die "an empty grant should still exit 8 (got $rc)"
+echo "$out" | grep -q "is empty" || die "the empty-grant refusal should name the reason"
+step "empty grant refused (exit 8)"
 # (c) With a scoped grant — written by the grant helper, which stamps the git
 # user and time — it lands and the authorization is recorded in history.
 bash "$WSH" grant db-drop "legacy_sessions is unused" >/dev/null || die "grant helper failed"
@@ -233,6 +239,13 @@ bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 7 ] || die "an unproven real-environment change should exit 7 (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "an unproven real-environment change must not touch the trunk"
 step "real-environment change without proof refused (exit 7), trunk untouched"
+# (b2) A proof.sh planted in the WORKTREE does not count: land executes only
+# the primary tree's reviewed copy, so a change cannot ship its own green stub.
+printf '#!/bin/bash\nexit 0\n' > "$WT_P/scripts/proof.sh"
+bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 7 ] || die "a worktree-planted proof stub must not satisfy the gate (got $rc)"
+rm -f "$WT_P/scripts/proof.sh"
+step "worktree-planted proof.sh stub ignored (exit 7)"
 # (c) A sign-off that names no commit does not satisfy it: an unbound
 # sign-off would outlive the code it attested.
 mkdir -p "$REPO/.hone-proof"

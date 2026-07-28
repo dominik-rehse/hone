@@ -43,17 +43,19 @@ state (from the primary tree) rather than retrying blindly.
 
 The change's commit body carries
 `Proof: real-environment` and the proof is still missing: no green
-`scripts/proof.sh` (invoked as `proof.sh <change>` from the worktree, so it can
-reach the code under test), and no `.hone-proof/<change>` sign-off naming the
-current branch tip. A sign-off written for an earlier commit stops counting, by
-design: it must not outlive the code it vouched for.
+`scripts/proof.sh` (land executes the primary tree's reviewed copy, from the
+worktree so it reaches the code under test — a proof.sh the change itself adds
+does not count until it lands), and no `.hone-proof/<change>` sign-off naming
+the current branch tip. A sign-off written for an earlier commit stops
+counting, by design: it must not outlive the code it vouched for.
 
 The merge did not happen and the worktree is kept. **Stop and escalate.** The
 real-environment check is outside the loop's boundary: the human runs the journey
 or canary and records it, in their own terminal, with
-`worktree.sh attest <change> "what they ran"`. Never sign it off yourself, never
-run `attest`, and never write the commit id into a sign-off file to satisfy the
-check — the bash-guard denies all of these.
+`worktree.sh attest <change> "what they ran"` (the exit-7 message prints the
+full command with its path). Never sign it off yourself, never run `attest`,
+and never write the commit id into a sign-off file to satisfy the check — the
+guard and bash-guard deny all of these routes.
 
 ## 8 — the authority gate
 
@@ -63,9 +65,10 @@ check — the bash-guard denies all of these.
 
 The merge did not happen and the worktree is kept. **Stop and escalate.** This
 needs the human's scoped grant, recorded in their own terminal with
-`worktree.sh grant <change> "who/why"`. Never create the grant yourself and
-never run `grant` — authority is theirs to give, and the bash-guard denies both
-routes.
+`worktree.sh grant <change> "who/why"` (the exit-8 message prints the full
+command with its path). Never create the grant yourself and never run `grant`
+— authority is theirs to give, and the guard and bash-guard deny the file and
+shell routes.
 
 ## Never work around a non-zero exit
 

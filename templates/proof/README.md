@@ -9,6 +9,11 @@ merge. Copy a template here to `scripts/proof.sh` and adapt it.
 
 ## Contract
 
+- `land` executes the **primary tree's copy** of the adapter — the reviewed,
+  already-landed one — so a change cannot ship an always-green `proof.sh` of
+  its own. A change that introduces or edits `proof.sh` is trusted only after
+  that adapter change has landed; until then, the human sign-off is the way
+  through the gate.
 - Invoked as `proof.sh <change>`, with the working directory set to the
   **change's worktree** when it exists — that tree holds the code under test.
   The primary tree is still pre-merge at this point, so proving against it would

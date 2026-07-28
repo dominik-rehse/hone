@@ -52,28 +52,32 @@ done
 
 # A hone project carries durable artifacts (docs/decisions, docs/notes) or the
 # temporary .plans/ but no test adapter → the gate can't run. Point at setup.
+# These warnings go to STDOUT: a SessionStart hook's stdout is injected into
+# the session context, so the model actually sees them; stderr on exit 0 is
+# effectively invisible.
 looks_like_hone=false
 if [ -d "$PROJECT_DIR/docs/decisions" ] || [ -d "$PROJECT_DIR/docs/notes" ] || [ -d "$PROJECT_DIR/.plans" ]; then
     looks_like_hone=true
 fi
 
 if [ "$looks_like_hone" = true ] && [ ! -f "$PROJECT_DIR/scripts/run-tests.sh" ]; then
-    echo "hone: this project has no scripts/run-tests.sh, so the gate has no suite to run. Install the test adapter with: bash \"\${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh\"" >&2
+    echo "hone: this project has no scripts/run-tests.sh, so the gate has no suite to run. Install the test adapter with: bash \"\${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh\""
 fi
 
 # hone keys its enforcement off a src/<area>/ layout. A hone project with no src/
 # means the guard, gate, and nag silently do nothing. Surface that instead of
 # leaving it a silent gap.
 if [ "$looks_like_hone" = true ] && [ ! -d "$PROJECT_DIR/src" ]; then
-    echo "hone: no src/ directory found. hone's guard, gate, and nag key off a src/<area>/ layout; without it they do nothing. Put code under src/ (Python packages too: src/<pkg>/), or run scripts/setup.sh to create it." >&2
+    echo "hone: no src/ directory found. hone's guard, gate, and nag key off a src/<area>/ layout; without it they do nothing. Put code under src/ (Python packages too: src/<pkg>/), or run scripts/setup.sh to create it."
 fi
 
-# The settings.json deny rules are the file-tool half of hone's tamper
-# resistance (the bash-guard only closes the shell routes). They are installed
-# by hand, so nothing else notices when they are missing or were never added.
+# The settings deny rules are the file-tool half of hone's tamper resistance
+# for the adapters (the bash-guard closes the shell routes). They are
+# installed by hand, so nothing else notices when they are missing. Either
+# settings file counts.
 if [ "$looks_like_hone" = true ] && \
-   ! grep -qF '"Write(./scripts/run-tests.sh)"' "$PROJECT_DIR/.claude/settings.json" 2>/dev/null; then
-    echo "hone: .claude/settings.json is missing the Write/Edit deny rules for the test adapter and settings — the file-tool half of tamper resistance is off. Copy the permissions block from hone's README (Install section)." >&2
+   ! grep -qsF 'Write(./scripts/run-tests.sh)' "$PROJECT_DIR/.claude/settings.json" "$PROJECT_DIR/.claude/settings.local.json"; then
+    echo "hone: the Write/Edit deny rules for the test adapter and settings are missing from .claude/settings.json — the file-tool half of tamper resistance is off. Copy the permissions block from hone's README (Install section)."
 fi
 
 exit 0

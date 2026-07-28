@@ -67,6 +67,17 @@ touch "$WT/src/auth/login.test.ts"
 out=$(guard_write "src/auth/login.ts" "$WT")
 denied "$out" && bad "src should be allowed once its test exists" || ok "src allowed once test exists"
 
+# 7b. pytest's prefix convention is a test file too (the RED artifact): a new
+# colocated test_*.py must be writable, not mistaken for untested prod code.
+out=$(guard_write "src/auth/test_login.py" "$WT")
+denied "$out" && bad "pytest prefix test file should be allowed in worktree" || ok "pytest prefix test file allowed (RED)"
+
+echo "== guard: land-gate sign-offs denied in every tree =="
+out=$(guard_write ".hone-grant/db-drop" "$REPO")
+denied "$out" && ok ".hone-grant/ write denied in primary tree" || bad "should deny .hone-grant/ writes"
+out=$(guard_write ".hone-proof/ui-flow" "$WT")
+denied "$out" && ok ".hone-proof/ write denied in a worktree" || bad "should deny .hone-proof/ writes in a worktree"
+
 echo "== guard: .hone-off disables it =="
 touch "$REPO/.hone-off"
 out=$(guard_write "src/auth/login.ts" "$REPO")
@@ -86,6 +97,11 @@ echo "$(bg 'mkdir -p .hone-grant && touch .hone-grant/db-drop')" | grep -q '"den
 echo "$(bg 'bash scripts/worktree.sh grant db-drop reason')" | grep -q '"deny"' && ok "grant helper denied to the agent" || bad "worktree.sh grant should be denied"
 echo "$(bg 'bash scripts/worktree.sh attest db-drop ran-it')" | grep -q '"deny"' && ok "attest helper denied to the agent" || bad "worktree.sh attest should be denied"
 echo "$(bg 'cat .hone-grant/db-drop')" | grep -q 'permissionDecision' && bad "reading a grant should pass silently" || ok "reading a grant allowed"
+# Mutators beyond the creation verbs are denied too: rule 1b's op list is a
+# superset of rule 2's, so truncate/dd/sed -i can't slip a sign-off through.
+echo "$(bg 'truncate -s0 .hone-grant/db-drop')" | grep -q '"deny"' && ok "truncate of a grant denied" || bad "truncate into .hone-grant/ should be denied"
+echo "$(bg 'sed -i s/x/approved/ .hone-proof/ui-flow')" | grep -q '"deny"' && ok "sed -i of a sign-off denied" || bad "sed -i into .hone-proof/ should be denied"
+echo "$(bg 'dd of=.hone-grant/db-drop')" | grep -q '"deny"' && ok "dd into a grant denied" || bad "dd into .hone-grant/ should be denied"
 # The committed policy files bound the enforcement perimeter: mutating one asks.
 echo "$(bg 'sed -i s/a/b/ .hone-durable-paths')" | grep -q '"ask"' && ok "editing .hone-durable-paths escalated" || bad "editing a policy file should ask"
 echo "$(bg 'echo db/ >> .hone-irreversible-paths')" | grep -q '"ask"' && ok "appending to .hone-irreversible-paths escalated" || bad "appending to a policy file should ask"
@@ -234,6 +250,12 @@ denied "$out" && bad "unlisted root file should stay allowed" || ok "unlisted ro
 rm -f "$REPO/.hone-durable-paths"
 out=$(guard_write "deploy/systemd/app.service" "$REPO")
 denied "$out" && bad "deploy/ should be allowed without .hone-durable-paths" || ok "perimeter shrinks back when the file is removed"
+# The policy files themselves are protected in the primary tree: an Edit that
+# widens or shrinks the perimeter is a reviewed change, not a workspace edit.
+out=$(guard_write ".hone-durable-paths" "$REPO")
+denied "$out" && ok "policy file denied in primary tree" || bad ".hone-durable-paths should be guard-protected"
+out=$(guard_write ".hone-irreversible-paths" "$REPO")
+denied "$out" && ok "irreversible-paths policy file denied in primary tree" || bad ".hone-irreversible-paths should be guard-protected"
 
 echo
 echo "== nag: zero-deletion change (advisory, pre-land) =="
