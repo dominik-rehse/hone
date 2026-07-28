@@ -54,7 +54,11 @@ what they must resolve before the loop runs unattended against it.
 - **Collision with an open change.** Given the other open Plans/worktrees in the
   brief, would this change fight one of them on the same `src/` files, type,
   Decision, or Note? If so it is not independent; say which change and which
-  shared file or contract they collide on.
+  shared file or contract they collide on. Also reject a **slug collision**:
+  the Plan's slug is nested under another open Plan's slug (`a/b` while Plan
+  `a` is open), or names a directory that holds other open Plans. References
+  live in `.plans/<slug>/`, so such a Plan is indistinguishable from a
+  reference file and disappears from the pending-Plan scans.
 - **Contract churn.** Does the Plan touch a **persistent contract**: a DB
   schema or migration, a public API, a wire or file format? If so, is the
   value-space it admits complete, or will a foreseeable follow-up rewrite the

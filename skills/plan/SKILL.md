@@ -29,6 +29,22 @@ Derive a short, domain-named slug from `$ARGUMENTS` (`auth/refresh-token`,
 The Plan lands at `.plans/<slug>.md`; if that file already exists, ask whether to
 resume or overwrite it.
 
+One naming rule guards the layout's one ambiguity. A Plan's references live in
+`.plans/<slug>/`, so a markdown file whose parent directory has a sibling
+`<dir>.md` is read as a *reference*, not a Plan, by the nag and by
+`worktree.sh status`. A slug therefore may not double as a Plan directory:
+
+- If the slug is nested (`a/b`) and `.plans/a.md` exists, refuse the name: the
+  new Plan at `.plans/a/b.md` would look like a reference of Plan `a` and drop
+  out of every pending-Plan scan. Propose a sibling name instead (`a-b`, or a
+  different area).
+- If the slug is `a` and `.plans/a/` already holds other Plans (an `a/x.md`
+  with no `.plans/a.md` beside it), refuse it for the mirror reason: creating
+  `.plans/a.md` would turn those Plans into apparent references.
+
+State the conflict and agree on an alternative with the human; never silently
+rename.
+
 ### 2. Size it to one review gate
 
 A change is the **smallest unit worth its own review gate**: split only where a

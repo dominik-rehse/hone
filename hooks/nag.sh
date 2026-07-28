@@ -12,7 +12,9 @@
 #      Pending Plans get at most one aggregate advisory line. (A Plan whose
 #      worktree still exists is active work, not flagged either way.)
 #      <change> may be nested (auth/refresh-token): the plan skill derives
-#      slugs mirroring src/, so the scan must recurse.
+#      slugs mirroring src/, so the scan must recurse. The sibling-<dir>.md
+#      giveaway below stays unambiguous because the plan skill refuses a slug
+#      that collides with an existing Plan's directory (and vice versa).
 #   2. Oversized Note: a docs/notes/<area>.md over the size cap (a Note is a
 #      map + one invariant, not a spec: half a screen).
 #   3. Orphan Note: a docs/notes/<area>.md with no corresponding src/<area>/.
