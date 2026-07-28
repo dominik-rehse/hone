@@ -43,8 +43,11 @@
 #      human's own and are not checked. The file belongs to the human, so hone
 #      names it and never touches it.
 #
-# The nag is ADVISORY: it prints its findings and exits 0, never blocking the
-# stop (the gate is the blocking hook). Disabled entirely by .hone-off.
+# The nag is ADVISORY: it reports its findings and exits 0, never blocking the
+# stop (the gate is the blocking hook). Findings ride a {"systemMessage": ...}
+# on stdout — the one non-blocking channel a Stop hook has that is actually
+# shown (stderr on exit 0 reaches neither the model nor the user). Disabled
+# entirely by .hone-off.
 
 set -uo pipefail
 
@@ -197,8 +200,6 @@ fi
 
 [ -z "$findings" ] && exit 0
 
-{
-    printf 'hone nag (advisory):\n'
-    printf '%s' "$findings"
-} >&2
+printf '{"systemMessage":"%s"}\n' "$(hone_json_escape "hone nag (advisory):
+${findings%$'\n'}")"
 exit 0

@@ -133,9 +133,17 @@ Two kinds, with different homes.
   who/when/why into the file; its text lands in the merge commit body. Delete
   it to revoke.
 - `.hone-proof/<change>`: your sign-off that the real-environment check for one
-  change ran (a browser journey, a canary). It must name the commit it proved
-  (`echo "$(git rev-parse hone/<change>) — what you ran" > .hone-proof/<change>`),
+  change ran (a browser journey, a canary). It must name the commit it proved,
   so it stops counting once you push more commits.
+
+Two helpers write the sign-off files with the right stamps, and they are yours,
+not the agent's (the `bash-guard` denies them to it): from the plugin's
+`scripts/` directory, `worktree.sh grant <change> "who/why"` and
+`worktree.sh attest <change> "what you ran"` (which records the branch tip for
+you). And `worktree.sh status` prints the whole control surface at a glance:
+hooks on or off, adapters present, policy files and whether they are committed,
+pending Plans, worktrees in flight, grants and sign-offs, and whether the deny
+rules from *Install* are in place.
 
 ## Tamper resistance
 

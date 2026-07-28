@@ -27,11 +27,13 @@ decision() { hone_pretool_decision "$1" "hone bash-guard: $2"; exit 0; }
 
 # Sabotage tokens, defined ONCE and shared by both scan paths so they can't drift.
 # HARD_TOKENS always mean "disable the gate wholesale": sabotage on any path.
-# MARKER_TOKENS are context-dependent: CREATING .hone-off disables hone (denied
-# via the constructs below), but reading or REMOVING a marker is legitimate, so
-# a bare mention only escalates on the fail-closed backstop, never auto-denies.
+# MARKER_TOKENS are context-dependent: CREATING .hone-off disables hone, and
+# WRITING a grant or proof sign-off usurps the two land gates reserved to the
+# human (both denied via the constructs below), but reading or removing one is
+# legitimate, so a bare mention only escalates on the fail-closed backstop,
+# never auto-denies.
 HARD_TOKENS='--no-verify|core\.hooksPath'
-MARKER_TOKENS='\.hone-off'
+MARKER_TOKENS='\.hone-off|\.hone-(grant|proof)/|worktree\.sh[^|;&]*[[:space:]](grant|attest)'
 
 INPUT=$(cat)
 CMD=$(hone_extract_field "$INPUT" command)
@@ -55,8 +57,22 @@ if echo "$CMD" | grep -Eq \
     decision deny "command would disable the hone gate (e.g. --no-verify, core.hooksPath, creating .hone-off). If this is intentional, make the change yourself outside the agent."
 fi
 
-# 2. A mutating operation aimed at a protected artifact → ask.
-PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common)\.sh|\.claude/settings(\.local)?\.json'
+# 1b. Writing an authority grant or a proof sign-off → deny. The land gates'
+# exits 7 and 8 are reserved to the human: the agent never authorizes an
+# irreversible change or attests a real-environment check, by any route — a
+# file write into .hone-grant/ or .hone-proof/, or the grant/attest helper.
+if echo "$CMD" | grep -Eq \
+        -e '(touch|install|printf|echo|tee|cp|mv|mkdir|ln)[^|;&]*\.hone-(grant|proof)/' \
+        -e '>>?[[:space:]]*"?'"'"'?[^[:space:]|;&]*\.hone-(grant|proof)/' \
+        -e 'worktree\.sh"?'"'"'?[[:space:]]+(grant|attest)([[:space:]]|$)'; then
+    decision deny "command would write an authority grant or a proof sign-off (.hone-grant/, .hone-proof/, or worktree.sh grant/attest). Those are reserved to the human: escalate and wait for them to run it in their own terminal."
+fi
+
+# 2. A mutating operation aimed at a protected artifact → ask. The committed
+# policy files are protected too: editing .hone-durable-paths or
+# .hone-irreversible-paths shrinks or widens the enforcement perimeter, which
+# is the human's call.
+PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths'
 if echo "$CMD" | grep -Eq "(>>?|tee|sed -i|cp |mv |install |ln -s|chmod|chattr|rm |truncate|dd of=)[^|;&]*(${PROT})"; then
     decision ask "command appears to modify a protected hone artifact (the test adapter, a hook, or settings). Confirm this is an intended, legitimate change before allowing it."
 fi

@@ -68,4 +68,12 @@ if [ "$looks_like_hone" = true ] && [ ! -d "$PROJECT_DIR/src" ]; then
     echo "hone: no src/ directory found. hone's guard, gate, and nag key off a src/<area>/ layout; without it they do nothing. Put code under src/ (Python packages too: src/<pkg>/), or run scripts/setup.sh to create it." >&2
 fi
 
+# The settings.json deny rules are the file-tool half of hone's tamper
+# resistance (the bash-guard only closes the shell routes). They are installed
+# by hand, so nothing else notices when they are missing or were never added.
+if [ "$looks_like_hone" = true ] && \
+   ! grep -qF '"Write(./scripts/run-tests.sh)"' "$PROJECT_DIR/.claude/settings.json" 2>/dev/null; then
+    echo "hone: .claude/settings.json is missing the Write/Edit deny rules for the test adapter and settings — the file-tool half of tamper resistance is off. Copy the permissions block from hone's README (Install section)." >&2
+fi
+
 exit 0

@@ -79,6 +79,16 @@ echo "$(bg 'git commit --no-verify -m x')" | grep -q '"deny"' && ok "--no-verify
 echo "$(bg 'touch .hone-off')" | grep -q '"deny"' && ok "touch .hone-off denied" || bad "touch .hone-off should be denied"
 echo "$(bg 'sed -i s/x/y/ scripts/run-tests.sh')" | grep -q '"ask"' && ok "editing run-tests.sh escalated" || bad "editing adapter should ask"
 echo "$(bg 'ls -la')" | grep -q 'permissionDecision' && bad "benign command should pass silently" || ok "benign command passes"
+# The land gates' sign-offs are reserved to the human: any write route into
+# .hone-grant/ or .hone-proof/, including the helpers, is denied to the agent.
+echo "$(bg 'echo signed > .hone-proof/ui-flow')" | grep -q '"deny"' && ok "writing a proof sign-off denied" || bad "writing .hone-proof/ should be denied"
+echo "$(bg 'mkdir -p .hone-grant && touch .hone-grant/db-drop')" | grep -q '"deny"' && ok "creating a grant denied" || bad "creating .hone-grant/<change> should be denied"
+echo "$(bg 'bash scripts/worktree.sh grant db-drop reason')" | grep -q '"deny"' && ok "grant helper denied to the agent" || bad "worktree.sh grant should be denied"
+echo "$(bg 'bash scripts/worktree.sh attest db-drop ran-it')" | grep -q '"deny"' && ok "attest helper denied to the agent" || bad "worktree.sh attest should be denied"
+echo "$(bg 'cat .hone-grant/db-drop')" | grep -q 'permissionDecision' && bad "reading a grant should pass silently" || ok "reading a grant allowed"
+# The committed policy files bound the enforcement perimeter: mutating one asks.
+echo "$(bg 'sed -i s/a/b/ .hone-durable-paths')" | grep -q '"ask"' && ok "editing .hone-durable-paths escalated" || bad "editing a policy file should ask"
+echo "$(bg 'echo db/ >> .hone-irreversible-paths')" | grep -q '"ask"' && ok "appending to .hone-irreversible-paths escalated" || bad "appending to a policy file should ask"
 # A HEAD-move in the primary tree races other sessions → ask; the same op inside
 # a linked worktree is isolated → silent.
 echo "$(bg 'git checkout some-commit')" | grep -q '"ask"' && ok "git checkout in primary tree escalated" || bad "checkout in primary should ask"
@@ -163,6 +173,8 @@ rm -rf "$REPO/.worktrees/auth" "$REPO/.plans/auth"
 printf 'line\n%.0s' $(seq 1 60) > "$REPO/docs/notes/auth.md"   # 60 lines > cap; src/auth exists
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "docs/notes/auth.md is 60 lines" && ok "oversized Note flagged" || bad "should flag oversized Note"
+# Findings ride a systemMessage (visible), not bare stderr (invisible on exit 0).
+echo "$out" | grep -q '"systemMessage"' && ok "nag findings ride a systemMessage" || bad "nag findings should be a systemMessage"
 
 echo "# orphan" > "$REPO/docs/notes/ghostarea.md"   # no src/ghostarea/
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)

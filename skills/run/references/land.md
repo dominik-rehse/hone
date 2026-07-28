@@ -21,11 +21,23 @@ what was deleted.
 worktree as evidence. This is stop-point 1 surfacing at land: the change passed
 in isolation but not against what else has landed since. **Stop and escalate.**
 
-## 2 — merge conflict
+## 9 — merge conflict
 
 Aborted, tree restored. Under `--all` this means the independence check missed an
 overlap: fold this change in serially and flag it for a Decision-level look. Do
 not force the merge.
+
+## 5 — lock timeout
+
+Another session held the land lock (a land or a full-suite run) past the
+timeout. Nothing happened to the trunk. Wait for that run to finish, then
+re-run land; never work around the lock.
+
+## 2 — usage or repo-state error
+
+The branch does not exist, the primary tree is on a detached HEAD, or the
+invocation was malformed. Nothing was merged. Read the stderr line; fix the
+state (from the primary tree) rather than retrying blindly.
 
 ## 7 — the proof gate
 
@@ -38,8 +50,10 @@ the change, by design: an attestation must not outlive the code it attested.
 
 The merge did not happen and the worktree is kept. **Stop and escalate.** The
 real-environment check is outside the loop's boundary: the human runs the journey
-or canary and signs it off. Never sign it off yourself, and never write the commit
-id into a sign-off file to satisfy the check.
+or canary and records it, in their own terminal, with
+`worktree.sh attest <change> "what they ran"`. Never sign it off yourself, never
+run `attest`, and never write the commit id into a sign-off file to satisfy the
+check — the bash-guard denies all of these.
 
 ## 8 — the authority gate
 
@@ -48,8 +62,10 @@ id into a sign-off file to satisfy the check.
 `.hone-irreversible-paths` match) and found no `.hone-grant/<change>`.
 
 The merge did not happen and the worktree is kept. **Stop and escalate.** This
-needs the human's scoped grant. Never create the grant yourself: authority is
-theirs to give.
+needs the human's scoped grant, recorded in their own terminal with
+`worktree.sh grant <change> "who/why"`. Never create the grant yourself and
+never run `grant` — authority is theirs to give, and the bash-guard denies both
+routes.
 
 ## Never work around a non-zero exit
 

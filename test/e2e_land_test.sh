@@ -187,13 +187,15 @@ bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "ungranted irreversible change must not touch the trunk"
 [ -d "$WT_C" ] || die "worktree should survive an ungranted irreversible land as evidence"
 step "irreversible change without a grant refused (exit 8), trunk untouched"
-# (c) With a scoped grant, it lands and the authorization is recorded in history.
-mkdir -p "$REPO/.hone-grant"
-echo "approved by t@t.t: legacy_sessions is unused" > "$REPO/.hone-grant/db-drop"
+# (c) With a scoped grant — written by the grant helper, which stamps the git
+# user and time — it lands and the authorization is recorded in history.
+bash "$WSH" grant db-drop "legacy_sessions is unused" >/dev/null || die "grant helper failed"
+grep -q "legacy_sessions is unused" "$REPO/.hone-grant/db-drop" || die "grant helper should write the reason"
+grep -q "t@t.t" "$REPO/.hone-grant/db-drop" || die "grant helper should stamp the git user"
 bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "granted irreversible land should succeed (got $rc)"
 git log --format=%B -1 | grep -q "legacy_sessions is unused" || die "grant text should be recorded in the merge commit body"
-step "granted irreversible change landed, authorization recorded in history"
+step "grant helper wrote a stamped grant; change landed, authorization in history"
 # (d) The committed .hone-irreversible-paths extends the built-in signals: a
 # change touching a listed glob is gated exactly like destructive SQL. The
 # pre-0.19 name .hone-consequential-paths is still honoured.
@@ -249,12 +251,18 @@ bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 7 ] || die "a sign-off for an earlier commit should not discharge a newer tip (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "a stale sign-off must not touch the trunk"
 step "sign-off bound to an earlier commit refused after the branch moved (exit 7)"
-# (e) A sign-off naming the current tip (short SHA counts) discharges it.
-git rev-parse --short hone/ui-flow > "$REPO/.hone-proof/ui-flow"
+# (e) A sign-off naming the current tip satisfies it. The attest helper writes
+# it, stamping the tip commit, the git user, and the time.
+bash "$WSH" attest ui-flow "journey ok" >/dev/null || die "attest helper failed"
+grep -q "$(git rev-parse hone/ui-flow)" "$REPO/.hone-proof/ui-flow" || die "attest helper should stamp the branch tip"
 bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
-[ "$rc" -eq 0 ] || die "a sign-off naming the branch tip should discharge the proof (got $rc)"
-step "sign-off naming the current tip landed (short SHA accepted)"
+[ "$rc" -eq 0 ] || die "a sign-off naming the branch tip should satisfy the proof gate (got $rc)"
+step "attest helper wrote a tip-stamped sign-off; change landed"
 rm -f "$REPO/.hone-proof/ui-flow"
+# The attest helper refuses a change with no branch: nothing to attest.
+bash "$WSH" attest no-such-change "nope" >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 2 ] || die "attest of a nonexistent branch should exit 2 (got $rc)"
+step "attest refuses a change with no hone/ branch"
 # (f) A green scripts/proof.sh also discharges it — and runs in the change's
 # worktree, told which change it is, so it can reach the code under test. The
 # adapter is tracked, so the worktree checkout carries it.
@@ -303,6 +311,34 @@ bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
 step "sign-off naming the tip lands the change (checked before the adapter)"
 rm -f "$REPO/.hone-proof/ui-flow3"
 git rm -q scripts/proof.sh && git commit -qm "chore: drop the proof adapter"
+
+echo "== 6. status: the control surface at a glance =="
+out=$(bash "$WSH" status) || die "status failed"
+echo "$out" | grep -q "hooks: on" || die "status should report hooks on"
+echo "$out" | grep -q "run-tests=yes" || die "status should see the test adapter"
+echo "$out" | grep -q "plans: none pending" || die "status should report no pending Plans"
+echo "$out" | grep -q "worktrees: none in flight" || die "status should report no worktrees"
+echo "$out" | grep -q "settings deny rules: MISSING" || die "status should flag missing deny rules"
+mkdir -p "$REPO/.plans" && echo "# Plan" > "$REPO/.plans/queued.md"
+touch "$REPO/.hone-off"
+out=$(bash "$WSH" status) || die "status failed with markers present"
+echo "$out" | grep -q "hooks: OFF" || die "status should report .hone-off"
+echo "$out" | grep -q "plan pending: .plans/queued.md" || die "status should list the pending Plan"
+rm -f "$REPO/.hone-off" "$REPO/.plans/queued.md"
+step "status reports hooks, adapters, plans, worktrees, deny rules"
+
+echo "== 6b. a conflicting land exits 9, tree restored =="
+WT_CA=$(bash "$WSH" add conflict-a) || die "worktree add conflict-a"
+WT_CB=$(bash "$WSH" add conflict-b) || die "worktree add conflict-b"
+echo "version A" > "$WT_CA/README.md"; (cd "$WT_CA" && git add -A && git commit -qm "feat: a")
+echo "version B" > "$WT_CB/README.md"; (cd "$WT_CB" && git add -A && git commit -qm "feat: b")
+bash "$WSH" land conflict-a >/dev/null 2>&1 || die "first land should succeed"
+bash "$WSH" land conflict-b >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 9 ] || die "a conflicting land should exit 9 (got $rc)"
+[ -z "$(git status --porcelain -uno)" ] || die "a conflicted land should leave the tracked tree clean"
+git show-ref --verify --quiet refs/heads/hone/conflict-b || die "the conflicting branch should survive as evidence"
+step "conflict aborted with its own exit code (9), tree clean, branch kept"
+bash "$WSH" remove "$WT_CB" >/dev/null 2>&1; git branch -D hone/conflict-b >/dev/null 2>&1
 
 echo "== 7. add from inside a sibling worktree: anchors to the main tree =="
 # An orchestrator's cwd drifts into change A's worktree before starting change B.

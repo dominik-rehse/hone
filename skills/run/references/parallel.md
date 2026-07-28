@@ -47,7 +47,7 @@ Land them one at a time through step 6:
   land` never interleaves two merges; within this run, still drive them one at a
   time so each builds on the last landed result.
 - The upfront check is a judgment; the **merge verifies it**. A merge collision
-  on a shared type, Decision, or Note (`land` exit 2) means the check missed an
+  on a shared type, Decision, or Note (`land` exit 9) means the check missed an
   overlap: fold it into one serial change and flag it for a Decision-level look.
   Do not force the merge.
 - After all merges, run one **global consolidate pass** (a `consolidate-critic`

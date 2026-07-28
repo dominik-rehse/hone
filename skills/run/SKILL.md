@@ -261,10 +261,13 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    removes the worktree and deletes the branch. Read its exit:
 
    - **0** — landed and green. Continue.
+   - **9** — merge conflict; aborted, tree restored. Fold in serially. Stop.
    - **6** — the merge regressed the trunk; rolled back, worktree kept. Stop.
-   - **2** — merge conflict; aborted, tree restored. Fold in serially. Stop.
    - **7** — the proof gate wants real-environment proof only a human can give.
    - **8** — the authority gate wants a scoped grant for an irreversible change.
+   - **5** — another session held the land lock past the timeout. Wait, retry.
+   - **2** — usage or repo-state error (missing branch, detached HEAD): read
+     the stderr message.
 
    Any non-zero exit: read `references/land.md` before acting on it. It carries
    what each code means and what discharges it. Three rules hold whatever the
