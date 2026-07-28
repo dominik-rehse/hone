@@ -1,8 +1,7 @@
 # Upgrading an existing hone repository
 
 Moving a repo from an earlier hone version to the current one is three
-mechanical steps. (Converting a repo from the older stdd methodology is a
-different, one-time job: [`converting.md`](converting.md).)
+mechanical steps.
 
 1. **Take the new plugin version.** hone is distributed through the
    marketplace; update it there and the hooks and skills pick the change up

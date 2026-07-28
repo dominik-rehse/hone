@@ -17,9 +17,7 @@ Three documents cover the detail:
   the loop, the checks, the invariants.
 - [`docs/reference.md`](docs/reference.md) — the full control surface:
   commands, configuration files, hooks, land gates, exit codes, adapters.
-- [`docs/upgrading.md`](docs/upgrading.md) — moving between hone versions
-  (and [`docs/converting.md`](docs/converting.md) for adopting hone in a repo
-  built on a spec corpus).
+- [`docs/upgrading.md`](docs/upgrading.md) — moving between hone versions.
 
 ## Install
 
