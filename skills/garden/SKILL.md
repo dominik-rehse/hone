@@ -1,6 +1,6 @@
 ---
 name: garden
-description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, broken Governs links, redundant tests, dead code, stale open questions, drift in the project's own CLAUDE.md and skills), then land the safe cuts one at a time through the same worktree loop. Deletion-only: every garden change removes something and the suite proves the cut safe. Escalates judgment calls instead of forcing them. Invoke with /hone:garden, or on a schedule."
+description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, broken Governs links, redundant tests, dead code, stale open questions, drift in the project's own CLAUDE.md and skills), then land the safe cuts one at a time through the same worktree loop. Deletion-only: every garden change removes something and the suite proves the cut safe. Escalates judgment calls instead of forcing them. Invoke with /hone:garden."
 argument-hint: "[area-or-scope]"
 disable-model-invocation: true
 ---
@@ -13,8 +13,9 @@ Input: $ARGUMENTS
 own leftovers. But staleness also accumulates *between* changes: a Decision whose code
 moved, a Note nobody re-derived, a test made redundant by a later change, an open
 question running code already settled. Nothing in the change-triggered loop looks
-at the repo as a whole. `garden` is that standing look: it runs the same loop on a
-schedule, driven by a scan instead of a Plan, and its unit of work is a **cut**.
+at the repo as a whole. `garden` is that standing look: a human invokes it between
+changes, it runs the same loop driven by a scan instead of a Plan, and its unit of
+work is a **cut**.
 
 `garden` writes no new behaviour. Every garden change is **deletion-only**, and
 the gate's suite is the proof a cut is safe: a deletion that keeps the suite green
@@ -148,18 +149,12 @@ it isn't, so name every skip.
 `garden` is unbounded work over a whole repo, so cap it: scan fully, but land the
 highest-confidence cuts first and stop at a sensible batch rather than churning
 dozens of merges in one run. What you defer is named in the report and picked up
-next run. The loop is meant to run **often and small**: a scheduled trickle of
-cuts.
+next run. The loop is meant to run **often and small**: a trickle of cuts, not a
+sweep.
 
-## Scheduling
+## Where it runs
 
-hone does not own a scheduler. Run `garden` on whatever cron/CI the project
-already has, as a print-mode user turn (the same nesting `run` uses for
-`/code-review`):
-
-```bash
-claude -p "/hone:garden" --model opus --effort high --output-format json
-```
-
-Point it at the primary tree; each cut still lands through the worktree loop and
-the land lock, so a scheduled `garden` and an interactive `run` never collide.
+`garden` runs in the primary tree, in the session the human invoked it from. Each
+cut still lands through the worktree loop and the land lock, so a `garden` pass and
+a `run` in flight never collide: whichever reaches land first holds the lock, and
+the other waits or defers on a conflict (exit 9).

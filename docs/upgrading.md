@@ -38,7 +38,6 @@ Two capabilities cost nothing until used, so enable them whenever:
 - *`Governs:` links.* Add a `Governs:` line to a Decision or Note naming
   the `src/` path it explains, and the nag flags the doc when that path later
   disappears. Add them as you next touch each doc; no upfront sweep needed.
-- *The garden loop.* Point existing cron/CI at
-  `claude -p "/hone:garden"` to trim stale docs, dead code, and redundant
-  tests on a schedule. Worth starting once there is enough written down to go
-  stale.
+- *The garden loop.* Run `/hone:garden` between changes to trim stale docs,
+  dead code, and redundant tests. Worth starting once there is enough written
+  down to go stale.

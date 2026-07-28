@@ -18,8 +18,8 @@ Slash commands, in the order a change flows:
 - `/hone:run <change>` executes the Plan unattended (worktree, build, verify,
   consolidate, review, land). `/hone:run --all` runs every ready Plan.
 - `/hone:garden` scans the repo for stale docs, dead code, and redundant tests
-  between changes, and lands the safe deletions. Run it from cron/CI as
-  `claude -p "/hone:garden"`.
+  between changes, and lands the safe deletions. You invoke it, as often as
+  the repo needs it.
 
 `worktree.sh` (in the plugin's `scripts/` directory) does the mechanical git
 work. The loop calls it; you can too:

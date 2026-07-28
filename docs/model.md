@@ -384,8 +384,8 @@ proof: a deletion that keeps it green removed something dead; one that turns
 it red removed something load-bearing, and is abandoned. Judgment calls (is
 this Decision stale, or rationale the code can't show?) go to the
 `consolidate-critic`; what only a human can settle is logged or escalated,
-never guessed. Run it small and often: hone owns the loop, your existing
-cron/CI owns the schedule (`claude -p "/hone:garden"`).
+never guessed. You invoke it, between changes: hone owns the loop, you choose
+when it runs, and small and often beats one big sweep.
 
 ## The always-on rule
 

@@ -29,9 +29,9 @@ and `garden`, so a decision or invariant stored there governs nothing. Read
 it as background; when something in it belongs to the codebase, land it in
 `docs/` through consolidate.
 
-A third command, `/hone:garden`, runs the same loop on a schedule and only
+A third command, `/hone:garden`, runs the same loop between changes and only
 deletes (stale docs, dead code, redundant tests), with the suite proving
-each removal safe. It is maintenance, not a Plan.
+each removal safe. A human invokes it; it is maintenance, not a Plan.
 
 The hooks enforce: the primary tree is a merge target, never a workspace
 (`guard`); no production code without a failing test (`guard`); tests,

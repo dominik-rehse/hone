@@ -99,5 +99,5 @@ already deny-protected, show the missing block and let the human paste it.
 Close with what was installed, what was verified green (each adapter and the
 exact command that proved it), what was fixed along the way, what was skipped
 and why, and what remains optional: `proof.sh`, the committed policy files
-(`.hone-durable-paths`, `.hone-irreversible-paths`), and scheduling
-`/hone:garden`.
+(`.hone-durable-paths`, `.hone-irreversible-paths`), and the maintenance pass
+`/hone:garden`, once there is enough written down to go stale.
