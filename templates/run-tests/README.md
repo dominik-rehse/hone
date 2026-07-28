@@ -35,8 +35,8 @@ surface as broken tooling long after they landed.
 
 `scripts/proof.sh` is a *different* adapter from the test tiers: it proves a
 change against the **real environment** (a browser journey, a canary, deployed
-health). It runs only when a change declared `Proof: real-environment` (the proof
-gate is on by default; `.hone-proof-off` disables it), and only then at land. A
+health). It runs only when a change declared `Proof: real-environment`, and
+only then at land. A
 green suite proves its assertions, not that the deployed system behaves.
 
 Its contract and templates live in `templates/proof/`: it is invoked as

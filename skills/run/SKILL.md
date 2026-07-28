@@ -306,5 +306,4 @@ The land gates (on by default) add a stop that is neither a failure nor a fork:
 the authority gate (exit 8) awaits your scoped grant for an irreversible change,
 and the proof gate (exit 7) awaits real-environment proof the loop cannot give.
 Both are stops reserved to you by design: escalate and wait; never write the
-grant or the sign-off yourself. (A project can disable either with
-`.hone-authority-off` / `.hone-proof-off`.)
+grant or the sign-off yourself.

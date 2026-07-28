@@ -31,7 +31,7 @@ decision() { hone_pretool_decision "$1" "hone bash-guard: $2"; exit 0; }
 # via the constructs below), but reading or REMOVING a marker is legitimate, so
 # a bare mention only escalates on the fail-closed backstop, never auto-denies.
 HARD_TOKENS='--no-verify|core\.hooksPath'
-MARKER_TOKENS='\.hone-off|\.hone-(gate-enforce|nag-enforce)'
+MARKER_TOKENS='\.hone-off'
 
 INPUT=$(cat)
 CMD=$(hone_extract_field "$INPUT" command)

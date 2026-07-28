@@ -20,22 +20,21 @@
 #       leaves the primary tree clean and green (a conflict is aborted, a
 #       post-merge regression is rolled back) with the worktree/branch kept as
 #       evidence. Run from the primary tree, after committing in the worktree.
-#       Authority gate (on by default; disable with .hone-authority-off): an
-#       IRREVERSIBLE change (destructive SQL, a db/ deletion, or a
-#       .hone-consequential-paths match) may not merge without a scoped grant at
-#       .hone-grant/<change>; without it land refuses BEFORE the merge and keeps
-#       the worktree as evidence. The grant's text rides into the merge commit
-#       body, so the authorization lives in durable history rather than a chat.
-#       Proof gate (on by default; disable with .hone-proof-off): a change whose
-#       Plan declared real-environment proof (a `Proof: real-environment` trailer
-#       on a branch commit) may not land on the test suite alone. Discharge it
-#       either with a green scripts/proof.sh — invoked as `proof.sh <change>`
-#       from the change's WORKTREE (the primary tree still holds the pre-merge
-#       code, so an adapter run there would check the wrong thing), with
-#       HONE_CHANGE/HONE_BRANCH/HONE_WORKTREE/HONE_MAIN_ROOT in its environment
-#       — or with a human sign-off at .hone-proof/<change> that names the commit
-#       it proved, so an attestation cannot outlive the code it attested. Else
-#       land refuses BEFORE the merge.
+#       Authority gate: an IRREVERSIBLE change (destructive SQL, a db/ deletion,
+#       or a .hone-irreversible-paths match) may not merge without a scoped
+#       grant at .hone-grant/<change>; without it land refuses BEFORE the merge
+#       and keeps the worktree as evidence. The grant's text rides into the
+#       merge commit body, so the authorization lives in durable history rather
+#       than a chat.
+#       Proof gate: a change whose Plan declared real-environment proof (a
+#       `Proof: real-environment` trailer on a branch commit) may not land on
+#       the test suite alone. Satisfy it either with a green scripts/proof.sh —
+#       invoked as `proof.sh <change>` from the change's WORKTREE (the primary
+#       tree still holds the pre-merge code, so an adapter run there would check
+#       the wrong thing), with HONE_CHANGE/HONE_BRANCH/HONE_WORKTREE/
+#       HONE_MAIN_ROOT in its environment — or with a human sign-off at
+#       .hone-proof/<change> that names the commit it proved, so a sign-off
+#       cannot outlive the code it attested. Else land refuses BEFORE the merge.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached/conflict · 5 lock timeout ·
 #       6 post-merge regression (rolled back) · 7 real-environment proof
 #       missing · 8 ungranted irreversible change.
@@ -161,12 +160,12 @@ cmd_verify() {
 # Classify a branch about to land as IRREVERSIBLE (an effectively irreversible
 # or high-blast-radius change), printing one reason line per signal (empty output
 # = reversible). Reversibility is the axis: a bad reversible merge is undone with
-# `git revert`; a dropped column is not. Consulted whenever the authority gate is
-# on (the default; disabled by .hone-authority-off, see cmd_land), so a project
-# whose changes are all reversible is never gated in practice. Signals: destructive
-# SQL in a migration or db/ file, a deletion under db/, and any path glob the
-# project lists in .hone-consequential-paths. Git pathspecs do the matching.
-land_consequential() {
+# `git revert`; a dropped column is not. A project whose changes are all
+# reversible is never gated in practice. Signals: destructive SQL in a migration
+# or db/ file, a deletion under db/, and any path glob the project lists in the
+# committed .hone-irreversible-paths (.hone-consequential-paths is the pre-0.19
+# name, still honoured). Git pathspecs do the matching.
+land_irreversible() {
     local root="$1" branch="$2" base reasons=""
     base=$(git -C "$root" merge-base HEAD "$branch" 2>/dev/null)
     [ -n "$base" ] || return 0
@@ -177,25 +176,25 @@ land_consequential() {
     if git -C "$root" diff --diff-filter=D --name-only "$base" "$branch" -- db 2>/dev/null | grep -q .; then
         reasons+="  - a file under db/ is deleted"$'\n'
     fi
-    if [ -f "$root/.hone-consequential-paths" ]; then
-        local pat
+    local pf pat
+    for pf in .hone-irreversible-paths .hone-consequential-paths; do
+        [ -f "$root/$pf" ] || continue
         while IFS= read -r pat; do
             [ -n "$pat" ] || continue
             case "$pat" in \#*) continue ;; esac
             if git -C "$root" diff --name-only "$base" "$branch" -- ":(glob)$pat" 2>/dev/null | grep -q .; then
-                reasons+="  - touches a path listed in .hone-consequential-paths: $pat"$'\n'
+                reasons+="  - touches a path listed in $pf: $pat"$'\n'
             fi
-        done < "$root/.hone-consequential-paths"
-    fi
+        done < "$root/$pf"
+    done
     printf '%s' "$reasons"
 }
 
 # Print non-empty if the branch declares real-environment proof, a `Proof:
 # real-environment` trailer in any of its commit messages (the run skill copies
-# the Plan's proof class there). Consulted whenever the proof gate is on (the
-# default; disabled by .hone-proof-off). A change with no such trailer is
+# the Plan's proof class there). A change with no such trailer is
 # assertion-class: the gate's suite already proves it, and it is never gated here,
-# so a project that never declares real-environment proof is unaffected regardless.
+# so a project that never declares real-environment proof is unaffected.
 land_proof_required() {
     local root="$1" branch="$2" base
     base=$(git -C "$root" merge-base HEAD "$branch" 2>/dev/null)
@@ -206,9 +205,9 @@ land_proof_required() {
 
 # Print non-empty if the sign-off at .hone-proof/<change> names the commit it
 # proved: any hex token of >=7 chars in the file that prefixes the branch tip (so
-# `git rev-parse --short` works as well as the full SHA). Binding the attestation
+# `git rev-parse --short` works as well as the full SHA). Binding the sign-off
 # to a commit is what stops it going stale — unbound, a sign-off written for one
-# commit silently discharges every later commit on the same branch, which is the
+# commit would silently cover every later commit on the same branch, which is the
 # one failure mode a human gate cannot notice from the inside.
 land_proof_signoff_names_tip() {
     local file="$1" tip="$2" tok
@@ -245,41 +244,37 @@ cmd_land() {
     git -C "$main_root" symbolic-ref -q HEAD >/dev/null || {
         echo "hone worktree: the primary tree is in detached HEAD — restore it to the trunk before landing." >&2; return 2; }
 
-    # Authority gate (on by default; disable with .hone-authority-off): a
-    # IRREVERSIBLE change needs a scoped human grant before it may merge.
-    # Capability (guard/bash-guard) is "can the agent act"; this is the separate
-    # contract: "may it, for this irreversible act". Checked BEFORE the merge so
-    # an ungranted irreversible change never touches the trunk. The grant is
-    # scoped (one change), revocable (delete the file), auditable (its text lands
-    # in the merge body below), and recoverable (the worktree stays until granted).
-    local grant_note=""
-    if [ ! -f "$main_root/.hone-authority-off" ]; then
-        local reasons grant
-        reasons=$(land_consequential "$main_root" "$branch")
-        if [ -n "$reasons" ]; then
-            grant="$main_root/.hone-grant/$change"
-            if [ ! -f "$grant" ]; then
-                {
-                    echo "hone worktree: $branch is an IRREVERSIBLE change and has no authority grant:"
-                    printf '%s' "$reasons"
-                    echo "Review the diff. If you authorize it, record who/when/why in a file at"
-                    echo "  .hone-grant/$change  (gitignored, per-developer)"
-                    echo "then re-run land. The worktree is kept as evidence until then."
-                } >&2
-                return 8
-            fi
-            grant_note=$(cat "$grant" 2>/dev/null)
+    # Authority gate: an IRREVERSIBLE change needs a scoped human grant before
+    # it may merge. Capability (guard/bash-guard) is "can the agent act"; this
+    # is the separate contract: "may it, for this irreversible act". Checked
+    # BEFORE the merge so an ungranted irreversible change never touches the
+    # trunk. The grant is scoped (one change), revocable (delete the file),
+    # auditable (its text lands in the merge body below), and recoverable (the
+    # worktree stays until granted).
+    local grant_note="" reasons grant
+    reasons=$(land_irreversible "$main_root" "$branch")
+    if [ -n "$reasons" ]; then
+        grant="$main_root/.hone-grant/$change"
+        if [ ! -f "$grant" ]; then
+            {
+                echo "hone worktree: $branch is an IRREVERSIBLE change and has no authority grant:"
+                printf '%s' "$reasons"
+                echo "Review the diff. If you authorize it, record who/when/why in a file at"
+                echo "  .hone-grant/$change  (gitignored, per-developer)"
+                echo "then re-run land. The worktree is kept as evidence until then."
+            } >&2
+            return 8
         fi
+        grant_note=$(cat "$grant" 2>/dev/null)
     fi
 
-    # Proof gate (on by default; disable with .hone-proof-off): a change whose Plan
-    # declared real-environment proof cannot land on the gate's assertion-level
-    # suite alone. A green check proves only its assertion, not a browser journey
-    # or deployed health. Prove it with a real-environment adapter
-    # (scripts/proof.sh) or a human sign-off (.hone-proof/<change>); otherwise
-    # land refuses before the merge and escalates. A change with no such
-    # declaration is never gated.
-    if [ ! -f "$main_root/.hone-proof-off" ] && [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
+    # Proof gate: a change whose Plan declared real-environment proof cannot
+    # land on the gate's assertion-level suite alone. A green check proves only
+    # its assertion, not a browser journey or deployed health. Prove it with a
+    # real-environment adapter (scripts/proof.sh) or a human sign-off
+    # (.hone-proof/<change>); otherwise land refuses before the merge and
+    # escalates. A change with no such declaration is never gated.
+    if [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
         local tip signoff="$main_root/.hone-proof/$change" discharged=""
         tip=$(git -C "$main_root" rev-parse "$branch")
         if [ -f "$signoff" ] && [ -n "$(land_proof_signoff_names_tip "$signoff" "$tip")" ]; then

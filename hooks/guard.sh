@@ -3,8 +3,9 @@
 # the hone model, in this order:
 #
 #   1. The primary tree is a merge target, never a workspace. A Write/Edit to a
-#      durable committed artifact (src/, tests/, docs/, db/, plus any paths the
-#      project lists in .hone-durable-paths) in the PRIMARY git tree is denied.
+#      durable committed artifact (src/, tests/, docs/, db/, scripts/, plus any
+#      paths the project lists in .hone-durable-paths) in the PRIMARY git tree is
+#      denied.
 #      That work belongs in a worktree, landed by a merge. The hand-written Plan
 #      (.plans/), tracked but authored and committed here in the primary tree,
 #      and local config are exempt.
@@ -42,19 +43,9 @@ deny() { hone_pretool_decision deny "hone guard: $*"; exit 0; }
 
 [ -f ".hone-off" ] && exit 0
 
-# Basename globs that identify a test file. A project may override the defaults
-# by listing its own (one per line, # comments allowed) in .hone-test-globs.
-# The file REPLACES the defaults, so a language whose tests don't match the
-# defaults declares its convention there. Empty/all-comment file → defaults.
-configured_test_globs() {
-    if [ -f ".hone-test-globs" ] && grep -qvE '^[[:space:]]*(#|$)' ".hone-test-globs"; then
-        tr -d '\r' < ".hone-test-globs" \
-            | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' \
-            | grep -vE '^(#|$)'
-    else
-        printf '%s\n' '*.test.*' '*.spec.*' '*_test.*' '*_spec.*'
-    fi
-}
+# Basename globs that identify a test file. These cover the common conventions
+# (jest/vitest, pytest via the prefix patterns added below, Go, Ruby, Elixir).
+TEST_GLOBS=('*.test.*' '*.spec.*' '*_test.*' '*_spec.*')
 
 INPUT=$(cat)
 FILE_PATH=$(hone_extract_field "$INPUT" file_path)
@@ -76,15 +67,15 @@ case "$TARGET_PATH" in
     *) exit 0 ;;  # outside the project, not ours to guard
 esac
 
-# A durable committed artifact is anything under src/, tests/, docs/, or db/
-# (schema and migrations are as durable as code), plus any project-specific
-# paths listed in .hone-durable-paths (one per line, # comments allowed):
-# a directory prefix (`deploy/`) or an exact file (`tsconfig.json`). Unlike
-# .hone-test-globs, the file EXTENDS the defaults: the built-in protected
-# set can grow, never shrink.
+# A durable committed artifact is anything under src/, tests/, docs/, db/
+# (schema and migrations are as durable as code), or scripts/ (the adapters the
+# gate runs live there), plus any project-specific paths listed in the committed
+# .hone-durable-paths (one per line, # comments allowed): a directory prefix
+# (`deploy/`) or an exact file (`tsconfig.json`). The file EXTENDS the defaults:
+# the built-in protected set can grow, never shrink.
 is_durable() {
     case "$1" in
-        src/*|tests/*|docs/*|db/*) return 0 ;;
+        src/*|tests/*|docs/*|db/*|scripts/*) return 0 ;;
     esac
     [ -f ".hone-durable-paths" ] || return 1
     local entry
@@ -114,11 +105,6 @@ fi
 # Rule 2: no new production code in src/ without a failing test.
 [[ "$REL" == src/* ]] || exit 0
 [ -e "$TARGET_PATH" ] && exit 0   # editing an existing src/ file (its test was required at creation)
-
-TEST_GLOBS=()
-while IFS= read -r _g; do
-    [ -n "$_g" ] && TEST_GLOBS+=("$_g")
-done < <(configured_test_globs)
 
 # Test files are the RED artifact, always allowed.
 BN=$(basename "$REL")

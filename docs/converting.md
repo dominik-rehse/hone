@@ -120,9 +120,9 @@ None of this changes the nine steps; it just makes them go smoother.
   `scripts/run-tests.sh`, so in step 7 edit those with a shell command
   (sed / python / cp), not Write/Edit, and trim the deny list itself to hone's
   shorter form as you go. Adopt hone's `scripts/run-tests.sh` by copying it (the
-  stdd adapter still self-labels "stdd" in its comments). `.hone-durable-paths` is
-  a local, gitignored per-developer file; `.claude/rules/hone-guard.md` is
-  committed. Leave any unrelated git hooks (e.g. a semantic-index tool's) alone.
+  stdd adapter still self-labels "stdd" in its comments). `.hone-durable-paths`
+  is committed project policy, like `.claude/rules/hone-guard.md`. Leave any
+  unrelated git hooks (e.g. a semantic-index tool's) alone.
 
 - **Preserve a widely-cited spine as a Note.** If an overview doc carries a list
   everything references (a HARD RULES security spine, a domain model), don't just
@@ -138,29 +138,27 @@ None of this changes the nine steps; it just makes them go smoother.
 
 ## Upgrading an existing hone repository
 
-A repo already on hone moves to the current version in two mechanical steps. The
-new land gates are **on by default**, so read step 3 before you next land an
-irreversible or real-environment change. They will start gating automatically,
-which is the point, but an undeployed repo will want to switch them off.
+A repo already on hone moves to the current version in three mechanical steps.
 
 1. **Take the new plugin version.** hone is distributed through the marketplace,
    so update it there; the loop and hooks pick the change up automatically.
 
-2. **Re-run setup.** `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` is
-   safe to run again: it leaves your adapter, docs, and `.plans/` untouched and only
-   appends the new marker entries to `.gitignore` (`.hone-authority-off`,
-   `.hone-consequential-paths`, `.hone-grant/`, `.hone-proof-off`,
-   `.hone-proof/`), so those per-developer files never get committed once you
-   start using them.
+2. **Re-run setup.** `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` is safe to
+   run again: it leaves your adapter, docs, and `.plans/` untouched, keeps the
+   per-developer files gitignored (`.hone-off`, `.hone-grant/`, `.hone-proof/`),
+   and strips the `.gitignore` entries for markers hone 0.19 retired
+   (`.hone-test-globs`, `.hone-gate-enforce`, `.hone-nag-enforce`,
+   `.hone-authority-off`, `.hone-proof-off`) and for the policy files that are
+   committed now.
 
-3. **Decide on the default-on land gates.** From now on `land` refuses an
-   *irreversible* change (destructive SQL, a `db/` deletion, or a
-   `.hone-consequential-paths` match) without a scoped `.hone-grant/<change>`
-   (exit 8), and refuses a change whose Plan declares `Proof: real-environment`
-   until `scripts/proof.sh` passes (see `templates/proof/` for its contract) or a
-   `.hone-proof/<change>` sign-off names the commit it proved (exit 7). If the repo is undeployed with disposable data, switch
-   them off with `.hone-authority-off` and/or `.hone-proof-off`; otherwise leave
-   them on, since they now protect every land without further setup.
+3. **Commit your policy files.** `.hone-durable-paths` and
+   `.hone-irreversible-paths` (rename it from `.hone-consequential-paths` if you
+   have one; the old name still works) are project policy: commit them so the
+   whole team runs the same enforcement. If you relied on `.hone-authority-off`
+   or `.hone-proof-off`, they are gone: the land gates now always run, and the
+   per-change `.hone-grant/<change>` or `.hone-proof/<change>` is the way
+   through them. `.hone-test-globs` is gone too; the built-in test-file globs
+   cover the common conventions.
 
 Two more capabilities are additive and cost nothing until used:
 

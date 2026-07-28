@@ -43,18 +43,27 @@ else
     echo "hone setup: installed scripts/run-tests.sh (from $TEMPLATE)."
 fi
 
-# 2. Gitignore the temporary artifacts. NOT .plans/: a Plan is committable now.
-# It lands in git history, and consolidate removes it with a git rm the landing
-# merge carries, so a prior setup's .plans/ ignore is stripped if present.
+# 2. Gitignore the per-developer artifacts: the worktrees, the .hone-off kill
+# switch, and the per-change grant/proof sign-offs. NOT .plans/ (a Plan is
+# tracked; it lands in git history and consolidate removes it with a git rm the
+# landing merge carries) and NOT the policy files (.hone-durable-paths,
+# .hone-irreversible-paths): those are project policy, committed and shared.
+# Entries an earlier hone version ignored (markers removed in 0.19, and the
+# policy files back when they were per-developer) are stripped so they can be
+# committed or deleted.
 touch .gitignore
-for entry in ".worktrees/" ".hone-off" ".hone-test-globs" ".hone-durable-paths" ".hone-gate-enforce" ".hone-nag-enforce" ".hone-authority-off" ".hone-consequential-paths" ".hone-grant/" ".hone-proof-off" ".hone-proof/"; do
+for entry in ".worktrees/" ".hone-off" ".hone-grant/" ".hone-proof/"; do
     grep -qxF "$entry" .gitignore || printf '%s\n' "$entry" >> .gitignore
 done
-if grep -qxF ".plans/" .gitignore; then
-    grep -vxF ".plans/" .gitignore > .gitignore.hone-tmp && mv .gitignore.hone-tmp .gitignore
-    echo "hone setup: removed .plans/ from .gitignore — Plans are tracked now."
-fi
-echo "hone setup: ensured temporary artifacts are gitignored."
+for stale in ".plans/" ".hone-test-globs" ".hone-gate-enforce" ".hone-nag-enforce" \
+             ".hone-authority-off" ".hone-proof-off" ".hone-durable-paths" \
+             ".hone-consequential-paths" ".hone-irreversible-paths"; do
+    if grep -qxF "$stale" .gitignore; then
+        grep -vxF "$stale" .gitignore > .gitignore.hone-tmp && mv .gitignore.hone-tmp .gitignore
+        echo "hone setup: removed $stale from .gitignore (tracked or retired in this hone version)."
+    fi
+done
+echo "hone setup: ensured per-developer artifacts are gitignored."
 
 # 3. Durable docs skeleton (empty dirs are fine; the loop fills them), plus the
 # src/ root. hone's enforcement keys off a src/<area>/ layout: the guard requires

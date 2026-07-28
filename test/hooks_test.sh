@@ -25,7 +25,7 @@ cd "$REPO" || exit 1
 git init -q && git symbolic-ref HEAD refs/heads/main
 git config user.email t@t.t; git config user.name t
 mkdir -p src/auth tests docs/notes docs/decisions .plans scripts
-printf '.worktrees/\n.plans/\n.hone-off\n.hone-nag-enforce\n' > .gitignore
+printf '.worktrees/\n.plans/\n.hone-off\n' > .gitignore
 echo "# seed" > README.md
 # Keep the src/auth dir in the tree so it exists in a linked worktree checkout.
 echo "// seed" > src/auth/.keep
@@ -179,14 +179,12 @@ out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "docs/decisions/export.md declares Governs: src/ghost/gone.ts, which no longer exists" && ok "Decision with a dangling Governs path flagged" || bad "should flag a dangling Governs path"
 rm -f "$REPO/docs/decisions/auth.md" "$REPO/docs/decisions/export.md"
 
-# Enforce marker turns nag into a block.
-touch "$REPO/.hone-nag-enforce"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG")
-echo "$out" | grep -q '"decision":"block"' && ok ".hone-nag-enforce makes nag block" || bad "nag-enforce should block"
+# The nag never blocks: even with findings present, no block decision is emitted.
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>/dev/null)
+echo "$out" | grep -q '"decision":"block"' && bad "nag must never block" || ok "nag stays advisory (never blocks)"
 
 echo
 echo "== worktree.sh add/landable/remove =="
-rm -f "$REPO/.hone-nag-enforce"
 WSH="$PLUGIN_ROOT/scripts/worktree.sh"
 (cd "$REPO" && bash "$WSH" add feature-x >/dev/null) && [ -d "$REPO/.worktrees/feature-x" ] && ok "worktree add created .worktrees/feature-x" || bad "worktree add failed"
 # The worktree is the claim: a second add of the same change is "already claimed"
@@ -198,13 +196,19 @@ out=$(cd "$REPO" && bash "$WSH" landable) && echo "$out" | grep -q "feature-x" &
 out=$(cd "$REPO" && bash "$WSH" remove "/tmp/not-ours" 2>&1); [ $? -eq 3 ] || echo "$out" | grep -q "did not create it" && ok "remove refuses foreign path (exit 3)" || bad "remove should refuse foreign path"
 
 echo
-echo "== guard: durable perimeter (db/ default, .hone-durable-paths) =="
+echo "== guard: durable perimeter (db/ + scripts/ defaults, .hone-durable-paths) =="
 # db/ is durable by default → denied in the primary tree.
 out=$(guard_write "db/migrations/0001_init.sql" "$REPO")
 denied "$out" && ok "db/ denied in primary tree" || bad "db/ should be durable by default"
 # ...but writable in a worktree (rule 1 is primary-tree-only; rule 2 is src/-only).
 out=$(guard_write "db/migrations/0001_init.sql" "$WT")
 denied "$out" && bad "db/ should be writable in a worktree" || ok "db/ writable in a worktree"
+# scripts/ (the adapters) is durable by default → denied in the primary tree,
+# writable in a worktree.
+out=$(guard_write "scripts/typecheck.sh" "$REPO")
+denied "$out" && ok "scripts/ denied in primary tree" || bad "scripts/ should be durable by default"
+out=$(guard_write "scripts/typecheck.sh" "$WT")
+denied "$out" && bad "scripts/ should be writable in a worktree" || ok "scripts/ writable in a worktree"
 # .hone-durable-paths EXTENDS the perimeter: a dir prefix and an exact file.
 printf '# project perimeter\ndeploy/\ntsconfig.json\n' > "$REPO/.hone-durable-paths"
 out=$(guard_write "deploy/systemd/app.service" "$REPO")
@@ -226,11 +230,6 @@ echo "== nag: zero-deletion change (advisory, pre-land) =="
 (cd "$WT" && echo "new behaviour" > added.txt && git add -A && git commit -qm "feat: additive only")
 out=$(cd "$WT" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "deletes nothing" && ok "purely additive pre-land change flagged" || bad "should flag a zero-deletion change on a clean hone/* branch"
-# Advisory even under .hone-nag-enforce: it rides along but never blocks alone.
-touch "$WT/.hone-nag-enforce"
-out=$(cd "$WT" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q '"decision":"block"' && bad "advisory-only finding should not block under enforce" || ok "zero-deletion finding stays advisory under enforce"
-rm -f "$WT/.hone-nag-enforce"
 # A change that deletes something is not flagged.
 (cd "$WT" && sed -i '1d' README.md && git add -A && git commit -qm "chore: cut a line")
 out=$(cd "$WT" && echo '{}' | bash "$NAG" 2>&1)
@@ -277,11 +276,6 @@ printf -- '---\nname: pref\nmetadata:\n  type: user\n---\n\nplain english\n' > "
 out=$(cd "$MEMREPO" && CLAUDE_CONFIG_DIR="$MEMCFG" bash "$NAG" </dev/null 2>&1)
 echo "$out" | grep -q "goal.md is a 'type: project' harness memory" && ok "project-typed memory flagged" || bad "should flag a type: project memory"
 echo "$out" | grep -q "pref.md" && bad "user-typed memory should not be flagged" || ok "user-typed memory not flagged"
-# Advisory: it must never block, even under .hone-nag-enforce.
-touch "$MEMREPO/.hone-nag-enforce"
-out=$(cd "$MEMREPO" && CLAUDE_CONFIG_DIR="$MEMCFG" bash "$NAG" </dev/null 2>&1)
-echo "$out" | grep -q '"decision":"block"' && bad "memory finding must stay advisory" || ok "memory finding stays advisory under enforce"
-rm -f "$MEMREPO/.hone-nag-enforce"
 # Fails open: an absent memory dir yields nothing, never a false finding.
 out=$(cd "$MEMREPO" && CLAUDE_CONFIG_DIR="$MEMREPO/.nonexistent" bash "$NAG" </dev/null 2>&1)
 echo "$out" | grep -q "harness memory" && bad "absent memory dir should yield nothing" || ok "absent memory dir fails open"

@@ -29,7 +29,7 @@ not force the merge.
 
 ## 7 — the proof gate
 
-On by default; `.hone-proof-off` disables it. The change's commit body carries
+The change's commit body carries
 `Proof: real-environment` and the proof is still missing: no green
 `scripts/proof.sh` (invoked as `proof.sh <change>` from the worktree, so it can
 reach the code under test), and no `.hone-proof/<change>` sign-off naming the
@@ -43,9 +43,9 @@ id into a sign-off file to satisfy the check.
 
 ## 8 — the authority gate
 
-On by default; `.hone-authority-off` disables it. `land` classified the diff as an
+`land` classified the diff as an
 *irreversible* change (destructive SQL, a `db/` deletion, a
-`.hone-consequential-paths` match) and found no `.hone-grant/<change>`.
+`.hone-irreversible-paths` match) and found no `.hone-grant/<change>`.
 
 The merge did not happen and the worktree is kept. **Stop and escalate.** This
 needs the human's scoped grant. Never create the grant yourself: authority is

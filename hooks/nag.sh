@@ -28,10 +28,9 @@
 #   4. Change that cuts nothing: on a clean hone/<change> branch (committed,
 #      about to land), the branch's whole diff against its merge base has zero
 #      deletions. "Every cycle removes something" is the model's principle 4;
-#      a purely additive change means consolidate pruned nothing. This check
-#      stays advisory even under .hone-nag-enforce: a hard rule here would
-#      incentivize token deletions, so the finding names the principle and
-#      leaves the judgment to consolidate.
+#      a purely additive change means consolidate pruned nothing. A hard rule
+#      here would incentivize token deletions, so the finding names the
+#      principle and leaves the judgment to consolidate.
 #   5. Landed branch left behind: in the PRIMARY tree, a hone/* branch fully
 #      merged into HEAD with no worktree attached. Land removes the worktree;
 #      the merged branch should go with it (git branch -d) or they accumulate
@@ -41,12 +40,11 @@
 #      agent harness's own store, outside the repo: per-user, uncommitted,
 #      unreviewed, and invisible to garden, so a decision or constraint left
 #      there governs nothing. Types `user`/`feedback`/`reference` are the
-#      human's own and are not checked. ALWAYS advisory, never blocking: the
-#      file belongs to the human, so hone names it and never touches it.
+#      human's own and are not checked. The file belongs to the human, so hone
+#      names it and never touches it.
 #
-# Default: ADVISORY. Prints to stderr and exits 0 (never blocks). Create an
-# empty .hone-nag-enforce to make the findings BLOCK the stop instead. Disabled
-# entirely by .hone-off.
+# The nag is ADVISORY: it prints its findings and exits 0, never blocking the
+# stop (the gate is the blocking hook). Disabled entirely by .hone-off.
 
 set -uo pipefail
 
@@ -64,12 +62,7 @@ cd "$PROJECT_ROOT" || exit 0
 NOTE_MAX_LINES=40
 
 findings=""
-advisory=""
-# Append one finding line with a real newline (the block emitter escapes it to a
-# JSON \n; the advisory branch prints it as-is). add_advisory findings never
-# block, even under .hone-nag-enforce (see check 4 in the header).
-add_finding()  { findings+="- $1"$'\n'; }
-add_advisory() { advisory+="- $1"$'\n'; }
+add_finding() { findings+="- $1"$'\n'; }
 
 # 1. Leftover Plan. Recurse: slugs are nested (.plans/<area>/<change>.md).
 # Flag only on landed evidence (see the header); otherwise count as pending.
@@ -98,7 +91,7 @@ if [ -d ".plans" ]; then
             pending=$((pending+1))
         fi
     done < <(find .plans -type f -name '*.md' 2>/dev/null)
-    [ "$pending" -gt 0 ] && add_advisory "${pending} Plan(s) pending run in .plans/ — normal while queued; /hone:run picks them up."
+    [ "$pending" -gt 0 ] && add_finding "${pending} Plan(s) pending run in .plans/ — normal while queued; /hone:run picks them up."
 fi
 
 # 2. Oversized Note.
@@ -159,7 +152,7 @@ if [ -d "$MEM_ROOT" ]; then
         seen_mem="$seen_mem|$mem_dir|"
         while IFS= read -r mem; do
             [ -n "$mem" ] || continue
-            add_advisory "$(basename "$mem") is a 'type: project' harness memory in ${mem_dir/#$HOME/\~} — that store is per-user, uncommitted, and invisible to the critics and garden, so a decision or constraint there governs nothing. If it belongs to the codebase, land it as a Decision or Note through consolidate."
+            add_finding "$(basename "$mem") is a 'type: project' harness memory in ${mem_dir/#$HOME/\~} — that store is per-user, uncommitted, and invisible to the critics and garden, so a decision or constraint there governs nothing. If it belongs to the codebase, land it as a Decision or Note through consolidate."
         done < <(grep -rlE '^[[:space:]]*type:[[:space:]]*project[[:space:]]*$' "$mem_dir" --include='*.md' 2>/dev/null)
     done
 fi
@@ -183,7 +176,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
                     dels=$(printf '%s' "$stat" | grep -o '[0-9]* deletion' | grep -o '[0-9]*' || echo 0)
                     ins=$(printf '%s' "$stat" | grep -o '[0-9]* insertion' | grep -o '[0-9]*' || echo 0)
                     if [ "${ins:-0}" -gt 0 ] && [ "${dels:-0}" -eq 0 ]; then
-                        add_advisory "this change deletes nothing (+${ins}/-0 vs ${primary_branch:-the merge base}) — every cycle removes something: a redundant test, dead code, a stale doc line. If consolidate truly found nothing to cut, say so in the landing commit body."
+                        add_finding "this change deletes nothing (+${ins}/-0 vs ${primary_branch:-the merge base}) — every cycle removes something: a redundant test, dead code, a stale doc line. If consolidate truly found nothing to cut, say so in the landing commit body."
                     fi
                 fi
             fi
@@ -202,16 +195,10 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     fi
 fi
 
-[ -z "$findings" ] && [ -z "$advisory" ] && exit 0
-
-if [ -f ".hone-nag-enforce" ] && [ -n "$findings" ]; then
-    # Advisory-only findings ride along in the block reason but never trigger it.
-    hone_stop_block "hone nag found durable-layer hygiene issues — reconcile before finishing:"$'\n'"${findings}${advisory}"
-    exit 0
-fi
+[ -z "$findings" ] && exit 0
 
 {
-    printf 'hone nag (advisory — create .hone-nag-enforce to make these block):\n'
-    printf '%s' "${findings}${advisory}"
+    printf 'hone nag (advisory):\n'
+    printf '%s' "$findings"
 } >&2
 exit 0

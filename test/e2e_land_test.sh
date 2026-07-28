@@ -167,45 +167,52 @@ else
   step "SKIP suite-lock tests: flock not available"
 fi
 
-echo "== 5e. authority gate (on by default): consequential changes need a grant =="
-# (a) A reversible change lands freely. The gate only bites consequential diffs.
+echo "== 5e. authority gate: irreversible changes need a grant =="
+# (a) A reversible change lands freely. The gate only bites irreversible diffs.
 WT_OK=$(bash "$WSH" add rev-change) || die "worktree add rev-change"
 echo "// harmless" > "$WT_OK/src/mathx/notes.js"
 (cd "$WT_OK" && git add -A && git commit -qm "chore(mathx): a reversible note")
 bash "$WSH" land rev-change >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a reversible change should land freely (got $rc)"
 step "reversible change lands without a grant"
-# (b) A consequential change (destructive SQL in a migration) is refused BEFORE the
-# merge, by default. No marker needed.
+# (b) An irreversible change (destructive SQL in a migration) is refused BEFORE
+# the merge. No marker needed.
 WT_C=$(bash "$WSH" add db-drop) || die "worktree add db-drop"
 mkdir -p "$WT_C/db/migrations"
 echo "DROP TABLE legacy_sessions;" > "$WT_C/db/migrations/0002_drop.sql"
 (cd "$WT_C" && git add -A && git commit -qm "feat(db): drop legacy_sessions")
 PRE=$(git rev-parse HEAD)
 bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
-[ "$rc" -eq 8 ] || die "consequential land without a grant should exit 8 by default (got $rc)"
-[ "$(git rev-parse HEAD)" = "$PRE" ] || die "ungranted consequential change must not touch the trunk"
-[ -d "$WT_C" ] || die "worktree should survive an ungranted consequential land as evidence"
-step "consequential change without a grant refused by default (exit 8), trunk untouched"
+[ "$rc" -eq 8 ] || die "irreversible land without a grant should exit 8 (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "ungranted irreversible change must not touch the trunk"
+[ -d "$WT_C" ] || die "worktree should survive an ungranted irreversible land as evidence"
+step "irreversible change without a grant refused (exit 8), trunk untouched"
 # (c) With a scoped grant, it lands and the authorization is recorded in history.
 mkdir -p "$REPO/.hone-grant"
 echo "approved by t@t.t: legacy_sessions is unused" > "$REPO/.hone-grant/db-drop"
 bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
-[ "$rc" -eq 0 ] || die "granted consequential land should succeed (got $rc)"
+[ "$rc" -eq 0 ] || die "granted irreversible land should succeed (got $rc)"
 git log --format=%B -1 | grep -q "legacy_sessions is unused" || die "grant text should be recorded in the merge commit body"
-step "granted consequential change landed, authorization recorded in history"
-# (d) .hone-authority-off disables the gate: the same change lands unattended.
-touch "$REPO/.hone-authority-off"; rm -f "$REPO/.hone-grant/db-drop"
-WT_C2=$(bash "$WSH" add db-drop2) || die "worktree add db-drop2"
-mkdir -p "$WT_C2/db/migrations"
-echo "DROP TABLE more_legacy;" > "$WT_C2/db/migrations/0003_drop.sql"
-(cd "$WT_C2" && git add -A && git commit -qm "feat(db): drop more_legacy")
-bash "$WSH" land db-drop2 >/dev/null 2>&1; rc=$?
-[ "$rc" -eq 0 ] || die "consequential change should land freely when .hone-authority-off is set (got $rc)"
-step "with .hone-authority-off, a consequential change lands unattended"
-rm -f "$REPO/.hone-authority-off"
+step "granted irreversible change landed, authorization recorded in history"
+# (d) The committed .hone-irreversible-paths extends the built-in signals: a
+# change touching a listed glob is gated exactly like destructive SQL. The
+# pre-0.19 name .hone-consequential-paths is still honoured.
+echo "infra/**" > "$REPO/.hone-irreversible-paths"
+WT_C2=$(bash "$WSH" add infra-change) || die "worktree add infra-change"
+mkdir -p "$WT_C2/infra"
+echo "region = eu-central-1" > "$WT_C2/infra/prod.tf"
+(cd "$WT_C2" && git add -A && git commit -qm "feat(infra): touch prod config")
+bash "$WSH" land infra-change >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 8 ] || die "a .hone-irreversible-paths match should exit 8 (got $rc)"
+mv "$REPO/.hone-irreversible-paths" "$REPO/.hone-consequential-paths"
+bash "$WSH" land infra-change >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 8 ] || die "the legacy .hone-consequential-paths name should still gate (got $rc)"
+rm -f "$REPO/.hone-consequential-paths"
+bash "$WSH" land infra-change >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "infra change should land once the path list is gone (got $rc)"
+step ".hone-irreversible-paths (and its legacy name) gate a listed path (exit 8)"
 
-echo "== 5f. proof gate (on by default): real-environment changes need a discharge =="
+echo "== 5f. proof gate: real-environment changes need proof or a sign-off =="
 # (a) An assertion-class change (no Proof: trailer) is never gated.
 WT_A2=$(bash "$WSH" add assert-change) || die "worktree add assert-change"
 echo "// assertion-class" > "$WT_A2/src/mathx/plain.js"
@@ -213,7 +220,7 @@ echo "// assertion-class" > "$WT_A2/src/mathx/plain.js"
 bash "$WSH" land assert-change >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "an assertion-class change should land (got $rc)"
 step "assertion-class change lands (no Proof: trailer, not gated)"
-# (b) A real-environment change with no discharge is refused before the merge, by default.
+# (b) A real-environment change with no proof is refused before the merge.
 WT_P=$(bash "$WSH" add ui-flow) || die "worktree add ui-flow"
 echo "// browser flow" > "$WT_P/src/mathx/flow.js"
 (cd "$WT_P" && git add -A && git commit -qm "feat(mathx): checkout flow
@@ -221,19 +228,19 @@ echo "// browser flow" > "$WT_P/src/mathx/flow.js"
 Proof: real-environment")
 PRE=$(git rev-parse HEAD)
 bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
-[ "$rc" -eq 7 ] || die "an undischarged real-environment change should exit 7 by default (got $rc)"
+[ "$rc" -eq 7 ] || die "an unproven real-environment change should exit 7 (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "an unproven real-environment change must not touch the trunk"
-step "real-environment change without a discharge refused by default (exit 7), trunk untouched"
-# (c) A sign-off that names no commit does not discharge it: an unbound
-# attestation would outlive the code it attested.
+step "real-environment change without proof refused (exit 7), trunk untouched"
+# (c) A sign-off that names no commit does not satisfy it: an unbound
+# sign-off would outlive the code it attested.
 mkdir -p "$REPO/.hone-proof"
 echo "ran the browser journey against staging — ok" > "$REPO/.hone-proof/ui-flow"
 PRE=$(git rev-parse HEAD)
 bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
-[ "$rc" -eq 7 ] || die "a sign-off naming no commit should not discharge the proof (got $rc)"
+[ "$rc" -eq 7 ] || die "a sign-off naming no commit should not satisfy the proof gate (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "an unbound sign-off must not touch the trunk"
 step "sign-off naming no commit refused (exit 7)"
-# (d) A sign-off bound to an EARLIER commit stops discharging once the branch moves.
+# (d) A sign-off bound to an EARLIER commit stops counting once the branch moves.
 echo "$(git rev-parse hone/ui-flow) — journey ok" > "$REPO/.hone-proof/ui-flow"
 echo "// revised after the sign-off" >> "$WT_P/src/mathx/flow.js"
 (cd "$WT_P" && git add -A && git commit -qm "fixup(mathx): revise the flow")
@@ -288,12 +295,13 @@ bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 7 ] || die "a red scripts/proof.sh should keep a real-environment change out (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "a failed proof must not touch the trunk"
 step "real-environment change with a red scripts/proof.sh refused (exit 7)"
-# (h) .hone-proof-off disables the gate: the same change lands, red adapter and all.
-touch "$REPO/.hone-proof-off"
+# (h) A human sign-off naming the tip satisfies the gate even when the adapter
+# is red: the sign-off is checked first, and it says a human ran the real check.
+git rev-parse --short hone/ui-flow3 > "$REPO/.hone-proof/ui-flow3"
 bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
-[ "$rc" -eq 0 ] || die "a real-environment change should land when .hone-proof-off is set (got $rc)"
-step "with .hone-proof-off, an undischarged real-environment change lands"
-rm -f "$REPO/.hone-proof-off"
+[ "$rc" -eq 0 ] || die "a tip-naming sign-off should land the change despite a red adapter (got $rc)"
+step "sign-off naming the tip lands the change (checked before the adapter)"
+rm -f "$REPO/.hone-proof/ui-flow3"
 git rm -q scripts/proof.sh && git commit -qm "chore: drop the proof adapter"
 
 echo "== 7. add from inside a sibling worktree: anchors to the main tree =="

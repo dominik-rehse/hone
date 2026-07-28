@@ -39,9 +39,10 @@ invocation of that command, so hone runs it as a print-mode user turn
 The `permissions.deny` entries are the file-tool half of hone's tamper
 resistance (see *Tamper resistance* below). The `bash-guard` only closes the
 *shell* routes around the gate; the `guard` protects `src/`, `tests/`, `docs/`,
-and `db/` but **not** the gate's own machinery. These rules stop `Write`/`Edit`
-from mutating the test adapter or settings directly. Extend the list to any
-other adapter or config your project treats as protected.
+`db/`, and `scripts/` in the primary tree, but not inside a worktree. These
+rules stop `Write`/`Edit` from mutating the test adapter or settings anywhere.
+Extend the list to any other adapter or config your project treats as
+protected.
 
 Then, once per project, install the test adapter and the durable-docs skeleton:
 
@@ -50,7 +51,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"
 ```
 
 `setup.sh` picks a test-adapter template for your ecosystem, gitignores the
-temporary artifacts (`.worktrees/` and the markers, though Plans are tracked), and creates
+per-developer artifacts (`.worktrees/`, `.hone-off`, and the grant/proof
+sign-off directories; Plans are tracked), and creates
 `docs/decisions/`, `docs/notes/`, `docs/open-questions.md`, and `src/`. Add the
 optional `scripts/typecheck.sh` and `scripts/lint.sh` where your language has
 them; the gate runs each when present. The adapter contract is
@@ -91,9 +93,9 @@ the worktree as evidence and escalates, and never disables a gate to proceed.
 Three hooks run the laws, from `hooks/`:
 
 - *guard* (`PreToolUse`): no production code without a failing test, and no direct
-  edits to `src/`, `tests/`, `docs/`, or `db/` in the primary tree (that work
-  belongs in a worktree, landed by a merge). `.hone-durable-paths` adds
-  project-specific paths to the protected set.
+  edits to `src/`, `tests/`, `docs/`, `db/`, or `scripts/` in the primary tree
+  (that work belongs in a worktree, landed by a merge). The committed
+  `.hone-durable-paths` adds project-specific paths to the protected set.
 - *gate* (`Stop`): the test suite, plus type-check and lint where present, stay
   green. A failure blocks the turn.
 - *nag* (`Stop`, advisory): a leftover Plan, an oversized Note, a Note with no
@@ -109,38 +111,31 @@ present to revise a rejection) and `consolidate-critic` (checks what a change
 leaves behind in docs and tests). Review reuses Claude Code's built-in
 `/code-review`.
 
-## Off-switch and markers
+## Configuration files
 
-All gitignored, per-developer, never checked in:
+Two kinds, with different homes.
 
-- `.hone-off`: disable every hook at once.
-- `.hone-gate-enforce`: reserved for making advisory checks block (the gate blocks
-  by default; this is for future advisory tiers).
-- `.hone-nag-enforce`: make the nag's findings block instead of warn.
-- `.hone-test-globs`: override the test-file basename globs (one per line) for a
-  language whose tests don't match `*.test.* *.spec.* *_test.* *_spec.*`.
-- `.hone-durable-paths`: extend the set of paths the guard protects beyond
-  `src/ tests/ docs/ db/` (one entry per line, `#` comments): a directory
-  (`deploy/`) or an exact file (`tsconfig.json`). It only ever adds paths,
-  never removes them.
-- `.hone-authority-off`: turn *off* the *authority gate* (on by default). With it
-  present, `land` stops requiring a grant and lands an *irreversible* change
-  (destructive SQL, a `db/` deletion, or a `.hone-consequential-paths` match)
-  unattended, for undeployed work whose data is disposable. (The marker files
-  call an irreversible change "consequential".)
-- `.hone-consequential-paths`: extend what counts as irreversible beyond the
-  built-in signals (one path glob per line, `#` comments).
-- `.hone-grant/<change>`: the scoped authorization for one irreversible change.
-  You create it (its text, who/when/why, lands in the merge commit body);
-  delete it to revoke. Directory-ignored, per-developer.
-- `.hone-proof-off`: turn *off* the *proof gate* (on by default). With it present,
-  a change whose Plan declared `Proof: real-environment` lands on the test suite
-  alone, for undeployed software.
+*Committed project policy* — shared by the team, reviewed like any other file:
+
+- `.hone-durable-paths`: paths the guard protects beyond the built-in
+  `src/ tests/ docs/ db/ scripts/` (one entry per line, `#` comments): a
+  directory (`deploy/`) or an exact file (`tsconfig.json`). It only ever adds
+  paths, never removes them.
+- `.hone-irreversible-paths`: path globs that mark a change irreversible beyond
+  the built-in signals (one glob per line, `#` comments). The pre-0.19 name
+  `.hone-consequential-paths` still works.
+
+*Per-developer, gitignored, never checked in:*
+
+- `.hone-off`: disable every hook at once, for a quick manual edit outside the
+  loop. Delete it when you're done.
+- `.hone-grant/<change>`: your authorization for one irreversible change. Write
+  who/when/why into the file; its text lands in the merge commit body. Delete
+  it to revoke.
 - `.hone-proof/<change>`: your sign-off that the real-environment check for one
   change ran (a browser journey, a canary). It must name the commit it proved
   (`echo "$(git rev-parse hone/<change>) — what you ran" > .hone-proof/<change>`),
-  so it stops discharging the change once you push more commits.
-  Directory-ignored, per-developer.
+  so it stops counting once you push more commits.
 
 ## Tamper resistance
 
@@ -157,11 +152,11 @@ Tamper resistance answers what the agent *can* touch. *Authority* is a separate
 question: may an unattended merge land an *irreversible* change (a destructive
 migration, a `db/` deletion) without a human's say-so? A reversible change can
 be undone with `git revert` and lands unattended; a dropped column cannot be.
-The gate is **on by default**: `land` classifies the diff and refuses an
-irreversible change (exit 8, worktree kept as evidence) until you record a
-scoped grant at `.hone-grant/<change>`, whose text lands in the merge commit
-body. Turn it off with `.hone-authority-off` (see *Off-switch and markers*) for
-undeployed work whose data is disposable.
+`land` classifies the diff and refuses an irreversible change (exit 8, worktree
+kept as evidence) until you record a scoped grant at `.hone-grant/<change>`,
+whose text lands in the merge commit body. In an undeployed project whose data
+is disposable, the grant is the same one-line file; it just gets written more
+readily.
 
 ## Proof boundary
 
@@ -172,9 +167,9 @@ canary, deployed health. For a change whose claim lives there, a Plan declares
 `Proof: real-environment`, and `land` refuses it (exit 7, worktree kept) until
 a real-environment check passes (`scripts/proof.sh`, invoked as
 `proof.sh <change>` from the change's worktree — see `templates/proof/`) or you
-sign it off (`.hone-proof/<change>`, naming the commit it proved). This gate is
-**on by default** for any change that declares real-environment proof; turn it
-off with `.hone-proof-off` for undeployed work.
+sign it off (`.hone-proof/<change>`, naming the commit it proved). The gate
+only applies to changes that declare real-environment proof; everything else
+lands on the suite as usual.
 
 ## Adopting hone in an existing spec-driven repo
 

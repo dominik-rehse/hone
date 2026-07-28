@@ -117,8 +117,8 @@ there governs nothing.
 *Enforcement (config, not docs):*
 
 - *guard*: no production code without a failing test; no durable edits
-  (`src/`, `tests/`, `docs/`, `db/`, plus `.hone-durable-paths` extensions) in
-  the primary tree.
+  (`src/`, `tests/`, `docs/`, `db/`, `scripts/`, plus the committed
+  `.hone-durable-paths` extensions) in the primary tree.
 - *gate*: tests green, plus type-check and lint where the language has them
   (one adapter script keeps the hook language-agnostic).
 - *nag*: leftover Plan, oversized Note, orphan Note, a Decision/Note with a
@@ -193,7 +193,7 @@ flowchart TD
     rev -.->|"Findings to fix"| fix
     fix --> land
     rev -.->|"Needs a decision<br/>only you can make"| stop
-    land -.->|"Consequential or real-environment:<br/>awaits your grant or proof<br/>(default-on land gates)"| stop
+    land -.->|"Irreversible or real-environment:<br/>awaits your grant or proof<br/>(the land gates)"| stop
     stop --> esc
     esc -.->|"You revise the Plan<br/>and re-run"| planFile
 
@@ -355,8 +355,7 @@ the trap.
 
 So hone states the boundary explicitly. A Plan whose proof is user- or ops-level
 declares `Proof: real-environment` (the `plan-critic` rejects a Plan whose proof
-is *categorically* incapable of settling its claim). The proof gate is on by
-default (disable with `.hone-proof-off` for undeployed work), so such a
+is *categorically* incapable of settling its claim). Such a
 change may not land on the test suite alone: the requirement is met by a
 real-environment check (`scripts/proof.sh`, run from the change's worktree so it
 can reach the code under test; the primary tree is still pre-merge) or a human
@@ -401,10 +400,9 @@ majority do. An *irreversible* one (a dropped column, a destructive backfill, a
 truncate) is not undone by reverting the merge; the data is already gone. For
 that subset, green-and-reviewed is necessary but not sufficient.
 
-The authority gate is on by default (disable with `.hone-authority-off` for an
-undeployed project with disposable data). `land`
+`land`
 classifies the diff mechanically (destructive SQL in a migration or `db/` file, a
-`db/` deletion, any `.hone-consequential-paths` glob), and an irreversible change
+`db/` deletion, any glob in the committed `.hone-irreversible-paths`), and an irreversible change
 may not merge without a *scoped grant* the human writes at `.hone-grant/<change>`:
 scoped (one change), revocable (delete the file), auditable (its text lands in the
 merge commit body), recoverable (the worktree stays as evidence until it is
