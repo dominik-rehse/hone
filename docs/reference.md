@@ -9,6 +9,10 @@ pieces exist is covered in [`model.md`](model.md).
 
 Slash commands, in the order a change flows:
 
+- `/hone:setup` — once per project: run `scripts/setup.sh` for the
+  mechanics, then verify the install — author the adapter where detection
+  fell short, execute every installed adapter, fix what fails, and complete
+  the settings block. Interactive; run it with the human present.
 - `/hone:plan <change>` — write and commit the Plan for one change, checked by
   the `plan-critic` while you are present. The only manual step.
 - `/hone:run <change>` — execute the Plan unattended: worktree, build,
@@ -193,7 +197,7 @@ The plugin itself:
 ```
 hone/
 ├── rules/workflow.md            # injected at session start
-├── skills/{plan,run,garden}/    # the three commands; run/references/ loads on demand
+├── skills/{setup,plan,run,garden}/ # the four commands; run/references/ loads on demand
 ├── hooks/                       # guard, bash-guard, gate, nag, session-start
 ├── scripts/{worktree,setup}.sh
 ├── agents/                      # plan-critic, consolidate-critic

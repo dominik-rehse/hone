@@ -1,8 +1,9 @@
 # Test adapter contract
 
 `scripts/run-tests.sh` is the one language adapter that keeps hone's `gate` hook
-language-agnostic. Install it with `scripts/setup.sh` (which picks a template
-here) or copy a template and adapt it. It must honour this contract:
+language-agnostic. Install it with `/hone:setup` (which runs `scripts/setup.sh`
+to pick a template here, then verifies it by executing it) or copy a template
+and adapt it. It must honour this contract:
 
 - `run-tests.sh` runs the *unit* tier: every fast test that needs nothing
   outside the repo (no network, no DB, no browser). This is what

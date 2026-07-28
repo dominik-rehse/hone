@@ -12,7 +12,7 @@ different, one-time job: [`converting.md`](converting.md).)
    to repeat: it leaves your adapter, docs, and `.plans/` alone, keeps the
    per-developer files gitignored (`.hone-off`, `.hone-grant/`,
    `.hone-proof/`), and strips `.gitignore` entries for things hone no longer
-   uses.
+   uses. `/hone:setup` also works and re-verifies the adapters on top.
 
 3. **Reconcile what your version predates.** Check each of these against
    [`reference.md`](reference.md):

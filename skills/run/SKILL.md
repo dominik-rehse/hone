@@ -22,8 +22,7 @@ Resolve `$ARGUMENTS`:
 - empty: list the Plans in `.plans/`; if exactly one, run it; else ask which.
 
 Setup check: if `scripts/run-tests.sh` is missing, stop and tell the user to run
-`bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` first; without the adapter the
-gate can't verify anything.
+`/hone:setup` first; without the adapter the gate can't verify anything.
 
 ## The loop, per Plan
 

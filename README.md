@@ -48,17 +48,23 @@ Together they are a deterrent against an agent quietly weakening its own
 checks — not a sandbox. A session-start warning fires if the deny rules are
 missing.
 
-Then, once per project:
+Then, once per project, in a Claude Code session:
 
-```bash
-bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"
+```
+/hone:setup
 ```
 
-It installs a test adapter (`scripts/run-tests.sh`) matching your ecosystem,
-gitignores the per-developer files, and creates the docs skeleton
-(`docs/decisions/`, `docs/notes/`, `docs/open-questions.md`) plus `src/`.
-Optional adapters — `scripts/typecheck.sh`, `scripts/lint.sh`,
-`scripts/proof.sh` — are yours to add; the hooks use them when present.
+It runs `scripts/setup.sh` for the mechanics — a test adapter
+(`scripts/run-tests.sh`) matching your ecosystem, gitignores for the
+per-developer files, the docs skeleton (`docs/decisions/`, `docs/notes/`,
+`docs/open-questions.md`) plus `src/` — and then verifies the result: it
+executes each installed adapter, adapts it where the template doesn't fit the
+project (an ecosystem the script can't detect, a missing `test` script, an
+unsupported language standard), and adds `scripts/typecheck.sh` /
+`scripts/lint.sh` where the tooling exists. Running the script directly —
+`bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` — also works, but installs
+without verifying. `scripts/proof.sh` is yours to add; the hooks use the
+optional adapters when present.
 
 One layout requirement: production code lives under `src/<area>/` (Python
 packages too: `src/<pkg>/`). All of hone's enforcement keys off that layout

@@ -28,8 +28,7 @@ Resolve `$ARGUMENTS`:
 - `<area>`: scope the scan to `src/<area>/` and its Notes/Decisions.
 
 Setup check: if `scripts/run-tests.sh` is missing, stop and tell the user to run
-`bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"`. Without the adapter no cut can
-be proven safe.
+`/hone:setup`. Without the adapter no cut can be proven safe.
 
 ## 1. Scan — find the drift, repo-wide
 

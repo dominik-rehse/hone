@@ -1,5 +1,7 @@
 #!/bin/bash
-# hone project setup. Safe to run again. Run once in a project that adopts hone:
+# hone project setup: the deterministic mechanics. Safe to run again. The
+# /hone:setup skill wraps it and then verifies the adapters by executing them;
+# to run just the mechanics:
 #
 #   bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"
 #
@@ -33,8 +35,8 @@ elif [ -f "pyproject.toml" ] || [ -f "setup.py" ] || [ -f "setup.cfg" ] || ls ./
 fi
 
 if [ -z "$TEMPLATE" ]; then
-    echo "hone setup: could not detect the ecosystem. Copy a template from" >&2
-    echo "  $PLUGIN_ROOT/templates/run-tests/ to scripts/run-tests.sh and adapt it to the contract (see that dir's README.md)." >&2
+    echo "hone setup: could not detect the ecosystem. Author scripts/run-tests.sh from the closest template in" >&2
+    echo "  $PLUGIN_ROOT/templates/run-tests/ against the contract in that dir's README.md (/hone:setup does this for you)." >&2
 elif [ -f "scripts/run-tests.sh" ]; then
     echo "hone setup: scripts/run-tests.sh already exists — leaving it. Diff against $PLUGIN_ROOT/templates/run-tests/$TEMPLATE if you want the current template."
 else
