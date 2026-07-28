@@ -24,10 +24,13 @@
 #
 # Usage:
 #   bash evals/run.sh [plan-critic|consolidate-critic|loop|all] \
-#                     [--model NAME] [--votes N] [--jobs N] [--dry-run]
+#                     [--model NAME] [--votes N] [--jobs N] [--holdout] [--dry-run]
 #   --votes N   plurality vote over N runs per case (default 1); use 3 pre-release.
 #   --jobs N    max concurrent model calls (default 8); raise for speed, but too
 #               high can hit API concurrency limits and error a call.
+#   --holdout   include the held-out cases (dirs named *-holdout), which are
+#               otherwise skipped; run them last before a release, and never
+#               read or tune against them while editing a prompt.
 #   --dry-run   list the cases and expected answers without calling the model.
 set -uo pipefail
 
@@ -36,18 +39,24 @@ cd "$ROOT" || exit 1
 
 ALL_TARGETS=(plan-critic consolidate-critic loop)
 
-WHICH="all"; MODEL="sonnet"; DRY=0; VOTES=1; JOBS=8
+WHICH="all"; MODEL="sonnet"; DRY=0; VOTES=1; JOBS=8; HOLDOUT=0
 while [ $# -gt 0 ]; do
     case "$1" in
         plan-critic|consolidate-critic|loop|all) WHICH="$1" ;;
         --model) shift; MODEL="$1" ;;
         --votes) shift; VOTES="$1" ;;
         --jobs) shift; JOBS="$1" ;;
+        --holdout) HOLDOUT=1 ;;
         --dry-run) DRY=1 ;;
         *) echo "unknown arg: $1" >&2; exit 2 ;;
     esac
     shift
 done
+
+# Held-out cases (dirs named *-holdout) only run under --holdout. They exist so
+# prompt edits can be checked against briefs nobody tuned against; skipping them
+# by default is what keeps them held out.
+skip_case() { case "$1" in *-holdout) [ "$HOLDOUT" -eq 1 ] || return 0 ;; esac; return 1; }
 
 # The tokens a target may answer with, MOST CONSERVATIVE FIRST: a tie in the
 # vote breaks toward the earlier token, so a split critic rejects rather than
@@ -74,11 +83,14 @@ sys_for() {
 }
 
 # The user turn. Only the closing instruction differs: a critic ends with its
-# verdict, the loop ends with the action it would take next.
+# verdict, the loop ends with the action it would take next. Each target gets a
+# forced final line so scoring reads the answer, not a token the model happened
+# to mention last while reasoning ("REJECT, though arguably APPROVE-worthy").
 instruction_for() {
     case "$1" in
-        loop) printf 'You are part-way through a hone run. Decide the single next action for the situation below, following your instructions exactly. State your reasoning briefly, then end with a final line of exactly:\nACTION: <TOKEN>\nwhere <TOKEN> is one of: %s\n' "$(tokens_for loop | tr ' ' ' ')" ;;
-        *)    printf 'Review this case per your instructions. List your findings, then end with your one-line verdict.\n' ;;
+        loop)               printf 'You are part-way through a hone run. Decide the single next action for the situation below, following your instructions exactly. State your reasoning briefly, then end with a final line of exactly:\nACTION: <TOKEN>\nwhere <TOKEN> is one of: %s\n' "$(tokens_for loop | tr ' ' ' ')" ;;
+        plan-critic)        printf 'Review this case per your instructions. List your findings, then end with a final line of exactly:\nVERDICT: <TOKEN>\nwhere <TOKEN> is APPROVE or REJECT.\n' ;;
+        consolidate-critic) printf 'Review this case per your instructions. List your findings, then end with a final line of exactly:\nVERDICT: <TOKEN>\nwhere <TOKEN> is CUTS PROPOSED or CLEAN.\n' ;;
     esac
 }
 
@@ -93,6 +105,7 @@ if [ "$DRY" -eq 1 ]; then
         echo "== $target =="
         for dir in evals/"$target"/*/; do
             [ -f "$dir/brief.md" ] || continue
+            skip_case "$(basename "$dir")" && continue
             printf '  %-30s expect %-10s %s\n' "$(basename "$dir")" \
                 "$(head -1 "$dir/expected" | tr -d '[:space:]')" \
                 "$(tail -n +2 "$dir/expected" | tr '\n' ' ')"
@@ -119,12 +132,16 @@ $(cat "$dir/brief.md")"
 }
 
 # --- Phase 1: fan out every call, capped at $JOBS concurrent. -------------------
+# Record the run's context first: "sonnet" is a floating alias, so a saved log
+# is only interpretable later with the date and CLI version alongside it.
+echo "$(date -Iseconds) | model=$MODEL | claude $(claude --version 2>/dev/null | head -1)"
 total_calls=0
 running=0
 for target in "${TARGETS[@]}"; do
     for dir in evals/"$target"/*/; do
         [ -f "$dir/brief.md" ] || continue
         name=$(basename "$dir")
+        skip_case "$name" && continue
         for v in $(seq 1 "$VOTES"); do
             call_one "$target" "$dir" "$name" "$v" &
             total_calls=$((total_calls+1))
@@ -146,17 +163,18 @@ score_target() {
     for dir in evals/"$target"/*/; do
         [ -f "$dir/brief.md" ] || continue
         local name expected; name=$(basename "$dir")
+        skip_case "$name" && continue
         expected=$(head -1 "$dir/expected" | tr -d '[:space:]')
         local -a required=(); while IFS= read -r l; do [ -n "$l" ] && required+=("$l"); done < <(tail -n +2 "$dir/expected")
 
         # Collect one vote per run: the last token mentioned, which the closing
         # verdict/ACTION line makes the model's actual answer rather than a token
         # it happened to name while reasoning.
-        local allout="" out v
-        local -a votes=()
+        local out v
+        local -a votes=() outs=()
         for v in $(seq 1 "$VOTES"); do
             out=$(cat "$TMP/${target}~${name}~${v}.out" 2>/dev/null)
-            allout="$allout$out"
+            outs+=("$out")
             votes+=("$(printf '%s\n' "$out" | grep -oE "$re" | tail -1)")
         done
 
@@ -173,21 +191,32 @@ score_target() {
 
         # Plurality. Strict > keeps the FIRST token at the max count, so ties break
         # toward the more conservative token (tokens_for orders them that way).
-        local verdict="" best=0 n
+        local verdict="" best=0 n dist=""
         for t in $toks; do
             n=0
             local vt; for vt in "${votes[@]}"; do [ "$vt" = "$t" ] && n=$((n+1)); done
+            [ "$n" -gt 0 ] && dist="$dist $t×$n"
             if [ "$n" -gt "$best" ]; then best="$n"; verdict="$t"; fi
         done
 
+        # Report the vote count even on a pass: a case drifting from 3/3 to 2/3
+        # across prompt edits is degrading, and this line is where that shows.
+        [ "$answered" -lt "$VOTES" ] && dist="$dist none×$((VOTES-answered))"
+        local tally="($best/$VOTES)"
+        [ "$best" -lt "$VOTES" ] && tally="($best/$VOTES:$dist)"
+
+        # Required substrings must appear in a vote that carried the verdict; a
+        # losing vote mentioning the term is not evidence the winning judgment did.
+        local winout="" i
+        for i in "${!votes[@]}"; do [ "${votes[$i]}" = "$verdict" ] && winout="$winout${outs[$i]}"; done
         local missing=""
-        for r in "${required[@]}"; do printf '%s' "$allout" | grep -qiF "$r" || missing="$missing $r"; done
+        for r in "${required[@]}"; do printf '%s' "$winout" | grep -qiF "$r" || missing="$missing $r"; done
 
         if [ "$verdict" = "$expected" ] && [ -z "$missing" ]; then
-            printf '  ok    %-30s → %s\n' "$name" "$verdict"; pass=$((pass+1))
+            printf '  ok    %-30s → %s %s\n' "$name" "$verdict" "$tally"; pass=$((pass+1))
         else
-            printf '  FAIL  %-30s → got "%s" want "%s"%s\n' "$name" "$verdict" "$expected" \
-                "${missing:+ (missing:$missing)}"; fail=$((fail+1))
+            printf '  FAIL  %-30s → got "%s" want "%s" %s%s\n' "$name" "$verdict" "$expected" \
+                "$tally" "${missing:+ (missing:$missing)}"; fail=$((fail+1))
         fi
     done
     echo "  $target: $pass pass, $fail fail"

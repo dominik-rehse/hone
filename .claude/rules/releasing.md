@@ -15,3 +15,11 @@ Bump `version` in **both** `.claude-plugin/plugin.json` and
 `.claude-plugin/marketplace.json` (they must always match), in a separate
 `chore: release X.Y.Z` commit whose body summarizes the release. Semver: a
 feature or behavior change is a minor bump; a fix is a patch.
+
+Before the release commit, the changed layer must pass its suite:
+
+- a change to a critic prompt (`agents/*.md`), to `skills/run/SKILL.md` or its
+  references, or to `rules/workflow.md`: `bash evals/run.sh <target> --votes 3`
+  green, then `--holdout` green as the final check (see `evals/README.md` on
+  held-out cases; the loop target runs with `--model opus`);
+- a change to hooks or scripts: `bash test/run.sh` green.
