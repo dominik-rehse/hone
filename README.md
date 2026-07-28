@@ -1,20 +1,20 @@
 # hone
 
+A Claude Code plugin for test-driven, largely unattended development.
+
 [![version](https://img.shields.io/badge/dynamic/json?url=https%3A%2F%2Fraw.githubusercontent.com%2Fdominik-rehse%2Fhone%2Fmain%2F.claude-plugin%2Fplugin.json&query=%24.version&label=version&color=blue)](https://github.com/dominik-rehse/hone)
 [![license](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 ![platform](https://img.shields.io/badge/platform-Linux%20%2F%20WSL-lightgrey)
 
-A Claude Code plugin for test-driven, largely unattended development. You
-write a short plan for one change; an automated loop builds it test-first in
-an isolated git worktree, runs every check, distills the documentation,
-reviews the result, and merges it. Documentation is kept deliberately small:
-anything the code, types, or tests already show gets deleted rather than
-written down, and a maintenance pass you run between changes keeps cutting
-what goes stale. Hence the name: you hone a blade by grinding material away,
-over repeated passes, and never by adding to it.
+You write a short plan for one change; an automated loop builds it test-first
+in an isolated git worktree, runs every check, distills the documentation,
+reviews the result, and merges it.
 
-<img src="assets/hone.png" width="600"
-     alt="A knife drawn across a whetstone, steel coming off the edge">
+Documentation is kept deliberately small: anything the code, types, or tests
+already show gets deleted rather than written down, and a maintenance pass you
+run between changes keeps cutting what goes stale. Hence the name: you hone a
+blade by grinding material away, over repeated passes, and never by adding to
+it.
 
 Three documents cover the detail:
 
