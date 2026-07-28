@@ -47,7 +47,7 @@
 #
 # The nag is ADVISORY: it reports its findings and exits 0, never blocking the
 # stop (the gate is the blocking hook). Findings ride a {"systemMessage": ...}
-# on stdout — the one non-blocking channel a Stop hook has that is actually
+# on stdout, the one non-blocking channel a Stop hook has that is actually
 # shown (stderr on exit 0 reaches neither the model nor the user). Disabled
 # entirely by .hone-off.
 
@@ -91,12 +91,12 @@ if [ -d ".plans" ]; then
             fi
         fi
         if [ -n "$landed" ]; then
-            add_finding "${plan} survived its landing (${landed}) — consolidate should have deleted the Plan; delete it (git keeps the history)."
+            add_finding "${plan} survived its landing (${landed}); consolidate should have deleted the Plan, delete it (git keeps the history)."
         else
             pending=$((pending+1))
         fi
     done < <(find .plans -type f -name '*.md' 2>/dev/null)
-    [ "$pending" -gt 0 ] && add_finding "${pending} Plan(s) pending run in .plans/ — normal while queued; /hone:run picks them up."
+    [ "$pending" -gt 0 ] && add_finding "${pending} Plan(s) pending run in .plans/; normal while queued, /hone:run picks them up."
 fi
 
 # 2. Oversized Note.
@@ -105,7 +105,7 @@ if [ -d "docs/notes" ]; then
         [ -e "$note" ] || continue
         lines=$(wc -l < "$note" | tr -d '[:space:]')
         if [ "${lines:-0}" -gt "$NOTE_MAX_LINES" ]; then
-            add_finding "${note} is ${lines} lines (cap ${NOTE_MAX_LINES}) — a Note is a map + one invariant, not a spec. Cut it, or push the detail into types/Decisions/tests."
+            add_finding "${note} is ${lines} lines (cap ${NOTE_MAX_LINES}); a Note is a map + one invariant, not a spec. Cut it, or push the detail into types/Decisions/tests."
         fi
     done
 fi
@@ -116,7 +116,7 @@ if [ -d "docs/notes" ]; then
         [ -e "$note" ] || continue
         area=$(basename "$note" .md)
         if [ ! -d "src/$area" ]; then
-            add_finding "${note} has no src/${area}/ — a Note is 1:1 with an existing area (hone assumes a src/<area>/ layout). Rename it to its area, or delete it if the area is gone."
+            add_finding "${note} has no src/${area}/, and a Note is 1:1 with an existing area (hone assumes a src/<area>/ layout). Rename it to its area, or delete it if the area is gone."
         fi
     done
 fi
@@ -135,7 +135,7 @@ if [ -d "docs/decisions" ] || [ -d "docs/notes" ]; then
         for tok in $gov; do
             tok=${tok%.}         # strip a trailing period
             case "$tok" in
-                */*) [ -e "$tok" ] || add_finding "${doc} declares Governs: ${tok}, which no longer exists — this durable doc has drifted from the code it governs. Update the reference, or cut the doc if the code is gone." ;;
+                */*) [ -e "$tok" ] || add_finding "${doc} declares Governs: ${tok}, which no longer exists, so this durable doc has drifted from the code it governs. Update the reference, or cut the doc if the code is gone." ;;
             esac
         done
     done < <(find docs/decisions docs/notes -type f -name '*.md' 2>/dev/null)
@@ -157,7 +157,7 @@ if [ -d "$MEM_ROOT" ]; then
         seen_mem="$seen_mem|$mem_dir|"
         while IFS= read -r mem; do
             [ -n "$mem" ] || continue
-            add_finding "$(basename "$mem") is a 'type: project' harness memory in ${mem_dir/#$HOME/\~} — that store is per-user, uncommitted, and invisible to the critics and garden, so a decision or constraint there governs nothing. If it belongs to the codebase, land it as a Decision or Note through consolidate."
+            add_finding "$(basename "$mem") is a 'type: project' harness memory in ${mem_dir/#$HOME/\~}; that store is per-user, uncommitted, and invisible to the critics and garden, so a decision or constraint there governs nothing. If it belongs to the codebase, land it as a Decision or Note through consolidate."
         done < <(grep -rlE '^[[:space:]]*type:[[:space:]]*project[[:space:]]*$' "$mem_dir" --include='*.md' 2>/dev/null)
     done
 fi
@@ -181,7 +181,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
                     dels=$(printf '%s' "$stat" | grep -o '[0-9]* deletion' | grep -o '[0-9]*' || echo 0)
                     ins=$(printf '%s' "$stat" | grep -o '[0-9]* insertion' | grep -o '[0-9]*' || echo 0)
                     if [ "${ins:-0}" -gt 0 ] && [ "${dels:-0}" -eq 0 ]; then
-                        add_finding "this change deletes nothing (+${ins}/-0 vs ${primary_branch:-the merge base}) — every cycle removes something: a redundant test, dead code, a stale doc line. If consolidate truly found nothing to cut, say so in the landing commit body."
+                        add_finding "this change deletes nothing (+${ins}/-0 vs ${primary_branch:-the merge base}), and every cycle removes something: a redundant test, dead code, a stale doc line. If consolidate truly found nothing to cut, say so in the landing commit body."
                     fi
                 fi
             fi
@@ -195,7 +195,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
         while IFS= read -r b; do
             [ -n "$b" ] || continue
             printf '%s\n' "$attached" | grep -qxF "$b" && continue   # a live worktree, active work
-            add_finding "branch ${b} is fully merged and has no worktree — land should have deleted it (git branch -d ${b})."
+            add_finding "branch ${b} is fully merged and has no worktree; land should have deleted it (git branch -d ${b})."
         done < <(git branch --merged HEAD --format='%(refname:short)' 2>/dev/null | grep '^hone/')
     fi
 fi

@@ -38,7 +38,7 @@ if [ -z "$TEMPLATE" ]; then
     echo "hone setup: could not detect the ecosystem. Author scripts/run-tests.sh from the closest template in" >&2
     echo "  $PLUGIN_ROOT/templates/run-tests/ against the contract in that dir's README.md (/hone:setup does this for you)." >&2
 elif [ -f "scripts/run-tests.sh" ]; then
-    echo "hone setup: scripts/run-tests.sh already exists — leaving it. Diff against $PLUGIN_ROOT/templates/run-tests/$TEMPLATE if you want the current template."
+    echo "hone setup: scripts/run-tests.sh already exists, so leaving it. Diff against $PLUGIN_ROOT/templates/run-tests/$TEMPLATE if you want the current template."
 else
     cp "$PLUGIN_ROOT/templates/run-tests/$TEMPLATE" scripts/run-tests.sh
     chmod +x scripts/run-tests.sh
@@ -76,6 +76,6 @@ mkdir -p docs/decisions docs/notes .plans src
 [ -f docs/open-questions.md ] || printf '# Open questions\n\nAssumptions only running code can settle. Close or delete each entry once resolved; never grow it.\n' > docs/open-questions.md
 echo "hone setup: created docs/decisions, docs/notes, docs/open-questions.md, .plans/, src/."
 
-echo "hone setup: code lives under src/<area>/ — that is where the guard, gate, and nag apply."
+echo "hone setup: code lives under src/<area>/; that is where the guard, gate, and nag apply."
 echo "hone setup: for changes that need real-environment proof, copy a template from $PLUGIN_ROOT/templates/proof/ to scripts/proof.sh (optional; see that dir's README.md)."
 echo "hone setup: done. Author a change with /hone:plan, then /hone:run."

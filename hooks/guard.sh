@@ -82,7 +82,7 @@ esac
 # file-tool route too, regardless of primary tree or worktree.
 case "$REL" in
     .hone-grant/*|.hone-proof/*)
-        deny "$REL is a human sign-off for a land gate. The agent never writes a grant or proof sign-off, by any route — escalate and wait for the human (worktree.sh grant/attest, run in their own terminal)."
+        deny "$REL is a human sign-off for a land gate. The agent never writes a grant or proof sign-off, by any route. Escalate and wait for the human (worktree.sh grant/attest, run in their own terminal)."
         ;;
 esac
 
@@ -176,7 +176,7 @@ for _u in "$FEATURE_UNDER" "$STEM_UNDER"; do
 done
 
 if ! has_glob_match "${TEST_PATTERNS[@]}"; then
-    deny "$REL has no test — hone is test-first. Write its failing test first (${BASE_NO_EXT}.test.<ext> or tests/${FEATURE}.test.<ext>), watch it fail, then write the code."
+    deny "$REL has no test, and hone is test-first. Write its failing test first (${BASE_NO_EXT}.test.<ext> or tests/${FEATURE}.test.<ext>), watch it fail, then write the code."
 fi
 
 exit 0

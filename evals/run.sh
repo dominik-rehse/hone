@@ -6,18 +6,18 @@
 # safe: trim the skill or a critic, re-run, and see whether the behaviour held.
 #
 # Three targets:
-#   plan-critic, consolidate-critic — the critic agents. System prompt is the
+#   plan-critic, consolidate-critic: the critic agents. System prompt is the
 #     agent body; the case is a constructed brief; the answer is its verdict.
-#   loop — the run skill's own instructions. System prompt is skills/run/SKILL.md;
+#   loop: the run skill's own instructions. System prompt is skills/run/SKILL.md;
 #     the case is a situation mid-run; the answer is the next action it picks.
 #     These are the cases that say which paragraphs of the skill are load-bearing.
 #
 # Each case is a directory under evals/<target>/<case>/ with:
-#   brief.md   — the case handed to the model (self-contained; no file reads
+#   brief.md   is the case handed to the model (self-contained; no file reads
 #                needed, mirroring the loop's constructed context)
-#   expected   — line 1: the expected token (see tokens_for below). Any further
-#                non-empty lines are substrings the reply must mention (e.g. a
-#                category like `collision`), each checked case-insensitively.
+#   expected   holds the expected token on line 1 (see tokens_for below). Any
+#                further non-empty line is a substring the reply must mention
+#                (e.g. a category like `collision`), checked case-insensitively.
 #
 # Every (case × vote) call is independent, so the calls fan out concurrently
 # (throttled by --jobs) and scoring happens after they land.
@@ -99,7 +99,7 @@ if [ "$DRY" -eq 1 ]; then
         done
     done
     echo "-------------------------------------"
-    echo "(dry run — no model calls)"
+    echo "(dry run: no model calls)"
     exit 0
 fi
 
@@ -167,7 +167,7 @@ score_target() {
         local answered=0 t
         for t in "${votes[@]}"; do [ -n "$t" ] && answered=$((answered+1)); done
         if [ "$answered" -eq 0 ]; then
-            printf '  FAIL  %-30s → no answer from %s call(s) — model/API failure?\n' "$name" "$VOTES"
+            printf '  FAIL  %-30s → no answer from %s call(s); model/API failure?\n' "$name" "$VOTES"
             fail=$((fail+1)); continue
         fi
 

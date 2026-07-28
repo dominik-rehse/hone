@@ -5,7 +5,7 @@
 #                        HONE_BRANCH, HONE_WORKTREE, HONE_MAIN_ROOT set.
 #   exit 0 = proven in the real environment; non-zero = not proven (land exits 7).
 #
-# Shape: run the real tool — the real external binary, the real API, no fakes —
+# Shape: run the real tool (the real external binary, the real API, no fakes)
 # over a fixture the repo controls, into a scratch dir, and compare the output
 # against what the change claims it should be. This is the tier the test suite
 # cannot cover, so substituting a stub here defeats the point of the gate.
@@ -23,7 +23,7 @@ main() {
     # Preflight the real-world dependency. Failing here is the honest outcome:
     # "not proven" is correct when the environment to prove it in is absent.
     command -v SOME_REAL_BINARY >/dev/null 2>&1 || {
-        echo "proof: SOME_REAL_BINARY is not on PATH — cannot prove $change against the real environment." >&2
+        echo "proof: SOME_REAL_BINARY is not on PATH, so it cannot prove $change against the real environment." >&2
         return 1
     }
 
@@ -32,7 +32,7 @@ main() {
     # 1. Run the real thing from the code under test.
     #    (cd "$root" && ./your-cli convert test/fixtures/corpus "$out")
 
-    # 2. Assert on what came out — the observable the Plan named, not a restated
+    # 2. Assert on what came out: the observable the Plan named, not a restated
     #    unit assertion.
     #    diff -r test/fixtures/expected "$out"
 

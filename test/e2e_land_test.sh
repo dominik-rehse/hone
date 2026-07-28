@@ -110,7 +110,7 @@ EOF
 PRE=$(git rev-parse HEAD)
 bash "$WSH" land mathx-regress >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 6 ] || die "land should exit 6 on a post-merge regression (got $rc)"
-[ "$(git rev-parse HEAD)" = "$PRE" ] || die "regressing merge should be rolled back — HEAD moved"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "regressing merge should be rolled back; HEAD moved"
 bash scripts/run-tests.sh >/dev/null 2>&1 || die "trunk left red after a rolled-back land"
 git show-ref --verify --quiet refs/heads/hone/mathx-regress || die "branch should survive a failed land as evidence"
 [ -d "$WT_R" ] || die "worktree should survive a failed land as evidence"
@@ -193,8 +193,8 @@ out=$(bash "$WSH" land db-drop 2>&1); rc=$?
 [ "$rc" -eq 8 ] || die "an empty grant should still exit 8 (got $rc)"
 echo "$out" | grep -q "is empty" || die "the empty-grant refusal should name the reason"
 step "empty grant refused (exit 8)"
-# (c) With a scoped grant — written by the grant helper, which stamps the git
-# user and time — it lands and the authorization is recorded in history.
+# (c) With a scoped grant written by the grant helper, which stamps the git
+# user and time, it lands and the authorization is recorded in history.
 bash "$WSH" grant db-drop "legacy_sessions is unused" >/dev/null || die "grant helper failed"
 grep -q "legacy_sessions is unused" "$REPO/.hone-grant/db-drop" || die "grant helper should write the reason"
 grep -q "t@t.t" "$REPO/.hone-grant/db-drop" || die "grant helper should stamp the git user"
@@ -249,14 +249,14 @@ step "worktree-planted proof.sh stub ignored (exit 7)"
 # (c) A sign-off that names no commit does not satisfy it: an unbound
 # sign-off would outlive the code it attested.
 mkdir -p "$REPO/.hone-proof"
-echo "ran the browser journey against staging — ok" > "$REPO/.hone-proof/ui-flow"
+echo "ran the browser journey against staging: ok" > "$REPO/.hone-proof/ui-flow"
 PRE=$(git rev-parse HEAD)
 bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 7 ] || die "a sign-off naming no commit should not satisfy the proof gate (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "an unbound sign-off must not touch the trunk"
 step "sign-off naming no commit refused (exit 7)"
 # (d) A sign-off bound to an EARLIER commit stops counting once the branch moves.
-echo "$(git rev-parse hone/ui-flow) — journey ok" > "$REPO/.hone-proof/ui-flow"
+echo "$(git rev-parse hone/ui-flow) | journey ok" > "$REPO/.hone-proof/ui-flow"
 echo "// revised after the sign-off" >> "$WT_P/src/mathx/flow.js"
 (cd "$WT_P" && git add -A && git commit -qm "fixup(mathx): revise the flow")
 PRE=$(git rev-parse HEAD)
@@ -276,7 +276,7 @@ rm -f "$REPO/.hone-proof/ui-flow"
 bash "$WSH" attest no-such-change "nope" >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 2 ] || die "attest of a nonexistent branch should exit 2 (got $rc)"
 step "attest refuses a change with no hone/ branch"
-# (f) A green scripts/proof.sh also discharges it — and runs in the change's
+# (f) A green scripts/proof.sh also discharges it, and runs in the change's
 # worktree, told which change it is, so it can reach the code under test. The
 # adapter is tracked, so the worktree checkout carries it.
 cat > "$REPO/scripts/proof.sh" <<'PROOF'

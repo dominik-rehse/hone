@@ -75,7 +75,7 @@ run_step() {
     if [ "$rc" -ne 0 ]; then
         local tail
         tail=$(printf '%s\n' "$out" | tail -n 15)
-        block "$label failed (exit $rc). Fix it before finishing — do not disable the gate. Output tail:"$'\n'"${tail}"
+        block "$label failed (exit $rc). Fix it before finishing; do not disable the gate. Output tail:"$'\n'"${tail}"
     fi
     ran+="${ran:+, }$label"
 }
@@ -91,7 +91,7 @@ if [ "$TIER" = "--all" ] && command -v flock >/dev/null 2>&1; then
     SUITE_LOCK="$(git rev-parse --git-common-dir 2>/dev/null)/hone-land.lock"
     if { exec 9>"$SUITE_LOCK"; } 2>/dev/null; then
         flock -w "${HONE_SUITE_LOCK_TIMEOUT:-30}" 9 || \
-            block "another session is running the full suite (a land or verify holds the suite lock) — wait and re-verify rather than racing it; do not run the suite concurrently."
+            block "another session is running the full suite (a land or verify holds the suite lock); wait and re-verify rather than racing it; do not run the suite concurrently."
     fi
 fi
 

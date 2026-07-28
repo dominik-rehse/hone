@@ -77,7 +77,7 @@ fi
 # settings file counts.
 if [ "$looks_like_hone" = true ] && \
    ! grep -qsF 'Write(./scripts/run-tests.sh)' "$PROJECT_DIR/.claude/settings.json" "$PROJECT_DIR/.claude/settings.local.json"; then
-    echo "hone: the Write/Edit deny rules for the test adapter and settings are missing from .claude/settings.json — the file-tool half of tamper resistance is off. Copy the permissions block from hone's README (Install section)."
+    echo "hone: the Write/Edit deny rules for the test adapter and settings are missing from .claude/settings.json, so the file-tool half of tamper resistance is off. Copy the permissions block from hone's README (Install section)."
 fi
 
 exit 0

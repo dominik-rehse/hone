@@ -1,4 +1,4 @@
-# ShellCheck configuration — https://www.shellcheck.net/wiki/
+# ShellCheck configuration: https://www.shellcheck.net/wiki/
 # Default dialect when a script has no shebang.
 shell=bash
 # Allow following `source`/`.` includes into other files.

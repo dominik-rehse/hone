@@ -59,7 +59,7 @@ fi
 
 # 1b. Writing an authority grant or a proof sign-off → deny. The land gates'
 # exits 7 and 8 are reserved to the human: the agent never authorizes an
-# irreversible change or attests a real-environment check, by any route — a
+# irreversible change or attests a real-environment check, by any route: a
 # file write into .hone-grant/ or .hone-proof/, or the grant/attest helper.
 # The mutating-op list is a superset of rule 2's below (creation verbs plus
 # every mutator), so a token rule 2 treats as a write cannot slip past here.
@@ -90,7 +90,7 @@ fi
 # are safely isolated.
 if [ "$(git rev-parse --git-dir 2>/dev/null)" = "$(git rev-parse --git-common-dir 2>/dev/null)" ] \
    && echo "$CMD" | grep -Eq '(^|[^A-Za-z_])git[[:space:]]+((checkout|switch|stash)([[:space:]]|$)|reset[^|;&]*--(hard|merge|keep))'; then
-    decision ask "command moves HEAD in the primary tree (git checkout/switch/stash/reset). The primary tree stays on the trunk as a merge target — investigate in a 'git worktree add --detach' scratch tree, and land via 'worktree.sh land'. Confirm before allowing."
+    decision ask "command moves HEAD in the primary tree (git checkout/switch/stash/reset). The primary tree stays on the trunk as a merge target, so investigate in a 'git worktree add --detach' scratch tree, and land via 'worktree.sh land'. Confirm before allowing."
 fi
 
 exit 0
