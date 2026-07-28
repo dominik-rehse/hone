@@ -25,6 +25,9 @@ Three documents cover the detail:
 - [`docs/upgrading.md`](docs/upgrading.md) covers taking a repo from an
   earlier hone version to the current one.
 
+Working on hone itself (the suites, the release process) is covered in
+[`docs/development.md`](docs/development.md).
+
 ## Install
 
 Add the plugin and enable it in your project's `.claude/settings.json`:
