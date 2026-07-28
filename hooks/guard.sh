@@ -98,7 +98,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     GIT_DIR=$(git rev-parse --absolute-git-dir 2>/dev/null)
     COMMON_DIR=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P)
     if [ -n "$GIT_DIR" ] && [ "$GIT_DIR" = "$COMMON_DIR" ] && is_durable "$REL"; then
-        deny "$REL is a durable artifact and you are in the primary tree, which is a merge target — never a workspace. Do this change in a worktree (/hone:run spawns one) and let land merge it. Set .hone-off to override."
+        deny "$REL is a protected path and this is the primary tree, which only receives merges. Make the change in a worktree (/hone:run creates one) and let land merge it back. For a quick manual edit, the human can create .hone-off and delete it after."
     fi
 fi
 

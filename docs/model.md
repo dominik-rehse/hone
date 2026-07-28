@@ -1,43 +1,46 @@
 # hone: a development model for AI-written codebases
 
-*To hone is to sharpen a blade by grinding material away: refinement through
-removal.* hone is a development model for codebases where an AI agent is a primary
-writer *and* reader. It enforces the discipline of test-driven work but keeps no
-pile of prose that goes stale: there is no hand-maintained per-feature
-specification pile. It refines the codebase by cutting: only truth that cannot
-go stale survives, and every cycle removes something. Language-agnostic;
-examples use TypeScript and Python.
+hone is a development model for codebases where an AI agent is a primary
+writer *and* reader. It enforces test-driven work, but keeps no pile of
+per-feature specification prose: permanent documentation is limited to forms
+that are either checked mechanically or too small to rot unnoticed, and every
+change is expected to delete something. This page explains why the pieces
+exist; the operational detail (commands, files, exit codes) is in
+[`reference.md`](reference.md). Examples use TypeScript and Python; the model
+is language-agnostic.
 
 ## The problem
 
-Hand-maintained, per-feature behavioral specs serve two tenses at once: the
-*temporary* work-ticket (what we're building now, its criteria, its checkboxes)
-and the *permanent* description (how the system behaves today). Every batch of work
-mints a new file and criteria are only ever added, so truth for one feature
-scatters across many files and the pile grows without bound. Hand-maintained
-behavioral prose always goes stale. It is a second copy of the system's
-behaviour that nothing forces to stay in step with the code.
+Hand-maintained per-feature specs serve two purposes at once: the temporary
+work ticket (what we're building now, its criteria) and the permanent
+description (how the system behaves today). Every batch of work adds a file,
+criteria only ever accumulate, and the truth about one feature ends up
+scattered across many documents. Nothing forces any of that prose to stay in
+step with the code, so it goes stale — it is a second copy of the system's
+behavior with no checker attached.
 
 ## Principles
 
-1. *Discipline without a corpus.* Test-first is enforced; nothing maintains a
-   permanent pile of per-feature specs.
-2. *Durable truth lives only where it can't go stale.* Everything else is
+1. *Discipline without a corpus.* Test-first is enforced; no permanent pile
+   of per-feature specs is maintained.
+2. *Permanent docs live only where staleness gets caught.* Everything else is
    disposable.
-3. *The cut test.* Never write a durable line an agent could recover from the
-   code, and if it can be a type, it is a type, not prose.
-4. *Deletion is routine.* Every cycle removes something; it counterbalances a
-   machine that otherwise only adds.
-5. *The human plans; automation executes.* After the Plan, the loop runs
-   unattended: hooks enforce the laws, critics fill the judgment slots, and it
-   *escalates instead of forcing past a failed check*.
-6. *All work happens in a worktree.* The primary tree is a merge target, never
-   a workspace.
+3. *The cut test.* Never write down what an agent could work out from the
+   code, and if something can be a type, make it a type instead of prose.
+4. *Deletion is routine.* Every change should remove something; this
+   counterbalances a machine that otherwise only adds.
+5. *The human plans; automation executes.* After the plan, the loop runs
+   unattended: hooks enforce the rules, critic agents make the judgment
+   calls, and the loop stops and reports rather than forcing past a failed
+   check.
+6. *All work happens in a worktree.* The primary tree is a merge target,
+   never a workspace.
 
 ## Artifacts
 
-At consolidate, everything a change leaves behind that is worth keeping is
-routed by a fixed test (cut first, then type, then the smallest doc that fits):
+At consolidate, whatever a change leaves behind that is worth keeping is
+routed by a fixed test — cut first, then type, then the smallest document
+that fits:
 
 ```mermaid
 flowchart TD
@@ -51,85 +54,70 @@ flowchart TD
     kind -->|"A bet only running<br/>code can settle"| oq["Log it in<br/>open-questions.md"]
 ```
 
-*Durable (committed, survive the change):*
+*Committed and permanent — these survive the change:*
 
-- *Types / schemas*: static types (TS; Python under mypy/pyright) and
-  boundary/data schemas (Zod, Pydantic, JSON Schema, the DB schema). The
-  strongest carrier: a checker fails when code and contract disagree, so they
-  cannot drift.
-- *Code*: `src/<area>/` (`thing.ts`, `thing.py`). The behavior itself.
-- *Tests*: colocated by language convention (`thing.test.ts`,
-  `test_thing.py`), behavior-named. Verify the *what* and document it.
-- *Decision*: `docs/decisions/<topic>.md`. Present-tense: the current decision +
-  why, plus a rejected-alternatives line when it's load-bearing (to stop a dead
-  option being re-proposed). Edited freely when the decision changes; git carries
-  the history and the commit message the why-it-changed. One per topic, landing
-  in the same commit as the code it governs. May carry an optional `Governs:`
-  line naming the `src/` paths it explains; the nag checks those paths still
-  exist, so the prose is *mechanically* pinned to the code rather than left to
-  go stale silently (the one failure mode a checker can otherwise never see).
-- *Note*: `docs/notes/<area>.md`. Per-area map + its one invariant, pointing
-  at the Decision and the key types. Optional, 1:1 with an area, size-capped. Its
-  key-type/Decision pointers can be a `Governs:` line, checked the same way.
-- *Open question*: `docs/open-questions.md`. A bet only running code settles.
-  Closed or deleted, never grown.
-- *Git history*: what changed and why now.
+- *Types and schemas*: static types (TypeScript; Python under mypy or
+  pyright) and boundary schemas (Zod, Pydantic, JSON Schema, the DB schema).
+  The strongest form, because a checker fails when code and contract
+  disagree.
+- *Code*: `src/<area>/`. The behavior itself.
+- *Tests*: colocated by language convention, named for the behavior they
+  pin. They both verify and document what the system does.
+- *Decisions*: `docs/decisions/<topic>.md`. Present tense: the current
+  decision and why, plus a rejected alternative when recording it stops a
+  dead option from being proposed again. One file per topic, edited in place
+  when the decision changes (git keeps the history), landing in the same
+  commit as the code it governs. An optional `Governs:` line names the
+  `src/` paths the decision explains; the nag flags the file when a named
+  path stops existing, which is how prose drift gets caught mechanically.
+- *Notes*: `docs/notes/<area>.md`. An optional per-area map plus its one
+  invariant, pointing at the relevant Decision and key types. One per
+  existing `src/` area at most, size-capped. Its pointers can also be a
+  `Governs:` line, checked the same way.
+- *Open questions*: `docs/open-questions.md`. Assumptions only running code
+  can settle. Entries get closed or deleted, never accumulated.
+- *Git history*: what changed and why, at each point in time.
 
-*Temporary (tracked, but removed at consolidate):*
+*Tracked but temporary — removed when the change lands:*
 
-- *Plan*: `.plans/<change>.md`. The per-change brief: what, why, how I'll know
-  it works. The only hand-written artifact; committed at `plan` (so the run's
-  worktree inherits it off the trunk), then `git rm`'d at consolidate:
-  the landing merge carries the deletion, git history keeps the Plan, the
-  working tree does not.
-- *References*: `.plans/<change>/`. Optional files the Plan names because prose
-  carries them badly — a fixture of input/expected rows, a sample payload, a
-  mockup, a format sample. They exist because the gates catch a change that is
-  *unproven*, never one that is *misunderstood*: a Plan with two readings passes
-  the guard, the gate, both critics, and a review reading the same ambiguous
-  prose, then lands green and wrong. An artifact removes the second reading at the
-  point the human is still there. Committed with the Plan (an uncommitted one is
-  invisible inside the worktree); then each is either **promoted at build**, moved
-  beside the test that reads it and thereafter kept honest by the suite, or
-  **deleted at consolidate** with the Plan. Either way `.plans/<change>/` is gone
-  by the merge, so references never become a second prose layer.
+- *The Plan*: `.plans/<change>.md`. The per-change brief: what to build, why,
+  how you'll know it works. The only hand-written artifact. Committed at
+  `plan` so the run's worktree (created off the trunk) contains it; deleted
+  with `git rm` at consolidate, so the landing merge removes it from the
+  working tree while git history keeps it.
+- *References*: `.plans/<change>/`. Optional files the Plan names because
+  prose carries them badly: a fixture of input/expected rows, a sample
+  payload, a mockup. They exist because every gate in the loop catches a
+  change that is *unproven*, but none catches one that is *misunderstood* —
+  an ambiguous plan can pass every check and land green and wrong. A concrete
+  file removes the second reading while the human is still present. Each
+  reference is either promoted at build (moved next to the test that reads
+  it, and from then on kept honest by the suite) or deleted at consolidate
+  with the Plan, so references never become a second prose layer.
 
-*Not durable, whatever it looks like: harness memory.*
+*Not permanent, wherever it lives: the harness's own memory.*
 
-The agent harness now keeps its own memory outside the repo (Claude Code writes
-one file per fact under `~/.claude/projects/<project>/memory/`, indexed by a
-`MEMORY.md` loaded into every session). It is a second store of project facts
-running in the same session as the durable layer, and it fails every test the
-durable layer is built on: per-user rather than shared, uncommitted so no merge
-carries it, unreviewed by `/code-review`, unreachable by the `nag`'s `Governs:`
-check and by `garden`'s scan. Nothing forces it to stay in step with the code,
-which is the exact failure mode the model exists to remove.
+Claude Code keeps per-project memory outside the repo (one file per fact
+under `~/.claude/projects/<project>/memory/`). For facts about the human —
+who they are, how they like to work, where a dashboard lives — that store is
+fine and none of hone's business. But a project decision or constraint saved
+there fails every requirement this model sets for permanent docs: it is
+per-user, uncommitted, unreviewed, and invisible to the hooks, the critics,
+and `garden`, so nothing ever corrects it. The nag flags memory entries typed
+`project` (it never edits them — the file is the human's); the fix is to land
+the content in `docs/` through consolidate, where it can be reviewed and
+eventually cut.
 
-So the boundary is a stance, not a hook. Memory typed `user`, `feedback`, or
-`reference` (who the human is, how they want to work, where an external resource
-lives) is outside hone's concern and stays useful. Memory typed `project` is the
-overlap: an ongoing goal, a constraint, a decision. That belongs in `docs/` as a
-Decision or a Note, written at consolidate, where a critic can argue for its
-deletion and `garden` can cut it when it goes stale. The `nag` flags a `project`
-memory rather than deleting one: the file is the human's, but a Decision hiding
-there governs nothing.
-
-*Enforcement (config, not docs):*
-
-- *guard*: no production code without a failing test; no durable edits
-  (`src/`, `tests/`, `docs/`, `db/`, `scripts/`, plus the committed
-  `.hone-durable-paths` extensions) in the primary tree.
-- *gate*: tests green, plus type-check and lint where the language has them
-  (one adapter script keeps the hook language-agnostic).
-- *nag*: leftover Plan, oversized Note, orphan Note, a Decision/Note with a
-  broken `Governs:` link, a merged `hone/*` branch land forgot to delete, a
-  change about to land that deletes nothing, a `project`-typed harness memory
-  holding what belongs in `docs/`.
+*Enforcement:* the guard, gate, nag, and bash-guard hooks, described in
+[`reference.md`](reference.md). In short: no production code without a
+failing test, no direct edits to protected paths in the primary tree, tests
+and type-check and lint green before a turn ends, and hygiene findings
+reported visibly.
 
 ## The loop
 
-*From your side*, two commands in, a landed change out, or a question handed
-back to you:
+From your side: two commands in, a landed change out, or a question handed
+back to you.
 
 ```mermaid
 flowchart LR
@@ -152,14 +140,11 @@ flowchart LR
     class landed result;
 ```
 
-*In full.* Nodes are colored by actor: *user command* (amber), *mechanical*
-step (teal; scripted, same result every time), *model* step (violet; a judgment
-call, so its outcome can vary); the dashed parallelogram is
-the Plan, the one hand-written artifact. Work starts with a command: `/hone:plan`
-takes your sketch and writes `.plans/<change>.md` with you; then `/hone:run`
-launches everything downstream (`/hone:run --all` fans out over many Plans). Each
-slash command is a discrete step; between them the loop runs itself. The Plan's
-whole life is on the diagram: born at `/hone:plan`, deleted at consolidate.
+In full, with nodes colored by actor — *user command* (amber), *mechanical
+step* (teal: scripted, same result every time), *model step* (violet: a
+judgment call, so its outcome can vary) — and the Plan as the dashed
+parallelogram. The Plan's whole life is on the diagram: created at
+`/hone:plan`, deleted at consolidate.
 
 ```mermaid
 flowchart TD
@@ -170,7 +155,7 @@ flowchart TD
     wt["A fresh worktree is spawned:<br/>an isolated copy of the repo<br/>where all the work happens"]
     build["Build: run a red-green cycle,<br/>once per behaviour<br/>(the cycle is shown below)"]
     verify["Verify: run every check<br/>(tests, types, lint,<br/>hygiene, mutation)"]
-    cons["Consolidate, in this order:<br/>1 · save durable truth as docs or types<br/>2 · prune redundant tests<br/>3 · delete the Plan<br/>4 · consolidate-critic reviews (runs once)"]
+    cons["Consolidate, in this order:<br/>1 · save what must survive as docs or types<br/>2 · prune redundant tests<br/>3 · delete the Plan<br/>4 · consolidate-critic reviews (runs once)"]
     rev["Review: /code-review reads the<br/>whole change for bugs and cleanups<br/>(runs once; it is expensive)"]
     fix["Auto-fix: run the same red-green cycle,<br/>once per review finding<br/>(re-gated by verify, not re-reviewed)"]
     land["Land, in this order:<br/>1 · commit in the worktree<br/>2 · merge into main<br/>3 · re-run the full suite there<br/>4 · remove the worktree"]
@@ -208,7 +193,7 @@ flowchart TD
 ```
 
 Both `build` and `auto-fix` run the same red-green cycle, the loop's one
-repeating unit. It is shown in full once:
+repeating unit:
 
 ```mermaid
 flowchart TD
@@ -242,53 +227,52 @@ flowchart TD
     class done deterministic;
 ```
 
-- *plan* (`/hone:plan`): author `.plans/<change>.md`, plus any references the
-  change hinges on that prose would lose. The only manual step. Size a change to
-  the smallest unit worth its own review gate: split only where a reviewer could
-  reject one part while approving its neighbor. It ends with
-  the *Plan check*: `plan-critic` looks for placeholders, contradictions,
-  ambiguity, wrong scope, and collision with an open change, and a rejection is
-  revised with the human on the spot (the one moment they are guaranteed
-  present), so no flawed Plan is handed off.
-- *run* (`/hone:run`): per Plan, in a fresh worktree:
-  - *build*: red-green: type, failing test, then code; `guard` enforces the
-    order.
-  - *verify*: `gate` and `nag`, plus a mutation check on critical paths.
-  - *consolidate*: sort what the change leaves behind into its home (a type, a
-    Decision, a Note, a closed question), prune redundant tests, delete the
-    Plan; `consolidate-critic` reviews.
+The steps, briefly:
+
+- *plan* (`/hone:plan`): write `.plans/<change>.md`, plus any reference files
+  the change depends on. The only manual step. Size a change to the smallest
+  unit worth its own review: split only where a reviewer could reject one
+  part while approving the other. The step ends with the `plan-critic`
+  checking for placeholders, contradictions, ambiguity, wrong scope, and
+  collisions with open changes — while you are still present to fix a
+  rejection, so no flawed plan is handed to the unattended run.
+- *run* (`/hone:run`), per plan, in a fresh worktree:
+  - *build*: types, then a failing test, then code, repeated per behavior;
+    the guard enforces the order.
+  - *verify*: the gate (suite, types, lint) and the nag, plus a mutation
+    check on critical paths.
+  - *consolidate*: route what the change leaves behind (see *Artifacts*),
+    prune redundant tests, delete the Plan; the `consolidate-critic` then
+    argues for further cuts.
   - *review*: Claude Code's built-in `/code-review` on the finished change.
-  - *land*: commit, merge into the primary tree, re-run the whole suite there,
-    remove the worktree.
+  - *land*: commit, merge into the primary tree, re-run the whole suite
+    there, remove the worktree.
 
-Every step's completion is confirmed by its artifacts (the diff, the gate
-output), never by a subagent's report that it finished. A failed check is not a
-stop, and only the `build`⇄`verify` cycle loops: a red gate or a planted bug the
-tests miss sends the agent back to `build` for another red-green cycle, as many times as it
-takes to go green. The model checks each change *once* per slot: `plan-critic`
-(at `/hone:plan`), `consolidate-critic`, and the expensive `/code-review`; their findings are
-applied or auto-fixed in place, and a review fix is a red-green cycle re-gated by
-`verify`, never a second review. A confirmed finding may be declined only when
-it contradicts the Plan's explicit stance or falls outside the change, and the
-decline is recorded durably (the landing commit's body, or an open question for
-a deferred defect), never left in the conversation alone. The agent self-corrects in the worktree and
-escalates only at the two stop-points on the diagram: verify can't go green once
-the fix is exhausted, or review finds the change genuinely ambiguous. (A flawed
-Plan never reaches `run`: the Plan check rejects it inside `/hone:plan`, where
-the human is present to revise it.) On a stop it leaves the worktree in place as evidence; the
-human revises the Plan and re-runs (or abandons the change), never disabling a
-gate to proceed. The Plan is the sole re-entry point: the human does not hand-fix
-code mid-loop.
+Rules that hold throughout: each step's completion is confirmed by its
+artifacts (the diff, the gate output, the review's JSON envelope), never by a
+subagent's claim that it finished. A failed check is not a stop — only the
+build⇄verify cycle loops, as many times as it takes. Each judgment check runs
+once per change (`plan-critic` at plan time, `consolidate-critic`, and the
+expensive `/code-review`); review findings are fixed with red-green cycles
+and re-verified, not re-reviewed. A confirmed finding may be declined only
+when it contradicts the Plan's explicit position or falls outside the change,
+and the decline is recorded where it survives — the landing commit body, or
+an open question for a deferred defect — never only in conversation. The run
+stops in exactly three cases: verify can't go green and the fixes are
+exhausted; the change is genuinely ambiguous; or done. On a stop it leaves
+the worktree in place and reports the specific blocker. The human's response
+is to revise the Plan and re-run (or abandon the change) — never to disable a
+check, and never to hand-edit code mid-loop: the Plan is the only re-entry
+point.
 
-*A bug fix is the same loop:* `build` opens with a failing test that reproduces
-the defect, then fixes the root cause, never a fix confirmed by a test written
-after. *Exploration is not:* a spike runs in a throwaway worktree that is
-discarded, never landed; its finding becomes a Decision or a Note, not committed
-code.
+A bug fix is the same loop, with the first red test reproducing the defect
+before the fix — never a fix confirmed by a test written afterwards. A spike
+is not: exploration runs in a throwaway worktree that is discarded, and its
+conclusion becomes a Decision or a Note, not committed code.
 
 ## Checking
 
-Two kinds of checker; choosing the wrong kind is the main failure.
+Two kinds of checker, and choosing the wrong kind is the main failure:
 
 ```mermaid
 flowchart TD
@@ -302,264 +286,188 @@ flowchart TD
     class judge stochastic;
 ```
 
-*Mechanical.* Scripted, no model calls, the same result every time, cannot be
-fooled, always run: the hooks above plus mutation testing. Prefer mechanical
+*Mechanical checks* are scripted, produce the same result every time, cannot
+be argued with, and always run: the hooks, plus mutation testing. Prefer them
 wherever the question is computable.
 
-*Judgment.* Subagents, only where no hook can answer. Each gets a *constructed*
-brief (the diff, the Plan, the relevant Decisions and Notes), never the writer's
-transcript; inheriting the writer's context is not independent review. It is
-prompted to *find fault and argue for deletion* rather than approve, runs
-*once*, and returns structured findings.
+*Judgment checks* are subagents, used only where no script can answer. Each
+gets a *constructed* brief — the diff, the Plan, the relevant Decisions and
+Notes — never the writer's transcript, because a reviewer that inherits the
+writer's context is not an independent reviewer. Each is prompted to find
+fault and argue for deletion rather than to approve, runs once, and returns
+structured findings.
 
-- `plan-critic`: placeholders, contradictions, ambiguity, scope; belongs in an
-  existing area? is prose carrying data a file should? Runs inside `/hone:plan`,
-  so a rejection is revised with the human present rather than escalated mid-run.
-- `consolidate-critic`: Decision restating code? Note drifting into a spec?
-  redundant test? abstraction earning its keep?
-- `/code-review`: Claude Code's built-in workflow-backed command for correctness
-  plus what to delete; already multi-agent (parallel finders + a verification
-  pass), so the loop reuses it rather than shipping its own reviewer. Model
-  invocation of the command is now disabled, so the loop runs it as an explicit
-  user invocation in a nested headless Claude Code (a print-mode `/code-review`)
-  reading the worktree diff; it must not fall through to a marketplace
-  `code-review` plugin, which is GitHub-PR-shaped.
+- `plan-critic`: placeholders, contradictions, ambiguity, scope, prose
+  carrying data a file should carry, collisions with open changes. Runs
+  inside `/hone:plan` so rejections are fixed with the human present.
+- `consolidate-critic`: is a Decision just restating code? has a Note grown
+  into a spec? is a test redundant? is an abstraction earning its keep?
+- `/code-review`: Claude Code's built-in review command, already multi-agent
+  (parallel finders plus a verification pass), so the loop reuses it instead
+  of shipping its own reviewer. The command refuses model invocation, so the
+  loop runs it as a print-mode user turn in a nested headless Claude Code —
+  see the run skill and its references for the exact procedure.
 
-These critics are the only judgment inside the loop; together with the
-mechanical checks they are the whole trust foundation. The human's judgment
-sits before (the Plan) and after (auditing the merged result).
+These checks are the whole trust foundation of the unattended stretch; the
+human's judgment sits before it (the Plan) and after it (auditing what
+landed).
 
-The critic prompts, the `run` skill's own instructions, and the injected
-`rules/workflow.md` are themselves behavior-shaping prose doing real judgment
-work. Nothing type-checks a prompt, so unverified prose is the one part of the
-trust foundation that can go stale silently. Check it against evals (`evals/`: a
-suite of cases with known-good answers — a verdict for each critic, a next action
-for the loop) rather than assuming it holds.
-
-Evals are also what make *cutting* prose safe, and that matters more as the models
-improve: much of what a prompt spells out, a capable model now does on its own, so
-the paragraphs earning their place shrink over time. Which ones those are is an
-empirical question, not a taste one. Trim, re-run, keep what holds. A cut made on
-the belief that the model "probably knows" is a guess about future behaviour, and
-`garden` refuses that guess in any repo without a suite to settle it.
+One part of that foundation can still rot silently: the prompts themselves.
+The critic prompts, the run skill, and the injected workflow rule are prose
+doing real work, and nothing type-checks a prompt. `evals/` holds a suite of
+cases with known-good answers (a verdict for each critic case, a next action
+for each loop case); run it after any change to that prose. The evals are
+also what make *cutting* prompt text safe — as models improve, spelled-out
+instructions become unnecessary one by one, but which ones is an empirical
+question. Trim, re-run, keep what holds. Without such a suite, a cut is a
+guess about future behavior, which is why `garden` refuses to cut prompt
+files in repos that lack one.
 
 ### The proof boundary (land-time)
 
-hone's checks (the suite, types, lint, property tests, mutation checks) all run
-inside the repo, before the merge, needing nothing from the outside world. That
-is the boundary. A green check proves only what it asserts, never a
-real-environment outcome: a browser journey, a canary, deployed health,
-behaviour a user actually observes. For a change whose claim lives at that
-level, "landed, tested, reviewed" is not "proven", and pretending otherwise is
-the trap.
+Everything above — suite, types, lint, property tests, mutation checks — runs
+inside the repo, before the merge, needing nothing from the outside world. A
+green check therefore proves only what it asserts; it can never prove a
+browser journey, a canary, or deployed health. For a change whose real claim
+lives out there, "landed, tested, reviewed" is not "proven".
 
-So hone states the boundary explicitly. A Plan whose proof is user- or ops-level
-declares `Proof: real-environment` (the `plan-critic` rejects a Plan whose proof
-is *categorically* incapable of settling its claim). Such a
-change may not land on the test suite alone: the requirement is met by a
-real-environment check (`scripts/proof.sh`, run from the change's worktree so it
-can reach the code under test; the primary tree is still pre-merge) or a human
-sign-off (`.hone-proof/<change>`, naming the commit it proved so an attestation
-cannot outlive the code it attested), and otherwise land refuses (exit 7) and the
-run escalates. The loop diagram shows this land-time
-escalation alongside the authority gate, faithful to *escalate, never force*: proof the
-loop cannot give is handed back, not faked.
+So the boundary is stated explicitly: a Plan whose proof is user- or
+ops-level declares `Proof: real-environment` (the `plan-critic` rejects a
+plan whose named proof is categorically unable to settle its claim), and
+`land` refuses such a change (exit 7, worktree kept) until either
+`scripts/proof.sh` — a real-environment check run from the change's worktree
+— passes, or a human runs the check and signs it off. The sign-off names the
+commit it covers, so it expires when new commits are pushed. Mechanics in
+[`reference.md`](reference.md).
 
 ### Property-based tests (build-time)
 
-A property test states a rule once (`parse(serialize(x)) == x`) and the runner
-then tries it against hundreds of random inputs, so the writer cannot game
-inputs it does not pick. *Use* for
-modules with a universal invariant: parsers, serializers, pure transforms,
-especially on critical paths. *Skip* where no universal rule exists: UI,
-orchestration, glue. It complements example tests that pin specific behavior; it
-does not replace them.
+A property test states a rule once (`parse(serialize(x)) == x`) and the
+runner tries it against hundreds of random inputs, so the writer cannot pick
+inputs that happen to pass. Use them for modules with a universal invariant —
+parsers, serializers, pure transforms, especially on critical paths. Skip
+them where no universal rule exists: UI, orchestration, glue. They complement
+example tests; they do not replace them.
 
 ### Mutation tests (verify-time)
 
-Mutation testing plants small bugs on purpose and checks that a test catches
-each one: the one judge of empty tests that cannot be fooled, which matters
-because the same agent wrote the code and the tests. *Use*
-diff-scoped and budget-capped, on critical paths only. *Skip* whole-suite runs
-(cost, noise) and UI behavior; it audits the tests, not the code, and never
-gates a trivial change. Runner maturity varies by ecosystem (StrykerJS for
-JS/TS; mutmut or cosmic-ray for Python), so check before relying on it.
+Mutation testing plants small bugs on purpose and checks that some test
+catches each one. It is the one judge of empty tests that cannot be fooled,
+which matters here because the same agent writes both the code and the
+tests. Run it diff-scoped and budget-capped, on critical paths only; skip
+whole-suite runs (cost, noise) and UI behavior. It audits the tests, not the
+code, and never gates a trivial change. Runner maturity varies (StrykerJS for
+JS/TS; mutmut or cosmic-ray for Python).
 
-Both are *verification independent of the author*: the writer can game its own
-examples and its own self-review, but not random inputs or a planted bug.
+Both techniques verify the work independently of its author: an agent can
+game its own examples and its own self-review, but not random inputs or a
+planted bug.
 
 ## Authority
 
-Capability and authority are separate questions. The `guard` and `bash-guard`
-answer *can the agent act*: where it may write, which shell routes stay open.
-Authority answers a question deliberately *not* delegated to the model: *may an
-unattended merge land this irreversible act at all.* The axis is reversibility.
-A reversible change (a logic bug, a wrong refactor) can be undone with
-`git revert`, so its cost is bounded and it lands unattended, as the vast
-majority do. An *irreversible* one (a dropped column, a destructive backfill, a
-truncate) is not undone by reverting the merge; the data is already gone. For
-that subset, green-and-reviewed is necessary but not sufficient.
+What the agent *can* touch (the guard and bash-guard) and what an unattended
+merge *may* do are separate questions, and the second is deliberately not
+delegated to the model. The dividing line is reversibility. A bad reversible
+change — a logic bug, a wrong refactor — is undone with `git revert`, so its
+cost is bounded and it lands unattended, as the vast majority do. An
+irreversible one — a dropped column, a destructive backfill — is not undone
+by reverting the merge: the data is already gone. For that subset,
+green-and-reviewed is necessary but not sufficient; a human has to say yes.
 
-`land`
-classifies the diff mechanically (destructive SQL in a migration or `db/` file, a
-`db/` deletion, any glob in the committed `.hone-irreversible-paths`), and an irreversible change
-may not merge without a *scoped grant* the human writes at `.hone-grant/<change>`:
-scoped (one change), revocable (delete the file), auditable (its text lands in the
-merge commit body), recoverable (the worktree stays as evidence until it is
-granted). No grant → `land` refuses before the merge (exit 8) and the run escalates.
-`bash-guard` already escalates risky shell commands to the human; this gate does
-the same for the one irreversible act the loop performs itself: the merge.
+`land` classifies the diff mechanically (destructive SQL, `db/` deletions,
+plus any glob in the committed `.hone-irreversible-paths`) and refuses an
+irreversible change (exit 8, worktree kept) until a grant exists for it. The
+grant is one file for one change, revocable by deleting it, and its text is
+recorded in the merge commit body, so the authorization ends up in history
+rather than in a chat log. The `bash-guard` denies the agent every route to
+writing a grant itself. Mechanics in [`reference.md`](reference.md).
 
 ## Types and abstractions
 
-Anything expressible as a type belongs in a type, not prose: an interface, a
-constraint, an invalid state made impossible to express (a discriminated union
-in TS, a `Literal` in Python). Types carry *shape and constraint*; behavior
-stays in tests, *why* in Decisions.
+Anything expressible as a type belongs in a type: an interface, a constraint,
+an invalid state made impossible to express (a discriminated union in
+TypeScript, a `Literal` in Python). Types carry shape and constraint;
+behavior stays in tests; why stays in Decisions.
 
-Their failure mode is over-abstraction, not staleness, and no checker flags it: a
-type checker verifies a type is correct, never that it is wise. (Where checking
-is opt-in, as with mypy or pyright, adopting it is a deliberate choice; the
-discipline matters more, not less.) So abstractions are judged *reactively, at
-the point of change*, never by proactive hunt, since hunting breeds premature
-abstraction:
+The failure mode of types is over-abstraction, not staleness, and no checker
+flags it — a type checker verifies that a type is correct, never that it was
+worth building. So abstractions are judged when a change touches them, not by
+proactive sweeps (hunting for things to abstract produces premature
+abstractions):
 
 - At *build*, friction is the signal. Rule of three: duplicate until the
   abstraction proves itself.
-- At *consolidate*, `consolidate-critic` asks whether the change *revealed* a
-  wrong abstraction (a generic with one caller; two types that should merge).
-  This named slot is essential: nothing else forces the look.
-- What is not being changed is not managed. A bad abstraction costs only at
-  change-time. Exception: *recurring* friction on a foundational type across
-  several changes triggers a deliberate, Decision-level reconsideration.
+- At *consolidate*, the `consolidate-critic` asks whether the change
+  *revealed* a wrong abstraction — a generic with one caller, two types that
+  should merge. This named slot matters because nothing else forces the
+  question.
+- What is not being changed is not managed; a bad abstraction only costs at
+  change time. Exception: friction on the same foundational type across
+  several changes deserves a deliberate, Decision-level look.
 
 ## Many changes at once
 
-Parallelism is `run` over several Plans, each in its own worktree, landed one
-at a time, not a special mode. Three rules:
+Parallelism is just `run` over several plans, each in its own worktree,
+landed one at a time. Three rules:
 
-- *Within a change the loop is serial.* Each red-green cycle learns from the
-  last; the unit of parallelism is the change, never the cycles inside it.
+- *Within a change, the loop is serial.* Each red-green cycle learns from the
+  last. The unit of parallelism is the change.
 - *Independence is checked before fan-out, never assumed.* Each `plan-critic`
-  ran at plan time, before later Plans existed, so `run` compares the complete
-  set first (expected files and areas, shared types and persistent contracts,
-  Decisions and Notes more than one Plan would touch) and partitions:
-  disjoint Plans fan out in parallel; overlapping Plans run sequentially, each
-  landing before the next starts, so the later change builds on the landed
-  result.
-- *Independence is verified at the merge.* A merge collision on a shared type
-  or Note means the upfront check missed an overlap: the colliding changes
-  become one serial change and a Decision-level reconsideration. After all merges, a *global
-  consolidate pass* catches cross-change duplication no single worktree could
-  see.
-
-`/hone:run --all` fans a worktree agent out per independent Plan, sequences the
-overlapping ones, and lands them all through the same conservative
-merge-and-verify stage.
+  ran before the later plans existed, so `run --all` first compares the whole
+  set — expected files and areas, shared types and persistent contracts,
+  Decisions and Notes more than one plan touches — and partitions it:
+  disjoint plans run in parallel, overlapping ones sequentially, each landing
+  before the next starts.
+- *The merge verifies the partition.* A collision at land (exit 9) means the
+  check missed an overlap: the colliding changes are folded into one serial
+  change. After all merges, one global consolidate pass looks for
+  cross-change duplication no single worktree could see.
 
 ## Continuous maintenance
 
-`plan → run` cuts what a change leaves behind at the point of change. But
-staleness also accumulates *between* changes, across the parts nothing is
-currently touching: a Decision whose code moved, a Note nobody re-derived, a
-test a later change made redundant, an open question running code already
-settled. *What is not being changed is not managed* holds for abstractions
-(judged reactively); it leaves a gap for the durable layer as a whole, which no
-diff-scoped hook can see.
+`plan → run` cleans up at the point of change, but staleness also builds up
+*between* changes, in the parts nothing touches: a Decision whose code moved,
+a Note nobody re-checked, a test a later change made redundant, an open
+question that running code has since answered. No diff-scoped hook can see
+any of that.
 
-`garden` (`/hone:garden`) is the standing loop that closes it: it scans the whole
-repo for that drift and lands the safe cuts through the *same* worktree loop, one
-at a time. Two properties keep it honest. It is **deletion-only**: a garden
-change removes and never adds, so it can only shrink the surface, extending
-principle 4 (*every cycle removes something*) from a per-change habit to a
-scheduled one. And it is **self-verifying**: the gate's suite is the proof a cut
-is safe. A deletion that stays green was dead, one that reddens was load-bearing
-and is abandoned. The judgment calls (is this Decision stale, or load-bearing
-rationale?) go to the `consolidate-critic`, repo-wide; durable rationale is never
-cut by machine on a hunch, and anything only a human can settle is logged or
-escalated to a human. Run it often and small: a trickle of cuts, not a periodic
-reckoning. hone owns the loop, not the timer: the schedule is the project's
-existing cron/CI invoking a print-mode `/hone:garden`.
+`garden` (`/hone:garden`) closes the gap: it scans the whole repo for that
+drift and lands the safe removals through the same worktree loop, one at a
+time. Two properties keep it safe. It is *deletion-only* — a garden change
+removes and never adds. And it is *self-verifying* — the test suite is the
+proof: a deletion that keeps the suite green removed something dead; one that
+turns it red removed something load-bearing, and is abandoned. Judgment calls
+(is this Decision stale, or rationale the code can't show?) go to the
+`consolidate-critic`; what only a human can settle is logged or escalated,
+never guessed. Run it small and often — hone owns the loop, your existing
+cron/CI owns the schedule (`claude -p "/hone:garden"`).
 
-## Filetree
+## The always-on rule
 
-```
-hone/                            # the plugin — the machinery (installs once)
-├── .claude-plugin/plugin.json
-├── rules/workflow.md            # lean always-on trigger, injected at session start
-├── skills/{plan,run,garden}/SKILL.md   # /hone:plan, /hone:run, /hone:garden
-│   └── run/references/          # loaded on demand: code-review, land, parallel
-├── hooks/                       # the laws
-│   ├── {guard,gate,nag}.sh + hooks.json
-│   ├── bash-guard.sh            # tamper resistance for the gate
-│   └── session-start.sh         # injects rules/workflow.md; nudges setup
-├── scripts/{worktree,setup}.sh  # worktree add/land/remove; one-time project setup
-├── agents/{plan-critic,consolidate-critic}.md   # the judgment (review reuses /code-review)
-├── templates/run-tests/         # the one test-adapter contract, per ecosystem
-└── evals/                       # known-good answers: critic verdicts, loop actions
-
-repo/  (primary tree — a merge target, never worked in)
-├── src/<area>/                  # code + tests: thing.ts/thing.test.ts,
-│                                #               thing.py/test_thing.py, ...
-├── docs/{decisions/, notes/, open-questions.md}
-├── scripts/run-tests.sh         # the test adapter (installed by setup.sh)
-├── .plans/<change>.md           # tracked — hand-written; git-rm'd at consolidate
-├── .plans/<change>/             # tracked — optional references; promoted at
-│                                #   build or git-rm'd at consolidate, never kept
-├── .worktrees/<change>/         # gitignored — one per in-flight change
-└── .claude/settings.json        # enables the plugin; deny-rules protect gates
-```
-
-`rules/workflow.md` is a *pointer, not the manual*: a paragraph naming the
-plan→run workflow and its invariants, so the always-on context stays cheap and
-gets obeyed (a long always-on rule burns the budget every session and is ignored
-once it grows). The operational detail lives in the `plan` and `run` skills,
-loaded only when invoked (progressive disclosure). For a single repo rather than
-a distributed plugin, that trigger is just as well a lean `CLAUDE.md` pointing at
-local skills; the detail-in-skills split is the same either way.
-
-
-## What writes what
-
-W = writes · M = amends · P = prunes/deletes · R = reads · — = untouched
-
-| Operation   | .plans/ | code | tests | decisions/ | notes/ | open-q | .git |
-|-------------|---------|------|-------|------------|--------|--------|------|
-| plan        | W       | —    | —     | —          | —      | (W)    | W    |
-| build       | R/P     | W    | W     | —          | —      | —      | —    |
-| verify      | —       | R    | R     | R          | R      | R      | —    |
-| consolidate | P       | —    | P     | W/M        | W/M    | M      | —    |
-| land        | —       | —    | —     | —          | —      | —      | W    |
-| garden      | P       | P    | P     | P          | P      | P      | W    |
-
-(W) on open-q: only when the Plan surfaces a new open question. plan's `.plans/`
-W covers the Plan and any references beside it, and its `.git` W is the commit of
-both on the trunk (so the run's worktree inherits them). build's `.plans/` P is a
-reference promoted out: `git mv`'d beside the test that reads it, which is why the
-move sits at build, the only step that writes tests. consolidate's `.plans/` P is a
-`git rm` of the Plan and every reference build did not promote, staged in the
-worktree so land's commit and merge carry it back to the primary tree. *garden* is not part of the plan→run change; it is
-the standalone maintenance loop, deletion-only (every column it touches is a prune)
-and landing its cuts through the same merge (`.git` W). It never writes durable
-prose: a stale doc it can only cut, never edit.
+`rules/workflow.md`, injected at session start, is a pointer, not a manual: a
+few paragraphs naming the workflow and its invariants. It stays short on
+purpose — a long always-on rule burns context in every session and stops
+being followed as it grows. The operational detail lives in the `plan`,
+`run`, and `garden` skills, loaded only when invoked. (In a single repo
+rather than a distributed plugin, the same split works as a lean `CLAUDE.md`
+pointing at local skills.)
 
 ## Invariants
 
-1. Code and tests are written only by *build*, and durable artifacts are pruned
-   only by *consolidate*, or between changes by the standalone *garden* pass,
-   its deletion-only counterpart (never by *build*, *verify*, or *land*). `docs/`
-   prose is written only by *consolidate*. `.plans/` is emptied by exactly two
-   steps: *build* promotes a reference out (a `git mv` into the tests that read
-   it, which is why the move sits at the only step that writes tests), and
-   *consolidate* deletes the Plan and every reference left. Work-in-progress
-   cannot leak into durable truth: the structural cure for the spec pile.
-2. A Note is optional, 1:1 with an existing area, and size-capped, held by the
-   correspondence and size checks; the *carving* of areas is judged by
-   `/code-review`.
+1. Code and tests are written only by *build*; `docs/` prose is written only
+   by *consolidate*; permanent artifacts are pruned only by *consolidate* or,
+   between changes, by the deletion-only *garden*. `.plans/` is emptied by
+   exactly two steps: *build* promotes a reference out (a `git mv` next to
+   the test that reads it), and *consolidate* deletes the Plan and every
+   remaining reference. Work-in-progress therefore cannot leak into the
+   permanent record — the structural cure for the spec pile.
+2. A Note is optional, 1:1 with an existing area, and size-capped; the checks
+   hold the correspondence and the size, and `/code-review` judges whether
+   the areas are carved sensibly.
 3. Every `docs/` write passes the cut test (principle 3).
-4. The primary tree's durable artifacts are written only by *land*, a merge;
-   `guard` blocks direct source edits there, so no half-built change ever sits
-   in the tree everything merges into. The one hand-authored exception is the
-   Plan and its references (`.plans/`, a path `guard` does not protect), committed
-   there at *plan* so the run's worktree inherits them and land's merge can remove
-   them.
+4. The primary tree's protected artifacts change only through *land*, a
+   merge; the guard blocks direct edits there, so no half-built change ever
+   sits in the tree everything merges into. The one hand-authored exception
+   is the Plan and its references (`.plans/` is not a protected path),
+   committed there at *plan* so the worktree inherits them and the landing
+   merge can delete them.

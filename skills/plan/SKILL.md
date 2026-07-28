@@ -11,10 +11,10 @@ Input: $ARGUMENTS
 
 The Plan is the one hand-written artifact and the single manual step in hone.
 Everything after it (build, verify, consolidate, review, land) runs unattended
-from `/hone:run`. So the Plan is a *brief*, not a spec: it says what to build, why,
-and how you'll know it works, and then it is deleted at consolidate. It never
-accretes acceptance-criteria bookkeeping; the tests are the durable record of
-behaviour.
+from `/hone:run`. So the Plan is a short brief, not a spec: it says what to
+build, why, and how you'll know it works, and it is deleted at consolidate. It
+never accumulates acceptance-criteria bookkeeping; the tests are the permanent
+record of behaviour.
 
 This command helps a human write that brief. It writes **only** `.plans/<change>.md`
 (and, when the change rests on an untested assumption, an entry in
@@ -94,14 +94,14 @@ Omit any section that would only restate another. No placeholders, no `TBD`: the
 
 ### 4a. Attach what prose describes badly
 
-Some things a change hinges on survive prose poorly: a wire or file format, a
+Some things a change depends on survive prose badly: a wire or file format, a
 response shape, a table or screen layout, an exact error string, a set of
 escaping or boundary cases. Describing one costs paragraphs and still loses
-detail, and the Plan is deleted at consolidate, so nothing is left to check the
-loop's reading against. Hand over the artifact instead: a file the loop reads
-directly, and often the fixture its first red test consumes.
+detail, and because the Plan is deleted at consolidate, nothing remains to
+check the loop's reading against. Hand over the file instead — the loop reads
+it directly, and it is often the fixture the first red test consumes.
 
-A reference is a **file that exists**, never prose relocated:
+A reference is a **file that exists**, never prose moved into a second file:
 
 - *Already in the repo* (a type, a golden file, an existing test, a schema):
   name its path and stop. Do not copy it into the Plan.
@@ -112,9 +112,9 @@ A reference is a **file that exists**, never prose relocated:
   where `/hone:plan` runs.
 
 Two limits. If you need a paragraph to explain what a reference *means*, it is
-prose wearing a filename: put the point in *What* and drop the file. And a
-reference is not a spec: it pins data the loop would otherwise guess, never the
-acceptance criteria, which stay the tests' job.
+prose in a file's clothing: put the point in *What* and drop the file. And a
+reference is not a spec: it pins data the loop would otherwise have to guess,
+never the acceptance criteria — those stay the tests' job.
 
 ### 5. Check — `plan-critic`
 

@@ -1,13 +1,12 @@
 # Converting a stdd repository to hone
 
-This is a migration prompt. It is the one place in hone that names *stdd*, the
-spec-and-test methodology hone descends from, because it operates on a repository
-still laid out that way. The final section, *Upgrading an existing hone
-repository*, instead moves a repo already on an earlier hone version to the
-current one. Run it **inside the target repo** (for example one with
-60+ specs and 500+ acceptance criteria), with this plugin's
-[`docs/model.md`](model.md) readable. Use subagents for the bulk per-spec
-distillation; each spec is independent.
+This is a migration prompt for a repository still on *stdd*, the
+spec-and-test methodology hone descends from — the one place in hone that
+names it. (For moving a repo between hone versions, see
+[`upgrading.md`](upgrading.md) instead.) Run the prompt **inside the target
+repo** (for example one with 60+ specs and 500+ acceptance criteria), with
+this plugin's [`docs/model.md`](model.md) readable. Use subagents for the
+bulk per-spec distillation; each spec is independent.
 
 One manual prerequisite: install and enable the hone plugin in Claude Code
 (`/plugin marketplace add dominik-rehse/hone`, then install `hone@hone`) before
@@ -43,7 +42,7 @@ therefore harmless: it stays inert until step 9.
 > 2. **Distill specs, then delete them.** Classify each `docs/specs/*.md`:
 >    (a) a work-batch or fix spec (names like `*-review-fixes`, `*-pass`,
 >    `*-audit-fixes`): its behavior already lives in code and tests; delete it
->    outright. (b) a feature spec, where you extract only durable truth the code cannot
+>    outright. (b) a feature spec, where you extract only what the code cannot
 >    show: an intent or invariant → a **Note** (`docs/notes/<area>.md`, ≤ ~half a
 >    screen, one per `src/` area); a decision + why → a **Decision** (step 3); a
 >    shape or constraint expressible as a **type** → make it a type in `src/`.
@@ -136,38 +135,5 @@ None of this changes the nine steps; it just makes them go smoother.
   `.env.example` may be permission-blocked from tooling, so note any leftover
   reference there for a human rather than forcing it.
 
-## Upgrading an existing hone repository
-
-A repo already on hone moves to the current version in three mechanical steps.
-
-1. **Take the new plugin version.** hone is distributed through the marketplace,
-   so update it there; the loop and hooks pick the change up automatically.
-
-2. **Re-run setup.** `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` is safe to
-   run again: it leaves your adapter, docs, and `.plans/` untouched, keeps the
-   per-developer files gitignored (`.hone-off`, `.hone-grant/`, `.hone-proof/`),
-   and strips the `.gitignore` entries for markers hone 0.19 retired
-   (`.hone-test-globs`, `.hone-gate-enforce`, `.hone-nag-enforce`,
-   `.hone-authority-off`, `.hone-proof-off`) and for the policy files that are
-   committed now.
-
-3. **Commit your policy files.** `.hone-durable-paths` and
-   `.hone-irreversible-paths` (rename it from `.hone-consequential-paths` if you
-   have one; the old name still works) are project policy: commit them so the
-   whole team runs the same enforcement. If you relied on `.hone-authority-off`
-   or `.hone-proof-off`, they are gone: the land gates now always run, and the
-   per-change `.hone-grant/<change>` or `.hone-proof/<change>` is the way
-   through them. `.hone-test-globs` is gone too; the built-in test-file globs
-   cover the common conventions.
-
-Two more capabilities are additive and cost nothing until used:
-
-- **`Governs:` links** (no marker; they go live as soon as you write them). Add a
-  `Governs:` line to a Decision or Note naming the `src/` path it explains, and
-  the nag flags it when that path later disappears: mechanical proof the prose
-  drifted. Add them opportunistically, at the next change that touches each doc;
-  no upfront sweep.
-- **The garden loop** (`/hone:garden`). Point your existing cron/CI at a
-  print-mode `claude -p "/hone:garden"` to cut durable-layer drift between changes
-  on a schedule. Start it once the durable layer is large enough to be worth
-  gardening.
+Upgrading a repo that is already on hone (rather than on stdd) is a different,
+recurring job: [`upgrading.md`](upgrading.md).

@@ -131,9 +131,9 @@ cut. Apply its accepted cuts as deletion-only changes (step 3); for a cut it can
 justify, leave the line. A Decision the critic defends stays.
 
 Anything that needs a human call (a Decision that may be stale but only the owner
-knows, a Note whose invariant you can't confirm) is **logged, not guessed**: a
-`docs/open-questions.md` entry, or an escalation. `garden` never deletes durable
-rationale to hit a quota.
+knows, a Note whose invariant you can't confirm) is **logged, never guessed at**:
+a `docs/open-questions.md` entry, or an escalation. `garden` never deletes
+recorded rationale just to have a cut to show.
 
 ## 5. Report — what was cut, what was deferred
 

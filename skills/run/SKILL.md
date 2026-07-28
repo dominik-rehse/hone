@@ -52,11 +52,12 @@ That creates `.worktrees/<change>` on branch `hone/<change>` and prints its path
 `cd "$WT"`. All build/verify/consolidate work happens here; the primary tree is a
 merge target and the `guard` will block durable edits made in it.
 
-The worktree **is the change's claim**, and the add is atomic: if it exits **4**,
-this change is already claimed: another `run` (in another session) owns it, or a
-crashed run left it behind. Do **not** adopt that worktree: a single named change
-**stops** and reports it (the human resumes leftover work by hand); under `--all`
-it is **skipped** (below). Only exit 0 means you own this change and may proceed.
+Creating the worktree is what **claims the change**, and the creation is atomic:
+exit **4** means the change is already claimed — another `run` (in another
+session) owns it, or a crashed run left it behind. Do **not** adopt that
+worktree: a single named change **stops** and reports it (the human resumes
+leftover work by hand); under `--all` it is **skipped** (below). Only exit 0
+means you own this change and may proceed.
 
 ### 2. Build — red → green, serial
 
@@ -69,9 +70,9 @@ Move it into place beside that test as part of the same red-green cycle
 (`git mv .plans/<change>/cases.csv src/export/__fixtures__/cases.csv`) — from then
 on it is a test artifact like any other, and the suite is what keeps it honest.
 
-A named reference that does not exist is a stop, not a thing to invent: the Plan
-step commits references alongside the Plan, so a missing one means the hand-off
-broke.
+If a named reference does not exist, **stop** — never invent its contents. The
+plan step commits references together with the Plan, so a missing one means the
+hand-off broke.
 
 Implement the Plan test-first, one behaviour at a time. The `guard` enforces the
 order, so work with it:
@@ -114,11 +115,11 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
     wrapper.)
   - Then run `scripts/typecheck.sh` and `scripts/lint.sh` if present. All must be
     green.
-  - Running the gate here is how *you* confirm from the output, not from having
-    intended it. The Stop-hook gate enforces the same suite independently: on a
-    clean, committed `hone/<change>` branch it escalates to `--all` under the same
-    lock (so an integration regression can't merge on a green unit tier alone);
-    while the tree is dirty it runs the fast unit tier.
+  - Run the gate here so you can confirm each check from its output, not from
+    having intended to run it. The Stop-hook gate enforces the same suite
+    independently: on a clean, committed `hone/<change>` branch it escalates to
+    `--all` under the same lock (so an integration regression can't merge on a
+    green unit tier alone); while the tree is dirty it runs the fast unit tier.
   - A full suite can outlast the ~2m foreground Bash timeout, which kills it
     regardless of any inner `timeout`. Run the gate (and any long build or verify
     command) in your Bash tool's background mode and poll it to completion, never
@@ -166,11 +167,11 @@ build):
   because you git-rm'd it earlier? Fine, do not re-add it.)
 - **`git rm` whatever is left under `.plans/<change>/`.** Build already moved the
   references the tests read into the tree beside those tests; anything still
-  sitting here only ever communicated intent (a mockup, a sample payload nothing
-  loads) and has done its job exactly as the Plan has. Delete it, and
-  `.plans/<change>/` with it: a surviving reference directory is a new stale-prose
-  layer, which is the thing hone exists to remove. (A reference that named a path
-  already in the repo was never yours and needs nothing.)
+  sitting here only communicated intent (a mockup, a sample payload nothing
+  loads) and is finished, like the Plan itself. Delete it, and
+  `.plans/<change>/` with it: a reference directory that survives the merge
+  becomes exactly the kind of stale prose hone exists to remove. (A reference
+  that named a path already in the repo was never yours and needs nothing.)
 
 Then submit the change to the `consolidate-critic` agent (Task tool,
 `subagent_type: consolidate-critic`) with a constructed brief: the diff, the
@@ -203,10 +204,11 @@ claude -p "/code-review $(cat <brief-file>)" \
   --output-format json > <out-file> 2>&1
 ```
 
-That JSON envelope **is this step's artifact**. Before you trust any finding,
-confirm `<out-file>` parses as JSON with `is_error: false`, `subtype: success`,
-and a `session_id`. Anything else — missing, truncated, an error envelope, or
-findings you produced some other way — means the native review did not happen.
+That JSON envelope is this step's **proof that the review ran**. Before you
+trust any finding, confirm `<out-file>` parses as JSON with `is_error: false`,
+`subtype: success`, and a `session_id`. Anything else — missing, truncated, an
+error envelope, or findings you produced some other way — means the native
+review did not happen.
 Fix that by running the nested call; never review around it, and never hand-roll a
 substitute (no `Workflow`, no fan-out of `Agent`/`Task` finders), which abandons
 the very review this step exists to reuse and fails the step even when it produces
@@ -239,17 +241,17 @@ wrong to land (not merely large or out of scope), **stop and escalate**
 Commit in the worktree, then hand the merge to `worktree.sh land`:
 
 1. In `$WT`: `git add -A && git commit` with a Conventional Commits message. The
-   Decision(s) this change governs land in **this same commit** as the code.
-   The **type follows the dominant durable artifact**: a change that alters the
-   behaviour of `deploy/` or `scripts/` is never `docs:`, whatever prose rode
-   along. The body carries a **`Cut:` line** naming what consolidate removed
-   (pruned tests, dead code, deleted doc lines, a spent reference), or
-   `Cut: nothing`, with the
-   reason, when there genuinely was nothing; the nag flags a zero-deletion
-   change, and this line is its answer. If the Plan declared `Proof:
-   real-environment`, carry that same **`Proof: real-environment` line** in the
-   body: it is how land's proof gate (on by default) knows an assertion-level
-   suite is not enough for this change.
+   Decision(s) this change makes land in **this same commit** as the code.
+   Pick the **commit type from what the change does**, not from what rode
+   along: a change that alters the behaviour of `deploy/` or `scripts/` is
+   never `docs:`, however much prose it also touched. The body carries a
+   **`Cut:` line** naming what consolidate removed (pruned tests, dead code,
+   deleted doc lines, a spent reference), or `Cut: nothing` with the reason
+   when there genuinely was nothing; the nag flags a zero-deletion change, and
+   this line is its answer. If the Plan declared `Proof: real-environment`,
+   carry that same **`Proof: real-environment` line** in the body: that
+   trailer is how land's proof gate knows the test suite alone cannot prove
+   this change.
 2. From the primary tree, land the branch:
 
    ```bash
@@ -270,7 +272,7 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
      the stderr message.
 
    Any non-zero exit: read `references/land.md` before acting on it. It carries
-   what each code means and what discharges it. Three rules hold whatever the
+   what each code means and what resolves it. Three rules hold whatever the
    code: never merge by hand, never move the primary tree's HEAD to investigate
    (use a throwaway `git worktree add --detach` scratch tree), and never write the
    grant or the sign-off yourself — 7 and 8 are reserved to the human by design.
@@ -302,11 +304,12 @@ and the landing order. Read it whenever the invocation is `--all`.
 3. **done**: landed and green.
 
 On 1 or 2, leave the worktree in place as evidence and escalate with the specific
-blocker. Never disable, weaken, or route around a gate to proceed: an escalated
-stop is a correct outcome, a forced pass is not.
+blocker. Never disable, weaken, or route around a check to proceed: stopping and
+reporting is a correct outcome; a forced pass is not.
 
-The land gates (on by default) add a stop that is neither a failure nor a fork:
-the authority gate (exit 8) awaits your scoped grant for an irreversible change,
-and the proof gate (exit 7) awaits real-environment proof the loop cannot give.
-Both are stops reserved to you by design: escalate and wait; never write the
-grant or the sign-off yourself.
+The land gates add a fourth stop that is neither a failure nor a fork: the
+authority gate (exit 8) awaits the human's scoped grant for an irreversible
+change, and the proof gate (exit 7) awaits real-environment proof the loop
+cannot give. Both are reserved to the human by design: escalate and wait;
+never write the grant or the sign-off yourself, and never run the grant or
+attest helpers.

@@ -45,8 +45,8 @@ The change's commit body carries
 `Proof: real-environment` and the proof is still missing: no green
 `scripts/proof.sh` (invoked as `proof.sh <change>` from the worktree, so it can
 reach the code under test), and no `.hone-proof/<change>` sign-off naming the
-current branch tip. A sign-off written for an earlier commit no longer discharges
-the change, by design: an attestation must not outlive the code it attested.
+current branch tip. A sign-off written for an earlier commit stops counting, by
+design: it must not outlive the code it vouched for.
 
 The merge did not happen and the worktree is kept. **Stop and escalate.** The
 real-environment check is outside the loop's boundary: the human runs the journey

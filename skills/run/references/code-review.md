@@ -22,10 +22,10 @@ finders, no "faithful equivalent" or "same multi-agent shape." Each silently
 abandons the native review (parallel finders plus a verification pass) this step
 exists to reuse, and is a step failure even when it produces findings.
 
-## The JSON envelope is the artifact
+## The JSON envelope is the proof the review ran
 
-The envelope is the proof the native reviewer ran, as the diff proves build and
-the gate output proves verify. Before trusting any finding, confirm it is real:
+The envelope proves the native reviewer ran, the same way the diff proves build
+and the gate output proves verify. Before trusting any finding, confirm it is real:
 `<out-file>` parses as JSON with `is_error: false`, `subtype: success`, and a
 `session_id`. If it is missing, truncated, an error envelope, or absent because
 findings came from some other route, the native review did not happen. That is a

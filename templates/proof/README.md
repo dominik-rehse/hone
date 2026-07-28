@@ -40,8 +40,8 @@ isolated config/state root so a proof run cannot touch real state.
 *The checkout plus infrastructure.* A long-running service needs a second
 instance beside production: its own port, its own database copy, the same
 secrets. Start from `service.sh`. If a project can only run its real
-environment in production, that instance has to be built before this adapter can
-exist — until then the honest discharge is the human sign-off.
+environment in production, that instance has to be built before this adapter
+can exist — until then, the honest way through the gate is the human sign-off.
 
 Name every instance after `$HONE_CHANGE` rather than hardcoding one. Two changes
 can be in flight at once, and an instance they share is one that proves neither.
