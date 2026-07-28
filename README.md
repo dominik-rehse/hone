@@ -10,6 +10,10 @@ an isolated git worktree, runs every check, distills the documentation,
 reviews the result, and merges it. Documentation is kept deliberately small:
 anything the code, types, or tests already show gets deleted rather than
 written down, and a scheduled maintenance pass keeps cutting what goes stale.
+Hence the name: you hone a blade by grinding material away, over repeated
+passes, and never by adding to it.
+
+![A knife drawn across a whetstone, steel coming off the edge](assets/hone.png)
 
 Three documents cover the detail:
 
