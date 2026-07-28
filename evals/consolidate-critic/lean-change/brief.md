@@ -13,7 +13,7 @@ Escape CSV fields per RFC 4180.
 - No new Decision (the RFC-4180 choice is self-evident from the code and the
   property test; there was no alternative worth recording).
 - docs/notes/export.md unchanged (still: "Export area serializes records to CSV;
-  invariant: output round-trips through a standard CSV parser." — one map line,
+  invariant: output round-trips through a standard CSV parser." (one map line,
   one invariant).
 - No tests pruned (none were redundant).
 

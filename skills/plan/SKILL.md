@@ -5,7 +5,7 @@ argument-hint: "[change-name-or-sketch]"
 disable-model-invocation: true
 ---
 
-# /hone:plan — author a change Plan
+# /hone:plan (author a change Plan)
 
 Input: $ARGUMENTS
 
@@ -102,7 +102,7 @@ line; otherwise the proof is assertion-level and the gate's suite covers it.>
 - <Open question OQ-N this change resolves, if any.>
 
 ## References (optional)
-- `<path>` — <what it carries, in one line.>
+- `<path>`: <what it carries, in one line.>
 ```
 
 Omit any section that would only restate another. No placeholders, no `TBD`: the
@@ -114,7 +114,7 @@ Some things a change depends on survive prose badly: a wire or file format, a
 response shape, a table or screen layout, an exact error string, a set of
 escaping or boundary cases. Describing one costs paragraphs and still loses
 detail, and because the Plan is deleted at consolidate, nothing remains to
-check the loop's reading against. Hand over the file instead — the loop reads
+check the loop's reading against. Hand over the file instead: the loop reads
 it directly, and it is often the fixture the first red test consumes.
 
 A reference is a **file that exists**, never prose moved into a second file:
@@ -130,13 +130,13 @@ A reference is a **file that exists**, never prose moved into a second file:
 Two limits. If you need a paragraph to explain what a reference *means*, it is
 prose in a file's clothing: put the point in *What* and drop the file. And a
 reference is not a spec: it pins data the loop would otherwise have to guess,
-never the acceptance criteria — those stay the tests' job.
+never the acceptance criteria; those stay the tests' job.
 
-### 5. Check — `plan-critic`
+### 5. Check: `plan-critic`
 
 Submit the finished Plan to the `plan-critic` agent (Task tool,
 `subagent_type: plan-critic`). Give it a **constructed brief**: the Plan text,
-the list of open changes (other `.plans/**/*.md` — slugs nest — and existing
+the list of open changes (other `.plans/**/*.md`, since slugs nest, and existing
 `hone/*` worktrees), and the relevant existing Decisions/Notes, never your own
 transcript. It returns structured findings and an `APPROVE`/`REJECT` verdict.
 
@@ -166,7 +166,7 @@ Plan: an uncommitted reference is invisible inside the worktree, so the build
 fails on a missing file it was told to read. Commit nothing but the Plan and its
 references; the loop owns every other artifact.
 
-### 7. Confirm — the hand-off
+### 7. Confirm: the hand-off
 
 Close with an explicit hand-off. The slug you derived may differ from the name
 the user typed, so state it plainly:

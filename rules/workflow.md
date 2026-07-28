@@ -30,7 +30,7 @@ it as background; when something in it belongs to the codebase, land it in
 `docs/` through consolidate.
 
 A third command, `/hone:garden`, runs the same loop on a schedule and only
-deletes — stale docs, dead code, redundant tests — with the suite proving
+deletes (stale docs, dead code, redundant tests), with the suite proving
 each removal safe. It is maintenance, not a Plan.
 
 The hooks enforce: the primary tree is a merge target, never a workspace

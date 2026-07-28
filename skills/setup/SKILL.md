@@ -4,13 +4,13 @@ description: "Install hone into a project and verify the install actually works:
 disable-model-invocation: true
 ---
 
-# /hone:setup — install hone and prove the adapters work
+# /hone:setup (install hone and prove the adapters work)
 
 `scripts/setup.sh` handles the deterministic mechanics, but it only guesses at
 the test adapter: detection covers Bun, Node, and Python, and it never executes
-what it installs. A template that does not fit the project — no `test` script,
+what it installs. A template that does not fit the project (no `test` script,
 a runner that rejects file arguments, a compiler config pinned to a language
-standard the toolchain does not support — fails later, in the middle of an
+standard the toolchain does not support) fails later, in the middle of an
 unattended run, where nobody is present to fix it. This command closes that
 gap: it runs the script, then verifies each adapter by executing it and fixes
 what fails, while the human is still here to approve.
@@ -41,23 +41,23 @@ yourself: start from the closest template in
 directory's `README.md` (unit tier by default, `--all` every tier, `--unit`
 explicit, `<files...>` exact selection, exit 0 = pass).
 
-Then verify by executing — whether the adapter is fresh, pre-existing, or one
+Then verify by executing, whether the adapter is fresh, pre-existing, or one
 you just wrote:
 
-- `bash scripts/run-tests.sh` — exits 0 on a passing (or empty) suite.
-- `bash scripts/run-tests.sh <one test file>` — runs exactly that file, if the
+- `bash scripts/run-tests.sh` exits 0 on a passing (or empty) suite.
+- `bash scripts/run-tests.sh <one test file>` runs exactly that file, if the
   project has any test to try it on.
-- `bash scripts/run-tests.sh --all` — accepts the flag without erroring.
+- `bash scripts/run-tests.sh --all` accepts the flag without erroring.
 
 React to what fails instead of reporting it. Distinguish three causes:
 
-- *Adapter bug* — the template's assumption does not hold (wrong runner, an
+- *Adapter bug*: the template's assumption does not hold (wrong runner, an
   argument-passing quirk, tiers not separated). Fix the adapter script.
-- *Project misconfiguration* — the project side is missing or broken (no
+- *Project misconfiguration*: the project side is missing or broken (no
   `test` script in `package.json`, a config pinned to an unsupported language
   standard, integration tests mixed into the unit tier). Fix the project,
   telling the human what you changed and why.
-- *Missing toolchain* — the runner or interpreter is not installed. Tell the
+- *Missing toolchain*: the runner or interpreter is not installed. Tell the
   human exactly what to install; do not install toolchains yourself.
 
 ## 3. Optional adapters
@@ -67,7 +67,7 @@ and verify each the same way (execute it; exit 0 = clean):
 
 - `scripts/typecheck.sh` when there is a type checker (`tsconfig.json` →
   `tsc --noEmit`; a `mypy`/`pyright` config). It must cover everything the
-  repo compiles — `src/`, tests, `scripts/`, tooling — not only production
+  repo compiles (`src/`, tests, `scripts/`, tooling), not only production
   code; a checker whose scope stops at `src/` makes the gate's green
   overstate what was checked.
 - `scripts/lint.sh` when there is a linter config (`eslint`, `ruff`).
@@ -90,7 +90,7 @@ its own Plan.
 Check `.claude/settings.json` against the install block in hone's README:
 the `enabledPlugins` entry, the `Bash(claude -p:*)` allow (without it the
 loop's review step can't run unattended), and the deny rules for the adapters
-and the settings file itself. Add what is missing — last, so the denies land
+and the settings file itself. Add what is missing last, so the denies land
 after the adapters they protect are verified. If the settings file is itself
 already deny-protected, show the missing block and let the human paste it.
 

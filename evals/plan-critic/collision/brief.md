@@ -20,7 +20,7 @@ endpoint and asserts a session is created for the returned identity.
 # Context
 
 Open changes in flight:
-- .plans/auth/add-oauth-github.md — "Add GitHub OAuth: extend the `AuthProvider`
+- .plans/auth/add-oauth-github.md, "Add GitHub OAuth: extend the `AuthProvider`
   union in src/auth/provider.ts with a `github` variant, add flow in
   src/auth/oauth.ts." Currently in a worktree, not yet landed.
 

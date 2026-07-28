@@ -7,7 +7,7 @@ Send an email receipt after a successful payment.
 - src/notify/email-receipt.ts: builds and sends the receipt email.
 - src/notify/dispatch.ts: NEW. A generic `Dispatcher<TChannel, TPayload>`
   abstraction with a channel registry, retry policy, and a pluggable transport
-  interface — currently instantiated exactly once, by email-receipt.ts, for the
+  interface. Currently instantiated exactly once, by email-receipt.ts, for the
   email channel.
 - tests for both.
 
@@ -17,6 +17,6 @@ Send an email receipt after a successful payment.
   every send is idempotent on the (event-id, channel) key."
 
 ## Types / abstractions touched
-- `Dispatcher<TChannel, TPayload>` — generic over channel and payload, one
+- `Dispatcher<TChannel, TPayload>`: generic over channel and payload, one
   concrete instantiation (email), one caller. Introduced by this change "so we
   can add SMS and push later."

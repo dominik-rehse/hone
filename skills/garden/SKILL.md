@@ -5,7 +5,7 @@ argument-hint: "[area-or-scope]"
 disable-model-invocation: true
 ---
 
-# /hone:garden — cut drift between changes
+# /hone:garden (cut drift between changes)
 
 Input: $ARGUMENTS
 
@@ -30,7 +30,7 @@ Resolve `$ARGUMENTS`:
 Setup check: if `scripts/run-tests.sh` is missing, stop and tell the user to run
 `/hone:setup`. Without the adapter no cut can be proven safe.
 
-## 1. Scan — find the drift, repo-wide
+## 1. Scan: find the drift, repo-wide
 
 The Stop-hook `nag` already names most of it on every turn; `garden` runs the same
 questions across the whole tree at once and adds the ones a diff-scoped hook can't
@@ -49,8 +49,8 @@ see. Collect, don't act yet:
 - **Leftover artifact**: a landed Plan never deleted; a `.plans/<change>/`
   reference directory consolidate never settled; a merged `hone/*` branch land
   forgot to remove.
-- **Prompt-layer drift**: the project's own instructions to the agent —
-  `CLAUDE.md`, `.claude/rules/`, project skills — describing a gotcha the code no
+- **Prompt-layer drift**: the project's own instructions to the agent
+  (`CLAUDE.md`, `.claude/rules/`, project skills), describing a gotcha the code no
   longer has, a command that no longer exists, or a rule the model now follows
   without being told. This layer accretes exactly like `docs/` and nothing else
   looks at it. Never cut it mechanically (see step 2).
@@ -61,7 +61,7 @@ see. Collect, don't act yet:
 State the full list before acting. This scan is the artifact that says what the
 run covered: a silent scope is indistinguishable from a scan that found nothing.
 
-## 2. Classify — mechanical cut vs judgment
+## 2. Classify: mechanical cut vs judgment
 
 Split every finding two ways:
 
@@ -75,7 +75,7 @@ Split every finding two ways:
   this Note's invariant still hold? These go to the `consolidate-critic`, never
   auto-deleted. Durable *rationale* is never cut by machine on a hunch.
 
-**Prompt-layer findings are always judgment, never mechanical** — including the
+**Prompt-layer findings are always judgment, never mechanical**, including the
 ones that look obvious. Everything else here rests on the suite proving the cut
 safe, and *no suite proves a prompt cut safe*: delete a paragraph of `CLAUDE.md`
 and every test still passes, because what changed is how an agent behaves next
@@ -90,7 +90,7 @@ finding for a human, and propose the eval as its own Plan. An unverified prompt 
 is a guess about future behaviour, and the whole point of deletion-only is that
 guesses are not required.
 
-## 3. Cut — one deletion-only change at a time
+## 3. Cut: one deletion-only change at a time
 
 Run each mechanical cut (and each critic-accepted judgment cut) through the
 worktree loop, exactly as `run` lands a feature; the only difference is that the
@@ -121,7 +121,7 @@ was unsafe, treat as red above; 9 conflict → another change owns these files, 
 7/8 → a land gate wants a human, escalate). Independent cuts may run in parallel
 worktrees; land them one at a time.
 
-## 4. Judgment — the consolidate-critic, repo-wide
+## 4. Judgment: the consolidate-critic, repo-wide
 
 For the judgment findings, hand the `consolidate-critic` a **constructed brief**
 (the durable lines in question, the code they claim to govern, the relevant Notes
@@ -134,7 +134,7 @@ knows, a Note whose invariant you can't confirm) is **logged, never guessed at**
 a `docs/open-questions.md` entry, or an escalation. `garden` never deletes
 recorded rationale just to have a cut to show.
 
-## 5. Report — what was cut, what was deferred
+## 5. Report: what was cut, what was deferred
 
 Close with the ledger: each cut landed (and its `Cut:` line), each finding
 abandoned because the suite went red (with what it revealed depends on it), and

@@ -7,7 +7,7 @@ evals pin them to cases with known-good answers, so a reword that quietly weaken
 a critic, or a cut that quietly drops a loop behaviour, is caught.
 
 They are equally the licence to *delete*. As models improve, prose a prompt used
-to need becomes prose the model no longer needs told — but which paragraphs those
+to need becomes prose the model no longer needs told, but which paragraphs those
 are is empirical, not a matter of taste. Trim, re-run, keep what holds. Without a
 suite, cutting a prompt is a guess about future behaviour.
 
@@ -28,17 +28,17 @@ target is whatever model drives the session (`--model opus`).
 
 ## Targets and cases
 
-*`plan-critic`* — verdict `APPROVE`/`REJECT`: `clean-scoped` (APPROVE),
+*`plan-critic`*, verdict `APPROVE`/`REJECT`: `clean-scoped` (APPROVE),
 `placeholder-tbd`, `two-changes` (scope), `collision`, `proof-altitude` (a
 user-level claim whose only proof is a unit assertion), `prose-for-artifact` (a
 file format spelled out in prose that a fixture should carry instead).
 
-*`consolidate-critic`* — verdict `CLEAN`/`CUTS`: `lean-change` (CLEAN),
+*`consolidate-critic`*, verdict `CLEAN`/`CUTS`: `lean-change` (CLEAN),
 `decision-restates-code`, `note-drift`, `single-caller-generic`
 (over-abstraction), `garden-stale-decision` (a Decision whose governed code is
 gone, surfaced by a garden pass).
 
-*`loop`* — the next action `run` takes, one of `STOP SKIP DISCARD NEST RECORD
+*`loop`*, the next action `run` takes, one of `STOP SKIP DISCARD NEST RECORD
 BACKGROUND ASK EXPAND HANDROLL PROCEED`: a claimed worktree under a single change
 (STOP) and under `--all` (SKIP), a red test that passes on its first run
 (DISCARD), the `/code-review` refusal (NEST, not HANDROLL), a confirmed

@@ -5,7 +5,7 @@ argument-hint: "[change-name | --all]"
 disable-model-invocation: true
 ---
 
-# /hone:run — execute a Plan through the loop
+# /hone:run (execute a Plan through the loop)
 
 Input: $ARGUMENTS
 
@@ -52,13 +52,13 @@ That creates `.worktrees/<change>` on branch `hone/<change>` and prints its path
 merge target and the `guard` will block durable edits made in it.
 
 Creating the worktree is what **claims the change**, and the creation is atomic:
-exit **4** means the change is already claimed — another `run` (in another
+exit **4** means the change is already claimed: another `run` (in another
 session) owns it, or a crashed run left it behind. Do **not** adopt that
 worktree: a single named change **stops** and reports it (the human resumes
 leftover work by hand); under `--all` it is **skipped** (below). Only exit 0
 means you own this change and may proceed.
 
-### 2. Build — red → green, serial
+### 2. Build: red → green, serial
 
 If the Plan has a *References* section, **read every file it names before writing
 anything**. A reference is there because prose would have lost the detail: a
@@ -66,10 +66,11 @@ fixture of input/expected rows, a sample payload, a mockup, an existing schema.
 Where one pins data a test needs, have the test **read the file** rather than
 transcribing its contents into assertions: the transcription is what goes stale.
 Move it into place beside that test as part of the same red-green cycle
-(`git mv .plans/<change>/cases.csv src/export/__fixtures__/cases.csv`) — from then
-on it is a test artifact like any other, and the suite is what keeps it honest.
+(`git mv .plans/<change>/cases.csv src/export/__fixtures__/cases.csv`). From
+then on it is a test artifact like any other, and the suite is what keeps it
+honest.
 
-If a named reference does not exist, **stop** — never invent its contents. The
+If a named reference does not exist, **stop**, and never invent its contents. The
 plan step commits references together with the Plan, so a missing one means the
 hand-off broke.
 
@@ -135,14 +136,14 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
   for non-critical or UI changes; never gate a trivial change on it.
 
 Close verify by stating each check's outcome (tests, type-check, lint,
-mutation), including any skip **with its reason** ("mutation: skipped — no
+mutation), including any skip **with its reason** ("mutation: skipped, no
 critical path named in the Plan"). An unstated skip is indistinguishable from a
 forgotten check, and this receipt is what a later audit of the transcript reads.
 
 If verify cannot go green and you have exhausted the fix, **stop and escalate**
 (stop-point 1), leaving the worktree as evidence.
 
-### 4. Consolidate — sort the leftovers, prune, delete the Plan
+### 4. Consolidate: sort the leftovers, prune, delete the Plan
 
 This is the only step that writes `docs/` and the only step that prunes tests.
 Sort everything the change leaves behind that is worth keeping into the place
@@ -179,7 +180,7 @@ for deletion: a Decision restating code, a Note drifting into a spec, a
 redundant test, an abstraction not earning its keep. Apply its accepted findings
 (more pruning), or record why not.
 
-### 5. Review — native `/code-review`
+### 5. Review: native `/code-review`
 
 Run Claude Code's built-in `/code-review` on the finished change (the worktree
 diff) **once**: it is multi-agent (parallel finders plus a verification pass) and
@@ -205,8 +206,8 @@ claude -p "/code-review $(cat <brief-file>)" \
 
 That JSON envelope is this step's **proof that the review ran**. Before you
 trust any finding, confirm `<out-file>` parses as JSON with `is_error: false`,
-`subtype: success`, and a `session_id`. Anything else — missing, truncated, an
-error envelope, or findings you produced some other way — means the native
+`subtype: success`, and a `session_id`. Anything else (missing, truncated, an
+error envelope, or findings you produced some other way) means the native
 review did not happen.
 Fix that by running the nested call; never review around it, and never hand-roll a
 substitute (no `Workflow`, no fan-out of `Agent`/`Task` finders), which abandons
@@ -261,25 +262,26 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    merges `--no-ff`, re-runs the whole suite in the primary tree, and on green
    removes the worktree and deletes the branch. Read its exit:
 
-   - **0** — landed and green. Continue.
-   - **9** — merge conflict; aborted, tree restored. Fold in serially. Stop.
-   - **6** — the merge regressed the trunk; rolled back, worktree kept. Stop.
-   - **7** — the proof gate wants real-environment proof only a human can give.
-   - **8** — the authority gate wants a scoped grant for an irreversible change.
-   - **5** — another session held the land lock past the timeout. Wait, retry.
-   - **2** — usage or repo-state error (missing branch, detached HEAD): read
+   - **0**: landed and green. Continue.
+   - **9**: merge conflict; aborted, tree restored. Fold in serially. Stop.
+   - **6**: the merge regressed the trunk; rolled back, worktree kept. Stop.
+   - **7**: the proof gate wants real-environment proof only a human can give.
+   - **8**: the authority gate wants a scoped grant for an irreversible change.
+   - **5**: another session held the land lock past the timeout. Wait, retry.
+   - **2**: usage or repo-state error (missing branch, detached HEAD): read
      the stderr message.
 
    Any non-zero exit: read `references/land.md` before acting on it. It carries
    what each code means and what resolves it. Three rules hold whatever the
    code: never merge by hand, never move the primary tree's HEAD to investigate
    (use a throwaway `git worktree add --detach` scratch tree), and never write the
-   grant or the sign-off yourself — 7 and 8 are reserved to the human by design.
+   grant or the sign-off yourself, because 7 and 8 are reserved to the human by
+   design.
 
 Confirm to the user: what landed, the Decisions/Notes written, what was deleted
 (the Plan, and any pruned tests; every cycle removes something).
 
-## `--all` — many changes at once
+## `--all`: many changes at once
 
 Parallelism is `run` over several Plans, not a special mode, and it is never
 assumed. **Check independence before spawning any worktree**: each `plan-critic`

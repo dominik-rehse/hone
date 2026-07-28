@@ -19,7 +19,7 @@ then a standard CSV parser reads it back byte-for-byte identical to the input
 row. Plus a golden-file assertion for a known tricky record.
 
 ### Notes for the loop
-- Critical path: this is untrusted-input serialization — add a property test
+- Critical path: this is untrusted-input serialization, so add a property test
   (parse(serialize(x)) == x over generated fields).
 - Touches only src/export/csv.ts. Independent of in-flight work.
 

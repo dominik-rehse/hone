@@ -1,7 +1,7 @@
 # Change under review (garden maintenance pass, repo-wide)
 
 ## Plan
-None — this is a /hone:garden continuous-maintenance run, not a feature change.
+None. This is a /hone:garden continuous-maintenance run, not a feature change.
 The candidate cut below was surfaced by a repo-wide drift scan.
 
 ## Candidate cut
@@ -11,7 +11,7 @@ The candidate cut below was surfaced by a repo-wide drift scan.
   > We poll the vendor API every 30s from a background poller and reconcile
   > deltas into the local store. Polling (not webhooks) because the vendor had no
   > webhook support at integration time.
-  > Rejected: webhooks — unavailable then.
+  > Rejected: webhooks, unavailable then.
 
 ## Repo evidence the scan collected
 - src/sync/poller.ts was deleted three changes ago; the whole src/sync/ area is

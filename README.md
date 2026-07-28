@@ -13,11 +13,12 @@ written down, and a scheduled maintenance pass keeps cutting what goes stale.
 
 Three documents cover the detail:
 
-- [`docs/model.md`](docs/model.md) — why it works this way: the artifacts,
-  the loop, the checks, the invariants.
-- [`docs/reference.md`](docs/reference.md) — the full control surface:
+- [`docs/model.md`](docs/model.md) covers why it works this way: the
+  artifacts, the loop, the checks, the invariants.
+- [`docs/reference.md`](docs/reference.md) is the full control surface:
   commands, configuration files, hooks, land gates, exit codes, adapters.
-- [`docs/upgrading.md`](docs/upgrading.md) — moving between hone versions.
+- [`docs/upgrading.md`](docs/upgrading.md) covers taking a repo from an
+  earlier hone version to the current one.
 
 ## Install
 
@@ -43,7 +44,7 @@ in a nested headless Claude Code; without it the run can't stay unattended.
 The `deny` entries stop the file tools from editing the test adapter or the
 settings; hone's `bash-guard` hook covers the shell routes to the same files.
 Together they are a deterrent against an agent quietly weakening its own
-checks — not a sandbox. A session-start warning fires if the deny rules are
+checks, not a sandbox. A session-start warning fires if the deny rules are
 missing.
 
 Then, once per project, in a Claude Code session:
@@ -52,15 +53,15 @@ Then, once per project, in a Claude Code session:
 /hone:setup
 ```
 
-It runs `scripts/setup.sh` for the mechanics — a test adapter
-(`scripts/run-tests.sh`) matching your ecosystem, gitignores for the
-per-developer files, the docs skeleton (`docs/decisions/`, `docs/notes/`,
-`docs/open-questions.md`) plus `src/` — and then verifies the result: it
+It runs `scripts/setup.sh` for the mechanics (a test adapter
+`scripts/run-tests.sh` matching your ecosystem, gitignores for the
+per-developer files, the docs skeleton of `docs/decisions/`, `docs/notes/`,
+and `docs/open-questions.md`, plus `src/`) and then verifies the result: it
 executes each installed adapter, adapts it where the template doesn't fit the
 project (an ecosystem the script can't detect, a missing `test` script, an
 unsupported language standard), and adds `scripts/typecheck.sh` /
-`scripts/lint.sh` where the tooling exists. Running the script directly —
-`bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` — also works, but installs
+`scripts/lint.sh` where the tooling exists. Running the script directly with
+`bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` also works, but installs
 without verifying. `scripts/proof.sh` is yours to add; the hooks use the
 optional adapters when present.
 
@@ -70,30 +71,30 @@ and silently does nothing without it.
 
 ## Use
 
-- `/hone:plan <change>` — write `.plans/<change>.md`, the one hand-written
+- `/hone:plan <change>` writes `.plans/<change>.md`, the one hand-written
   artifact: what to build, why, and how you'll know it works. Where prose
   would lose detail (a file format, a fixture, a mockup), attach the actual
   file under `.plans/<change>/`. A critic checks the plan while you are still
   there to fix it, and it is committed so the run can see it.
-- `/hone:run <change>` — execute that plan through the loop and merge it
+- `/hone:run <change>` executes that plan through the loop and merges it
   green. `/hone:run --all` runs every ready plan, in parallel worktrees where
   the plans are independent, sequentially where they overlap.
-- `/hone:garden` — scan the whole repo for staleness between changes (stale
-  docs, dead code, redundant tests) and land the safe deletions. Meant to run
+- `/hone:garden` scans the whole repo for staleness between changes (stale
+  docs, dead code, redundant tests) and lands the safe deletions. Meant to run
   small and often from your existing cron/CI: `claude -p "/hone:garden"`.
 
 Everything after the plan is automatic. The run stops and reports instead of
 proceeding in exactly three cases: a check won't go green and the fixes are
 exhausted; the change turns out genuinely ambiguous; or landing it needs
-something only you can give — a grant for an irreversible change (a dropped
-column is not undone by `git revert`) or a sign-off that a real-environment
-check ran (a green test suite proves nothing about a browser journey or a
-deployed service). It never weakens a check to get through; on a stop, the
-worktree stays for inspection and `worktree.sh grant` / `attest` are the way
-to let it proceed.
+something only you can give, either a grant for an irreversible change (a
+dropped column is not undone by `git revert`) or a sign-off that a
+real-environment check ran (a green test suite proves nothing about a browser
+journey or a deployed service). It never weakens a check to get through; on a
+stop, the worktree stays for inspection and `worktree.sh grant` / `attest` are
+the way to let it proceed.
 
-Check the state of everything — hooks, adapters, pending plans, worktrees,
-sign-offs — with `worktree.sh status` (see the
+Check the state of everything with `worktree.sh status`: hooks, adapters,
+pending plans, worktrees, sign-offs (see the
 [reference](docs/reference.md)).
 
 ## Enforcement

@@ -1,4 +1,4 @@
-You were invoked as `/hone:run export/csv-escaping` — one named Plan, no `--all`.
+You were invoked as `/hone:run export/csv-escaping`: one named Plan, no `--all`.
 
 At step 1 you ran:
 
