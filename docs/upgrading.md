@@ -7,11 +7,17 @@ mechanical steps.
    marketplace; update it there and the hooks and skills pick the change up
    automatically.
 
-2. *Re-run setup.* `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` is safe
-   to repeat: it leaves your adapter, docs, and `.plans/` alone, keeps the
-   per-developer files gitignored (`.hone-off`, `.hone-grant/`,
-   `.hone-proof/`), and strips `.gitignore` entries for things hone no longer
-   uses. `/hone:setup` also works and re-verifies the adapters on top.
+2. *Re-run setup.* Run `/hone:setup` in the repo, with you present. It runs
+   the setup script, then executes each installed adapter and fixes what
+   fails. That check matters most on an upgrade: the script alone never
+   executes what it installs, so an adapter that has drifted out of date
+   only fails later, mid-run, with nobody there to repair it.
+
+   `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` is the non-interactive
+   fallback. It is safe to repeat: it leaves your adapter, docs, and
+   `.plans/` alone, keeps the per-developer files gitignored (`.hone-off`,
+   `.hone-grant/`, `.hone-proof/`), and strips `.gitignore` entries for
+   things hone no longer uses.
 
 3. *Reconcile what your version predates.* Check each of these against
    [`reference.md`](reference.md):
