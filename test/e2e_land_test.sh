@@ -332,6 +332,18 @@ echo "$out" | grep -q "run-tests=yes" || die "status should see the test adapter
 echo "$out" | grep -q "plans: none pending" || die "status should report no pending Plans"
 echo "$out" | grep -q "worktrees: none in flight" || die "status should report no worktrees"
 echo "$out" | grep -q "settings deny rules: MISSING" || die "status should flag missing deny rules"
+# The present-case, and that what the README tells people to paste is what the
+# probe looks for. Probing a rule form nobody writes reads as MISSING forever;
+# probing one Claude Code rejects (Write(path)) is worse, since it pushes an
+# inert rule. Edit(path) is the only form file tools match.
+mkdir -p "$REPO/.claude"
+printf '{"permissions":{"deny":["Edit(./scripts/run-tests.sh)"]}}\n' > "$REPO/.claude/settings.json"
+out=$(bash "$WSH" status) || die "status failed with deny rules present"
+echo "$out" | grep -q "settings deny rules: present" || die "status should see an Edit deny rule"
+grep -qF 'Edit(./scripts/run-tests.sh)' "$PLUGIN_ROOT/README.md" || die "README install block drifted from the rule status probes for"
+grep -qF 'Write(./scripts/run-tests.sh)' "$PLUGIN_ROOT/README.md" && die "README must not teach Write(path) rules; Claude Code rejects them"
+rm -rf "$REPO/.claude"
+out=$(bash "$WSH" status) || die "status failed"
 mkdir -p "$REPO/.plans" && echo "# Plan" > "$REPO/.plans/queued.md"
 touch "$REPO/.hone-off"
 out=$(bash "$WSH" status) || die "status failed with markers present"

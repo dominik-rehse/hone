@@ -38,10 +38,10 @@ Add the plugin and enable it in your project's `.claude/settings.json`:
   "permissions": {
     "allow": ["Bash(claude -p:*)"],
     "deny": [
-      "Write(./scripts/run-tests.sh)", "Edit(./scripts/run-tests.sh)",
-      "Write(./scripts/typecheck.sh)", "Edit(./scripts/typecheck.sh)",
-      "Write(./scripts/lint.sh)", "Edit(./scripts/lint.sh)",
-      "Write(./.claude/settings.json)", "Edit(./.claude/settings.json)"
+      "Edit(./scripts/run-tests.sh)",
+      "Edit(./scripts/typecheck.sh)",
+      "Edit(./scripts/lint.sh)",
+      "Edit(./.claude/settings.json)"
     ]
   }
 }
@@ -51,6 +51,9 @@ The `allow` entry lets the loop's review step run the native `/code-review`
 in a nested headless Claude Code; without it the run can't stay unattended.
 The `deny` entries stop the file tools from editing the test adapter or the
 settings; hone's `bash-guard` hook covers the shell routes to the same files.
+`Edit(path)` is the only rule form file permissions match, and it covers every
+file-editing tool, Write included — a `Write(path)` rule is inert and Claude
+Code rejects it at startup.
 Together they are a deterrent against an agent quietly weakening its own
 checks, not a sandbox. A session-start warning fires if the deny rules are
 missing.

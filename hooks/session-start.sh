@@ -75,9 +75,13 @@ fi
 # for the adapters (the bash-guard closes the shell routes). They are
 # installed by hand, so nothing else notices when they are missing. Either
 # settings file counts.
+#
+# Probe for the Edit rule, not a Write one: Claude Code matches file tools
+# against Edit(path) only, and Edit covers every file-editing tool including
+# Write. A Write(path) rule is inert and rejected at startup.
 if [ "$looks_like_hone" = true ] && \
-   ! grep -qsF 'Write(./scripts/run-tests.sh)' "$PROJECT_DIR/.claude/settings.json" "$PROJECT_DIR/.claude/settings.local.json"; then
-    echo "hone: the Write/Edit deny rules for the test adapter and settings are missing from .claude/settings.json, so the file-tool half of tamper resistance is off. Copy the permissions block from hone's README (Install section)."
+   ! grep -qsF 'Edit(./scripts/run-tests.sh)' "$PROJECT_DIR/.claude/settings.json" "$PROJECT_DIR/.claude/settings.local.json"; then
+    echo "hone: the Edit deny rules for the test adapter and settings are missing from .claude/settings.json, so the file-tool half of tamper resistance is off. Copy the permissions block from hone's README (Install section)."
 fi
 
 exit 0

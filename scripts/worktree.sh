@@ -460,7 +460,7 @@ cmd_status() {
         [ -n "$f" ] && echo "- proof sign-off: $f"
     done < <(find .hone-proof -type f 2>/dev/null | sort)
 
-    if grep -qsF 'Write(./scripts/run-tests.sh)' .claude/settings.json .claude/settings.local.json; then
+    if grep -qsF 'Edit(./scripts/run-tests.sh)' .claude/settings.json .claude/settings.local.json; then
         echo "- settings deny rules: present"
     else
         echo "- settings deny rules: MISSING; add the deny list from hone's README to .claude/settings.json"
