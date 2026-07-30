@@ -76,6 +76,20 @@ mkdir -p docs/decisions docs/notes .plans src
 [ -f docs/open-questions.md ] || printf '# Open questions\n\nAssumptions only running code can settle. Close or delete each entry once resolved; never grow it.\n' > docs/open-questions.md
 echo "hone setup: created docs/decisions, docs/notes, docs/open-questions.md, .plans/, src/."
 
+# 4. Report — never write — the settings deny rules. The block is installed by
+# hand (README, Install) and /hone:setup completes it with the human present;
+# a bare script run still names what is missing, so an upgrade that grew the
+# canonical list surfaces here as one paste instead of an investigation.
+# shellcheck source=hooks/common.sh
+. "$PLUGIN_ROOT/hooks/common.sh"
+MISSING_DENY=$(hone_missing_deny_rules "$PROJECT_DIR" "$PLUGIN_ROOT/templates/settings/deny-rules.txt")
+if [ -n "$MISSING_DENY" ]; then
+    echo "hone setup: .claude/settings.json is missing these deny rules (paste from the README's install block; add them last, after the adapters they protect are verified):"
+    printf '%s\n' "$MISSING_DENY" | sed 's/^/  /'
+else
+    echo "hone setup: settings deny rules complete."
+fi
+
 echo "hone setup: code lives under src/<area>/; that is where the guard, gate, and nag apply."
 echo "hone setup: for changes that need real-environment proof, copy a template from $PLUGIN_ROOT/templates/proof/ to scripts/proof.sh (optional; see that dir's README.md)."
 echo "hone setup: done. Author a change with /hone:plan, then /hone:run."

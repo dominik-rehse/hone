@@ -331,6 +331,59 @@ git -C "$REPO" show-ref --verify --quiet refs/heads/hone/area2/nested-change && 
 [ -d "$REPO/.worktrees" ] && ok ".worktrees/ itself is kept" || bad ".worktrees/ itself should be kept"
 
 echo
+echo "== session-start: canonical deny rules =="
+SESSION_START="$PLUGIN_ROOT/hooks/session-start.sh"
+DENY_CANON="$PLUGIN_ROOT/templates/settings/deny-rules.txt"
+SETTINGS="$REPO/.claude/settings.json"
+mkdir -p "$REPO/.claude"
+ss() { (cd "$REPO" && CLAUDE_PROJECT_DIR="$REPO" bash "$SESSION_START"); }
+# Write $SETTINGS carrying every canonical rule, piped through filter $1 (a
+# sed program; '' = verbatim). The output only has to satisfy the grep-based
+# comparison, not a JSON parser, so a filtered-out last element's dangling
+# comma is harmless.
+canon_settings() {
+    { echo '{"permissions":{"deny":['
+      grep -vE '^[[:space:]]*(#|$)' "$DENY_CANON" | sed 's/.*/"&",/' | sed -e '$ s/,$//' -e "${1:-}"
+      echo ']}}'
+    } > "$SETTINGS"
+}
+
+canon_settings ''
+out=$(ss)
+echo "$out" | grep -q 'missing these deny rules' && bad "complete canonical set should not warn" || ok "complete canonical set: no warning"
+
+canon_settings 's|Edit(\./|Edit(|'
+out=$(ss)
+echo "$out" | grep -q 'missing these deny rules' && bad "bare Edit(x) spelling should count" || ok "bare Edit(x) spelling counts"
+
+canon_settings '\|scripts/proof\.sh|d'
+out=$(ss)
+if echo "$out" | grep -qF 'Edit(./scripts/proof.sh)' && ! echo "$out" | grep -qF 'Edit(./scripts/lint.sh)'; then
+    ok "one missing rule named, present ones not"
+else
+    bad "warning should name exactly the missing rule"
+fi
+
+canon_settings 's|Edit(\./scripts/lint\.sh)|Write(./scripts/lint.sh)|'
+out=$(ss)
+echo "$out" | grep -qF 'Edit(./scripts/lint.sh)' && ok "inert Write spelling does not satisfy" || bad "a Write(path) rule should not satisfy the Edit requirement"
+
+canon_settings '\|no-verify|d'
+printf '{"permissions":{"deny":["Bash(git commit*--no-verify*)"]}}\n' > "$REPO/.claude/settings.local.json"
+out=$(ss)
+echo "$out" | grep -q 'missing these deny rules' && bad "settings.local.json should count" || ok "settings.local.json counts"
+rm -f "$REPO/.claude/settings.local.json"
+
+# The README's install block must carry the whole canonical list: it is what
+# the warnings tell the human to paste from.
+readme_ok=1
+while IFS= read -r rule; do
+    case "$rule" in ''|'#'*) continue ;; esac
+    grep -qF "\"$rule\"" "$PLUGIN_ROOT/README.md" || { readme_ok=0; bad "README install block lacks $rule"; }
+done < <(grep -vE '^[[:space:]]*(#|$)' "$DENY_CANON")
+[ "$readme_ok" -eq 1 ] && ok "README install block carries every canonical rule"
+
+echo
 echo "-------------------------------------"
 printf 'PASS: %d   FAIL: %d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]

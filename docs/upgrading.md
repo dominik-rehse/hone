@@ -34,6 +34,11 @@ mechanical steps.
    - *Land exit codes changed in 0.20*: a merge conflict is exit 9 (2 now
      means only a usage or repo-state error). Update anything of yours that
      reads land's exit.
+   - *The deny list is canonical since 0.24*: the plugin ships the full list
+     (`templates/settings/deny-rules.txt`), grown beyond the four rules older
+     READMEs prescribed. You don't reconcile it by hand: `setup.sh`, the
+     session-start warning, and `worktree.sh status` each name exactly the
+     rules your settings lack; paste them from the README's install block.
 
 After that, run `worktree.sh status`: it shows what is installed, what is
 missing, and flags a policy file that is still uncommitted or a settings.json

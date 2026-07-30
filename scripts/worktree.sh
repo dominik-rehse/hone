@@ -95,6 +95,10 @@ set -uo pipefail
 # grant/attest helpers in their own terminal, where ${CLAUDE_PLUGIN_ROOT} is
 # not set, so a bare "worktree.sh ..." would be a dead end.
 HONE_WSH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/worktree.sh"
+HONE_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+# shellcheck source=hooks/common.sh
+. "$HONE_PLUGIN_ROOT/hooks/common.sh"
 
 cmd_add() {
     local change="${1:-}"
@@ -460,10 +464,13 @@ cmd_status() {
         [ -n "$f" ] && echo "- proof sign-off: $f"
     done < <(find .hone-proof -type f 2>/dev/null | sort)
 
-    if grep -qsF 'Edit(./scripts/run-tests.sh)' .claude/settings.json .claude/settings.local.json; then
+    local missing_deny
+    missing_deny=$(hone_missing_deny_rules "$main_root" "$HONE_PLUGIN_ROOT/templates/settings/deny-rules.txt")
+    if [ -z "$missing_deny" ]; then
         echo "- settings deny rules: present"
     else
-        echo "- settings deny rules: MISSING; add the deny list from hone's README to .claude/settings.json"
+        echo "- settings deny rules: MISSING from the canonical set; add from hone's README install block:"
+        printf '%s\n' "$missing_deny" | sed 's/^/    /'
     fi
 }
 

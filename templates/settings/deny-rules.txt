@@ -1,0 +1,36 @@
+# hone's canonical settings deny rules: the file-tool half of tamper
+# resistance (the bash-guard hook closes the shell routes to the same files).
+# One rule per line, exactly as it appears in `permissions.deny` in the
+# project's .claude/settings.json; # comments.
+#
+# This file is what session-start, setup.sh, and `worktree.sh status` compare
+# a project's settings against, and the README's install block carries the
+# same list (test/hooks_test.sh keeps them in sync). The comparison is
+# semantic, not verbatim: a project-relative Edit rule counts in either legal
+# spelling (Edit(./x) or Edit(x)), either settings file counts, and a project
+# may carry any extra deny rules on top. An inert Write(path) rule never
+# counts: Claude Code matches file tools against Edit(path) only and rejects
+# a Write rule at startup.
+
+# The adapters. Each defines a verdict the loop trusts — run-tests "green",
+# proof "proven" — so an agent that can edit one can wave itself through.
+# Deny them even where the file does not exist yet: the rule then also stops
+# the agent from authoring it.
+Edit(./scripts/run-tests.sh)
+Edit(./scripts/typecheck.sh)
+Edit(./scripts/lint.sh)
+Edit(./scripts/proof.sh)
+
+# The perimeter itself. A deny list the agent can rewrite is not a perimeter.
+Edit(./.claude/settings.json)
+Edit(./.claude/settings.local.json)
+
+# The gate wiring outside the adapters: the repo's own git hooks, and the
+# plugin's hook code (guard, bash-guard, gate, nag).
+Edit(./.git/hooks/**)
+Edit(~/.claude/plugins/**)
+
+# The one-flag bypass of any commit-time hook. bash-guard denies the same
+# command; the permissions rule still holds when hone's hooks are off
+# (.hone-off).
+Bash(git commit*--no-verify*)

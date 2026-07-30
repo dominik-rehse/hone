@@ -332,15 +332,25 @@ echo "$out" | grep -q "run-tests=yes" || die "status should see the test adapter
 echo "$out" | grep -q "plans: none pending" || die "status should report no pending Plans"
 echo "$out" | grep -q "worktrees: none in flight" || die "status should report no worktrees"
 echo "$out" | grep -q "settings deny rules: MISSING" || die "status should flag missing deny rules"
-# The present-case, and that what the README tells people to paste is what the
-# probe looks for. Probing a rule form nobody writes reads as MISSING forever;
-# probing one Claude Code rejects (Write(path)) is worse, since it pushes an
-# inert rule. Edit(path) is the only form file tools match.
+# A partial set is still MISSING, and the warning names only what is absent —
+# the semantic comparison against the canonical list, not a single-rule probe.
 mkdir -p "$REPO/.claude"
 printf '{"permissions":{"deny":["Edit(./scripts/run-tests.sh)"]}}\n' > "$REPO/.claude/settings.json"
+out=$(bash "$WSH" status) || die "status failed with a partial deny set"
+echo "$out" | grep -q "settings deny rules: MISSING" || die "status should flag a partial deny set"
+echo "$out" | grep -qF 'Edit(./scripts/proof.sh)' || die "status should name a missing rule"
+echo "$out" | grep -qF 'Edit(./scripts/run-tests.sh)' && die "status should not name a present rule"
+# The present-case: the full canonical list, in the bare Edit(x) spelling to
+# pin that the comparison is semantic. Probing a rule form nobody writes reads
+# as MISSING forever; probing one Claude Code rejects (Write(path)) is worse,
+# since it pushes an inert rule. Edit(path) is the only form file tools match.
+{ echo '{"permissions":{"deny":['
+  grep -vE '^[[:space:]]*(#|$)' "$PLUGIN_ROOT/templates/settings/deny-rules.txt" \
+      | sed -e 's/.*/"&",/' -e '$ s/,$//' -e 's|Edit(\./|Edit(|'
+  echo ']}}'
+} > "$REPO/.claude/settings.json"
 out=$(bash "$WSH" status) || die "status failed with deny rules present"
-echo "$out" | grep -q "settings deny rules: present" || die "status should see an Edit deny rule"
-grep -qF 'Edit(./scripts/run-tests.sh)' "$PLUGIN_ROOT/README.md" || die "README install block drifted from the rule status probes for"
+echo "$out" | grep -q "settings deny rules: present" || die "status should accept the full set in the bare spelling"
 grep -qF 'Write(./scripts/run-tests.sh)' "$PLUGIN_ROOT/README.md" && die "README must not teach Write(path) rules; Claude Code rejects them"
 rm -rf "$REPO/.claude"
 out=$(bash "$WSH" status) || die "status failed"

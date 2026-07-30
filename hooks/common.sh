@@ -1,8 +1,10 @@
 #!/bin/bash
-# Shared helpers for hone's hooks. SOURCED by guard.sh, bash-guard.sh, gate.sh,
-# and nag.sh, never executed directly. Defines functions only; no side effects
-# at source time. Keeping the JSON emit/escape and the stdin-field parse in one
-# place stops the four hooks from drifting (they had already diverged).
+# Shared helpers for hone's hooks. SOURCED by the hooks (guard.sh,
+# bash-guard.sh, gate.sh, nag.sh, session-start.sh) and by the scripts that
+# share their checks (setup.sh, worktree.sh), never executed directly. Defines
+# functions only; no side effects at source time. Keeping the JSON emit/escape,
+# the stdin-field parse, and the deny-rule comparison in one place stops the
+# consumers from drifting (they had already diverged).
 
 # Escape a string for embedding as a JSON string value in a hook decision:
 # backslash first, then double-quote, then real newlines to the JSON `\n` escape.
@@ -43,4 +45,29 @@ hone_extract_field() {
     else
         printf '%s' "$json" | sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -1
     fi
+}
+
+# Print each canonical deny rule that appears in NEITHER settings file of
+# project $1. $2 is the canonical list (templates/settings/deny-rules.txt: one
+# rule per line, # comments). The match is semantic, not verbatim: a
+# project-relative Edit rule counts in either legal spelling (Edit(./x) or
+# Edit(x)), matched as a whole JSON string ("...") so a substring of a longer
+# rule never counts, and neither does an inert Write(path) rule (Claude Code
+# matches file tools against Edit(path) only and rejects a Write rule at
+# startup). Extra deny rules beyond the canonical list are the project's
+# business; nothing here reports them. Empty output = complete.
+hone_missing_deny_rules() {
+    local project="$1" canon="$2" rule alt
+    [ -f "$canon" ] || return 0
+    while IFS= read -r rule; do
+        rule=$(printf '%s' "$rule" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+        case "$rule" in ''|'#'*) continue ;; esac
+        case "$rule" in
+            'Edit(./'*) alt="Edit(${rule#"Edit(./"}" ;;
+            *)          alt="$rule" ;;
+        esac
+        grep -qsF -e "\"$rule\"" -e "\"$alt\"" \
+            "$project/.claude/settings.json" "$project/.claude/settings.local.json" \
+            || printf '%s\n' "$rule"
+    done < "$canon"
 }

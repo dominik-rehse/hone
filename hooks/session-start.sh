@@ -19,6 +19,9 @@ SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 SOURCE_DIR="$SCRIPT_DIR/../rules"
 PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 
+# shellcheck source=hooks/common.sh
+. "$SCRIPT_DIR/common.sh"
+
 [ -d "$SOURCE_DIR" ] || exit 0
 [ -f "$PROJECT_DIR/.hone-off" ] && exit 0
 
@@ -73,15 +76,18 @@ fi
 
 # The settings deny rules are the file-tool half of hone's tamper resistance
 # for the adapters (the bash-guard closes the shell routes). They are
-# installed by hand, so nothing else notices when they are missing. Either
-# settings file counts.
-#
-# Probe for the Edit rule, not a Write one: Claude Code matches file tools
-# against Edit(path) only, and Edit covers every file-editing tool including
-# Write. A Write(path) rule is inert and rejected at startup.
-if [ "$looks_like_hone" = true ] && \
-   ! grep -qsF 'Edit(./scripts/run-tests.sh)' "$PROJECT_DIR/.claude/settings.json" "$PROJECT_DIR/.claude/settings.local.json"; then
-    echo "hone: the Edit deny rules for the test adapter and settings are missing from .claude/settings.json, so the file-tool half of tamper resistance is off. Copy the permissions block from hone's README (Install section)."
+# installed by hand, so nothing else notices when they are missing — or, after
+# a plugin upgrade that grew the canonical list, incomplete. Compare against
+# the canonical list semantically (hone_missing_deny_rules: either settings
+# file, either spelling of a relative path) and name exactly what is missing,
+# so an upgrade is one paste instead of an investigation.
+if [ "$looks_like_hone" = true ]; then
+    missing=$(hone_missing_deny_rules "$PROJECT_DIR" "$SCRIPT_DIR/../templates/settings/deny-rules.txt")
+    if [ -n "$missing" ]; then
+        echo "hone: .claude/settings.json is missing these deny rules, so part of the file-tool tamper resistance is off:"
+        printf '%s\n' "$missing" | sed 's/^/  /'
+        echo "hone: paste the missing entries into permissions.deny (the full block is in hone's README, Install section). Edit(./x) and Edit(x) both count; a Write(path) rule is inert."
+    fi
 fi
 
 exit 0

@@ -87,12 +87,20 @@ its own Plan.
 
 ## 5. Settings
 
-Check `.claude/settings.json` against the install block in hone's README:
-the `enabledPlugins` entry, the `Bash(claude -p:*)` allow (without it the
-loop's review step can't run unattended), and the deny rules for the adapters
-and the settings file itself. Add what is missing last, so the denies land
-after the adapters they protect are verified. If the settings file is itself
-already deny-protected, show the missing block and let the human paste it.
+Check `.claude/settings.json` for the `enabledPlugins` entry and the
+`Bash(claude -p:*)` allow (without it the loop's review step can't run
+unattended). For the deny rules, `setup.sh` already printed exactly which
+canonical rules are missing (it compares both settings files against
+`${CLAUDE_PLUGIN_ROOT}/templates/settings/deny-rules.txt`, accepting the
+`Edit(./x)` and `Edit(x)` spellings alike); do not re-derive the list
+yourself. Add what is missing last, so the denies land after the adapters
+they protect are verified. Rules a project carries beyond the canonical set
+are its own policy: leave them alone. If the settings file is itself already
+deny-protected, show the missing entries and let the human paste them.
+
+This step is also the upgrade path: when a new hone version grows the
+canonical list, re-running `/hone:setup` (or `setup.sh` alone) reduces the
+reconciliation to the same single paste.
 
 ## 6. Report
 

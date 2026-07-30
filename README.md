@@ -41,7 +41,12 @@ Add the plugin and enable it in your project's `.claude/settings.json`:
       "Edit(./scripts/run-tests.sh)",
       "Edit(./scripts/typecheck.sh)",
       "Edit(./scripts/lint.sh)",
-      "Edit(./.claude/settings.json)"
+      "Edit(./scripts/proof.sh)",
+      "Edit(./.claude/settings.json)",
+      "Edit(./.claude/settings.local.json)",
+      "Edit(./.git/hooks/**)",
+      "Edit(~/.claude/plugins/**)",
+      "Bash(git commit*--no-verify*)"
     ]
   }
 }
@@ -49,14 +54,18 @@ Add the plugin and enable it in your project's `.claude/settings.json`:
 
 The `allow` entry lets the loop's review step run the native `/code-review`
 in a nested headless Claude Code; without it the run can't stay unattended.
-The `deny` entries stop the file tools from editing the test adapter or the
-settings; hone's `bash-guard` hook covers the shell routes to the same files.
+The `deny` entries stop the file tools from editing the four adapters, the
+settings, the git hook wiring, and the plugin's own code; hone's `bash-guard`
+hook covers the shell routes to the same files.
 `Edit(path)` is the only rule form file permissions match, and it covers every
 file-editing tool, Write included — a `Write(path)` rule is inert and Claude
 Code rejects it at startup.
 Together they are a deterrent against an agent quietly weakening its own
-checks, not a sandbox. A session-start warning fires if the deny rules are
-missing.
+checks, not a sandbox. The deny list above is canonical in the plugin
+(`templates/settings/deny-rules.txt`); a session-start warning names any rule
+your settings lack — the comparison accepts `Edit(./x)` and `Edit(x)` alike,
+in either settings file, and extra project-specific denies on top are yours
+to add.
 
 Then, once per project, in a Claude Code session:
 

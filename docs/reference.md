@@ -108,8 +108,11 @@ is never gated, and enforcement assumes code lives under `src/<area>/`.
   about to land that deletes nothing, a `type: project` entry in the
   harness's own memory store.
 - *session-start* injects the workflow rule from the plugin, and warns
-  when the test adapter, the `src/` layout, or the settings deny rules are
-  missing.
+  when the test adapter or the `src/` layout is missing, or when the settings
+  lack any rule from the canonical deny list
+  (`templates/settings/deny-rules.txt`), naming the missing rules. The
+  comparison is semantic: `Edit(./x)` and `Edit(x)` both count, either
+  settings file counts, and extra project-specific denies are ignored.
 
 ## Land gates
 
@@ -203,6 +206,7 @@ hone/
 ├── scripts/{worktree,setup}.sh
 ├── agents/                      # plan-critic, consolidate-critic
 ├── templates/{run-tests,proof}/ # adapter contracts and templates
+├── templates/settings/          # the canonical deny-rules list
 └── evals/                       # known-good answers for the critics and the loop
 ```
 
