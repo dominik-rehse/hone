@@ -11,8 +11,10 @@ and optimization of the plugin itself is headed is in
 hone is distributed through its marketplace entry, so a consumer's install is
 exactly what `.claude-plugin/plugin.json` describes: `rules/`, `skills/`,
 `hooks/`, `agents/`, `scripts/`, and `templates/`. Everything else is
-repo-internal and never reaches a consumer: `test/`, `evals/`, `docs/`, and
-`.claude/` (this repo's own settings and rules).
+repo-internal and never reaches a consumer: `README.md`, `test/`, `evals/`,
+`docs/`, and `.claude/` (this repo's own settings and rules). `README.md` is
+the only one of those a stranger reads, because GitHub and the marketplace
+listing show it, so it is repo-internal without being private.
 
 The consequence that shapes every change: consumers only pick up a change
 through a marketplace version bump. An edit to a distributed file that ships

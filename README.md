@@ -30,7 +30,13 @@ Working on hone itself (the suites, the release process) is covered in
 
 ## Install
 
-Add the plugin and enable it in your project's `.claude/settings.json`:
+```text
+/plugin marketplace add dominik-rehse/hone
+/plugin install hone@hone
+```
+
+`/plugin install` writes the `enabledPlugins` entry. The permissions are yours
+to add, so the complete block in your project's `.claude/settings.json` is:
 
 ```json
 {
@@ -88,6 +94,17 @@ optional adapters when present.
 One layout requirement: production code lives under `src/<area>/` (Python
 packages too: `src/<pkg>/`). All of hone's enforcement keys off that layout
 and silently does nothing without it.
+
+## Upgrades
+
+```text
+/plugin marketplace update hone
+/plugin update hone@hone
+```
+
+That takes the new plugin version, which is step 1 of
+[`docs/upgrading.md`](docs/upgrading.md); the remaining steps re-run setup and
+reconcile the repo's own artifacts.
 
 ## Use
 
