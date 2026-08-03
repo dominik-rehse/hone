@@ -2,7 +2,9 @@
 
 This page is for changing the plugin itself. Using hone in a project is
 covered by [`model.md`](model.md) (why it works this way) and
-[`reference.md`](reference.md) (the control surface).
+[`reference.md`](reference.md) (the control surface). Where the evaluation
+and optimization of the plugin itself is headed is in
+[`roadmap.md`](roadmap.md).
 
 ## What ships and what doesn't
 
