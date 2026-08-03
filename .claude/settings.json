@@ -2,6 +2,7 @@
   "enabledPlugins": {
     "language-agnostic-agent-setup@language-agnostic-agent-setup": true,
     "skill-creator@claude-plugins-official": true,
-    "plugin-dev@claude-plugins-official": true
+    "plugin-dev@claude-plugins-official": true,
+    "ste@ste": true
   }
 }
