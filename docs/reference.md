@@ -46,6 +46,11 @@ work. The loop calls it; you can too:
 - `worktree.sh attest <change> "what you ran"` records your sign-off that
   the real-environment check ran (writes `.hone-proof/<change>`, stamped with
   the branch tip, your git user, and the time). Also denied to the agent.
+  It refuses a description that is empty or only whitespace. It also refuses
+  the unedited placeholder from this page: `what you ran`, or `what you ran
+  and the outcome`. Case and surrounding quotes make no difference. Both
+  refusals exit 2 and write nothing, because a sign-off holding the
+  placeholder reads as evidence and carries none.
 
 ## Configuration files
 
@@ -60,6 +65,13 @@ file:
   irreversible, beyond the built-in signals (destructive SQL in a migration
   or `db/` file, a deletion under `db/`). One glob per line, `#` comments.
   The pre-0.19 name `.hone-consequential-paths` still works.
+- `.hone-proof-always` makes the proof gate fire on *every* change, whether or
+  not a commit declares the trailer. Its existence is the whole switch, and
+  land ignores the contents, so use them for a `#` comment. Commit it, or it
+  gates your own lands and nobody else's. With the marker present and no
+  `scripts/proof.sh`, land refuses with exit 7 and asks you to add the
+  adapter or delete the marker. `worktree.sh status` reports the marker and
+  warns while it is uncommitted.
 
 *Per-developer*, gitignored and never checked in:
 
@@ -133,7 +145,20 @@ the worktree stays for inspection.
   check has to. Landing it needs one of: a green run of the *primary tree's*
   `scripts/proof.sh` (see *Adapters*: the reviewed copy is executed, so a
   change cannot ship its own green stub), or your sign-off after running the
-  check yourself: `worktree.sh attest <change> "what you ran"`.
+  check yourself: `worktree.sh attest <change> "what you ran"`. A committed
+  `.hone-proof-always` widens this gate to every change (see *Configuration
+  files*).
+
+The proof gate's refusal prints the check the trailer declared, the text
+after the dash on the `Proof: real-environment` line. You run that check, so
+you should not have to open the Plan to read it. An older trailer carries no
+description, and the message stays generic.
+
+One change has no automatic route. Where the diff touches `scripts/proof.sh`
+or anything under `scripts/proof-probes/`, land cannot prove it. The copy land
+holds is the one the change replaces. The refusal then
+tells you to run `bash scripts/proof.sh <change>` from the worktree in your
+own terminal, and to attest with its output.
 
 The agent never writes a grant or sign-off and never runs the helpers: the
 guard denies the file-tool routes and the bash-guard the shell routes (a
@@ -161,6 +186,12 @@ What to do at each code, in detail:
 The post-merge suite writes `<git-common-dir>/hone-land.log`, replaced on
 every land. Exit 6 prints that path and the last 20 lines of it.
 
+After a green post-merge run, land reads the tier summary lines out of that
+log. It then warns about every tier that reported `ran=0`, because a tier
+that matched no test makes the green prove nothing. The warning never blocks:
+land exits 0 and the merge stands. An adapter that prints no summary lines
+draws no warning.
+
 Other subcommands: `add` exits 4 when the change is already claimed by
 another run (0 created, 2 error); `remove` exits 3 when the path is not one
 hone created (0 removed, 2 error); `verify` passes through the adapter's exit
@@ -172,8 +203,9 @@ One script per job, all under the project's `scripts/`; the gate and the loop
 call them so hone itself stays language-agnostic.
 
 - `run-tests.sh` is required. Unit tier by default, `--all` for every tier,
-  `<files...>` for specific files. Contract and per-ecosystem templates:
-  [`templates/run-tests/README.md`](../templates/run-tests/README.md).
+  `<files...>` for specific files. It should also print one summary line per
+  tier it ran, `hone tier: <name> ran=<count>`. Contract and per-ecosystem
+  templates: [`templates/run-tests/README.md`](../templates/run-tests/README.md).
   Installed by `setup.sh`.
 - `typecheck.sh` and `lint.sh` are optional, one line each, run by the gate
   when present.
@@ -199,6 +231,7 @@ repo/                            # the primary tree: a merge target, never a wor
 ├── .worktrees/<change>/         # gitignored; one per change in flight
 ├── .hone-durable-paths          # committed policy (optional)
 ├── .hone-irreversible-paths     # committed policy (optional)
+├── .hone-proof-always           # committed policy (optional): prove every change
 └── .claude/settings.json        # enables the plugin; deny rules for the adapters
 ```
 
