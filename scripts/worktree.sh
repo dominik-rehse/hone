@@ -419,9 +419,17 @@ cmd_land() {
             # needs the human sign-off. Pass the change through, by argument
             # and environment, so the adapter can address its own instance (a
             # per-change port, DB, output dir) instead of guessing.
+            #
+            # A BOOTSTRAP change (one that writes or edits scripts/proof.sh or
+            # a probe) runs no adapter at all. The copy land holds is the copy
+            # this change replaces, so running it proves the OLD adapter passes
+            # against the new code, and a green run would auto-land a change to
+            # the proof adapter itself. The documented contract gives this case
+            # no automatic route: the human runs the branch's own adapter from
+            # the worktree and attests with its output.
             local proof_root="$main_root" proof_wt=""
             [ -d "$wt" ] && { proof_root="$wt"; proof_wt="$wt"; }
-            if [ -f "$main_root/scripts/proof.sh" ]; then
+            if [ -f "$main_root/scripts/proof.sh" ] && [ -z "$bootstrap" ]; then
                 if ! ( cd "$proof_root" \
                        && HONE_CHANGE="$change" HONE_BRANCH="$branch" \
                           HONE_WORKTREE="$proof_wt" HONE_MAIN_ROOT="$main_root" \
@@ -429,9 +437,11 @@ cmd_land() {
                     msg_wt_land_proof_adapter_failed "$branch" "$check" "$attest_cmd" "$bootstrap" >&2
                     return 7
                 fi
-            elif [ -n "$proof_always" ]; then
+            elif [ -n "$proof_always" ] && [ ! -f "$main_root/scripts/proof.sh" ]; then
                 # The marker asked for an adapter run on every change, and
                 # there is no adapter. Refusing beats quietly proving nothing.
+                # A bootstrap change skipped an adapter that DOES exist, so it
+                # never reaches this branch and never reads that it is missing.
                 msg_wt_land_proof_always_no_adapter "$HONE_PLUGIN_ROOT/templates/proof/" >&2
                 return 7
             elif [ -f "$signoff" ]; then

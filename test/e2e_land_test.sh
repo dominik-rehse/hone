@@ -403,6 +403,35 @@ bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a tip-naming sign-off should land the change despite a red adapter (got $rc)"
 step "sign-off naming the tip lands the change (checked before the adapter)"
 rm -f "$REPO/.hone-proof/ui-flow3"
+# (i) The bootstrap change runs NO adapter, even where the primary tree holds a
+# green one. That copy is the copy this change replaces, so a green run would
+# prove the old adapter against the new code and auto-land the change. Only the
+# human's sign-off discharges it.
+cat > "$REPO/scripts/proof.sh" <<'PROOF'
+#!/bin/bash
+echo "the landed adapter ran" > "$HONE_MAIN_ROOT/proof-context"
+exit 0
+PROOF
+git add scripts/proof.sh && git commit -qm "chore: a green proof adapter again"
+WT_BG=$(bash "$WSH" add bootstrap-green) || die "worktree add bootstrap-green"
+printf '#!/bin/bash\n# the change rewrites the adapter\nexit 0\n' > "$WT_BG/scripts/proof.sh"
+(cd "$WT_BG" && git add -A && git commit -qm "feat(proof): rewrite the adapter
+
+Proof: real-environment - run the new adapter by hand")
+PRE=$(git rev-parse HEAD)
+out=$(bash "$WSH" land bootstrap-green 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "a bootstrap change must not land on the primary tree's adapter (got $rc)"
+[ -f "$REPO/proof-context" ] && die "land must not run the landed adapter for a bootstrap change"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a bootstrap change must not touch the trunk"
+echo "$out" | grep -q "land cannot use the copy it has" || die "the refusal should explain the bootstrap case"
+echo "$out" | grep -qF "bash scripts/proof.sh bootstrap-green" || die "the refusal should print the by-hand proof command"
+# The human runs the branch's own adapter and attests: that discharges it.
+bash "$WSH" attest bootstrap-green "ran the new adapter from the worktree: ok" >/dev/null \
+    || die "attest of the bootstrap change failed"
+bash "$WSH" land bootstrap-green >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "a tip-naming sign-off should land the bootstrap change (got $rc)"
+rm -f "$REPO/.hone-proof/bootstrap-green" "$REPO/proof-context"
+step "a bootstrap change runs no adapter (exit 7), and a sign-off lands it"
 
 echo "== 5g. proof-always: the marker gates every change =="
 # (a) With the marker and a green adapter, a change with NO trailer is proven
