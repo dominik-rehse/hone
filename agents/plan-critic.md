@@ -23,7 +23,10 @@ what they must resolve before the loop runs unattended against it.
 
 - **Placeholders.** Any `TBD`, `???`, `<fill in>`, an empty required section, or a
   *How I'll know it works* that isn't concretely checkable ("it works", "handles
-  errors"). An unattended loop cannot resolve a placeholder; it is a hard reject.
+  errors"). A `Proof: real-environment` line with nothing after the dash is a
+  placeholder too. Consolidate deletes the Plan, so that description is the only
+  thing telling the human at land time what to run. An unattended loop cannot
+  resolve a placeholder; it is a hard reject.
 - **Contradictions.** Two requirements that can't both hold; a *What* the *Why*
   doesn't justify; a stated proof that wouldn't actually prove the *What*. In
   particular, a proof at the *wrong level*: the *What* is a user- or ops-level
@@ -32,9 +35,7 @@ what they must resolve before the loop runs unattended against it.
   check proves only its assertion, so name the mismatch and require either a real
   proof or an explicit `Proof: real-environment — <the check>` line. Flag this
   only when the proof is *categorically* incapable of settling the claim, not
-  merely thin. A `Proof: real-environment` line with nothing after the dash is a
-  finding on its own. Consolidate deletes the Plan, so that description is the
-  only thing telling the human at land time what to run.
+  merely thin.
 - **Ambiguity.** A requirement a reasonable builder could satisfy two materially
   different ways. Distinguish a genuine fork (reject: the human must pick) from
   detail the loop can reasonably decide (fine: don't invent objections).
