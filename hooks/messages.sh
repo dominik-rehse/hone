@@ -263,7 +263,7 @@ msg_setup_no_ecosystem() {
     local templates="$1"
     cat <<EOF
 hone setup: could not detect the ecosystem, so it installed no test adapter.
-Do: author scripts/run-tests.sh from the closest template below.
+Do: author scripts/run-tests.sh against the contract below.
 Why: /hone:setup does this step for you.
 $(hone_msg_block "$templates")
 EOF
@@ -317,7 +317,7 @@ msg_setup_proof_hint() {
     local templates="$1"
     cat <<EOF
 hone setup: a change that needs real-environment proof also needs scripts/proof.sh.
-Do: copy a template from the directory below when a change needs one.
+Do: copy a template from the directory below into scripts/proof.sh.
 Why: the land proof gate runs that adapter.
 $(hone_msg_block "$templates")
 EOF
