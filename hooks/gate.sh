@@ -38,6 +38,8 @@ set -uo pipefail
 
 # shellcheck source=hooks/common.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck source=hooks/messages.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/messages.sh"
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
 [ -n "$PROJECT_ROOT" ] || PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
@@ -62,7 +64,8 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     fi
 fi
 
-block() { hone_stop_block "hone gate: $*"; exit 0; }
+# $1 = a template from messages.sh (already prefixed).
+block() { hone_stop_block "$1"; exit 0; }
 
 # Run an adapter, capturing a short tail of its output for the block reason.
 # On success, append the label to the green receipt.
@@ -75,7 +78,7 @@ run_step() {
     if [ "$rc" -ne 0 ]; then
         local tail
         tail=$(printf '%s\n' "$out" | tail -n 15)
-        block "$label failed (exit $rc). Fix it before finishing; do not disable the gate. Output tail:"$'\n'"${tail}"
+        block "$(msg_gate_step_failed "$label" "$rc" "$tail")"
     fi
     ran+="${ran:+, }$label"
 }
@@ -91,7 +94,7 @@ if [ "$TIER" = "--all" ] && command -v flock >/dev/null 2>&1; then
     SUITE_LOCK="$(git rev-parse --git-common-dir 2>/dev/null)/hone-land.lock"
     if { exec 9>"$SUITE_LOCK"; } 2>/dev/null; then
         flock -w "${HONE_SUITE_LOCK_TIMEOUT:-30}" 9 || \
-            block "another session is running the full suite (a land or verify holds the suite lock); wait and re-verify rather than racing it; do not run the suite concurrently."
+            block "$(msg_gate_suite_lock)"
     fi
 fi
 
@@ -101,5 +104,5 @@ run_step "tests ($TIER)" bash "$ADAPTER" "$TIER"
 
 # Green receipt: one visible line saying what actually ran, so a transcript can
 # confirm the gate fired rather than inferring it from silence.
-printf '{"systemMessage":"hone gate: green (%s)"}\n' "$(hone_json_escape "$ran")"
+printf '{"systemMessage":"%s"}\n' "$(hone_json_escape "$(msg_gate_green "$ran")")"
 exit 0

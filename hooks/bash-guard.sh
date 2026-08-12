@@ -17,13 +17,16 @@ set -uo pipefail
 
 # shellcheck source=hooks/common.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck source=hooks/messages.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/messages.sh"
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
 [ -n "$PROJECT_ROOT" ] || PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 cd "$PROJECT_ROOT" || exit 0
 [ -f ".hone-off" ] && exit 0
 
-decision() { hone_pretool_decision "$1" "hone bash-guard: $2"; exit 0; }
+# $1 = deny|ask, $2 = a template from messages.sh (already prefixed).
+decision() { hone_pretool_decision "$1" "$2"; exit 0; }
 
 # Sabotage tokens, defined ONCE and shared by both scan paths so they can't drift.
 # HARD_TOKENS always mean "disable the gate wholesale": sabotage on any path.
@@ -42,7 +45,7 @@ if [ -z "$CMD" ]; then
     # Parsing failed. Fail closed: if the raw payload carries any gate-sabotage
     # token, escalate; otherwise nothing actionable, so allow.
     if echo "$INPUT" | grep -Eq "$HARD_TOKENS|$MARKER_TOKENS"; then
-        decision ask "could not parse the command, but the payload contains a token associated with disabling the hone gate (e.g. --no-verify, core.hooksPath, .hone-off). Review it manually before allowing."
+        decision ask "$(msg_bashguard_unparsed)"
     fi
     exit 0
 fi
@@ -54,7 +57,7 @@ if echo "$CMD" | grep -Eq \
         -e '(^|[^A-Za-z_])(HUSKY|LEFTHOOK|GIT_CONFIG[A-Z_]*)=' \
         -e '(touch|install|printf|echo)[^|;&]*\.hone-off' \
         -e '>[[:space:]]*"?'"'"'?\.hone-off'; then
-    decision deny "command would disable the hone gate (e.g. --no-verify, core.hooksPath, creating .hone-off). If this is intentional, make the change yourself outside the agent."
+    decision deny "$(msg_bashguard_sabotage)"
 fi
 
 # 1b. Writing an authority grant or a proof sign-off → deny. The land gates'
@@ -67,7 +70,7 @@ if echo "$CMD" | grep -Eq \
         -e '(touch|install|printf|echo|tee|cp|mv|mkdir|ln|sed -i|rm |truncate|dd|chmod|chattr)[^|;&]*\.hone-(grant|proof)/' \
         -e '>>?[[:space:]]*"?'"'"'?[^[:space:]|;&]*\.hone-(grant|proof)/' \
         -e 'worktree\.sh"?'"'"'?[[:space:]]+(grant|attest)([[:space:]]|$)'; then
-    decision deny "command would write an authority grant or a proof sign-off (.hone-grant/, .hone-proof/, or worktree.sh grant/attest). Those are reserved to the human: escalate and wait for them to run it in their own terminal."
+    decision deny "$(msg_bashguard_signoff)"
 fi
 
 # 2. A mutating operation aimed at a protected artifact → ask. The committed
@@ -76,7 +79,7 @@ fi
 # is the human's call.
 PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths'
 if echo "$CMD" | grep -Eq "(>>?|tee|sed -i|cp |mv |install |ln -s|chmod|chattr|rm |truncate|dd of=)[^|;&]*(${PROT})"; then
-    decision ask "command appears to modify a protected hone artifact (the test adapter, a hook, or settings). Confirm this is an intended, legitimate change before allowing it."
+    decision ask "$(msg_bashguard_protected)"
 fi
 
 # 3. A HEAD-moving git op in the PRIMARY tree → ask. The primary tree is a merge
@@ -90,7 +93,7 @@ fi
 # are safely isolated.
 if [ "$(git rev-parse --git-dir 2>/dev/null)" = "$(git rev-parse --git-common-dir 2>/dev/null)" ] \
    && echo "$CMD" | grep -Eq '(^|[^A-Za-z_])git[[:space:]]+((checkout|switch|stash)([[:space:]]|$)|reset[^|;&]*--(hard|merge|keep))'; then
-    decision ask "command moves HEAD in the primary tree (git checkout/switch/stash/reset). The primary tree stays on the trunk as a merge target, so investigate in a 'git worktree add --detach' scratch tree, and land via 'worktree.sh land'. Confirm before allowing."
+    decision ask "$(msg_bashguard_head_move)"
 fi
 
 exit 0

@@ -21,6 +21,8 @@ PROJECT_DIR="${CLAUDE_PROJECT_DIR:-$PWD}"
 
 # shellcheck source=hooks/common.sh
 . "$SCRIPT_DIR/common.sh"
+# shellcheck source=hooks/messages.sh
+. "$SCRIPT_DIR/messages.sh"
 
 [ -d "$SOURCE_DIR" ] || exit 0
 [ -f "$PROJECT_DIR/.hone-off" ] && exit 0
@@ -64,14 +66,14 @@ if [ -d "$PROJECT_DIR/docs/decisions" ] || [ -d "$PROJECT_DIR/docs/notes" ] || [
 fi
 
 if [ "$looks_like_hone" = true ] && [ ! -f "$PROJECT_DIR/scripts/run-tests.sh" ]; then
-    echo "hone: this project has no scripts/run-tests.sh, so the gate has no suite to run. Install the test adapter with: bash \"\${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh\""
+    msg_session_no_adapter
 fi
 
 # hone keys its enforcement off a src/<area>/ layout. A hone project with no src/
 # means the guard, gate, and nag silently do nothing. Surface that instead of
 # leaving it a silent gap.
 if [ "$looks_like_hone" = true ] && [ ! -d "$PROJECT_DIR/src" ]; then
-    echo "hone: no src/ directory found. hone's guard, gate, and nag key off a src/<area>/ layout; without it they do nothing. Put code under src/ (Python packages too: src/<pkg>/), or run scripts/setup.sh to create it."
+    msg_session_no_src
 fi
 
 # The settings deny rules are the file-tool half of hone's tamper resistance
@@ -84,9 +86,7 @@ fi
 if [ "$looks_like_hone" = true ]; then
     missing=$(hone_missing_deny_rules "$PROJECT_DIR" "$SCRIPT_DIR/../templates/settings/deny-rules.txt")
     if [ -n "$missing" ]; then
-        echo "hone: .claude/settings.json is missing these deny rules, so part of the file-tool tamper resistance is off:"
-        printf '%s\n' "$missing" | sed 's/^/  /'
-        echo "hone: paste the missing entries into permissions.deny (the full block is in hone's README, Install section). Edit(./x) and Edit(x) both count; a Write(path) rule is inert."
+        msg_session_missing_deny "$missing"
     fi
 fi
 

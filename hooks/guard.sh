@@ -31,6 +31,8 @@ set -uo pipefail
 
 # shellcheck source=hooks/common.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
+# shellcheck source=hooks/messages.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/messages.sh"
 
 # Resolve the project root from the git worktree we are actually in (the hook's
 # cwd), so the guard is correct inside a linked worktree, including a
@@ -41,9 +43,10 @@ PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
 cd "$PROJECT_ROOT" || exit 0
 PROJECT_DIR=$(pwd -P)
 
-# Report a denial as a structured PreToolUse decision. exit 0 keeps the JSON the
-# sole channel (a non-zero exit would compete with it).
-deny() { hone_pretool_decision deny "hone guard: $*"; exit 0; }
+# Report a denial as a structured PreToolUse decision. The reason is a template
+# from messages.sh, already prefixed. exit 0 keeps the JSON the sole channel (a
+# non-zero exit would compete with it).
+deny() { hone_pretool_decision deny "$1"; exit 0; }
 
 [ -f ".hone-off" ] && exit 0
 
@@ -59,7 +62,7 @@ TEST_GLOBS=('*.test.*' '*.spec.*' '*_test.*' '*_spec.*')
 INPUT=$(cat)
 FILE_PATH=$(hone_extract_field "$INPUT" file_path)
 
-[ -z "$FILE_PATH" ] && deny "Write/Edit hook input did not include tool_input.file_path."
+[ -z "$FILE_PATH" ] && deny "$(msg_guard_no_file_path)"
 
 FILE_PATH="${FILE_PATH#./}"
 # `-s` normalizes lexically (collapses ./ and ../) WITHOUT resolving symlinks,
@@ -82,7 +85,7 @@ esac
 # file-tool route too, regardless of primary tree or worktree.
 case "$REL" in
     .hone-grant/*|.hone-proof/*)
-        deny "$REL is a human sign-off for a land gate. The agent never writes a grant or proof sign-off, by any route. Escalate and wait for the human (worktree.sh grant/attest, run in their own terminal)."
+        deny "$(msg_guard_signoff "$REL")"
         ;;
 esac
 
@@ -120,7 +123,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     GIT_DIR=$(git rev-parse --absolute-git-dir 2>/dev/null)
     COMMON_DIR=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P)
     if [ -n "$GIT_DIR" ] && [ "$GIT_DIR" = "$COMMON_DIR" ] && is_durable "$REL"; then
-        deny "$REL is a protected path and this is the primary tree, which only receives merges. Make the change in a worktree (/hone:run creates one) and let land merge it back. For a quick manual edit, the human can create .hone-off and delete it after."
+        deny "$(msg_guard_primary_tree "$REL")"
     fi
 fi
 
@@ -176,7 +179,7 @@ for _u in "$FEATURE_UNDER" "$STEM_UNDER"; do
 done
 
 if ! has_glob_match "${TEST_PATTERNS[@]}"; then
-    deny "$REL has no test, and hone is test-first. Write its failing test first (${BASE_NO_EXT}.test.<ext> or tests/${FEATURE}.test.<ext>), watch it fail, then write the code."
+    deny "$(msg_guard_no_test "$REL" "$BASE_NO_EXT" "$FEATURE")"
 fi
 
 exit 0
