@@ -512,7 +512,7 @@ hone worktree: $branch declares real-environment proof, which the test suite can
 Prove it one of two ways, then re-run land:
   - add scripts/proof.sh to the primary tree (a real-environment check: a journey, a canary, deployed health), or
   - run the check yourself and record your sign-off:
-$(hone_msg_block "$attest_cmd")
+$(printf '      %s' "$attest_cmd")
 The worktree is kept as evidence until then.
 EOF
 }
