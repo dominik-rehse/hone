@@ -387,12 +387,17 @@ cmd_land() {
         msg_wt_land_conflict "$branch" >&2
         return 9
     fi
-    if ! ( cd "$main_root" && bash scripts/run-tests.sh --all >/dev/null 2>&1 ); then
+    # Keep the post-merge run's output. On red it is the only record of what
+    # broke, and the merge is rolled back before anyone can re-run it. One file
+    # per primary tree, overwritten by each land.
+    local land_log
+    land_log="$(cd "$common_dir" 2>/dev/null && pwd || printf '%s' "$common_dir")/hone-land.log"
+    if ! ( cd "$main_root" && bash scripts/run-tests.sh --all ) >"$land_log" 2>&1; then
         # Green confirms the merge. Red means it regressed the trunk, so roll
         # the merge back and leave the shared tree green for the next lander.
         # The worktree and branch survive for investigation.
         git -C "$main_root" reset --hard "$pre" >/dev/null 2>&1
-        msg_wt_land_suite_red "$branch" "" "" >&2
+        msg_wt_land_suite_red "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
         return 6
     fi
     # Green: the merge is confirmed. Retire the worktree and its branch (cmd_remove
