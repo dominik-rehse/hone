@@ -4,8 +4,8 @@
 from the test tiers in `templates/run-tests/`: those assert against the working
 tree, this one proves the change against a **real environment** (a browser
 journey, a canary, deployed health, a real API). It runs only when a change
-declared `Proof: real-environment` in its Plan, and only at land, before the
-merge. Copy a template here to `scripts/proof.sh` and adapt it.
+declared `Proof: real-environment — <the check>` in its Plan, and only at land,
+before the merge. Copy a template here to `scripts/proof.sh` and adapt it.
 
 ## Contract
 
