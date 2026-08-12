@@ -199,9 +199,12 @@ cmd_verify() {
 # or db/ file, a deletion under db/, and any path glob the project lists in the
 # committed .hone-irreversible-paths (.hone-consequential-paths is the pre-0.19
 # name, still honoured). Git pathspecs do the matching.
+#
+# Every land helper takes the same three leading arguments, (root, base,
+# branch), because cmd_land resolves the merge base once and hands it down. The
+# base was a separate `git merge-base` call in four helpers before.
 land_irreversible() {
-    local root="$1" branch="$2" base reasons=""
-    base=$(git -C "$root" merge-base HEAD "$branch" 2>/dev/null)
+    local root="$1" base="$2" branch="$3" reasons=""
     [ -n "$base" ] || return 0
     if git -C "$root" diff "$base" "$branch" -- db ':(glob)**/migrations/**' 2>/dev/null \
         | grep -E '^\+' | grep -qiE 'DROP[[:space:]]+(TABLE|COLUMN)|TRUNCATE|DELETE[[:space:]]+FROM|ALTER[[:space:]].+DROP'; then
@@ -258,8 +261,7 @@ land_diffstat() {
 # at all. A single parser is why `PROOF: REAL-ENVIRONMENT — x` no longer prints
 # its own prefix back, and why `-- x` no longer keeps a stray dash.
 land_proof_trailer() {
-    local root="$1" branch="$2" base line
-    base=$(git -C "$root" merge-base HEAD "$branch" 2>/dev/null)
+    local root="$1" base="$2" branch="$3" line
     [ -n "$base" ] || return 1
     line=$(git -C "$root" log --format=%B "$base..$branch" 2>/dev/null \
         | grep -iE '^[[:space:]]*Proof:[[:space:]]*real-environment' \
@@ -275,7 +277,7 @@ land_proof_trailer() {
 # is never gated here, so a project that never declares real-environment proof
 # is unaffected.
 land_proof_required() {
-    land_proof_trailer "$1" "$2" >/dev/null && echo yes
+    land_proof_trailer "$1" "$2" "$3" >/dev/null && echo yes
 }
 
 # Print the change name when the branch itself writes or edits the proof
@@ -284,8 +286,7 @@ land_proof_required() {
 # replaces, so no automatic route exists. The human runs the branch's own
 # adapter from the worktree and attests with its output.
 land_proof_bootstrap() {
-    local root="$1" branch="$2" change="$3" base
-    base=$(git -C "$root" merge-base HEAD "$branch" 2>/dev/null)
+    local root="$1" base="$2" branch="$3" change="$4"
     [ -n "$base" ] || return 0
     git -C "$root" diff --name-only "$base" "$branch" \
         -- scripts/proof.sh scripts/proof-probes 2>/dev/null \
@@ -361,7 +362,7 @@ cmd_land() {
     local grant_note="" reasons grant base grant_cmd
     base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
     grant_cmd="bash $HONE_WSH grant $change \"who/why\""
-    reasons=$(land_irreversible "$main_root" "$branch")
+    reasons=$(land_irreversible "$main_root" "$base" "$branch")
     if [ -n "$reasons" ]; then
         grant="$main_root/.hone-grant/$change"
         if [ ! -f "$grant" ]; then
@@ -397,14 +398,10 @@ cmd_land() {
     # the contents are free for a comment.
     local proof_always=""
     [ -f "$main_root/.hone-proof-always" ] && proof_always=yes
-    if [ -n "$proof_always" ] || [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
+    if [ -n "$proof_always" ] || [ -n "$(land_proof_required "$main_root" "$base" "$branch")" ]; then
         local tip signoff="$main_root/.hone-proof/$change" discharged="" attest_cmd check bootstrap
         tip=$(git -C "$main_root" rev-parse "$branch")
         attest_cmd="bash $HONE_WSH attest $change \"$(hone_msg_attest_what_full)\"   (stamps the tip commit)"
-        # The trailer's own description, printed back at the gate: the human
-        # who has to run the check should not have to go read the Plan for it.
-        check=$(land_proof_trailer "$main_root" "$branch")
-        bootstrap=$(land_proof_bootstrap "$main_root" "$branch" "$change")
         if [ -f "$signoff" ] && [ -n "$(land_proof_signoff_names_tip "$signoff" "$tip")" ]; then
             discharged=yes  # human attested this exact commit
         fi
@@ -429,11 +426,17 @@ cmd_land() {
             # the worktree and attests with its output.
             local proof_root="$main_root" proof_wt=""
             [ -d "$wt" ] && { proof_root="$wt"; proof_wt="$wt"; }
+            # The bootstrap classification picks the branch below, so it runs
+            # here. The trailer's own description only ever appears in a
+            # refusal, so each refusal reads it for itself and a green land
+            # pays for neither.
+            bootstrap=$(land_proof_bootstrap "$main_root" "$base" "$branch" "$change")
             if [ -f "$main_root/scripts/proof.sh" ] && [ -z "$bootstrap" ]; then
                 if ! ( cd "$proof_root" \
                        && HONE_CHANGE="$change" HONE_BRANCH="$branch" \
                           HONE_WORKTREE="$proof_wt" HONE_MAIN_ROOT="$main_root" \
                           bash "$main_root/scripts/proof.sh" "$change" ); then
+                    check=$(land_proof_trailer "$main_root" "$base" "$branch")
                     msg_wt_land_proof_adapter_failed "$branch" "$check" "$attest_cmd" "$bootstrap" >&2
                     return 7
                 fi
@@ -444,6 +447,7 @@ cmd_land() {
                 # and only has to run it again for the new tip. The marker
                 # message would instead hide that route and offer removing
                 # project policy.
+                check=$(land_proof_trailer "$main_root" "$base" "$branch")
                 msg_wt_land_proof_signoff_stale "$change" "$branch" "$tip" "$check" "$attest_cmd" "$bootstrap" >&2
                 return 7
             elif [ -n "$proof_always" ] && [ ! -f "$main_root/scripts/proof.sh" ]; then
@@ -454,6 +458,7 @@ cmd_land() {
                 msg_wt_land_proof_always_no_adapter "$HONE_PLUGIN_ROOT/templates/proof/" >&2
                 return 7
             else
+                check=$(land_proof_trailer "$main_root" "$base" "$branch")
                 msg_wt_land_proof_missing "$branch" "$check" "$attest_cmd" "$bootstrap" >&2
                 return 7
             fi

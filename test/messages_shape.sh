@@ -52,6 +52,7 @@ check() {
     fn=""
 }
 
+registered=""
 while IFS= read -r line; do
     case "$line" in
         '=== '*)
@@ -59,6 +60,7 @@ while IFS= read -r line; do
             fn=${line#=== }
             kind=${fn##* }
             fn=${fn%% *}
+            registered+=" $fn"
             lines=()
             ;;
         *) lines+=("$line") ;;
@@ -70,6 +72,16 @@ if [ "$checked" -eq 0 ]; then
     echo "  FAIL the catalog is empty, so nothing was checked" >&2
     exit 1
 fi
-printf '  %s %d templates checked, %d misshapen\n' \
+
+# Completeness: every msg_* template the file defines must appear in the
+# catalog. An unregistered one is neither linted nor shape-checked, so its prose
+# would ship unread, and nothing else would ever notice.
+while IFS= read -r defined; do
+    case " $registered " in
+        *" $defined "*) : ;;
+        *) bad "$defined" "defined in messages.sh but missing from the catalog" ;;
+    esac
+done < <(grep -oE '^msg_[A-Za-z0-9_]+\(\)' "$PLUGIN_ROOT/hooks/messages.sh" | sed 's/()$//' | sort -u)
+printf '  %s %d templates checked, %d problem(s)\n' \
     "$([ "$fail" -eq 0 ] && echo ok  || echo FAIL)" "$checked" "$fail"
 [ "$fail" -eq 0 ]
