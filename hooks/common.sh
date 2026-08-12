@@ -7,14 +7,23 @@
 # consumers from drifting (they had already diverged).
 
 # Escape a string for embedding as a JSON string value in a hook decision:
-# backslash first, then double-quote, then real newlines to the JSON `\n` escape.
-# Prints the escaped text (no trailing newline).
+# backslash first, then double-quote, then the control characters JSON spells
+# out (newline, carriage return, tab). Prints the escaped text (no trailing
+# newline).
+#
+# Every remaining C0 control character is dropped. JSON forbids a raw control
+# character inside a string, so one tab in a gate's output tail used to produce
+# invalid JSON. The harness then discards the whole decision, and a blocking
+# gate fails OPEN. A runner's progress output carries tabs and carriage returns
+# routinely, so this is the common case, not an exotic one.
 hone_json_escape() {
     local s="$1"
     s=${s//\\/\\\\}
     s=${s//\"/\\\"}
     s=${s//$'\n'/\\n}
-    printf '%s' "$s"
+    s=${s//$'\r'/\\r}
+    s=${s//$'\t'/\\t}
+    printf '%s' "$s" | tr -d '\001-\010\013\014\016-\037'
 }
 
 # Emit a PreToolUse decision. $1 = deny|ask, $2 = reason. The caller exits 0

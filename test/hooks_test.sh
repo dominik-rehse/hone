@@ -331,6 +331,34 @@ git -C "$REPO" show-ref --verify --quiet refs/heads/hone/area2/nested-change && 
 [ -d "$REPO/.worktrees" ] && ok ".worktrees/ itself is kept" || bad ".worktrees/ itself should be kept"
 
 echo
+echo "== common: a control character never breaks a hook decision =="
+# A gate's output tail carries whatever the runner printed, tabs and carriage
+# returns included. A raw control character inside a JSON string is invalid, the
+# harness drops the whole decision, and a blocking gate then fails OPEN.
+if command -v python3 >/dev/null 2>&1; then
+    payload=$'col1\tcol2\rprogress\\ "quoted"\nnext line\x0bvertical tab'
+    out=$(. "$PLUGIN_ROOT/hooks/common.sh"; hone_stop_block "$payload")
+    if printf '%s' "$out" | python3 -c '
+import json, sys
+r = json.load(sys.stdin)["reason"]
+assert "col1\tcol2" in r, "tab lost"
+assert "\r" in r, "carriage return lost"
+assert "\x0b" not in r, "raw control character survived"
+assert "next line" in r and "\"quoted\"" in r, "text mangled"
+' 2>/dev/null; then
+        ok "a tab, CR, and control character leave the block JSON valid"
+    else
+        bad "a tab or CR in a hook reason should not break the decision JSON"
+    fi
+    out=$(. "$PLUGIN_ROOT/hooks/common.sh"; hone_pretool_decision deny $'a\tb\rc')
+    printf '%s' "$out" | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null \
+        && ok "a PreToolUse decision escapes the same characters" \
+        || bad "a PreToolUse decision should stay valid JSON"
+else
+    ok "SKIP JSON escaping test: python3 not available"
+fi
+
+echo
 echo "== session-start: canonical deny rules =="
 SESSION_START="$PLUGIN_ROOT/hooks/session-start.sh"
 DENY_CANON="$PLUGIN_ROOT/templates/settings/deny-rules.txt"
