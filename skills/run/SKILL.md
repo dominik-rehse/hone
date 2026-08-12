@@ -248,10 +248,11 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    **`Cut:` line** naming what consolidate removed (pruned tests, dead code,
    deleted doc lines, a spent reference), or `Cut: nothing` with the reason
    when there genuinely was nothing; the nag flags a zero-deletion change, and
-   this line is its answer. If the Plan declared `Proof: real-environment`,
-   carry that same **`Proof: real-environment` line** in the body: that
-   trailer is how land's proof gate knows the test suite alone cannot prove
-   this change.
+   this line is its answer. If the Plan declared a `Proof: real-environment`
+   line, copy **that whole line verbatim** into the body, description and
+   all. That trailer is how land's proof gate knows the test suite alone
+   cannot prove this change. The text after the dash names the check the
+   human must run. The gate prints it back to them, so never drop it.
 2. From the primary tree, land the branch:
 
    ```bash
