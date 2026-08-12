@@ -383,7 +383,70 @@ bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a tip-naming sign-off should land the change despite a red adapter (got $rc)"
 step "sign-off naming the tip lands the change (checked before the adapter)"
 rm -f "$REPO/.hone-proof/ui-flow3"
+
+echo "== 5g. proof-always: the marker gates every change =="
+# (a) With the marker and a green adapter, a change with NO trailer is proven
+# anyway. The adapter runs under the same rules: the primary tree's copy, from
+# the worktree, with the change in its environment.
+cat > "$REPO/scripts/proof.sh" <<'PROOF'
+#!/bin/bash
+{ echo "arg=$1"; echo "cwd=$PWD"; echo "change=$HONE_CHANGE"; } > "$HONE_MAIN_ROOT/proof-context"
+exit 0
+PROOF
+printf '# every change gets proven here\n' > "$REPO/.hone-proof-always"
+git add scripts/proof.sh .hone-proof-always
+git commit -qm "chore: prove every change"
+WT_AL=$(bash "$WSH" add always-ok) || die "worktree add always-ok"
+echo "// no trailer" > "$WT_AL/src/mathx/always.js"
+(cd "$WT_AL" && git add -A && git commit -qm "chore(mathx): a change with no Proof trailer")
+bash "$WSH" land always-ok >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "a green adapter should land a proof-always change (got $rc)"
+grep -qx "change=always-ok" "$REPO/proof-context" || die "proof-always should run the adapter with the change named"
+grep -qx "cwd=$REPO/.worktrees/always-ok" "$REPO/proof-context" || die "proof-always should run the adapter from the worktree"
+rm -f "$REPO/proof-context"
+step "the marker proves a change that declared nothing"
+# (b) A red adapter keeps an untrailered change out, exit 7.
+printf '#!/bin/bash\nexit 1\n' > "$REPO/scripts/proof.sh"
+git add scripts/proof.sh && git commit -qm "chore: make the proof adapter fail again"
+WT_AR=$(bash "$WSH" add always-red) || die "worktree add always-red"
+echo "// still no trailer" > "$WT_AR/src/mathx/always2.js"
+(cd "$WT_AR" && git add -A && git commit -qm "chore(mathx): another untrailered change")
+PRE=$(git rev-parse HEAD)
+bash "$WSH" land always-red >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 7 ] || die "a red adapter should refuse a proof-always change (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a failed proof-always run must not touch the trunk"
+# (c) A sign-off naming the tip still discharges it, adapter or not.
+git rev-parse --short hone/always-red > "$REPO/.hone-proof/always-red"
+bash "$WSH" land always-red >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "a tip-naming sign-off should discharge proof-always (got $rc)"
+rm -f "$REPO/.hone-proof/always-red"
+step "proof-always refuses on red (exit 7), and a tip sign-off still discharges it"
+# (d) The marker with no adapter refuses, and says which of the two to fix.
 git rm -q scripts/proof.sh && git commit -qm "chore: drop the proof adapter"
+WT_AN=$(bash "$WSH" add always-noadapter) || die "worktree add always-noadapter"
+echo "// third" > "$WT_AN/src/mathx/always3.js"
+(cd "$WT_AN" && git add -A && git commit -qm "chore(mathx): a third untrailered change")
+PRE=$(git rev-parse HEAD)
+out=$(bash "$WSH" land always-noadapter 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "the marker without an adapter should exit 7 (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "the marker without an adapter must not touch the trunk"
+echo "$out" | grep -q "delete the marker file" || die "the refusal should offer both routes"
+# (e) Without the marker, that same change lands untouched by the gate.
+git rm -q .hone-proof-always && git commit -qm "chore: stop proving every change"
+bash "$WSH" land always-noadapter >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "the change should land once the marker is gone (got $rc)"
+step "the marker without an adapter refuses (exit 7); removing it reopens the gate"
+# (f) status names the marker, and warns while it is uncommitted.
+printf '# every change\n' > "$REPO/.hone-proof-always"
+out=$(bash "$WSH" status) || die "status failed with the marker present"
+echo "$out" | grep -q "NOT committed" || die "status should warn about an uncommitted marker"
+git add .hone-proof-always && git commit -qm "chore: commit the proof-always marker"
+out=$(bash "$WSH" status) || die "status failed with the marker committed"
+echo "$out" | grep -q ".hone-proof-always present (committed)" || die "status should report the committed marker"
+git rm -q .hone-proof-always && git commit -qm "chore: drop the marker again"
+out=$(bash "$WSH" status) || die "status failed without the marker"
+echo "$out" | grep -q ".hone-proof-always" && die "status should say nothing without the marker"
+step "status reports the proof-always marker and flags an uncommitted one"
 
 echo "== 6. status: the control surface at a glance =="
 out=$(bash "$WSH" status) || die "status failed"

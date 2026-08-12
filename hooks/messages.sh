@@ -552,6 +552,18 @@ EOF
     printf 'land kept the worktree as evidence.\n'
 }
 
+msg_wt_land_proof_always_no_adapter() {
+    local templates="$1"
+    cat <<EOF
+hone worktree: .hone-proof-always asks land to prove every change, and scripts/proof.sh is missing.
+Do: add the adapter, or delete the marker file.
+Why: the marker promises a check this project does not have.
+Copy a template from the directory below, then commit it:
+$(hone_msg_block "$templates")
+land kept the worktree as evidence.
+EOF
+}
+
 msg_wt_land_conflict() {
     local branch="$1"
     cat <<EOF
@@ -690,6 +702,14 @@ msg_status_policy_legacy() {
     printf -- '  note: legacy name, rename it to .hone-irreversible-paths\n'
 }
 
+msg_status_proof_always() {
+    printf -- '- proof: .hone-proof-always present (committed), land proves every change\n'
+}
+
+msg_status_proof_always_uncommitted() {
+    printf -- '- proof: .hone-proof-always present, NOT committed, and policy files are project config\n'
+}
+
 msg_status_plan_pending() {
     printf -- '- plan pending: %s\n' "$1"
 }
@@ -791,6 +811,7 @@ worktree|human|msg_wt_land_grant_empty|<change>|bash <plugin-root>/scripts/workt
 worktree|human|msg_wt_land_proof_adapter_failed|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_proof_signoff_stale|<change>|hone/<change>|<tip>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_proof_missing|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
+worktree|human|msg_wt_land_proof_always_no_adapter|<plugin-root>/templates/proof/
 worktree|human|msg_wt_land_conflict|hone/<change>
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_grant_recorded|<change>
@@ -810,6 +831,8 @@ status|plain|msg_status_adapters| run-tests=yes typecheck=no lint=no proof=no
 status|plain|msg_status_policy|<policy-file>|<count>
 status|plain|msg_status_policy_uncommitted|<policy-file>|<count>
 status|plain|msg_status_policy_legacy
+status|plain|msg_status_proof_always
+status|plain|msg_status_proof_always_uncommitted
 status|plain|msg_status_plan_pending|.plans/<change>.md
 status|plain|msg_status_plans_none
 status|plain|msg_status_worktree|<path>|<branch>

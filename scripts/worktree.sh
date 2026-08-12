@@ -35,7 +35,9 @@
 #       HONE_WORKTREE/HONE_MAIN_ROOT in its environment) or with a human
 #       sign-off at .hone-proof/<change> that names the commit it proved, so a
 #       sign-off cannot outlive the code it attested. Else land refuses BEFORE
-#       the merge.
+#       the merge. A committed .hone-proof-always marker widens the gate to
+#       EVERY change, trailer or not; with the marker present and no
+#       scripts/proof.sh, land refuses (7) rather than proving nothing.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached · 5 lock timeout ·
 #       6 post-merge regression (rolled back) · 7 real-environment proof
 #       missing · 8 ungranted irreversible change · 9 merge conflict
@@ -366,7 +368,14 @@ cmd_land() {
     # real-environment adapter (scripts/proof.sh) or a human sign-off
     # (.hone-proof/<change>); otherwise land refuses before the merge and
     # escalates. A change with no such declaration is never gated.
-    if [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
+    #
+    # A committed .hone-proof-always marker widens that to every change: the
+    # project has an adapter and wants it run each time, so a change that
+    # forgot its trailer is still proven. Existence is the whole switch, and
+    # the contents are free for a comment.
+    local proof_always=""
+    [ -f "$main_root/.hone-proof-always" ] && proof_always=yes
+    if [ -n "$proof_always" ] || [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
         local tip signoff="$main_root/.hone-proof/$change" discharged="" attest_cmd check bootstrap
         tip=$(git -C "$main_root" rev-parse "$branch")
         attest_cmd="bash $HONE_WSH attest $change \"what you ran and the outcome\"   (stamps the tip commit)"
@@ -398,6 +407,11 @@ cmd_land() {
                     msg_wt_land_proof_adapter_failed "$branch" "$check" "$attest_cmd" "$bootstrap" >&2
                     return 7
                 fi
+            elif [ -n "$proof_always" ]; then
+                # The marker asked for an adapter run on every change, and
+                # there is no adapter. Refusing beats quietly proving nothing.
+                msg_wt_land_proof_always_no_adapter "$HONE_PLUGIN_ROOT/templates/proof/" >&2
+                return 7
             elif [ -f "$signoff" ]; then
                 msg_wt_land_proof_signoff_stale "$change" "$branch" "$tip" "$check" "$attest_cmd" "$bootstrap" >&2
                 return 7
@@ -503,6 +517,17 @@ cmd_status() {
         fi
         [ "$pf" = ".hone-consequential-paths" ] && msg_status_policy_legacy
     done
+
+    # The proof-always marker is project policy like the path lists, so an
+    # uncommitted one gets the same warning: it gates this developer's lands
+    # and nobody else's.
+    if [ -f ".hone-proof-always" ]; then
+        if git ls-files --error-unmatch .hone-proof-always >/dev/null 2>&1; then
+            msg_status_proof_always
+        else
+            msg_status_proof_always_uncommitted
+        fi
+    fi
 
     local plan change pending=0
     while IFS= read -r plan; do
