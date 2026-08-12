@@ -97,13 +97,16 @@ set -uo pipefail
 HONE_WSH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/worktree.sh"
 HONE_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# The plugin layout is fixed: scripts/ and hooks/ are siblings.
 # shellcheck source=hooks/common.sh
 . "$HONE_PLUGIN_ROOT/hooks/common.sh"
+# shellcheck source=hooks/messages.sh
+. "$HONE_PLUGIN_ROOT/hooks/messages.sh"
 
 cmd_add() {
     local change="${1:-}"
-    [ -n "$change" ] || { echo "hone worktree: add needs a change name." >&2; return 2; }
-    git rev-parse --git-dir >/dev/null 2>&1 || { echo "hone worktree: not a git repository." >&2; return 2; }
+    [ -n "$change" ] || { msg_wt_needs_change add >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
 
     # Anchor to the MAIN tree, not cwd: an orchestrator's shell cwd may sit inside
     # a sibling change's linked worktree, which would otherwise nest the new
@@ -118,9 +121,9 @@ cmd_add() {
     # The worktree/branch is the change's claim. "Already exists" is exit 4
     # (claimed), distinct from a real failure (2), so a `run` can tell "another
     # run owns this, skip it" from "something broke".
-    [ -e "$path" ] && { echo "hone worktree: $path already exists; another run owns this change, or it is leftover evidence to resume by hand." >&2; return 4; }
+    [ -e "$path" ] && { msg_wt_add_path_claimed "$path" >&2; return 4; }
     if git show-ref --verify --quiet "refs/heads/$branch"; then
-        echo "hone worktree: branch $branch already exists; another run owns this change, or it is leftover evidence to resume by hand." >&2
+        msg_wt_add_branch_claimed "$branch" >&2
         return 4
     fi
 
@@ -130,10 +133,10 @@ cmd_add() {
         # just claimed this change (the atomic branch-ref creation lost the race)
         # or a genuine error. If the claim now exists, report it as claimed (4).
         if git show-ref --verify --quiet "refs/heads/$branch" || [ -e "$path" ]; then
-            echo "hone worktree: $branch was just claimed by a concurrent run." >&2
+            msg_wt_add_race "$branch" >&2
             return 4
         fi
-        echo "hone worktree: 'git worktree add' failed." >&2
+        msg_wt_add_failed >&2
         return 2
     fi
     printf '%s\n' "$path"
@@ -159,7 +162,7 @@ parse_worktrees() {
 }
 
 cmd_landable() {
-    git rev-parse --git-dir >/dev/null 2>&1 || { echo "hone worktree: not a git repository." >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
     local primary target any=0 path branch ahead
     primary=$(git rev-parse --show-toplevel 2>/dev/null)
     target=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
@@ -168,21 +171,21 @@ cmd_landable() {
         ahead=$(git rev-list --count "$target..$branch" 2>/dev/null || echo 0)
         if [ "${ahead:-0}" -gt 0 ]; then printf '%s\t%s\n' "$path" "$branch"; any=1; fi
     done < <(parse_worktrees "$(git worktree list --porcelain 2>/dev/null)" "$primary")
-    [ "$any" -eq 1 ] || { echo "hone worktree: no worktree is ahead of $target." >&2; return 1; }
+    [ "$any" -eq 1 ] || { msg_wt_landable_none "$target" >&2; return 1; }
 }
 
 cmd_verify() {
-    git rev-parse --git-dir >/dev/null 2>&1 || { echo "hone worktree: not a git repository." >&2; return 2; }
-    [ -f "scripts/run-tests.sh" ] || { echo "hone worktree: no scripts/run-tests.sh adapter here; run setup.sh first." >&2; return 2; }
-    command -v flock >/dev/null 2>&1 || { echo "hone worktree: 'flock' not found, so the full suite cannot be serialized across sessions; install util-linux." >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
+    [ -f "scripts/run-tests.sh" ] || { msg_wt_no_adapter >&2; return 2; }
+    command -v flock >/dev/null 2>&1 || { msg_wt_no_flock "full suite" >&2; return 2; }
 
     local lock timeout
     lock="$(git rev-parse --git-common-dir 2>/dev/null)/hone-land.lock"
     timeout="${HONE_LAND_LOCK_TIMEOUT:-600}"
     # Land's lock, on purpose: a full suite must never overlap another full
     # suite OR a land's merge/re-verify. One lock makes both exclusions hold.
-    exec 9>"$lock" || { echo "hone worktree: cannot open the suite lock at $lock." >&2; return 2; }
-    flock -w "$timeout" 9 || { echo "hone worktree: another session held the suite lock for >${timeout}s (a land or full-suite run); retry." >&2; return 5; }
+    exec 9>"$lock" || { msg_wt_lock_unopenable "$lock" >&2; return 2; }
+    flock -w "$timeout" 9 || { msg_wt_lock_timeout "$timeout" >&2; return 5; }
     bash scripts/run-tests.sh --all
 }
 
@@ -200,10 +203,10 @@ land_irreversible() {
     [ -n "$base" ] || return 0
     if git -C "$root" diff "$base" "$branch" -- db ':(glob)**/migrations/**' 2>/dev/null \
         | grep -E '^\+' | grep -qiE 'DROP[[:space:]]+(TABLE|COLUMN)|TRUNCATE|DELETE[[:space:]]+FROM|ALTER[[:space:]].+DROP'; then
-        reasons+="  - destructive SQL (DROP/TRUNCATE/DELETE/ALTER…DROP) in a migration or db/ file"$'\n'
+        reasons+="- destructive SQL (DROP/TRUNCATE/DELETE/ALTER…DROP) in a migration or db/ file"$'\n'
     fi
     if git -C "$root" diff --diff-filter=D --name-only "$base" "$branch" -- db 2>/dev/null | grep -q .; then
-        reasons+="  - a file under db/ is deleted"$'\n'
+        reasons+="- a file under db/ is deleted"$'\n'
     fi
     local pf pat
     for pf in .hone-irreversible-paths .hone-consequential-paths; do
@@ -212,11 +215,30 @@ land_irreversible() {
             [ -n "$pat" ] || continue
             case "$pat" in \#*) continue ;; esac
             if git -C "$root" diff --name-only "$base" "$branch" -- ":(glob)$pat" 2>/dev/null | grep -q .; then
-                reasons+="  - touches a path listed in $pf: $pat"$'\n'
+                reasons+="- touches a path listed in $pf: $pat"$'\n'
             fi
         done < "$root/$pf"
     done
     printf '%s' "$reasons"
+}
+
+# Print the branch's diffstat against its merge base, for the authority gate's
+# refusal. Capped at 20 file lines plus the summary line: the gate stops an
+# unattended run, and the human reading it needs the shape of the change, not
+# every file of a large one. $1 = main root, $2 = merge base, $3 = branch.
+land_diffstat() {
+    local root="$1" base="$2" branch="$3" full total
+    [ -n "$base" ] || return 0
+    full=$(git -C "$root" diff --stat "$base" "$branch" 2>/dev/null)
+    [ -n "$full" ] || return 0
+    total=$(printf '%s\n' "$full" | wc -l)
+    if [ "$total" -le 21 ]; then
+        printf '%s\n' "$full"
+        return 0
+    fi
+    printf '%s\n' "$full" | head -n 20
+    printf '... and %d more files\n' "$((total - 21))"
+    printf '%s\n' "$full" | tail -n 1
 }
 
 # Print non-empty if the branch declares real-environment proof, a `Proof:
@@ -247,9 +269,9 @@ land_proof_signoff_names_tip() {
 
 cmd_land() {
     local change="${1:-}"
-    [ -n "$change" ] || { echo "hone worktree: land needs a change name." >&2; return 2; }
-    git rev-parse --git-dir >/dev/null 2>&1 || { echo "hone worktree: not a git repository." >&2; return 2; }
-    command -v flock >/dev/null 2>&1 || { echo "hone worktree: 'flock' not found, so the land cannot be serialized across sessions; install util-linux." >&2; return 2; }
+    [ -n "$change" ] || { msg_wt_needs_change land >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
+    command -v flock >/dev/null 2>&1 || { msg_wt_no_flock land >&2; return 2; }
 
     local common_dir main_root branch wt lock timeout
     common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
@@ -265,13 +287,13 @@ cmd_land() {
     # lock). A concurrent land waits up to $timeout rather than interleaving on
     # the shared HEAD/index/worktree. Everything that reads or moves the primary
     # tree lives inside the lock. Checking outside it would be a TOCTOU race.
-    exec 9>"$lock" || { echo "hone worktree: cannot open the land lock at $lock." >&2; return 2; }
-    flock -w "$timeout" 9 || { echo "hone worktree: another land held the lock for >${timeout}s; retry." >&2; return 5; }
+    exec 9>"$lock" || { msg_wt_lock_unopenable "$lock" >&2; return 2; }
+    flock -w "$timeout" 9 || { msg_wt_lock_timeout "$timeout" >&2; return 5; }
 
     git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch" || {
-        echo "hone worktree: branch $branch does not exist, so there is nothing to land." >&2; return 2; }
+        msg_wt_land_no_branch "$branch" >&2; return 2; }
     git -C "$main_root" symbolic-ref -q HEAD >/dev/null || {
-        echo "hone worktree: the primary tree is in detached HEAD; restore it to the trunk before landing." >&2; return 2; }
+        msg_wt_land_detached >&2; return 2; }
 
     # Authority gate: an IRREVERSIBLE change needs a scoped human grant before
     # it may merge. Capability (guard/bash-guard) is "can the agent act"; this
@@ -280,28 +302,28 @@ cmd_land() {
     # trunk. The grant is scoped (one change), revocable (delete the file),
     # auditable (its text lands in the merge body below), and recoverable (the
     # worktree stays until granted).
-    local grant_note="" reasons grant
+    local grant_note="" reasons grant base grant_cmd
+    base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
+    grant_cmd="bash $HONE_WSH grant $change \"who/why\""
     reasons=$(land_irreversible "$main_root" "$branch")
     if [ -n "$reasons" ]; then
         grant="$main_root/.hone-grant/$change"
         if [ ! -f "$grant" ]; then
-            {
-                echo "hone worktree: $branch is an IRREVERSIBLE change and has no authority grant:"
-                printf '%s' "$reasons"
-                echo "Review the diff. If you authorize it, record who/when/why:"
-                echo "  bash $HONE_WSH grant $change \"who/why\"   (writes .hone-grant/$change; gitignored, per-developer)"
-                echo "then re-run land. The worktree is kept as evidence until then."
-            } >&2
+            # The refusal carries what the human needs to judge the change: the
+            # signals that classified it, a diffstat, and the exact command
+            # that shows the whole diff. Reading the branch is otherwise a
+            # detour through git plumbing at the moment the run stops.
+            msg_wt_land_authority_missing "$branch" "$reasons" \
+                "$(land_diffstat "$main_root" "$base" "$branch")" \
+                "git -C $main_root diff $base...$branch" \
+                "$grant_cmd" >&2
             return 8
         fi
         grant_note=$(cat "$grant" 2>/dev/null)
         # An empty grant authorizes nothing and would leave no audit trail in
         # the merge commit body, so it does not open the gate.
         if ! printf '%s' "$grant_note" | grep -q '[^[:space:]]'; then
-            {
-                echo "hone worktree: .hone-grant/$change is empty; a grant must say who authorized the change, when, and why. that text is the audit trail in the merge commit body."
-                echo "Rewrite it (bash $HONE_WSH grant $change \"who/why\") and re-run land."
-            } >&2
+            msg_wt_land_grant_empty "$change" "$grant_cmd" >&2
             return 8
         fi
     fi
@@ -313,8 +335,9 @@ cmd_land() {
     # (.hone-proof/<change>); otherwise land refuses before the merge and
     # escalates. A change with no such declaration is never gated.
     if [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
-        local tip signoff="$main_root/.hone-proof/$change" discharged=""
+        local tip signoff="$main_root/.hone-proof/$change" discharged="" attest_cmd
         tip=$(git -C "$main_root" rev-parse "$branch")
+        attest_cmd="bash $HONE_WSH attest $change \"what you ran and the outcome\"   (stamps the tip commit)"
         if [ -f "$signoff" ] && [ -n "$(land_proof_signoff_names_tip "$signoff" "$tip")" ]; then
             discharged=yes  # human attested this exact commit
         fi
@@ -336,27 +359,14 @@ cmd_land() {
                        && HONE_CHANGE="$change" HONE_BRANCH="$branch" \
                           HONE_WORKTREE="$proof_wt" HONE_MAIN_ROOT="$main_root" \
                           bash "$main_root/scripts/proof.sh" "$change" ); then
-                    echo "hone worktree: $branch declares real-environment proof and scripts/proof.sh failed, so the change is not proven in the real environment. Worktree kept as evidence." >&2
+                    msg_wt_land_proof_adapter_failed "$branch" >&2
                     return 7
                 fi
             elif [ -f "$signoff" ]; then
-                {
-                    echo "hone worktree: .hone-proof/$change does not name the commit it proved, so it cannot cover $branch (tip $tip)."
-                    echo "A sign-off is bound to one commit: this one predates the current tip, or never named a commit at all."
-                    echo "Re-run the real-environment check against this tip, then record it:"
-                    echo "  bash $HONE_WSH attest $change \"what you ran and the outcome\"   (stamps the tip commit)"
-                    echo "The worktree is kept as evidence until then."
-                } >&2
+                msg_wt_land_proof_signoff_stale "$change" "$branch" "$tip" "$attest_cmd" >&2
                 return 7
             else
-                {
-                    echo "hone worktree: $branch declares real-environment proof, which the test suite cannot give (a green suite proves nothing about the deployed system)."
-                    echo "Prove it one of two ways, then re-run land:"
-                    echo "  - add scripts/proof.sh to the primary tree (a real-environment check: a journey, a canary, deployed health), or"
-                    echo "  - run the check yourself and record your sign-off:"
-                    echo "      bash $HONE_WSH attest $change \"what you ran and the outcome\"   (stamps the tip commit)"
-                    echo "The worktree is kept as evidence until then."
-                } >&2
+                msg_wt_land_proof_missing "$branch" "$attest_cmd" >&2
                 return 7
             fi
         fi
@@ -374,15 +384,15 @@ cmd_land() {
         # evidence to fold in serially. Its own exit code (9), so a caller can
         # tell "fold in serially" from a usage or repo-state error (2).
         git -C "$main_root" merge --abort 2>/dev/null
-        echo "hone worktree: merging $branch conflicted, so the independence check missed an overlap. Primary tree restored; branch kept. Fold this change in serially." >&2
+        msg_wt_land_conflict "$branch" >&2
         return 9
     fi
     if ! ( cd "$main_root" && bash scripts/run-tests.sh --all >/dev/null 2>&1 ); then
-        # Green would confirm the merge; red means it regressed the trunk. Roll
-        # the merge back so the shared tree is left green for the next lander;
-        # the worktree/branch survive for investigation.
+        # Green confirms the merge. Red means it regressed the trunk, so roll
+        # the merge back and leave the shared tree green for the next lander.
+        # The worktree and branch survive for investigation.
         git -C "$main_root" reset --hard "$pre" >/dev/null 2>&1
-        echo "hone worktree: suite RED in the primary tree after merging $branch, so the merge regresses the trunk. Rolled back; worktree kept as evidence. Investigate before retrying." >&2
+        msg_wt_land_suite_red "$branch" "" "" >&2
         return 6
     fi
     # Green: the merge is confirmed. Retire the worktree and its branch (cmd_remove
@@ -405,37 +415,36 @@ signer_stamp() {
 }
 
 cmd_status() {
-    git rev-parse --git-dir >/dev/null 2>&1 || { echo "hone worktree: not a git repository." >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
     local main_root primary
     main_root=$(main_root_of)
     cd "$main_root" || return 2
     primary=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
 
-    echo "hone status ($main_root, primary on $primary)"
+    msg_status_header "$main_root" "$primary"
 
     if [ -f ".hone-off" ]; then
-        echo "- hooks: OFF (.hone-off present; delete it to re-enable)"
+        msg_status_hooks_off
     else
-        echo "- hooks: on (guard, gate, nag; land gates for irreversible and real-environment changes)"
+        msg_status_hooks_on
     fi
 
     local a line=""
     for a in run-tests typecheck lint proof; do
         if [ -f "scripts/$a.sh" ]; then line+=" $a=yes"; else line+=" $a=no"; fi
     done
-    echo "- adapters (scripts/<name>.sh):$line"
+    msg_status_adapters "$line"
 
     local pf n
     for pf in .hone-durable-paths .hone-irreversible-paths .hone-consequential-paths; do
         [ -f "$pf" ] || continue
         n=$(grep -cvE '^[[:space:]]*(#|$)' "$pf" 2>/dev/null || true)
         if git ls-files --error-unmatch "$pf" >/dev/null 2>&1; then
-            echo "- policy: $pf (${n:-0} entries, committed)"
+            msg_status_policy "$pf" "${n:-0}"
         else
-            echo "- policy: $pf (${n:-0} entries, NOT committed; policy files are project config, so commit them)"
+            msg_status_policy_uncommitted "$pf" "${n:-0}"
         fi
-        [ "$pf" = ".hone-consequential-paths" ] && \
-            echo "  note: legacy name; rename to .hone-irreversible-paths"
+        [ "$pf" = ".hone-consequential-paths" ] && msg_status_policy_legacy
     done
 
     local plan change pending=0
@@ -443,34 +452,33 @@ cmd_status() {
         [ -f "$(dirname "$plan").md" ] && continue   # a Plan's reference, not a Plan
         change=${plan#.plans/}; change=${change%.md}
         [ -d ".worktrees/$change" ] && continue      # mid-run; its worktree is listed below
-        echo "- plan pending: $plan"
+        msg_status_plan_pending "$plan"
         pending=$((pending+1))
     done < <(find .plans -type f -name '*.md' 2>/dev/null | sort)
-    [ "$pending" -eq 0 ] && echo "- plans: none pending"
+    [ "$pending" -eq 0 ] && msg_status_plans_none
 
     local path branch any=0
     while IFS=$'\t' read -r path branch; do
         [ -n "$branch" ] || continue
-        echo "- worktree in flight: $path ($branch)"
+        msg_status_worktree "$path" "$branch"
         any=1
     done < <(parse_worktrees "$(git worktree list --porcelain 2>/dev/null)" "$main_root")
-    [ "$any" -eq 0 ] && echo "- worktrees: none in flight"
+    [ "$any" -eq 0 ] && msg_status_worktrees_none
 
     local f
     while IFS= read -r f; do
-        [ -n "$f" ] && echo "- grant: $f"
+        [ -n "$f" ] && msg_status_grant "$f"
     done < <(find .hone-grant -type f 2>/dev/null | sort)
     while IFS= read -r f; do
-        [ -n "$f" ] && echo "- proof sign-off: $f"
+        [ -n "$f" ] && msg_status_signoff "$f"
     done < <(find .hone-proof -type f 2>/dev/null | sort)
 
     local missing_deny
     missing_deny=$(hone_missing_deny_rules "$main_root" "$HONE_PLUGIN_ROOT/templates/settings/deny-rules.txt")
     if [ -z "$missing_deny" ]; then
-        echo "- settings deny rules: present"
+        msg_status_deny_present
     else
-        echo "- settings deny rules: MISSING from the canonical set; add from hone's README install block:"
-        printf '%s\n' "$missing_deny" | sed 's/^/    /'
+        msg_status_deny_missing "$missing_deny"
     fi
 }
 
@@ -478,37 +486,37 @@ cmd_grant() {
     local change="${1:-}"; shift 2>/dev/null || true
     local why="$*"
     if [ -z "$change" ] || [ -z "$why" ]; then
-        echo 'usage: worktree.sh grant <change> "who/why"' >&2; return 2
+        msg_wt_grant_usage >&2; return 2
     fi
-    git rev-parse --git-dir >/dev/null 2>&1 || { echo "hone worktree: not a git repository." >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
     local main_root; main_root=$(main_root_of)
     local grant="$main_root/.hone-grant/$change"
     mkdir -p "$(dirname "$grant")"
     printf '%s | %s\n' "$(signer_stamp)" "$why" > "$grant"
-    echo "hone worktree: grant recorded at .hone-grant/$change (its text lands in the merge commit body); re-run land. Delete the file to revoke."
+    msg_wt_grant_recorded "$change"
 }
 
 cmd_attest() {
     local change="${1:-}"; shift 2>/dev/null || true
     local what="$*"
     if [ -z "$change" ] || [ -z "$what" ]; then
-        echo 'usage: worktree.sh attest <change> "what you ran"' >&2; return 2
+        msg_wt_attest_usage >&2; return 2
     fi
-    git rev-parse --git-dir >/dev/null 2>&1 || { echo "hone worktree: not a git repository." >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
     local main_root tip
     main_root=$(main_root_of)
     tip=$(git -C "$main_root" rev-parse "hone/$change" 2>/dev/null) || {
-        echo "hone worktree: branch hone/$change does not exist, so there is nothing to attest." >&2; return 2; }
+        msg_wt_attest_no_branch "$change" >&2; return 2; }
     local signoff="$main_root/.hone-proof/$change"
     mkdir -p "$(dirname "$signoff")"
     printf '%s | %s | %s\n' "$tip" "$(signer_stamp)" "$what" > "$signoff"
-    echo "hone worktree: sign-off recorded at .hone-proof/$change for commit ${tip:0:7}; re-run land. It stops counting once new commits land on hone/$change."
+    msg_wt_attest_recorded "$change" "${tip:0:7}"
 }
 
 cmd_remove() {
     local wt="${1:-}"
-    [ -n "$wt" ] || { echo "hone worktree: remove needs a worktree path." >&2; return 2; }
-    git rev-parse --git-dir >/dev/null 2>&1 || { echo "hone worktree: not a git repository." >&2; return 2; }
+    [ -n "$wt" ] || { msg_wt_remove_needs_path >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
 
     # The MAIN tree's root (the common git dir's parent), so provenance is stable
     # even when this runs from inside a linked worktree.
@@ -518,15 +526,15 @@ cmd_remove() {
 
     case "$wt" in
         "$main_root"/.worktrees/*) : ;;
-        *) echo "hone worktree: '$wt' is not under .worktrees/, so hone did not create it; leaving it for its owner." >&2; return 3 ;;
+        *) msg_wt_remove_foreign "$wt" >&2; return 3 ;;
     esac
-    [ "$here" = "$wt" ] && { echo "hone worktree: refusing to remove the worktree you are in ($wt); run land from the primary tree." >&2; return 2; }
+    [ "$here" = "$wt" ] && { msg_wt_remove_self "$wt" >&2; return 2; }
 
     # Capture the branch this worktree has checked out BEFORE removing it.
     local branch
     branch=$(git -C "$wt" rev-parse --abbrev-ref HEAD 2>/dev/null)
 
-    git worktree remove "$wt" || { echo "hone worktree: 'git worktree remove $wt' failed (uncommitted changes, or run from inside it?)." >&2; return 2; }
+    git worktree remove "$wt" || { msg_wt_remove_failed "$wt" >&2; return 2; }
     git worktree prune
 
     # Land hygiene 1: a landed change's branch goes with its worktree. `-d`
@@ -535,7 +543,7 @@ cmd_remove() {
     case "$branch" in
         hone/*)
             if ! git branch -d "$branch" >/dev/null 2>&1; then
-                echo "hone worktree: kept branch $branch (not fully merged, so it is evidence of unlanded work; delete with 'git branch -D $branch' only if abandoning it)." >&2
+                msg_wt_remove_branch_kept "$branch" >&2
             fi
             ;;
     esac
@@ -566,7 +574,7 @@ main() {
         status)   cmd_status "$@" ;;
         grant)    cmd_grant "$@" ;;
         attest)   cmd_attest "$@" ;;
-        *) echo "usage: worktree.sh {add <change>|landable|verify|land <change>|remove <worktree-path>|status|grant <change> \"who/why\"|attest <change> \"what you ran\"}" >&2; return 2 ;;
+        *) msg_wt_usage >&2; return 2 ;;
     esac
 }
 

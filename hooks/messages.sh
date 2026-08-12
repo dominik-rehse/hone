@@ -735,8 +735,8 @@ worktree|human|msg_wt_land_detached
 worktree|human|msg_wt_land_authority_missing|hone/<change>|- <signal>|<diffstat>|git -C <main-root> diff <base>...hone/<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "who/why"
 worktree|human|msg_wt_land_grant_empty|<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "who/why"
 worktree|plain|msg_wt_land_proof_adapter_failed|hone/<change>
-worktree|plain|msg_wt_land_proof_signoff_stale|<change>|hone/<change>|<tip>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"
-worktree|plain|msg_wt_land_proof_missing|hone/<change>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"
+worktree|plain|msg_wt_land_proof_signoff_stale|<change>|hone/<change>|<tip>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)
+worktree|plain|msg_wt_land_proof_missing|hone/<change>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)
 worktree|human|msg_wt_land_conflict|hone/<change>
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_grant_recorded|<change>
