@@ -235,9 +235,11 @@ echo "// browser flow" > "$WT_P/src/mathx/flow.js"
 
 Proof: real-environment")
 PRE=$(git rev-parse HEAD)
-bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
+out=$(bash "$WSH" land ui-flow 2>&1); rc=$?
 [ "$rc" -eq 7 ] || die "an unproven real-environment change should exit 7 (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "an unproven real-environment change must not touch the trunk"
+# A bare trailer (an older Plan) declares no check, so the message stays generic.
+echo "$out" | grep -q "The Plan declares this check" && die "a bare trailer should not print a declared check"
 step "real-environment change without proof refused (exit 7), trunk untouched"
 # (b2) A proof.sh planted in the WORKTREE does not count: land executes only
 # the primary tree's reviewed copy, so a change cannot ship its own green stub.
@@ -246,6 +248,24 @@ bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 7 ] || die "a worktree-planted proof stub must not satisfy the gate (got $rc)"
 rm -f "$WT_P/scripts/proof.sh"
 step "worktree-planted proof.sh stub ignored (exit 7)"
+# (b3) A trailer that carries its check after a dash gets that check printed
+# back at the gate, so the human never has to go read the Plan for it. Both
+# dashes count, and the description survives verbatim.
+n=0
+for dash in "—" "-"; do
+    n=$((n+1))
+    WT_D=$(bash "$WSH" add "described-$n") || die "worktree add described-$n"
+    echo "// described" > "$WT_D/src/mathx/described.js"
+    (cd "$WT_D" && git add -A && git commit -qm "feat(mathx): described flow
+
+Proof: real-environment $dash walk the checkout journey on staging")
+    out=$(bash "$WSH" land "described-$n" 2>&1); rc=$?
+    [ "$rc" -eq 7 ] || die "a described real-environment change should still exit 7 (got $rc)"
+    echo "$out" | grep -q "The Plan declares this check" || die "the gate should label the declared check ($dash)"
+    echo "$out" | grep -q "walk the checkout journey on staging" || die "the gate should print the declared check ($dash)"
+    bash "$WSH" remove "$WT_D" >/dev/null 2>&1; git branch -D "hone/described-$n" >/dev/null 2>&1
+done
+step "the trailer's declared check is printed at the gate (both dashes)"
 # (c) A sign-off that names no commit does not satisfy it: an unbound
 # sign-off would outlive the code it attested.
 mkdir -p "$REPO/.hone-proof"

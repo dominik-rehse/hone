@@ -254,6 +254,24 @@ land_proof_required() {
         | grep -qiE '^[[:space:]]*Proof:[[:space:]]*real-environment' && echo yes
 }
 
+# Print the check a `Proof: real-environment` trailer declares: the text after
+# the dash on the first such line in the branch's commits. `plan` makes that
+# description mandatory, so the gate can print the exact thing the human must
+# run instead of sending them back to the Plan. An older bare trailer has no
+# text after the dash, and prints nothing here.
+land_proof_check() {
+    local root="$1" branch="$2" base line
+    base=$(git -C "$root" merge-base HEAD "$branch" 2>/dev/null)
+    [ -n "$base" ] || return 0
+    line=$(git -C "$root" log --format=%B "$base..$branch" 2>/dev/null \
+        | grep -iE '^[[:space:]]*Proof:[[:space:]]*real-environment[[:space:]]*(—|–|-)' \
+        | head -n 1)
+    [ -n "$line" ] || return 0
+    printf '%s' "$line" | sed -E \
+        -e 's/^[[:space:]]*[Pp]roof:[[:space:]]*[Rr]eal-[Ee]nvironment[[:space:]]*(—|–|-)[[:space:]]*//' \
+        -e 's/[[:space:]]+$//'
+}
+
 # Print non-empty if the sign-off at .hone-proof/<change> names the commit it
 # proved: any hex token of >=7 chars in the file that prefixes the branch tip (so
 # `git rev-parse --short` works as well as the full SHA). Binding the sign-off
@@ -335,9 +353,12 @@ cmd_land() {
     # (.hone-proof/<change>); otherwise land refuses before the merge and
     # escalates. A change with no such declaration is never gated.
     if [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
-        local tip signoff="$main_root/.hone-proof/$change" discharged="" attest_cmd
+        local tip signoff="$main_root/.hone-proof/$change" discharged="" attest_cmd check
         tip=$(git -C "$main_root" rev-parse "$branch")
         attest_cmd="bash $HONE_WSH attest $change \"what you ran and the outcome\"   (stamps the tip commit)"
+        # The trailer's own description, printed back at the gate: the human
+        # who has to run the check should not have to go read the Plan for it.
+        check=$(land_proof_check "$main_root" "$branch")
         if [ -f "$signoff" ] && [ -n "$(land_proof_signoff_names_tip "$signoff" "$tip")" ]; then
             discharged=yes  # human attested this exact commit
         fi
@@ -359,14 +380,14 @@ cmd_land() {
                        && HONE_CHANGE="$change" HONE_BRANCH="$branch" \
                           HONE_WORKTREE="$proof_wt" HONE_MAIN_ROOT="$main_root" \
                           bash "$main_root/scripts/proof.sh" "$change" ); then
-                    msg_wt_land_proof_adapter_failed "$branch" >&2
+                    msg_wt_land_proof_adapter_failed "$branch" "$check" >&2
                     return 7
                 fi
             elif [ -f "$signoff" ]; then
-                msg_wt_land_proof_signoff_stale "$change" "$branch" "$tip" "$attest_cmd" >&2
+                msg_wt_land_proof_signoff_stale "$change" "$branch" "$tip" "$check" "$attest_cmd" >&2
                 return 7
             else
-                msg_wt_land_proof_missing "$branch" "$attest_cmd" >&2
+                msg_wt_land_proof_missing "$branch" "$check" "$attest_cmd" >&2
                 return 7
             fi
         fi
