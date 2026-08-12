@@ -243,35 +243,39 @@ land_diffstat() {
     printf '%s\n' "$full" | tail -n 1
 }
 
-# Print non-empty if the branch declares real-environment proof, a `Proof:
-# real-environment` trailer in any of its commit messages (the run skill copies
-# the Plan's proof class there). A change with no such trailer is
-# assertion-class: the gate's suite already proves it, and it is never gated here,
-# so a project that never declares real-environment proof is unaffected.
-land_proof_required() {
-    local root="$1" branch="$2" base
-    base=$(git -C "$root" merge-base HEAD "$branch" 2>/dev/null)
-    [ -n "$base" ] || return 0
-    git -C "$root" log --format=%B "$base..$branch" 2>/dev/null \
-        | grep -qiE '^[[:space:]]*Proof:[[:space:]]*real-environment' && echo yes
-}
-
-# Print the check a `Proof: real-environment` trailer declares: the text after
-# the dash on the first such line in the branch's commits. `plan` makes that
-# description mandatory, so the gate can print the exact thing the human must
-# run instead of sending them back to the Plan. An older bare trailer has no
-# text after the dash, and prints nothing here.
-land_proof_check() {
+# The ONE parser for the `Proof: real-environment` trailer, which the run skill
+# copies from the Plan into a branch commit. It finds the first such line in the
+# branch's commits and prints what the trailer declares: the check the human
+# must run. `plan` makes that description mandatory, so the gate can print the
+# exact check instead of sending the human back to the Plan.
+#
+# Exit 0 means the branch declares the trailer, and 1 means it does not, so a
+# bare trailer (an older Plan, no description) is exit 0 with empty output.
+# Callers must read the exit code, never the emptiness of the output.
+#
+# The prefix and the separator come off case-insensitively (`sed s///I`), and
+# the separator may be an em dash, an en dash, one or more hyphens, or nothing
+# at all. A single parser is why `PROOF: REAL-ENVIRONMENT — x` no longer prints
+# its own prefix back, and why `-- x` no longer keeps a stray dash.
+land_proof_trailer() {
     local root="$1" branch="$2" base line
     base=$(git -C "$root" merge-base HEAD "$branch" 2>/dev/null)
-    [ -n "$base" ] || return 0
+    [ -n "$base" ] || return 1
     line=$(git -C "$root" log --format=%B "$base..$branch" 2>/dev/null \
-        | grep -iE '^[[:space:]]*Proof:[[:space:]]*real-environment[[:space:]]*(—|–|-)' \
+        | grep -iE '^[[:space:]]*Proof:[[:space:]]*real-environment' \
         | head -n 1)
-    [ -n "$line" ] || return 0
+    [ -n "$line" ] || return 1
     printf '%s' "$line" | sed -E \
-        -e 's/^[[:space:]]*[Pp]roof:[[:space:]]*[Rr]eal-[Ee]nvironment[[:space:]]*(—|–|-)[[:space:]]*//' \
+        -e 's/^[[:space:]]*Proof:[[:space:]]*real-environment[[:space:]]*(—|–|-+)?[[:space:]]*//I' \
         -e 's/[[:space:]]+$//'
+}
+
+# Print non-empty if the branch declares real-environment proof. A change with
+# no such trailer is assertion-class: the gate's suite already proves it, and it
+# is never gated here, so a project that never declares real-environment proof
+# is unaffected.
+land_proof_required() {
+    land_proof_trailer "$1" "$2" >/dev/null && echo yes
 }
 
 # Print the change name when the branch itself writes or edits the proof
@@ -399,7 +403,7 @@ cmd_land() {
         attest_cmd="bash $HONE_WSH attest $change \"what you ran and the outcome\"   (stamps the tip commit)"
         # The trailer's own description, printed back at the gate: the human
         # who has to run the check should not have to go read the Plan for it.
-        check=$(land_proof_check "$main_root" "$branch")
+        check=$(land_proof_trailer "$main_root" "$branch")
         bootstrap=$(land_proof_bootstrap "$main_root" "$branch" "$change")
         if [ -f "$signoff" ] && [ -n "$(land_proof_signoff_names_tip "$signoff" "$tip")" ]; then
             discharged=yes  # human attested this exact commit

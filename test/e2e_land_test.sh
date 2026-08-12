@@ -266,6 +266,26 @@ Proof: real-environment $dash walk the checkout journey on staging")
     bash "$WSH" remove "$WT_D" >/dev/null 2>&1; git branch -D "hone/described-$n" >/dev/null 2>&1
 done
 step "the trailer's declared check is printed at the gate (both dashes)"
+# (b3b) One parser reads every trailer spelling. An uppercase trailer must not
+# print its own prefix back as the check, a double-hyphen separator must not
+# leave a stray dash, and a bare trailer still gates while declaring nothing.
+n=0
+for trailer in "PROOF: REAL-ENVIRONMENT — walk the staging journey" \
+               "Proof: real-environment -- walk the staging journey" \
+               "Proof: real-environment walk the staging journey"; do
+    n=$((n+1))
+    WT_S=$(bash "$WSH" add "spelling-$n") || die "worktree add spelling-$n"
+    echo "// spelled" > "$WT_S/src/mathx/spelled.js"
+    (cd "$WT_S" && git add -A && git commit -qm "feat(mathx): a spelled trailer
+
+$trailer")
+    out=$(bash "$WSH" land "spelling-$n" 2>&1); rc=$?
+    [ "$rc" -eq 7 ] || die "the trailer '$trailer' should gate the land (got $rc)"
+    echo "$out" | grep -qx "  walk the staging journey" \
+        || die "the parser should print exactly the declared check for '$trailer'"
+    bash "$WSH" remove "$WT_S" >/dev/null 2>&1; git branch -D "hone/spelling-$n" >/dev/null 2>&1
+done
+step "one parser handles an uppercase, double-hyphen, and separatorless trailer"
 # (b4) The bootstrap case: a change that writes the proof adapter itself, or one
 # of its probes, cannot be proven by the copy land holds, so the refusal tells
 # the human to run the branch's own adapter from the worktree.
