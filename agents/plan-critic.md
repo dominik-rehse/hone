@@ -30,8 +30,11 @@ what they must resolve before the loop runs unattended against it.
   claim (a browser flow, a deployed behaviour, an integration a user observes)
   but the only proof named is a unit assertion that cannot settle it. A green
   check proves only its assertion, so name the mismatch and require either a real
-  proof or an explicit `Proof: real-environment` line. Flag this only when the
-  proof is *categorically* incapable of settling the claim, not merely thin.
+  proof or an explicit `Proof: real-environment — <the check>` line. Flag this
+  only when the proof is *categorically* incapable of settling the claim, not
+  merely thin. A `Proof: real-environment` line with nothing after the dash is a
+  finding on its own. Consolidate deletes the Plan, so that description is the
+  only thing telling the human at land time what to run.
 - **Ambiguity.** A requirement a reasonable builder could satisfy two materially
   different ways. Distinguish a genuine fork (reject: the human must pick) from
   detail the loop can reasonably decide (fine: don't invent objections).
