@@ -123,7 +123,10 @@ the worktree stays for inspection.
 - *Authority gate (exit 8)* fires when the diff is irreversible (see
   `.hone-irreversible-paths` above for the signals). Landing it needs your
   grant: review the diff, then `worktree.sh grant <change> "who/why"`, then
-  re-run land. The grant text is recorded in the merge commit body.
+  re-run land. The grant text is recorded in the merge commit body. The
+  refusal prints the signals that fired and a diffstat against the merge base.
+  It also prints the `git diff` command for the whole change, and the grant
+  command.
 - *Proof gate (exit 7)* fires when a commit on the branch carries a
   `Proof: real-environment` trailer (copied from the Plan), meaning no
   in-repo test can prove the change; a browser journey, canary, or deployed
@@ -147,13 +150,16 @@ gate's error message prints the exact helper command with its full path.
 | 0 | landed and green |
 | 2 | usage or repo-state error (missing branch, detached HEAD) |
 | 5 | lock timeout: another land or full-suite run held the lock |
-| 6 | suite red after the merge; rolled back, worktree kept |
+| 6 | suite red after the merge; rolled back, worktree kept, output in the land log |
 | 7 | proof gate: real-environment proof missing |
 | 8 | authority gate: irreversible change without a grant |
 | 9 | merge conflict; aborted, tree restored, branch kept |
 
 What to do at each code, in detail:
 [`skills/run/references/land.md`](../skills/run/references/land.md).
+
+The post-merge suite writes `<git-common-dir>/hone-land.log`, replaced on
+every land. Exit 6 prints that path and the last 20 lines of it.
 
 Other subcommands: `add` exits 4 when the change is already claimed by
 another run (0 created, 2 error); `remove` exits 3 when the path is not one
@@ -203,6 +209,7 @@ hone/
 ├── rules/workflow.md            # injected at session start
 ├── skills/{setup,plan,run,garden}/ # the four commands; run/references/ loads on demand
 ├── hooks/                       # guard, bash-guard, gate, nag, session-start
+│   └── messages.sh              # every message hone prints, one template each
 ├── scripts/{worktree,setup}.sh
 ├── agents/                      # plan-critic, consolidate-critic
 ├── templates/{run-tests,proof}/ # adapter contracts and templates

@@ -28,7 +28,9 @@ that file before releasing.
 Which suite a change must pass follows from what it touches.
 
 *Mechanical* — `bash test/run.sh`. Deterministic, no model calls: the hook
-unit tests and the end-to-end land path (worktree, gates, merge, rollback).
+unit tests, the end-to-end land path (worktree, gates, merge, rollback), and
+two checks over the message templates. Every message hone prints lives in
+`hooks/messages.sh`, and the checks lint its prose and hold it to the shape.
 Run it after any change to `hooks/` or `scripts/`. The shell sources are also
 kept `shellcheck`-clean (`.shellcheckrc` sets the dialect); nothing runs
 shellcheck for you, so run it over any script you touch.
