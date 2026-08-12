@@ -584,6 +584,18 @@ $(hone_msg_block "$tail")
 EOF
 }
 
+msg_wt_land_tier_empty() {
+    local tiers="$1"
+    cat <<EOF
+hone worktree: the suite went green, and these tiers ran no test at all.
+Do: fix the adapter's tier selection, then run the suite again.
+Why: an empty tier makes a green suite prove nothing.
+Tiers that ran nothing:
+$(hone_msg_block "$tiers")
+land merged the change anyway, because this warning never blocks.
+EOF
+}
+
 msg_wt_grant_recorded() {
     local change="$1"
     cat <<EOF
@@ -814,6 +826,7 @@ worktree|human|msg_wt_land_proof_missing|hone/<change>|<the check the Plan decla
 worktree|human|msg_wt_land_proof_always_no_adapter|<plugin-root>/templates/proof/
 worktree|human|msg_wt_land_conflict|hone/<change>
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
+worktree|human|msg_wt_land_tier_empty|- <tier>
 worktree|human|msg_wt_grant_recorded|<change>
 worktree|human|msg_wt_attest_recorded|<change>|<tip>
 worktree|human|msg_wt_attest_empty

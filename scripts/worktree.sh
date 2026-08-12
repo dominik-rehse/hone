@@ -301,6 +301,24 @@ land_proof_signoff_names_tip() {
     done
 }
 
+# Print one "- <tier>" line for every tier the suite reported as empty. The
+# adapter contract asks for a `hone tier: <name> ran=<count>` line per tier
+# (templates/run-tests/README.md). A tier that matches no test still exits 0,
+# so a green suite can cover nothing and nobody sees it. An older adapter
+# prints no such lines, and this prints nothing.
+land_zero_tiers() {
+    awk '
+        /hone tier:/ {
+            name = ""; zero = 0
+            for (i = 1; i <= NF; i++) {
+                if ($i == "tier:" && i < NF) name = $(i+1)
+                if ($i == "ran=0") zero = 1
+            }
+            if (name != "" && zero) print "- " name
+        }
+    ' "$1" 2>/dev/null
+}
+
 cmd_land() {
     local change="${1:-}"
     [ -n "$change" ] || { msg_wt_needs_change land >&2; return 2; }
@@ -450,6 +468,13 @@ cmd_land() {
         msg_wt_land_suite_red "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
         return 6
     fi
+    # Green, but green over nothing is not green. A tier whose selection stopped
+    # matching (a moved directory, a renamed suffix) exits 0 on zero tests, and
+    # the land log is the one place that shows it. Advisory: the merge stands,
+    # and the human decides.
+    local zero_tiers
+    zero_tiers=$(land_zero_tiers "$land_log")
+    [ -n "$zero_tiers" ] && msg_wt_land_tier_empty "$zero_tiers" >&2
     # Green: the merge is confirmed. Retire the worktree and its branch (cmd_remove
     # runs from the primary tree, so it never refuses "the tree you are in").
     cmd_remove "$wt"

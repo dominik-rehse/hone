@@ -448,6 +448,43 @@ out=$(bash "$WSH" status) || die "status failed without the marker"
 echo "$out" | grep -q ".hone-proof-always" && die "status should say nothing without the marker"
 step "status reports the proof-always marker and flags an uncommitted one"
 
+echo "== 5h. tier summaries: land warns about a tier that ran nothing =="
+# The adapter reports one line per tier. A tier that matches no test still
+# exits 0, so the suite goes green over nothing. land reads the land log and
+# names every tier that reported ran=0, without blocking the merge.
+cp scripts/run-tests.sh "$REPO/run-tests.orig"
+cat > scripts/run-tests.sh <<'EOF'
+#!/bin/bash
+case "${1:-}" in --all|--unit) shift ;; esac
+node -e '
+  const {add} = require("./src/mathx/add.js");
+  if (add(2,3) !== 5) { console.error("add(2,3) !== 5"); process.exit(1); }
+' 2>/dev/null || exit 1
+echo "hone tier: unit ran=7"
+echo "hone tier: e2e ran=0"
+EOF
+git add scripts/run-tests.sh && git commit -qm "chore: report tier summaries"
+WT_T=$(bash "$WSH" add tier-warn) || die "worktree add tier-warn"
+echo "// tiered" > "$WT_T/src/mathx/tiered.js"
+(cd "$WT_T" && git add -A && git commit -qm "chore(mathx): a change under a tiered adapter")
+out=$(bash "$WSH" land tier-warn 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "the tier warning must not block a green land (got $rc)"
+echo "$out" | grep -q "ran no test at all" || die "land should warn about the empty tier"
+echo "$out" | grep -q -- "- e2e" || die "the warning should name the empty tier"
+echo "$out" | grep -q -- "- unit" && die "the warning must not name a tier that ran tests"
+step "land warns about a ran=0 tier and still lands the change"
+# An adapter that reports nothing (every older one) draws no warning.
+cp "$REPO/run-tests.orig" scripts/run-tests.sh
+git add scripts/run-tests.sh && git commit -qm "chore: back to a silent adapter"
+rm -f "$REPO/run-tests.orig"
+WT_TS=$(bash "$WSH" add tier-silent) || die "worktree add tier-silent"
+echo "// silent" > "$WT_TS/src/mathx/silent.js"
+(cd "$WT_TS" && git add -A && git commit -qm "chore(mathx): a change under a silent adapter")
+out=$(bash "$WSH" land tier-silent 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "a silent adapter should land normally (got $rc)"
+echo "$out" | grep -q "ran no test at all" && die "a silent adapter should draw no tier warning"
+step "an adapter that reports no tiers draws no warning"
+
 echo "== 6. status: the control surface at a glance =="
 out=$(bash "$WSH" status) || die "status failed"
 echo "$out" | grep -q "hooks: on" || die "status should report hooks on"

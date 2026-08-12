@@ -12,11 +12,27 @@ and adapt it. It must honour this contract:
   integration/e2e tests (network, DB, browser). Run at land.
 - `run-tests.sh --unit` runs the unit tier explicitly.
 - `run-tests.sh <files...>` runs exactly those files (the red/green inner loop).
-- Exit `0` = all selected tests passed; non-zero = failures.
+- Exit `0` = all selected tests passed. Any other exit means failures.
+- The adapter SHOULD print one summary line per tier it ran, in the form
+  `hone tier: <name> ran=<count>`. Take the count from the runner's own output
+  where it prints one, or from the number of test files the tier collected.
 
 Keep slow or external tests out of the unit tier. Put them under an
 `integration/` or `e2e/` directory, named so the runner still discovers them, or
 the gate becomes flaky and gets bypassed.
+
+## Tier summary lines
+
+A tier that matches no test still exits `0`. The suite goes green and proves
+nothing, and nobody sees it. The summary line makes that visible.
+
+`land` reads these lines from the post-merge run and warns about every tier that
+reported `ran=0`. The warning never blocks a land. An older adapter prints no
+such lines, and `land` then says nothing.
+
+The shipped templates emit one line each. Adapt the count to your runner: a
+number it prints beats a file count, because a file the runner skipped still
+sits on disk.
 
 ## Type-check and lint (optional)
 
@@ -28,9 +44,9 @@ project-specific.
 
 `typecheck.sh` must cover **everything the repo compiles** (`src/`, `tests/`,
 `scripts/`, tooling), not only production code. A tsconfig whose `include`
-stops at `src/` makes the gate's green overstate what was checked: type errors
-hide in exactly the code no test exercises (dev servers, deploy tooling) and
-surface as broken tooling long after they landed.
+stops at `src/` makes the gate's green overstate its own reach. Type errors
+then hide in exactly the code no test exercises, such as dev servers and deploy
+tooling. They surface as broken tooling long after they landed.
 
 ## Real-environment proof (optional)
 
