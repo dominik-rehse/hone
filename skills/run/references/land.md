@@ -41,23 +41,39 @@ state (from the primary tree) rather than retrying blindly.
 
 ## 7: the proof gate
 
-The change's commit body carries
-`Proof: real-environment` and the proof is still missing: no green
-`scripts/proof.sh` (land executes the primary tree's reviewed copy, from the
-worktree so it reaches the code under test; a proof.sh the change itself adds
-does not count until it lands), and no `.hone-proof/<change>` sign-off naming
-the current branch tip. A sign-off written for an earlier commit stops
-counting, by design: it must not outlive the code it vouched for.
+The change needs real-environment proof, and that proof is missing. Two things
+ask for it. A `Proof: real-environment` trailer on a branch commit asks for it.
+So does a committed `.hone-proof-always` marker, which gates every change, with
+a trailer or without one.
+
+Two things discharge it. A green `scripts/proof.sh` discharges it, and so does
+a `.hone-proof/<change>` sign-off naming the current branch tip. land runs the
+primary tree's reviewed copy of the adapter, from the worktree, so it reaches
+the code under test. A proof.sh the change itself adds does not count until it
+lands. A sign-off written for an earlier commit stops counting, by design: it
+must not outlive the code it vouched for.
 
 The merge did not happen and the worktree is kept. **Stop and escalate.** The
-real-environment check is outside the loop's boundary. Where the trailer carries
-a description after the dash, the gate message prints it as the declared check.
-The human runs exactly that check in their own terminal, then records it with
-`worktree.sh attest <change> "what they ran"`. The exit-7 message prints that
-full command with its path.
+real-environment check is outside the loop's boundary. Read the message to see
+which of the four refusals fired:
 
-One case has no other route. Where the change itself introduces or edits
-`scripts/proof.sh` or its probes, land cannot use the unlanded copy. The human
+- *No proof yet.* Where the trailer declared a check, the message prints it.
+  The message then prints the full `worktree.sh attest` command with its path.
+  The human runs the check in their own terminal and records it with that
+  command.
+- *A stale sign-off.* The message names the tip the sign-off does not cover,
+  and prints the same attest command.
+- *The adapter failed.* The message points at the adapter output above it. Fix
+  the change, then land again. This refusal prints no attest command, because
+  the real environment refused the change.
+- *The marker without an adapter.* The message asks the human to add
+  `scripts/proof.sh`, and prints no attest command. Never remove
+  `.hone-proof-always` to get past it. The marker is project policy, and both
+  guards protect it.
+
+One case has no automatic route. Where the change itself writes or edits
+`scripts/proof.sh` or a probe under `scripts/proof-probes/`, land runs no
+adapter for it. The copy land holds is the copy the change replaces. The human
 runs `bash scripts/proof.sh <change>` from the worktree, in their own terminal,
 and attests with its output.
 
