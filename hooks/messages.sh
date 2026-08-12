@@ -555,6 +555,25 @@ Why: the sign-off stops counting after new commits.
 EOF
 }
 
+msg_wt_attest_empty() {
+    cat <<'EOF'
+hone worktree: the sign-off text is empty, so it records nothing.
+Do: run attest again with the check you ran and its outcome.
+Why: the sign-off is the whole audit trail.
+EOF
+}
+
+msg_wt_attest_placeholder() {
+    local what="$1"
+    cat <<EOF
+hone worktree: the sign-off text is still the placeholder from the usage line.
+Do: run attest again, and name the check you ran and its outcome.
+Why: a placeholder tells a later reader nothing.
+The text you passed:
+$(hone_msg_block "$what")
+EOF
+}
+
 msg_wt_attest_no_branch() {
     local change="$1"
     cat <<EOF
@@ -741,6 +760,8 @@ worktree|human|msg_wt_land_conflict|hone/<change>
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_grant_recorded|<change>
 worktree|human|msg_wt_attest_recorded|<change>|<tip>
+worktree|human|msg_wt_attest_empty
+worktree|human|msg_wt_attest_placeholder|what you ran
 worktree|human|msg_wt_attest_no_branch|<change>
 worktree|human|msg_wt_remove_needs_path
 worktree|human|msg_wt_remove_foreign|<path>

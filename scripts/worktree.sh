@@ -411,6 +411,22 @@ main_root_of() {
     git -C "$(git rev-parse --git-common-dir 2>/dev/null)/.." rev-parse --show-toplevel 2>/dev/null
 }
 
+# Print non-empty if $1 is one of the placeholder descriptions the usage line
+# and the gate's remedy command carry, quoted or bare, in any case. An audit of
+# a consumer repo found three sign-offs holding exactly that text: the human
+# pasted the command and never edited it, so the file proved nothing while the
+# gate read it as proof.
+attest_is_placeholder() {
+    local what
+    what=$(printf '%s' "$1" | tr 'A-Z' 'a-z' \
+        | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+              -e 's/^["'"'"']//' -e 's/["'"'"']$//' \
+              -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    case "$what" in
+        "what you ran"|"what you ran and the outcome") echo yes ;;
+    esac
+}
+
 # "name <email> | timestamp" for grant/attest stamps.
 signer_stamp() {
     printf '%s <%s> | %s' \
@@ -506,6 +522,15 @@ cmd_attest() {
     local what="$*"
     if [ -z "$change" ] || [ -z "$what" ]; then
         msg_wt_attest_usage >&2; return 2
+    fi
+    # A sign-off IS its text: land reads the commit id, a human reads the rest.
+    # Whitespace records nothing, and the unedited placeholder records less than
+    # nothing, because it reads as evidence while carrying none.
+    if ! printf '%s' "$what" | grep -q '[^[:space:]]'; then
+        msg_wt_attest_empty >&2; return 2
+    fi
+    if [ -n "$(attest_is_placeholder "$what")" ]; then
+        msg_wt_attest_placeholder "$what" >&2; return 2
     fi
     git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
     local main_root tip
