@@ -140,9 +140,10 @@ the worktree stays for inspection.
   It also prints the `git diff` command for the whole change, and the grant
   command.
 - *Proof gate (exit 7)* fires when a commit on the branch carries a
-  `Proof: real-environment` trailer (copied from the Plan), meaning no
-  in-repo test can prove the change; a browser journey, canary, or deployed
-  check has to. Landing it needs one of: a green run of the *primary tree's*
+  `Proof: real-environment — <the check>` trailer (copied verbatim from the
+  Plan), meaning no in-repo test can prove the change; a browser journey,
+  canary, or deployed check has to. Landing it needs one of: a green run of
+  the *primary tree's*
   `scripts/proof.sh` (see *Adapters*: the reviewed copy is executed, so a
   change cannot ship its own green stub), or your sign-off after running the
   check yourself: `worktree.sh attest <change> "what you ran"`. A committed

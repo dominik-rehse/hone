@@ -278,11 +278,13 @@ browser journey, a canary, or deployed health. For a change whose real claim
 lives out there, "landed, tested, reviewed" is not "proven".
 
 So the boundary is stated explicitly: a Plan whose proof is user- or
-ops-level declares `Proof: real-environment` (the `plan-critic` rejects a
-plan whose named proof is categorically unable to settle its claim), and
-`land` refuses such a change until a reviewed real-environment check passes
-or a human runs the check and signs it off. The sign-off names the commit it
-covers, so it expires when new commits are pushed. Mechanics in
+ops-level declares `Proof: real-environment — <the check>` (the `plan-critic`
+rejects a plan whose named proof is categorically unable to settle its claim),
+and `land` refuses such a change until a reviewed real-environment check
+passes or a human runs the check and signs it off. The landing commit copies
+that whole line, because consolidate deletes the Plan and the trailer is all
+that reaches the human at land. The sign-off names the commit it covers, so it
+expires when new commits are pushed. Mechanics in
 [`reference.md`](reference.md).
 
 ### Property-based tests (build-time)
