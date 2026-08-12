@@ -50,12 +50,20 @@ the current branch tip. A sign-off written for an earlier commit stops
 counting, by design: it must not outlive the code it vouched for.
 
 The merge did not happen and the worktree is kept. **Stop and escalate.** The
-real-environment check is outside the loop's boundary: the human runs the journey
-or canary and records it, in their own terminal, with
-`worktree.sh attest <change> "what they ran"` (the exit-7 message prints the
-full command with its path). Never sign it off yourself, never run `attest`,
-and never write the commit id into a sign-off file to satisfy the check: the
-guard and bash-guard deny all of these routes.
+real-environment check is outside the loop's boundary. Where the trailer carries
+a description after the dash, the gate message prints it as the declared check.
+The human runs exactly that check in their own terminal, then records it with
+`worktree.sh attest <change> "what they ran"`. The exit-7 message prints that
+full command with its path.
+
+One case has no other route. Where the change itself introduces or edits
+`scripts/proof.sh` or its probes, land cannot use the unlanded copy. The human
+runs `bash scripts/proof.sh <change>` from the worktree, in their own terminal,
+and attests with its output.
+
+Never sign it off yourself, never run `attest`, and never write the commit id
+into a sign-off file to satisfy the check. The guard and bash-guard deny all of
+these routes.
 
 ## 8: the authority gate
 
