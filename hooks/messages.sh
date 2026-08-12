@@ -332,8 +332,31 @@ EOF
 
 # ------------------------------------------------------------- worktree
 
+# The placeholder description the usage lines carry.
+hone_msg_attest_what() { printf 'what you ran'; }
+
+# The placeholder the land gate's remedy command carries. A sign-off records the
+# check AND its outcome, so the gate asks for both.
+hone_msg_attest_what_full() { printf 'what you ran and the outcome'; }
+
+# Every placeholder `attest` refuses as a sign-off text. An audit of a consumer
+# repo found three sign-offs holding exactly this text: the human pasted the
+# command and never edited it, so the file proved nothing while the gate read it
+# as proof.
+#
+# The two functions above are the single source, so a reworded placeholder can
+# never leave the refusal behind. Each first-person form gets its third-person
+# twin, because skills/run/references/land.md relays the command to the agent as
+# "what they ran".
+hone_msg_attest_placeholders() {
+    local what
+    for what in "$(hone_msg_attest_what)" "$(hone_msg_attest_what_full)"; do
+        printf '%s\n%s\n' "$what" "${what/what you/what they}"
+    done
+}
+
 msg_wt_usage() {
-    printf '%s\n' 'usage: worktree.sh {add <change>|landable|verify|land <change>|remove <worktree-path>|status|grant <change> "who/why"|attest <change> "what you ran"}'
+    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|land <change>|remove <worktree-path>|status|grant <change> \"who/why\"|attest <change> \"$(hone_msg_attest_what)\"}"
 }
 
 msg_wt_grant_usage() {
@@ -341,7 +364,7 @@ msg_wt_grant_usage() {
 }
 
 msg_wt_attest_usage() {
-    printf '%s\n' 'usage: worktree.sh attest <change> "what you ran"'
+    printf '%s\n' "usage: worktree.sh attest <change> \"$(hone_msg_attest_what)\""
 }
 
 msg_wt_not_a_repo() {

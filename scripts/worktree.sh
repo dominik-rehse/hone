@@ -400,7 +400,7 @@ cmd_land() {
     if [ -n "$proof_always" ] || [ -n "$(land_proof_required "$main_root" "$branch")" ]; then
         local tip signoff="$main_root/.hone-proof/$change" discharged="" attest_cmd check bootstrap
         tip=$(git -C "$main_root" rev-parse "$branch")
-        attest_cmd="bash $HONE_WSH attest $change \"what you ran and the outcome\"   (stamps the tip commit)"
+        attest_cmd="bash $HONE_WSH attest $change \"$(hone_msg_attest_what_full)\"   (stamps the tip commit)"
         # The trailer's own description, printed back at the gate: the human
         # who has to run the check should not have to go read the Plan for it.
         check=$(land_proof_trailer "$main_root" "$branch")
@@ -506,20 +506,19 @@ main_root_of() {
     git -C "$(git rev-parse --git-common-dir 2>/dev/null)/.." rev-parse --show-toplevel 2>/dev/null
 }
 
-# Print non-empty if $1 is one of the placeholder descriptions the usage line
-# and the gate's remedy command carry, quoted or bare, in any case. An audit of
-# a consumer repo found three sign-offs holding exactly that text: the human
-# pasted the command and never edited it, so the file proved nothing while the
-# gate read it as proof.
+# Print non-empty if $1 is one of the placeholder descriptions hone itself
+# prints, quoted or bare, in any case. The list lives in messages.sh
+# (hone_msg_attest_placeholders), beside the usage lines and the remedy command
+# that carry those literals, so the two can never drift apart.
 attest_is_placeholder() {
-    local what
+    local what candidate
     what=$(printf '%s' "$1" | tr 'A-Z' 'a-z' \
         | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
               -e 's/^["'"'"']//' -e 's/["'"'"']$//' \
               -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-    case "$what" in
-        "what you ran"|"what you ran and the outcome") echo yes ;;
-    esac
+    while IFS= read -r candidate; do
+        [ "$what" = "$candidate" ] && { echo yes; return 0; }
+    done < <(hone_msg_attest_placeholders)
 }
 
 # "name <email> | timestamp" for grant/attest stamps.

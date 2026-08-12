@@ -345,8 +345,12 @@ out=$(bash "$WSH" attest attest-text "   " 2>&1); rc=$?
 [ "$rc" -eq 2 ] || die "attest with a whitespace description should exit 2 (got $rc)"
 echo "$out" | grep -q "is empty" || die "the empty-description refusal should say so"
 [ -f "$REPO/.hone-proof/attest-text" ] && die "a refused attest must not write a sign-off"
-for placeholder in "what you ran" "what you ran and the outcome" \
-                   "What You Ran" '"what you ran and the outcome"'; do
+# Both persons count: the usage line says "what you ran", and the run skill
+# relays the same command to the agent as "what they ran".
+for placeholder in "what you ran" "what they ran" \
+                   "what you ran and the outcome" "what they ran and the outcome" \
+                   "What You Ran" "WHAT THEY RAN AND THE OUTCOME" \
+                   '"what you ran and the outcome"' "'what they ran'"; do
     out=$(bash "$WSH" attest attest-text "$placeholder" 2>&1); rc=$?
     [ "$rc" -eq 2 ] || die "attest with the placeholder '$placeholder' should exit 2 (got $rc)"
     echo "$out" | grep -q "placeholder" || die "the placeholder refusal should name the reason"
