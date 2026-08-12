@@ -266,6 +266,28 @@ Proof: real-environment $dash walk the checkout journey on staging")
     bash "$WSH" remove "$WT_D" >/dev/null 2>&1; git branch -D "hone/described-$n" >/dev/null 2>&1
 done
 step "the trailer's declared check is printed at the gate (both dashes)"
+# (b4) The bootstrap case: a change that writes the proof adapter itself, or one
+# of its probes, cannot be proven by the copy land holds, so the refusal tells
+# the human to run the branch's own adapter from the worktree.
+n=0
+for target in scripts/proof.sh scripts/proof-probes/journey.sh; do
+    n=$((n+1))
+    WT_BS=$(bash "$WSH" add "bootstrap-$n") || die "worktree add bootstrap-$n"
+    mkdir -p "$WT_BS/$(dirname "$target")"
+    printf '#!/bin/bash\nexit 0\n' > "$WT_BS/$target"
+    (cd "$WT_BS" && git add -A && git commit -qm "feat(proof): add $target
+
+Proof: real-environment - run the new adapter by hand")
+    out=$(bash "$WSH" land "bootstrap-$n" 2>&1); rc=$?
+    [ "$rc" -eq 7 ] || die "a change writing $target should exit 7 (got $rc)"
+    echo "$out" | grep -q "land cannot use the copy it has" || die "the gate should explain the bootstrap case for $target"
+    echo "$out" | grep -qF "bash scripts/proof.sh bootstrap-$n" || die "the gate should print the by-hand proof command for $target"
+    bash "$WSH" remove "$WT_BS" >/dev/null 2>&1; git branch -D "hone/bootstrap-$n" >/dev/null 2>&1
+done
+# A change that leaves the adapter alone gets no bootstrap hint.
+out=$(bash "$WSH" land ui-flow 2>&1)
+echo "$out" | grep -q "land cannot use the copy it has" && die "an unrelated change should get no bootstrap hint"
+step "a change touching proof.sh or a probe gets the bootstrap instruction"
 # (c) A sign-off that names no commit does not satisfy it: an unbound
 # sign-off would outlive the code it attested.
 mkdir -p "$REPO/.hone-proof"

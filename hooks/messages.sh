@@ -494,41 +494,61 @@ hone_msg_proof_check() {
     hone_msg_block "$1"
 }
 
+# The bootstrap case, as a labelled paste block. land runs the PRIMARY tree's
+# proof.sh, so the change that writes or edits that adapter cannot be proven by
+# it: the copy land would run is the one this change replaces. $1 is the change
+# name, empty when the change leaves the adapter alone.
+hone_msg_proof_bootstrap() {
+    [ -n "$1" ] || return 0
+    cat <<'EOF'
+This change edits scripts/proof.sh or its probes, so land cannot use the copy it has.
+Run the change's own adapter, from its worktree, in your own terminal:
+EOF
+    hone_msg_block "bash scripts/proof.sh $1"
+}
+
 msg_wt_land_proof_adapter_failed() {
-    local branch="$1" check="$2"
+    local branch="$1" check="$2" attest_cmd="$3" bootstrap="$4"
     cat <<EOF
 hone worktree: $branch declares real-environment proof, and scripts/proof.sh failed.
 Do: read the adapter output above, fix the change, then land again.
 Why: the real environment refused this change.
 EOF
     hone_msg_proof_check "$check"
+    if [ -n "$bootstrap" ]; then
+        hone_msg_proof_bootstrap "$bootstrap"
+        printf 'Record that run, then re-run land:\n'
+        hone_msg_block "$attest_cmd"
+    fi
     printf 'land kept the worktree as evidence.\n'
 }
 
 msg_wt_land_proof_signoff_stale() {
-    local change="$1" branch="$2" tip="$3" check="$4" attest_cmd="$5"
+    local change="$1" branch="$2" tip="$3" check="$4" attest_cmd="$5" bootstrap="$6"
     cat <<EOF
 hone worktree: .hone-proof/$change names no commit, or an older one, so it cannot cover $branch at $tip.
 Do: run the check against this tip, then record the sign-off again.
 Why: a sign-off covers one commit, never a later one.
 EOF
     hone_msg_proof_check "$check"
+    hone_msg_proof_bootstrap "$bootstrap"
     printf 'Record the new sign-off, then re-run land:\n'
     hone_msg_block "$attest_cmd"
     printf 'land kept the worktree as evidence.\n'
 }
 
 msg_wt_land_proof_missing() {
-    local branch="$1" check="$2" attest_cmd="$3"
+    local branch="$1" check="$2" attest_cmd="$3" bootstrap="$4"
     cat <<EOF
 hone worktree: $branch declares real-environment proof, which the test suite cannot give.
 Do: run the check yourself, then record your sign-off.
 Why: a green suite proves assertions, not deployed behaviour.
 EOF
     hone_msg_proof_check "$check"
+    hone_msg_proof_bootstrap "$bootstrap"
     printf 'Record your sign-off, then re-run land:\n'
     hone_msg_block "$attest_cmd"
-    printf 'The other route is scripts/proof.sh in the primary tree, a real check such as a journey, a canary, or deployed health.\n'
+    [ -n "$bootstrap" ] || printf 'The other route is scripts/proof.sh in the primary tree, a real check such as a journey, a canary, or deployed health.\n'
     printf 'land kept the worktree as evidence.\n'
 }
 
@@ -768,9 +788,9 @@ worktree|human|msg_wt_land_no_branch|hone/<change>
 worktree|human|msg_wt_land_detached
 worktree|human|msg_wt_land_authority_missing|hone/<change>|- <signal>|<diffstat>|git -C <main-root> diff <base>...hone/<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "who/why"
 worktree|human|msg_wt_land_grant_empty|<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "who/why"
-worktree|human|msg_wt_land_proof_adapter_failed|hone/<change>|<the check the Plan declared>
-worktree|human|msg_wt_land_proof_signoff_stale|<change>|hone/<change>|<tip>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)
-worktree|human|msg_wt_land_proof_missing|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)
+worktree|human|msg_wt_land_proof_adapter_failed|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
+worktree|human|msg_wt_land_proof_signoff_stale|<change>|hone/<change>|<tip>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
+worktree|human|msg_wt_land_proof_missing|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_conflict|hone/<change>
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_grant_recorded|<change>
