@@ -437,15 +437,21 @@ cmd_land() {
                     msg_wt_land_proof_adapter_failed "$branch" "$check" "$attest_cmd" "$bootstrap" >&2
                     return 7
                 fi
+            elif [ -f "$signoff" ]; then
+                # A sign-off exists but does not name this tip. That is the
+                # precise diagnosis, and it comes BEFORE the marker's
+                # no-adapter refusal: the human already knows the attest route
+                # and only has to run it again for the new tip. The marker
+                # message would instead hide that route and offer removing
+                # project policy.
+                msg_wt_land_proof_signoff_stale "$change" "$branch" "$tip" "$check" "$attest_cmd" "$bootstrap" >&2
+                return 7
             elif [ -n "$proof_always" ] && [ ! -f "$main_root/scripts/proof.sh" ]; then
                 # The marker asked for an adapter run on every change, and
                 # there is no adapter. Refusing beats quietly proving nothing.
                 # A bootstrap change skipped an adapter that DOES exist, so it
                 # never reaches this branch and never reads that it is missing.
                 msg_wt_land_proof_always_no_adapter "$HONE_PLUGIN_ROOT/templates/proof/" >&2
-                return 7
-            elif [ -f "$signoff" ]; then
-                msg_wt_land_proof_signoff_stale "$change" "$branch" "$tip" "$check" "$attest_cmd" "$bootstrap" >&2
                 return 7
             else
                 msg_wt_land_proof_missing "$branch" "$check" "$attest_cmd" "$bootstrap" >&2

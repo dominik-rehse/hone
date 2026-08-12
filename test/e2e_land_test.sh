@@ -480,6 +480,16 @@ out=$(bash "$WSH" land always-noadapter 2>&1); rc=$?
 [ "$rc" -eq 7 ] || die "the marker without an adapter should exit 7 (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "the marker without an adapter must not touch the trunk"
 echo "$out" | grep -q "delete the marker file" || die "the refusal should offer both routes"
+# (d2) A sign-off that exists but has gone stale is the precise diagnosis, so it
+# is reported first. The marker's no-adapter message would hide the attest route
+# and point the human at project policy instead.
+git rev-parse HEAD > "$REPO/.hone-proof/always-noadapter"   # names a commit, not the tip
+out=$(bash "$WSH" land always-noadapter 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "a stale sign-off under the marker should still exit 7 (got $rc)"
+echo "$out" | grep -q "names no commit, or an older one" || die "the stale sign-off should be named as the reason"
+echo "$out" | grep -qF "attest always-noadapter" || die "the stale-sign-off refusal should print the attest route"
+echo "$out" | grep -q "asks land to prove every change" && die "the marker message must not shadow a stale sign-off"
+rm -f "$REPO/.hone-proof/always-noadapter"
 # (e) Without the marker, that same change lands untouched by the gate.
 git rm -q .hone-proof-always && git commit -qm "chore: stop proving every change"
 bash "$WSH" land always-noadapter >/dev/null 2>&1; rc=$?
