@@ -52,7 +52,9 @@ what they must resolve before the loop runs unattended against it.
   should replace it: a file under `.plans/<slug>/` (a fixture of input/expected
   rows, a sample payload, a mockup), or the path of something already in the repo.
   Flag this only where the prose is carrying *specific data* a file would pin
-  exactly. A Plan describing behaviour at the level of observable outcomes is doing
+  exactly. An enumeration of exact case-by-case outputs is such data, even when
+  each case reads as an observable outcome. A Plan describing behaviour at the
+  level of observable outcomes is doing
   its job; demanding an artifact for that is noise, and a Plan that already names
   its references is not asked for more.
 - **Collision with an open change.** Given the other open Plans/worktrees in the
