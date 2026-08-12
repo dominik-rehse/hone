@@ -1,6 +1,7 @@
 #!/bin/bash
 # Run hone's mechanical test suite: the hook unit tests, the end-to-end land
-# path, and the two checks on the message templates (prose and shape). These
+# path, the shipped test adapters, and the two checks on the message templates
+# (prose and shape). These
 # are deterministic (no model calls). The critic/rule evals are separate and
 # live under evals/ (they call a model). Run: bash test/run.sh
 set -uo pipefail
@@ -11,6 +12,9 @@ bash "$DIR/hooks_test.sh" || rc=1
 echo
 echo "### e2e_land_test.sh"
 bash "$DIR/e2e_land_test.sh" || rc=1
+echo
+echo "### adapters_test.sh"
+bash "$DIR/adapters_test.sh" || rc=1
 echo
 echo "### messages_lint.sh"
 bash "$DIR/messages_lint.sh" || rc=1

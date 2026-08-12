@@ -20,23 +20,28 @@ runner() {
     fi
 }
 
-# Read pytest's own count back out of a run's output.
+# Read pytest's own count back out of a run's output. Prints nothing when
+# pytest printed no collection line: the contract says an adapter that cannot
+# know the runner's count stays silent rather than guessing.
 collected() {
     local n
     n=$(grep -oE 'collected +[0-9]+' "$1" 2>/dev/null | tail -n 1 | grep -oE '[0-9]+' || true)
-    printf '%s' "${n:-0}"
+    printf '%s' "$n"
 }
 
 # Run one tier and print its summary line, `hone tier: <name> ran=<count>`
 # (see templates/run-tests/README.md). A tier that matches no test still exits
 # 0, so land reads these lines and warns about any tier that ran nothing.
+# Only --all takes this path: land is the line's one reader, and the gate's
+# per-turn unit runs should not pay for the capture.
 run_tier() {
     local tier="$1"; shift
-    local log rc=0
+    local log rc=0 n
     log=$(mktemp)
     runner "$@" 2>&1 | tee "$log" || rc=$?
-    printf 'hone tier: %s ran=%s\n' "$tier" "$(collected "$log")"
+    n=$(collected "$log")
     rm -f "$log"
+    if [ -n "$n" ]; then printf 'hone tier: %s ran=%s\n' "$tier" "$n"; fi
     return "$rc"
 }
 
@@ -58,9 +63,9 @@ main() {
         run_tier all
     else
         # Unit tier: skip the integration/e2e directories, wherever they sit.
-        run_tier unit \
-            --ignore=integration --ignore=e2e \
-            --ignore=tests/integration --ignore=tests/e2e
+        # No summary line here: only --all prints one.
+        runner --ignore=integration --ignore=e2e \
+               --ignore=tests/integration --ignore=tests/e2e
     fi
 }
 

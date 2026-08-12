@@ -205,8 +205,10 @@ One script per job, all under the project's `scripts/`; the gate and the loop
 call them so hone itself stays language-agnostic.
 
 - `run-tests.sh` is required. Unit tier by default, `--all` for every tier,
-  `<files...>` for specific files. It should also print one summary line per
-  tier it ran, `hone tier: <name> ran=<count>`. Contract and per-ecosystem
+  `<files...>` for specific files. Under `--all` it should also print one
+  summary line per tier it ran, `hone tier: <name> ran=<count>`, taking the
+  count from the runner's own total. An adapter that cannot read that total
+  prints no line. Contract and per-ecosystem
   templates: [`templates/run-tests/README.md`](../templates/run-tests/README.md).
   Installed by `setup.sh`.
 - `typecheck.sh` and `lint.sh` are optional, one line each, run by the gate

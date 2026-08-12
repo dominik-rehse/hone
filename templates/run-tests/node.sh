@@ -34,14 +34,24 @@ run_tests() {
     esac
 }
 
-# Count the test files the tier covers. Every Node runner prints its own
-# summary and this adapter does not know which one the project uses, so a file
-# count is the portable stand-in. Swap in your runner's own number where it
-# prints one: a file the runner skipped still sits on disk.
-count_test_files() {
-    find . -name node_modules -prune -o \
-        -type f \( -name '*.test.*' -o -name '*.spec.*' \) -print 2>/dev/null \
-        | wc -l | tr -d ' '
+# Read the RUNNER's own test total out of a run's output ($1 = the log). This
+# adapter does not know which runner the project uses, so it recognizes the
+# common summaries and prints nothing when it recognizes none. Printing nothing
+# is the contract: a guessed count (files on disk, say) can never be 0, and it
+# would silence the very warning the line feeds. Add your runner's summary here.
+ran_count() {
+    local n=""
+    # jest: "Tests:       12 passed, 12 total"
+    n=$(grep -oE 'Tests:.*[0-9]+ total' "$1" 2>/dev/null | tail -n 1 \
+        | grep -oE '[0-9]+ total' | grep -oE '[0-9]+')
+    # vitest: "Tests  12 passed (12)"
+    [ -n "$n" ] || n=$(grep -oE 'Tests +[0-9]+ [a-z]+ \([0-9]+\)' "$1" 2>/dev/null \
+        | tail -n 1 | grep -oE '\([0-9]+\)' | grep -oE '[0-9]+')
+    # node --test, and any other TAP reporter: "# tests 12"
+    [ -n "$n" ] || n=$(grep -oE '^# tests [0-9]+' "$1" 2>/dev/null | tail -n 1 | grep -oE '[0-9]+')
+    # mocha: "12 passing"
+    [ -n "$n" ] || n=$(grep -oE '[0-9]+ passing' "$1" 2>/dev/null | tail -n 1 | grep -oE '[0-9]+')
+    printf '%s' "$n"
 }
 
 main() {
@@ -54,18 +64,22 @@ main() {
         --unit) tier="unit"; shift ;;
     esac
 
-    if [ "$#" -gt 0 ]; then
-        # Explicit files: run exactly those, no summary line.
+    # Explicit files, and the unit tier, run bare: land is the only reader of
+    # the summary line, so the gate's per-turn runs pay nothing for it.
+    if [ "$#" -gt 0 ] || [ "$tier" != "all" ]; then
         run_tests "$@"
         return
     fi
 
-    # One summary line per tier, `hone tier: <name> ran=<count>` (see
-    # templates/run-tests/README.md). A tier that matches no test still exits
-    # 0, so land reads these lines and warns about any tier that ran nothing.
-    local rc=0
-    run_tests || rc=$?
-    printf 'hone tier: %s ran=%s\n' "$tier" "$(count_test_files)"
+    # --all prints one summary line, `hone tier: <name> ran=<count>` (see
+    # templates/run-tests/README.md). A tier that matches no test still exits 0,
+    # so land reads this line and warns about a tier that ran nothing.
+    local log rc=0 n
+    log=$(mktemp)
+    run_tests 2>&1 | tee "$log" || rc=$?
+    n=$(ran_count "$log")
+    rm -f "$log"
+    if [ -n "$n" ]; then printf 'hone tier: %s ran=%s\n' "$tier" "$n"; fi
     return "$rc"
 }
 

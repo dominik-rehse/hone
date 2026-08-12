@@ -13,9 +13,9 @@ and adapt it. It must honour this contract:
 - `run-tests.sh --unit` runs the unit tier explicitly.
 - `run-tests.sh <files...>` runs exactly those files (the red/green inner loop).
 - Exit `0` = all selected tests passed. Any other exit means failures.
-- The adapter SHOULD print one summary line per tier it ran, in the form
-  `hone tier: <name> ran=<count>`. Take the count from the runner's own output
-  where it prints one, or from the number of test files the tier collected.
+- Under `--all`, the adapter SHOULD print one summary line per tier it ran, in
+  the form `hone tier: <name> ran=<count>`. Take the count from the runner's own
+  reported total. An adapter that cannot read that total prints no line at all.
 
 Keep slow or external tests out of the unit tier. Put them under an
 `integration/` or `e2e/` directory, named so the runner still discovers them, or
@@ -30,9 +30,19 @@ nothing, and nobody sees it. The summary line makes that visible.
 reported `ran=0`. The warning never blocks a land. An older adapter prints no
 such lines, and `land` then says nothing.
 
-The shipped templates emit one line each. Adapt the count to your runner: a
-number it prints beats a file count, because a file the runner skipped still
-sits on disk.
+`land` is the only reader, and it runs the adapter with `--all`, so print the
+lines under `--all` alone. The gate runs the unit tier on every turn, and it
+reads nothing here.
+
+Print the count the runner itself reported, and nothing else. An adapter that
+cannot parse that total must stay silent rather than guess. A file count is the
+tempting guess and the wrong one. A file the runner skipped, or never collected,
+still sits on disk, so such a count never reaches 0. It hides the exact failure
+the line exists to show.
+
+The shipped bun and python templates read the runner's own total. The node
+template recognizes the common Node reporters, and prints no line for a reporter
+it does not know.
 
 ## Type-check and lint (optional)
 
