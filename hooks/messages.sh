@@ -364,7 +364,7 @@ EOF
 msg_wt_add_path_claimed() {
     local path="$1"
     cat <<EOF
-hone worktree: $path already exists, so this change is claimed.
+hone worktree: $path already exists, and that worktree claims this change.
 Do: resume that worktree by hand, or pick another change.
 Why: another run owns it, or it is leftover evidence.
 EOF
@@ -373,7 +373,7 @@ EOF
 msg_wt_add_branch_claimed() {
     local branch="$1"
     cat <<EOF
-hone worktree: branch $branch already exists, so this change is claimed.
+hone worktree: branch $branch already exists, and that branch claims this change.
 Do: resume that branch by hand, or pick another change.
 Why: another run owns it, or it is leftover evidence.
 EOF
