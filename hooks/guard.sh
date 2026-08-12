@@ -97,10 +97,15 @@ esac
 # .hone-durable-paths (one per line, # comments allowed): a directory prefix
 # (`deploy/`) or an exact file (`tsconfig.json`). The file EXTENDS the
 # defaults: the built-in protected set can grow, never shrink.
+#
+# The .hone-proof-always marker counts as durable for the same reason: deleting
+# it is the cheapest way past the land proof gate, and the project's proof
+# policy is not a workspace edit.
 is_durable() {
     case "$1" in
         src/*|tests/*|docs/*|db/*|scripts/*) return 0 ;;
         .hone-durable-paths|.hone-irreversible-paths|.hone-consequential-paths) return 0 ;;
+        .hone-proof-always) return 0 ;;
     esac
     [ -f ".hone-durable-paths" ] || return 1
     local entry

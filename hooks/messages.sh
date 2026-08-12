@@ -556,10 +556,11 @@ msg_wt_land_proof_always_no_adapter() {
     local templates="$1"
     cat <<EOF
 hone worktree: .hone-proof-always asks land to prove every change, and scripts/proof.sh is missing.
-Do: add the adapter, or delete the marker file.
+Do: add the adapter, then re-run land.
 Why: the marker promises a check this project does not have.
 Copy a template from the directory below, then commit it:
 $(hone_msg_block "$templates")
+The marker is project policy, so only the human removes it.
 land kept the worktree as evidence.
 EOF
 }

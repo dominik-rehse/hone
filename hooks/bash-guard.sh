@@ -74,10 +74,11 @@ if echo "$CMD" | grep -Eq \
 fi
 
 # 2. A mutating operation aimed at a protected artifact → ask. The committed
-# policy files are protected too: editing .hone-durable-paths or
-# .hone-irreversible-paths shrinks or widens the enforcement perimeter, which
-# is the human's call.
-PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths'
+# policy files are protected too: editing .hone-durable-paths,
+# .hone-irreversible-paths, or the .hone-proof-always marker shrinks or widens
+# the enforcement perimeter, which is the human's call. Deleting the marker is
+# the cheapest way past the land proof gate, so it escalates like the rest.
+PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common|messages)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths|\.hone-proof-always'
 if echo "$CMD" | grep -Eq "(>>?|tee|sed -i|cp |mv |install |ln -s|chmod|chattr|rm |truncate|dd of=)[^|;&]*(${PROT})"; then
     decision ask "$(msg_bashguard_protected)"
 fi

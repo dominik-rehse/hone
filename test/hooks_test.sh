@@ -105,6 +105,13 @@ echo "$(bg 'dd of=.hone-grant/db-drop')" | grep -q '"deny"' && ok "dd into a gra
 # The committed policy files bound the enforcement perimeter: mutating one asks.
 echo "$(bg 'sed -i s/a/b/ .hone-durable-paths')" | grep -q '"ask"' && ok "editing .hone-durable-paths escalated" || bad "editing a policy file should ask"
 echo "$(bg 'echo db/ >> .hone-irreversible-paths')" | grep -q '"ask"' && ok "appending to .hone-irreversible-paths escalated" || bad "appending to a policy file should ask"
+# The .hone-proof-always marker is policy too, and deleting it is the cheapest
+# way past the land proof gate, so removing or rewriting it escalates.
+echo "$(bg 'rm .hone-proof-always')" | grep -q '"ask"' && ok "removing .hone-proof-always escalated" || bad "removing the proof-always marker should ask"
+echo "$(bg 'echo x > .hone-proof-always')" | grep -q '"ask"' && ok "rewriting .hone-proof-always escalated" || bad "rewriting the proof-always marker should ask"
+# messages.sh carries hone's own prose, and it belongs to the same plugin-side
+# class as the other hooks the pattern already lists.
+echo "$(bg 'sed -i s/x/y/ hooks/messages.sh')" | grep -q '"ask"' && ok "editing hooks/messages.sh escalated" || bad "editing a plugin hook file should ask"
 # A HEAD-move in the primary tree races other sessions → ask; the same op inside
 # a linked worktree is isolated → silent.
 echo "$(bg 'git checkout some-commit')" | grep -q '"ask"' && ok "git checkout in primary tree escalated" || bad "checkout in primary should ask"
@@ -256,6 +263,10 @@ out=$(guard_write ".hone-durable-paths" "$REPO")
 denied "$out" && ok "policy file denied in primary tree" || bad ".hone-durable-paths should be guard-protected"
 out=$(guard_write ".hone-irreversible-paths" "$REPO")
 denied "$out" && ok "irreversible-paths policy file denied in primary tree" || bad ".hone-irreversible-paths should be guard-protected"
+# The proof-always marker is policy of the same kind: an agent that rewrites or
+# empties it walks past the land proof gate in one step.
+out=$(guard_write ".hone-proof-always" "$REPO")
+denied "$out" && ok "proof-always marker denied in primary tree" || bad ".hone-proof-always should be guard-protected"
 
 echo
 echo "== nag: zero-deletion change (advisory, pre-land) =="

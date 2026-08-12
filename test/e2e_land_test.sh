@@ -479,7 +479,11 @@ PRE=$(git rev-parse HEAD)
 out=$(bash "$WSH" land always-noadapter 2>&1); rc=$?
 [ "$rc" -eq 7 ] || die "the marker without an adapter should exit 7 (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "the marker without an adapter must not touch the trunk"
-echo "$out" | grep -q "delete the marker file" || die "the refusal should offer both routes"
+# The Do line offers the adapter alone. Removing the marker is project policy,
+# addressed to the human, and never a route the refusal hands an agent.
+echo "$out" | grep -q "Do: add the adapter" || die "the refusal should tell the reader to add the adapter"
+echo "$out" | grep -q "only the human removes it" || die "the refusal should name the marker as the human's policy"
+echo "$out" | grep -q "Do:.*marker" && die "the Do line must not offer removing the marker"
 # (d2) A sign-off that exists but has gone stale is the precise diagnosis, so it
 # is reported first. The marker's no-adapter message would hide the attest route
 # and point the human at project policy instead.

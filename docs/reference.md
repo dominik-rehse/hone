@@ -70,8 +70,9 @@ file:
   land ignores the contents, so use them for a `#` comment. Commit it, or it
   gates your own lands and nobody else's. With the marker present and no
   `scripts/proof.sh`, land refuses with exit 7 and asks you to add the
-  adapter or delete the marker. `worktree.sh status` reports the marker and
-  warns while it is uncommitted.
+  adapter. The guard and the bash-guard protect the marker like the other
+  policy files, so removing it stays your call. `worktree.sh status` reports
+  the marker and warns while it is uncommitted.
 
 *Per-developer*, gitignored and never checked in:
 
