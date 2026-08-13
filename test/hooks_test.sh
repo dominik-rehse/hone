@@ -220,6 +220,27 @@ echo 'exit 1' > "$REPO/scripts/run-tests.sh"
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
 echo "$out" | grep -q '"decision":"block"' && bad "clean tree should not run the gate" || ok "clean tree skips the gate"
 
+echo "== gate: durable dirt outside src/ and tests/ still runs the suite =="
+# A dependency sweep leaves the manifest, the lockfile, and a tool config dirty
+# while src/ and tests/ stay clean. The gate used to no-op there, and a red lint
+# survived the turn. The adapter is red, so a block proves the gate ran.
+echo "note" > "$REPO/docs/notes/perimeter.md"
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+echo "$out" | grep -q '"decision":"block"' && ok "dirty docs/ runs the suite" || bad "docs/ dirt should run the gate"
+rm -f "$REPO/docs/notes/perimeter.md"
+# The project's own perimeter counts the same: .hone-durable-paths lists
+# package.json here, which is the dependency sweep in full.
+echo '{}' > "$REPO/package.json"
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+echo "$out" | grep -q '"decision":"block"' && ok "a dirty .hone-durable-paths entry runs the suite" || bad "a listed durable path should run the gate"
+rm -f "$REPO/package.json"
+# A dirty path outside the perimeter is the project's business, so the gate
+# stays a no-op and the turn stays cheap.
+echo "scratch" > "$REPO/scratch.txt"
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+echo "$out" | grep -q '"decision":"block"' && bad "non-durable dirt should not run the gate" || ok "non-durable dirt keeps the gate a no-op"
+rm -f "$REPO/scratch.txt"
+
 echo "== gate: tier escalation on a hone/<change> branch =="
 # A tier-sensitive adapter: green on unit, red on --all. Proves which tier ran.
 git -C "$REPO" checkout -q -b hone/verify-tier

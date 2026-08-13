@@ -122,8 +122,11 @@ is never gated, and enforcement assumes code lives under `src/<area>/`.
   write, so it stops the run before the commit rather than preventing the edit.
 - *gate* (Stop) runs `scripts/run-tests.sh`, plus `scripts/typecheck.sh`
   and `scripts/lint.sh` when they exist, and blocks the turn on any failure.
-  With uncommitted `src`/`tests` changes it runs the fast unit tier; on a
-  clean `hone/<change>` branch it runs the full suite (the pre-land check).
+  With an uncommitted change to any durable path it runs the fast unit tier.
+  On a clean `hone/<change>` branch it runs the full suite (the pre-land
+  check). A dependency sweep dirties the manifest and the lockfile rather
+  than `src/`, and it breaks the suite just as easily, so the gate reads the
+  whole durable perimeter and not `src/` and `tests/` alone.
 - *nag* (Stop, advisory) reports hygiene findings as a visible message, never
   a block: a Plan that survived its landing, an oversized or orphan Note, a
   broken `Governs:` link, a merged `hone/*` branch left behind, a change

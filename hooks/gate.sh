@@ -6,8 +6,11 @@
 # model fixes it before finishing the turn. It never disables a gate to proceed.
 #
 # Which tier runs depends on where the work sits:
-#   - Uncommitted src/tests changes → the fast UNIT tier. This is the red-green
-#     inner loop; the gate must stay cheap on every turn or it gets disabled.
+#   - An uncommitted change to any durable path → the fast UNIT tier. src/ and
+#     tests/ are the red-green inner loop, and the gate must stay cheap on every
+#     turn or it gets disabled. A dependency sweep dirties other durable paths
+#     instead (the manifest, the lockfile, a tool config, wherever the project
+#     lists them), and it breaks the suite just as easily, so the same tier runs.
 #   - Clean tree on a hone/<change> worktree branch (work committed, about to
 #     land) → the full --ALL tier, including integration/e2e. This is the moment a
 #     change is about to merge, so an integration regression that a green unit
@@ -50,11 +53,39 @@ cd "$PROJECT_ROOT" || exit 0
 ADAPTER="scripts/run-tests.sh"
 [ -f "$ADAPTER" ] || exit 0   # project has no hone test adapter, not gated
 
+# Print "yes" when the working tree carries an uncommitted change to a durable
+# path. hone_is_durable owns the perimeter (src/ tests/ docs/ db/ scripts/, the
+# policy files, plus every .hone-durable-paths entry), so the gate, the guard,
+# and the dirty-guard can never protect different sets.
+#
+# This used to read `git status --porcelain -- src tests`, which no-opped on a
+# dependency sweep. `bun update` left package.json, the lockfile, and a tool
+# config dirty, all three listed in that project's .hone-durable-paths, while
+# src/ and tests/ stayed clean. The gate skipped the turn, and the lint was red.
+# Dirt outside src/ breaks the suite just as well, so the suite runs.
+#
+# docs/-only dirt triggers the suite too. The unit tier plus type-check and
+# lint is cheap, and one rule the reader can state beats an exception list.
+gate_durable_dirt() {
+    local entry xy path expect_orig=0
+    while IFS= read -r -d '' entry; do
+        if [ "$expect_orig" -eq 1 ]; then
+            path="$entry"; expect_orig=0
+        else
+            xy="${entry:0:2}"
+            case "$xy" in *R*|*C*) expect_orig=1 ;; esac
+            path="${entry:3}"
+        fi
+        [ -n "$path" ] || continue
+        hone_is_durable "$path" && { echo yes; return 0; }
+    done < <(git --no-optional-locks status --porcelain -z 2>/dev/null)
+}
+
 # Pick the tier by where the work sits (see the header). A bare Q&A turn on a
 # clean, non-change tree has nothing to verify and exits early.
 TIER="--unit"
 if git rev-parse --git-dir >/dev/null 2>&1; then
-    if [ -n "$(git status --porcelain -- src tests 2>/dev/null)" ]; then
+    if [ -n "$(gate_durable_dirt)" ]; then
         TIER="--unit"                       # red-green in flight → fast tier
     else
         case "$(git rev-parse --abbrev-ref HEAD 2>/dev/null)" in
