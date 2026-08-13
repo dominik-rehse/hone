@@ -83,18 +83,45 @@ if echo "$CMD" | grep -Eq "(>>?|tee|sed -i|cp |mv |install |ln -s|chmod|chattr|r
     decision ask "$(msg_bashguard_protected)"
 fi
 
+# Rules 3 and 4 both apply to the primary tree alone. git-dir == common-dir ⇔
+# the hook's cwd is the primary tree, not a linked worktree (whose git-dir sits
+# under .git/worktrees/), so neither rule fires inside a worktree, which is
+# where both operations are safe and belong.
+IN_PRIMARY_TREE=0
+[ "$(git rev-parse --git-dir 2>/dev/null)" = "$(git rev-parse --git-common-dir 2>/dev/null)" ] \
+    && IN_PRIMARY_TREE=1
+
 # 3. A HEAD-moving git op in the PRIMARY tree → ask. The primary tree is a merge
 # target kept on the trunk; landing goes through `worktree.sh land`, which
 # serializes the merge under a lock. Moving the shared HEAD by hand (a checkout
 # to investigate, a stash, a hard reset) races every other session that shares
 # this tree: the exact collision this guards. Investigation belongs in a
-# throwaway `git worktree add --detach`. git-dir == common-dir ⇔ the hook's cwd
-# is the primary tree, not a linked worktree (whose git-dir sits under
-# .git/worktrees/), so the rule never fires inside a worktree where HEAD-moves
-# are safely isolated.
-if [ "$(git rev-parse --git-dir 2>/dev/null)" = "$(git rev-parse --git-common-dir 2>/dev/null)" ] \
+# throwaway `git worktree add --detach`.
+if [ "$IN_PRIMARY_TREE" -eq 1 ] \
    && echo "$CMD" | grep -Eq '(^|[^A-Za-z_])git[[:space:]]+((checkout|switch|stash)([[:space:]]|$)|reset[^|;&]*--(hard|merge|keep))'; then
     decision ask "$(msg_bashguard_head_move)"
+fi
+
+# 4. A tool that writes its OWN files, run in the PRIMARY tree → ask. This is
+# the preventive half of the primary-tree rule for the shell route, and
+# dirty-guard.sh (PostToolUse) is the half that catches what this list misses.
+# Rule 2 above cannot see these: a package manager rewrites package.json from
+# inside its own process, so the command text carries neither a write construct
+# nor the path.
+#
+# This is an allow-list of names, so it DRIFTS by construction: a new package
+# manager, a new migrate subcommand, or a wrapper script that calls one is a
+# hole until someone adds it here. That is why it only escalates, and why
+# dirty-guard checks the effect instead. Keep the boundary loose (a writer
+# anywhere in the command, so `bunx biome migrate` and `sudo npm install` both
+# match) and accept that prose quoting one of these names also escalates: an
+# ask costs one keystroke, and a missed dependency sweep costs a bad commit.
+SELF_WRITERS='(npm|pnpm|yarn|bun|deno)[[:space:]]+(add|install|i|ci|remove|rm|uninstall|update|upgrade|up|link|pkg)([[:space:]]|$)'
+SELF_WRITERS="$SELF_WRITERS"'|(pip|pip3|uv|poetry|cargo|bundle|gem|mix|composer)[[:space:]]+(add|install|remove|uninstall|sync|lock|update|upgrade|require|fmt|deps\.get)([[:space:]]|$)'
+SELF_WRITERS="$SELF_WRITERS"'|go[[:space:]]+(get|mod)([[:space:]]|$)'
+SELF_WRITERS="$SELF_WRITERS"'|(biome|eslint|prettier|dprint|ruff|black|isort|rustfmt|gofmt|jscodeshift|codemod)[^|;&]*(migrate|--write|--fix|--apply|[[:space:]]-w([[:space:]]|$)|[[:space:]]fmt([[:space:]]|$)|[[:space:]]format([[:space:]]|$))'
+if [ "$IN_PRIMARY_TREE" -eq 1 ] && echo "$CMD" | grep -Eq "(^|[^A-Za-z0-9_.-])(${SELF_WRITERS})"; then
+    decision ask "$(msg_bashguard_self_writer)"
 fi
 
 exit 0

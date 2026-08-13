@@ -103,7 +103,8 @@ the critics, and `garden`, so nothing ever corrects it. The nag flags such
 entries. The fix is to land the content in `docs/` through consolidate,
 where review and later cuts can reach it.
 
-*Enforcement:* the guard, gate, nag, and bash-guard hooks, described in
+*Enforcement:* the guard, gate, nag, bash-guard, and dirty-guard hooks,
+described in
 [`reference.md`](reference.md). In short: no production code without a
 failing test, and no direct edits to protected paths in the primary tree.
 Tests, type-check, and lint must be green before a turn ends, and the

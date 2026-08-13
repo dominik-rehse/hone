@@ -39,6 +39,11 @@ mechanical steps.
      READMEs prescribed. You don't reconcile it by hand: `setup.sh`, the
      session-start warning, and `worktree.sh status` each name exactly the
      rules your settings lack; paste them from the README's install block.
+   - *A new hook in 0.26*: `dirty-guard` blocks a shell command that leaves a
+     protected path dirty in the primary tree. Claude Code reads the hook set
+     once, at session start, so restart every session in the repo before this
+     takes effect. The same restart picks up the workflow rule this version
+     adds. Nothing to install and nothing to configure.
 
 After that, run `worktree.sh status`: it shows what is installed, what is
 missing, and flags a policy file that is still uncommitted or a settings.json

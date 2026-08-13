@@ -35,7 +35,8 @@ hone_pretool_decision() {
         "$decision" "$reason"
 }
 
-# Emit a Stop-hook block decision. $1 = reason. The caller exits 0 afterwards.
+# Emit a block decision for a Stop or a PostToolUse hook (both read the same two
+# fields). $1 = reason. The caller exits 0 afterwards.
 hone_stop_block() {
     local reason
     reason=$(hone_json_escape "$1")
@@ -54,6 +55,42 @@ hone_extract_field() {
     else
         printf '%s' "$json" | sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -1
     fi
+}
+
+# True when path $1 is a durable committed artifact: anything under src/,
+# tests/, docs/, db/ (schema and migrations are as durable as code), or scripts/
+# (the adapters the gate runs live there), the policy files themselves (an edit
+# to them widens or shrinks the enforcement perimeter, which is a reviewed
+# change, not a workspace edit), plus any project-specific paths listed in the
+# committed .hone-durable-paths (one per line, # comments allowed): a directory
+# prefix (`deploy/`) or an exact file (`tsconfig.json`). The file EXTENDS the
+# defaults: the built-in protected set can grow, never shrink.
+#
+# The .hone-proof-always marker counts as durable for the same reason: deleting
+# it is the cheapest way past the land proof gate, and the project's proof
+# policy is not a workspace edit.
+#
+# Reads .hone-durable-paths from the caller's cwd, so the caller cds to the
+# project root first. guard.sh (the file-tool route) and dirty-guard.sh (the
+# shell route) both call this, so the two routes can never protect different
+# sets.
+hone_is_durable() {
+    case "$1" in
+        src/*|tests/*|docs/*|db/*|scripts/*) return 0 ;;
+        .hone-durable-paths|.hone-irreversible-paths|.hone-consequential-paths) return 0 ;;
+        .hone-proof-always) return 0 ;;
+    esac
+    [ -f ".hone-durable-paths" ] || return 1
+    local entry
+    while IFS= read -r entry; do
+        entry=$(printf '%s' "$entry" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+        case "$entry" in ''|'#'*) continue ;; esac
+        entry="${entry%/}"
+        case "$1" in
+            "$entry"|"$entry"/*) return 0 ;;
+        esac
+    done < ".hone-durable-paths"
+    return 1
 }
 
 # Print each canonical deny rule that appears in NEITHER settings file of

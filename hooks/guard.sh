@@ -89,45 +89,16 @@ case "$REL" in
         ;;
 esac
 
-# A durable committed artifact is anything under src/, tests/, docs/, db/
-# (schema and migrations are as durable as code), or scripts/ (the adapters the
-# gate runs live there), the two policy files themselves (an edit to them
-# widens or shrinks the enforcement perimeter, which is a reviewed change, not
-# a workspace edit), plus any project-specific paths listed in the committed
-# .hone-durable-paths (one per line, # comments allowed): a directory prefix
-# (`deploy/`) or an exact file (`tsconfig.json`). The file EXTENDS the
-# defaults: the built-in protected set can grow, never shrink.
-#
-# The .hone-proof-always marker counts as durable for the same reason: deleting
-# it is the cheapest way past the land proof gate, and the project's proof
-# policy is not a workspace edit.
-is_durable() {
-    case "$1" in
-        src/*|tests/*|docs/*|db/*|scripts/*) return 0 ;;
-        .hone-durable-paths|.hone-irreversible-paths|.hone-consequential-paths) return 0 ;;
-        .hone-proof-always) return 0 ;;
-    esac
-    [ -f ".hone-durable-paths" ] || return 1
-    local entry
-    while IFS= read -r entry; do
-        entry=$(printf '%s' "$entry" | tr -d '\r' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
-        case "$entry" in ''|'#'*) continue ;; esac
-        entry="${entry%/}"
-        case "$1" in
-            "$entry"|"$entry"/*) return 0 ;;
-        esac
-    done < ".hone-durable-paths"
-    return 1
-}
-
-# Rule 1: no direct edits to durable artifacts in the primary tree.
+# Rule 1: no direct edits to durable artifacts in the primary tree. What counts
+# as durable lives in hone_is_durable (common.sh), shared with dirty-guard.sh so
+# the file-tool route and the shell route protect one identical set.
 # Distinguish the primary tree from a linked worktree: in the primary tree the
 # per-worktree git dir equals the common git dir; in a linked worktree it does
 # not. Skip when not a git repo (no worktrees possible → the rule cannot apply).
 if git rev-parse --git-dir >/dev/null 2>&1; then
     GIT_DIR=$(git rev-parse --absolute-git-dir 2>/dev/null)
     COMMON_DIR=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P)
-    if [ -n "$GIT_DIR" ] && [ "$GIT_DIR" = "$COMMON_DIR" ] && is_durable "$REL"; then
+    if [ -n "$GIT_DIR" ] && [ "$GIT_DIR" = "$COMMON_DIR" ] && hone_is_durable "$REL"; then
         deny "$(msg_guard_primary_tree "$REL")"
     fi
 fi

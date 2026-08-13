@@ -9,6 +9,7 @@ GUARD="$PLUGIN_ROOT/hooks/guard.sh"
 GATE="$PLUGIN_ROOT/hooks/gate.sh"
 NAG="$PLUGIN_ROOT/hooks/nag.sh"
 BASH_GUARD="$PLUGIN_ROOT/hooks/bash-guard.sh"
+DIRTY_GUARD="$PLUGIN_ROOT/hooks/dirty-guard.sh"
 
 pass=0; fail=0
 ok()   { pass=$((pass+1)); printf '  ok   %s\n' "$1"; }
@@ -119,6 +120,60 @@ echo "$(bg 'git stash push -- IDEAS.md')" | grep -q '"ask"' && ok "git stash in 
 echo "$(bg 'git reset --hard HEAD^')" | grep -q '"ask"' && ok "git reset --hard in primary tree escalated" || bad "hard reset in primary should ask"
 bgwt() { echo "{\"tool_input\":{\"command\":\"$1\"}}" | (cd "$WT" && bash "$BASH_GUARD"); }
 echo "$(bgwt 'git checkout -- src/auth/login.ts')" | grep -q '"ask"' && bad "HEAD-move inside a worktree should not ask" || ok "HEAD-move allowed inside a worktree"
+# A tool that writes its own files carries neither a write construct nor a path,
+# so rule 2 cannot see it. Rule 4 matches it by name, in the primary tree only.
+echo "$(bg 'bun add -d dprint@latest')" | grep -q '"ask"' && ok "a package manager in the primary tree escalated" || bad "bun add in primary should ask"
+echo "$(bg 'bunx biome migrate --write')" | grep -q '"ask"' && ok "a migration tool in the primary tree escalated" || bad "biome migrate in primary should ask"
+echo "$(bg 'bun test')" | grep -q 'permissionDecision' && bad "a read-only runner should pass silently" || ok "a non-writing subcommand passes"
+echo "$(bgwt 'bun add -d dprint@latest')" | grep -q 'permissionDecision' && bad "a worktree is where dependency work belongs" || ok "a package manager inside a worktree passes"
+
+echo "== dirty-guard: what a shell command leaves dirty in the primary tree =="
+dg() { echo '{"tool_input":{"command":"bun add -d dprint"}}' | (cd "$1" && bash "$DIRTY_GUARD"); }
+blocked() { echo "$1" | grep -q '"decision":"block"'; }
+
+# A clean primary tree passes. The hook reads the tree, never the command.
+out=$(dg "$REPO")
+blocked "$out" && bad "clean primary tree should pass" || ok "clean primary tree passes"
+
+# A tracked durable path left dirty → block, naming the path and the restore.
+echo "// touched" >> "$REPO/src/auth/.keep"
+out=$(dg "$REPO")
+blocked "$out" && ok "dirty durable path in the primary tree blocks" || bad "should block a dirty durable path"
+echo "$out" | grep -q 'src/auth/.keep' && ok "the block names the dirty path" || bad "the block should name the path"
+echo "$out" | grep -q 'git checkout HEAD --' && ok "the restore command names HEAD, not the index" || bad "the restore should name HEAD"
+git -C "$REPO" checkout HEAD -- src/auth/.keep
+
+# An untracked durable path blocks too, and no checkout brings it back, so the
+# message must not offer one.
+echo "// new" > "$REPO/src/auth/extra.ts"
+out=$(dg "$REPO")
+blocked "$out" && ok "untracked durable path blocks" || bad "should block an untracked durable path"
+echo "$out" | grep -q 'git checkout HEAD --' && bad "no checkout restores an untracked path" || ok "no restore command offered for an untracked path"
+rm -f "$REPO/src/auth/extra.ts"
+
+# A non-durable root file is the project's business.
+echo '{}' > "$REPO/package.json"
+out=$(dg "$REPO")
+blocked "$out" && bad "non-durable package.json should pass" || ok "non-durable root file passes"
+
+# .hone-durable-paths extends the set, so the same file now blocks. This is the
+# package-manager case in full: 'bun add' rewrites package.json from inside its
+# own process, so guard.sh sees no file path and bash-guard rule 2 sees no write
+# construct. Only the effect gives it away.
+printf 'package.json\n' > "$REPO/.hone-durable-paths"
+(cd "$REPO" && git add .hone-durable-paths && git commit -qm "policy")
+out=$(dg "$REPO")
+blocked "$out" && ok "a path from .hone-durable-paths blocks" || bad "should block a listed durable path"
+
+# The same dirty durable path inside a worktree is the work in flight → silent.
+out=$(dg "$WT")
+blocked "$out" && bad "a worktree is where durable work belongs" || ok "dirty durable path in a worktree passes"
+
+# .hone-off disables it like the rest of hone.
+touch "$REPO/.hone-off"
+out=$(dg "$REPO")
+blocked "$out" && bad ".hone-off should disable the dirty-guard" || ok ".hone-off disables the dirty-guard"
+rm -f "$REPO/.hone-off" "$REPO/package.json"
 
 echo "== gate: blocks a red suite, passes a green one =="
 # Adapter that fails; make src dirty so the gate runs.

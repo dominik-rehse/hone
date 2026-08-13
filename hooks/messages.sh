@@ -113,6 +113,37 @@ Why: the primary tree stays on the trunk as a merge target for every session. La
 EOF
 }
 
+msg_bashguard_self_writer() {
+    cat <<'EOF'
+hone bash-guard: this command runs a tool that writes its own files in the primary tree.
+Do: run it in a worktree instead, and let land merge the result.
+Why: a package manager, a formatter, or a migration tool edits a durable file from inside its own process. The guard reads a file path, so it never sees that write.
+EOF
+}
+
+# ----------------------------------------------------------- dirty-guard
+
+# The restore command, as a labelled paste block. An untracked path sits in no
+# commit, so no checkout brings it back. A change that only adds such a path
+# carries no command here, and the message keeps its generic wording.
+hone_msg_dirty_restore() {
+    [ -n "$1" ] || return 0
+    printf 'Restore the tracked paths, then redo the work in a worktree:\n'
+    hone_msg_block "$1"
+}
+
+msg_dirtyguard_primary_tree() {
+    local dirty="$1" restore="$2"
+    cat <<EOF
+hone dirty-guard: this command changed a protected path in the primary tree.
+Do: restore or remove the paths below, then redo the work in a worktree.
+Why: the primary tree only receives merges. A tool that writes its own files reaches paths the guard never sees, so this check reads the tree and not the command.
+Paths this command left dirty:
+$(hone_msg_block "$dirty")
+EOF
+    hone_msg_dirty_restore "$restore"
+}
+
 # ----------------------------------------------------------------- gate
 
 msg_gate_step_failed() {
@@ -798,6 +829,8 @@ bash-guard|agent|msg_bashguard_sabotage
 bash-guard|agent|msg_bashguard_signoff
 bash-guard|agent|msg_bashguard_protected
 bash-guard|agent|msg_bashguard_head_move
+bash-guard|agent|msg_bashguard_self_writer
+dirty-guard|agent|msg_dirtyguard_primary_tree|src/<area>/<file>|git checkout HEAD -- 'src/<area>/<file>'
 gate|agent|msg_gate_step_failed|<check>|<code>|<output-tail>
 gate|agent|msg_gate_suite_lock
 gate|plain|msg_gate_green|<checks that ran>

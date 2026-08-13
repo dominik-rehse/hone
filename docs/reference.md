@@ -108,9 +108,16 @@ is never gated, and enforcement assumes code lives under `src/<area>/`.
   creating `.hone-off`) or write a grant or proof sign-off (those are the
   human's). It asks before commands that modify a protected artifact (an
   adapter, a hook, settings, a policy file) or move HEAD in the primary tree.
-  It is a deterrent, not a sandbox: it closes the obvious shell routes; the
-  settings.json deny rules (see *Install* in the README) close the file-tool
-  routes.
+  It asks before a package manager, a formatter, or a migration tool runs in
+  the primary tree. Such a tool writes its own files, so no command text ever
+  spells that write out. It is a deterrent, not a sandbox: it closes the
+  obvious shell routes; the settings.json deny rules (see *Install* in the
+  README) close the file-tool routes.
+- *dirty-guard* (PostToolUse on Bash) reads the effect instead of the command.
+  In the primary tree it asks git what the command left dirty, and blocks when
+  that list holds a protected path. This catches the writer the bash-guard's name
+  list misses, because it never has to recognize the tool. It reports after the
+  write, so it stops the run before the commit rather than preventing the edit.
 - *gate* (Stop) runs `scripts/run-tests.sh`, plus `scripts/typecheck.sh`
   and `scripts/lint.sh` when they exist, and blocks the turn on any failure.
   With uncommitted `src`/`tests` changes it runs the fast unit tier; on a
@@ -245,7 +252,7 @@ The plugin itself:
 hone/
 ├── rules/workflow.md            # injected at session start
 ├── skills/{setup,plan,run,garden}/ # the four commands; run/references/ loads on demand
-├── hooks/                       # guard, bash-guard, gate, nag, session-start
+├── hooks/                       # guard, bash-guard, dirty-guard, gate, nag, session-start
 │   └── messages.sh              # every message hone prints, one template each
 ├── scripts/{worktree,setup}.sh
 ├── agents/                      # plan-critic, consolidate-critic

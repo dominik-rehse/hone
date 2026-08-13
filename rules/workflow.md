@@ -33,6 +33,12 @@ A third command, `/hone:garden`, runs the same loop between changes and only
 deletes (stale docs, dead code, redundant tests), with the suite proving
 each removal safe. A human invokes it; it is maintenance, not a Plan.
 
+A shell command reaches the same durable paths the file tools do. Dependency
+work, a formatter run, and a schema migration all write their files from
+inside their own tool, where `guard` sees no path at all. Run them in a
+worktree like any other change, never in the primary tree. The `dirty-guard`
+hook reports such a write after the fact, and a report is not a prevention.
+
 The hooks enforce: the primary tree is a merge target, never a workspace
 (`guard`); no production code without a failing test (`guard`); tests,
 type-check, and lint stay green (`gate`); Plans and Notes stay small and
