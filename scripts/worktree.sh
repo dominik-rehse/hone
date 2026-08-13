@@ -38,6 +38,10 @@
 #       the merge. A committed .hone-proof-always marker widens the gate to
 #       EVERY change, trailer or not; with the marker present and no
 #       scripts/proof.sh, land refuses (7) rather than proving nothing.
+#       On success it prints a receipt on stdout: the merge commit, the green
+#       post-merge suite, and the removed worktree and branch. When the merge
+#       changed a lockfile, the receipt also names it and asks for a reinstall
+#       in the primary tree.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached · 5 lock timeout ·
 #       6 post-merge regression (rolled back) · 7 real-environment proof
 #       missing · 8 ungranted irreversible change · 9 merge conflict
@@ -324,6 +328,19 @@ land_zero_tiers() {
     ' "$1" 2>/dev/null
 }
 
+# Print every lockfile the merged diff touched, one path per line (empty output
+# = none). A landed lockfile leaves the primary tree's installed packages behind
+# the manifest: the merge updates the file, and nothing reinstalls. A consumer
+# repo ran its formatter from a 75-minute-old install against a landed newer
+# config because nobody named the reinstall step. Matching is by file name, so a
+# lockfile in a subdirectory of a monorepo counts too.
+land_lockfiles() {
+    local root="$1" base="$2" branch="$3"
+    [ -n "$base" ] || return 0
+    git -C "$root" diff --name-only "$base" "$branch" 2>/dev/null \
+        | grep -E '(^|/)(bun\.lock|bun\.lockb|package-lock\.json|pnpm-lock\.yaml|yarn\.lock|uv\.lock|poetry\.lock|Cargo\.lock|Gemfile\.lock|composer\.lock|go\.sum)$'
+}
+
 cmd_land() {
     local change="${1:-}"
     [ -n "$change" ] || { msg_wt_needs_change land >&2; return 2; }
@@ -502,7 +519,19 @@ cmd_land() {
     [ -n "$zero_tiers" ] && msg_wt_land_tier_empty "$zero_tiers" >&2
     # Green: the merge is confirmed. Retire the worktree and its branch (cmd_remove
     # runs from the primary tree, so it never refuses "the tree you are in").
-    cmd_remove "$wt"
+    # Read the merge commit and the landed lockfiles BEFORE the cleanup: it
+    # deletes the branch, and the diff needs it.
+    local merge_sha lockfiles
+    merge_sha=$(git -C "$main_root" rev-parse --short HEAD)
+    lockfiles=$(land_lockfiles "$main_root" "$base" "$branch")
+    cmd_remove "$wt" || return $?
+
+    # Say what happened. A silent exit 0 made the caller re-derive the outcome
+    # from `git log`, so the receipt names the merge commit, the green suite,
+    # and the cleanup. It goes to stdout, because it is the success path.
+    msg_wt_land_receipt "$merge_sha" "$branch"
+    [ -n "$lockfiles" ] && msg_wt_land_lockfile "$lockfiles"
+    return 0
 }
 
 # Resolve the main tree's root (the common git dir's parent), the anchor every

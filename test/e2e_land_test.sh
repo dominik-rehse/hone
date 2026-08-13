@@ -73,11 +73,37 @@ step "committed on branch hone/mathx-add"
 
 echo "== 5. land: merge + re-verify + remove, under the lock =="
 # `land` does the whole tail: lock → merge --no-ff → run-tests.sh --all → remove.
-bash "$WSH" land mathx-add >/dev/null 2>&1 || die "land failed on a green change"
+out=$(bash "$WSH" land mathx-add 2>/dev/null) || die "land failed on a green change"
 git log --oneline -1 | grep -q "Merge branch 'hone/mathx-add'" || die "merge commit not on the primary tree"
 bash scripts/run-tests.sh >/dev/null 2>&1 || die "suite red in primary after land"
 [ -d "$WT" ] && die "worktree still present after land" || step "landed, verified, and worktree removed"
 git show-ref --verify --quiet refs/heads/hone/mathx-add && die "merged branch should be deleted at land" || step "merged branch hone/mathx-add deleted"
+# A silent success made the caller re-derive the outcome from `git log`, so a
+# green land says what it did: the merge commit, the green suite, the cleanup.
+echo "$out" | grep -q "landed hone/mathx-add as merge commit" || die "land should print a success receipt"
+echo "$out" | grep -qF "$(git rev-parse --short HEAD)" || die "the receipt should name the merge commit"
+echo "$out" | grep -q "post-merge suite" || die "the receipt should report the post-merge suite"
+echo "$out" | grep -q "removed the worktree" || die "the receipt should report the cleanup"
+echo "$out" | grep -q "changed a lockfile" && die "a change with no lockfile should draw no reinstall notice"
+step "the receipt names the merge commit, the green suite, and the cleanup"
+
+echo "== 5a. land names a landed lockfile =="
+# A merged lockfile leaves the primary tree's install behind the manifest, and
+# nothing reinstalls it. Every ecosystem's lockfile counts, at any depth.
+WT_L=$(bash "$WSH" add lock-bump) || die "worktree add lock-bump"
+printf '{"lockfileVersion":1}\n' > "$WT_L/bun.lock"
+mkdir -p "$WT_L/packages/api"
+printf 'version = 1\n' > "$WT_L/packages/api/uv.lock"
+printf '// unrelated\n' > "$WT_L/src/mathx/dep.js"
+(cd "$WT_L" && git add -A && git commit -qm "chore(deps): bump the lockfiles")
+out=$(bash "$WSH" land lock-bump 2>/dev/null); rc=$?
+[ "$rc" -eq 0 ] || die "a lockfile change should land (got $rc)"
+echo "$out" | grep -q "changed a lockfile" || die "land should name the lockfile change"
+echo "$out" | grep -q "reinstall dependencies" || die "the notice should name the reinstall step"
+echo "$out" | grep -qx "  bun.lock" || die "the notice should name the root lockfile"
+echo "$out" | grep -qx "  packages/api/uv.lock" || die "the notice should name a nested lockfile"
+echo "$out" | grep -q "src/mathx/dep.js" && die "the notice should list lockfiles only"
+step "a landed lockfile draws a reinstall notice naming every lockfile"
 
 echo "== 5b. land rolls back a regression, leaving the trunk green =="
 # A change that passes on its own branch but breaks the suite once merged. `land`

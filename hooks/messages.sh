@@ -651,6 +651,26 @@ land merged the change anyway, because this warning never blocks.
 EOF
 }
 
+msg_wt_land_receipt() {
+    local sha="$1" branch="$2"
+    cat <<EOF
+hone worktree: landed $branch as merge commit $sha.
+The post-merge suite ran in the primary tree and passed.
+land removed the worktree and deleted the branch.
+EOF
+}
+
+msg_wt_land_lockfile() {
+    local files="$1"
+    cat <<EOF
+hone worktree: this land changed a lockfile, and the primary tree still holds the old dependencies.
+Do: reinstall dependencies in the primary tree, so node_modules or its equivalent matches the lockfile.
+Why: a stale install runs the versions the change replaced.
+Lockfiles this land changed:
+$(hone_msg_block "$files")
+EOF
+}
+
 msg_wt_grant_recorded() {
     local change="$1"
     cat <<EOF
@@ -884,6 +904,8 @@ worktree|human|msg_wt_land_proof_always_no_adapter|<plugin-root>/templates/proof
 worktree|human|msg_wt_land_conflict|hone/<change>
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_tier_empty|- <tier>
+worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>
+worktree|human|msg_wt_land_lockfile|- <lockfile>
 worktree|human|msg_wt_grant_recorded|<change>
 worktree|human|msg_wt_attest_recorded|<change>|<tip>
 worktree|human|msg_wt_attest_empty
