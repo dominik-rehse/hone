@@ -98,6 +98,13 @@ echo "$(bg 'mkdir -p .hone-grant && touch .hone-grant/db-drop')" | grep -q '"den
 echo "$(bg 'bash scripts/worktree.sh grant db-drop reason')" | grep -q '"deny"' && ok "grant helper denied to the agent" || bad "worktree.sh grant should be denied"
 echo "$(bg 'bash scripts/worktree.sh attest db-drop ran-it')" | grep -q '"deny"' && ok "attest helper denied to the agent" || bad "worktree.sh attest should be denied"
 echo "$(bg 'cat .hone-grant/db-drop')" | grep -q 'permissionDecision' && bad "reading a grant should pass silently" || ok "reading a grant allowed"
+# Only CREATING the off marker is sabotage. A read-only existence check names
+# the marker too, and denying that one cost a real session its diagnosis.
+echo "$(bg 'ls -la .hone-off || echo no .hone-off marker present')" | grep -q 'permissionDecision' && bad "an existence check for .hone-off should pass" || ok "reading .hone-off passes"
+echo "$(bg 'cat .hone-off')" | grep -q 'permissionDecision' && bad "reading .hone-off should pass" || ok "cat .hone-off passes"
+echo "$(bg 'echo x > .hone-off')" | grep -q '"deny"' && ok "a redirect into .hone-off denied" || bad "echo into .hone-off should be denied"
+echo "$(bg 'printf x >> .hone-off')" | grep -q '"deny"' && ok "an append into .hone-off denied" || bad "printf into .hone-off should be denied"
+echo "$(bg 'echo x > /tmp/repo/.hone-off')" | grep -q '"deny"' && ok "a redirect into a path ending in .hone-off denied" || bad "a pathful redirect should be denied"
 # Mutators beyond the creation verbs are denied too: rule 1b's op list is a
 # superset of rule 2's, so truncate/dd/sed -i can't slip a sign-off through.
 echo "$(bg 'truncate -s0 .hone-grant/db-drop')" | grep -q '"deny"' && ok "truncate of a grant denied" || bad "truncate into .hone-grant/ should be denied"
@@ -119,7 +126,16 @@ echo "$(bg 'git checkout some-commit')" | grep -q '"ask"' && ok "git checkout in
 echo "$(bg 'git stash push -- IDEAS.md')" | grep -q '"ask"' && ok "git stash in primary tree escalated" || bad "stash in primary should ask"
 echo "$(bg 'git reset --hard HEAD^')" | grep -q '"ask"' && ok "git reset --hard in primary tree escalated" || bad "hard reset in primary should ask"
 bgwt() { echo "{\"tool_input\":{\"command\":\"$1\"}}" | (cd "$WT" && bash "$BASH_GUARD"); }
-echo "$(bgwt 'git checkout -- src/auth/login.ts')" | grep -q '"ask"' && bad "HEAD-move inside a worktree should not ask" || ok "HEAD-move allowed inside a worktree"
+echo "$(bgwt 'git checkout some-commit')" | grep -q '"ask"' && bad "HEAD-move inside a worktree should not ask" || ok "HEAD-move allowed inside a worktree"
+# `git checkout -- <paths>` restores files and moves no HEAD, so it passes even
+# in the primary tree. It is how the operator undoes a bad edit there.
+echo "$(bg 'git checkout -- bun.lock package.json')" | grep -q 'permissionDecision' && bad "a pathspec restore moves no HEAD" || ok "git checkout -- <paths> passes"
+echo "$(bg 'git checkout HEAD -- src/auth/login.ts')" | grep -q 'permissionDecision' && bad "a ref plus pathspec restore moves no HEAD" || ok "git checkout <ref> -- <paths> passes"
+echo "$(bg 'git checkout -- bun.lock && bun install')" | grep -q 'permissionDecision' && bad "restore plus sync install moves no HEAD" || ok "restore plus a sync install passes"
+# A branch-like checkout still asks, and a restore later in the line does not
+# excuse a real HEAD move earlier in it.
+echo "$(bg 'git checkout -b hone/x')" | grep -q '"ask"' && ok "git checkout -b escalated" || bad "checkout -b should ask"
+echo "$(bg 'git checkout main && git checkout -- src/auth/login.ts')" | grep -q '"ask"' && ok "a HEAD move in an earlier segment still escalates" || bad "a later restore should not excuse a HEAD move"
 # A tool that writes its own files carries neither a write construct nor a path,
 # so rule 2 cannot see it. Rule 4 matches it by name, in the primary tree only.
 echo "$(bg 'bun add -d dprint@latest')" | grep -q '"ask"' && ok "a package manager in the primary tree escalated" || bad "bun add in primary should ask"

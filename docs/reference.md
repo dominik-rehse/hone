@@ -108,6 +108,8 @@ is never gated, and enforcement assumes code lives under `src/<area>/`.
   creating `.hone-off`) or write a grant or proof sign-off (those are the
   human's). It asks before commands that modify a protected artifact (an
   adapter, a hook, settings, a policy file) or move HEAD in the primary tree.
+  `git checkout -- <paths>` and `git checkout <ref> -- <paths>` restore files
+  and move no HEAD, so both pass.
   It asks before a package manager, a formatter, or a migration tool runs in
   the primary tree. Such a tool writes its own files, so no command text ever
   spells that write out. A bare sync install (`bun install`, `npm ci`, with

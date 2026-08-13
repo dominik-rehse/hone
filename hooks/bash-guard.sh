@@ -52,11 +52,18 @@ fi
 
 # 1. Unambiguous gate / marker sabotage → deny: a hard token, or a shell
 # construct that CREATES .hone-off.
+#
+# Only CREATION counts. `echo` and `printf` used to match on a bare mention of
+# the marker, so a read-only existence check (`ls .../.hone-off || echo "no
+# .hone-off marker present"`) was denied as sabotage. The redirect rule below
+# already catches every command that writes the marker, whichever program
+# produces the text, so the two creation verbs that write no redirect (touch,
+# install) are the whole list.
 if echo "$CMD" | grep -Eq \
         -e "$HARD_TOKENS" \
         -e '(^|[^A-Za-z_])(HUSKY|LEFTHOOK|GIT_CONFIG[A-Z_]*)=' \
-        -e '(touch|install|printf|echo)[^|;&]*\.hone-off' \
-        -e '>[[:space:]]*"?'"'"'?\.hone-off'; then
+        -e '(touch|install)[^|;&]*\.hone-off' \
+        -e '>[[:space:]]*[^|;&[:space:]]*\.hone-off'; then
     decision deny "$(msg_bashguard_sabotage)"
 fi
 
@@ -113,13 +120,32 @@ IN_PRIMARY_TREE=0
 
 # 3. A HEAD-moving git op in the PRIMARY tree → ask. The primary tree is a merge
 # target kept on the trunk; landing goes through `worktree.sh land`, which
-# serializes the merge under a lock. Moving the shared HEAD by hand (a checkout
-# to investigate, a stash, a hard reset) races every other session that shares
-# this tree: the exact collision this guards. Investigation belongs in a
-# throwaway `git worktree add --detach`.
+# serializes the merge under a lock. Moving the shared HEAD by hand (a branch
+# switch, a stash, a hard reset) races every other session that shares this
+# tree: the exact collision this guards. Investigation belongs in a throwaway
+# `git worktree add --detach`. `git checkout` has its own rule below, because
+# one of its forms restores files and moves no HEAD.
 if [ "$IN_PRIMARY_TREE" -eq 1 ] \
-   && echo "$CMD" | grep -Eq '(^|[^A-Za-z_])git[[:space:]]+((checkout|switch|stash)([[:space:]]|$)|reset[^|;&]*--(hard|merge|keep))'; then
+   && echo "$CMD" | grep -Eq '(^|[^A-Za-z_])git[[:space:]]+((switch|stash)([[:space:]]|$)|reset[^|;&]*--(hard|merge|keep))'; then
     decision ask "$(msg_bashguard_head_move)"
+fi
+
+# 3b. `git checkout` moves HEAD in one form and restores files in another, so it
+# needs the extra look rule 3 does not. `git checkout -- <paths>` and `git
+# checkout <ref> -- <paths>` write files and leave HEAD where it is, which is
+# the sanctioned way to undo a bad edit in the primary tree. Flagging them sent
+# the operator to a scratch worktree to restore two files.
+#
+# The `--` pathspec separator is the signal, read per command segment so a
+# restore later in the line cannot excuse a real HEAD move earlier in it.
+# Residual false positive: `git checkout <file>` without the separator is
+# indistinguishable from `git checkout <branch>` here, so it still asks.
+if [ "$IN_PRIMARY_TREE" -eq 1 ]; then
+    while IFS= read -r seg; do
+        printf '%s\n' "$seg" | grep -Eq '(^|[^A-Za-z_])git[[:space:]]+checkout([[:space:]]|$)' || continue
+        printf '%s\n' "$seg" | grep -Eq '[[:space:]]--([[:space:]]|$)' && continue
+        decision ask "$(msg_bashguard_head_move)"
+    done < <(printf '%s\n' "$CMD" | tr '|;&' '\n\n\n')
 fi
 
 # 4. A tool that writes its OWN files, run in the PRIMARY tree → ask. This is
