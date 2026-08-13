@@ -37,7 +37,9 @@ A shell command reaches the same durable paths the file tools do. Dependency
 work, a formatter run, and a schema migration all write their files from
 inside their own tool, where `guard` sees no path at all. Run them in a
 worktree like any other change, never in the primary tree. The `dirty-guard`
-hook reports such a write after the fact, and a report is not a prevention.
+hook reports such a write after the fact, and a report is not a prevention. A
+dependency or toolchain refresh has a named shape, and the `plan` and `run`
+skills point to it.
 
 The hooks enforce: the primary tree is a merge target, never a workspace
 (`guard`); no production code without a failing test (`guard`); tests,

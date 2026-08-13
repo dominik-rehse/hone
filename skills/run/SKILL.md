@@ -94,6 +94,12 @@ order, so work with it:
 A bug fix is the same loop: the first red test *reproduces the defect*, then you
 fix the root cause. Never fix first and add a confirming test after.
 
+A **dependency or toolchain refresh** is the exception, and it has its own shape:
+a version bump has no failing test to write first, and its evidence is the suite
+at the Plan's counts plus checks the gate cannot make. Read
+`references/dependency-refresh.md` before the first cycle whenever the change
+bumps a version, and follow its build and verify steps.
+
 An **unrelated defect discovered en route** (broken tooling, a latent bug the
 Plan never mentioned) does not ride inside the change's commit. Fix it with its
 own red-green cycle and its **own commit on the branch**, honestly typed; if it

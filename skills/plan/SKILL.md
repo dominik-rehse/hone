@@ -129,6 +129,12 @@ A reference is a **file that exists**, never prose moved into a second file:
   denies writes to `docs/`, `src/`, and `tests/` in the primary tree, which is
   where `/hone:plan` runs.
 
+When the sketch is a **dependency or toolchain refresh** (a version bump of a
+library, linter, formatter, build tool, or runtime), read
+`${CLAUDE_PLUGIN_ROOT}/skills/run/references/dependency-refresh.md` before
+writing the Plan. It carries the probe to run, the counts and findings the Plan
+must pin as expected data, and the test-first exemption a bump gets.
+
 Two limits. If you need a paragraph to explain what a reference *means*, it is
 prose in a file's clothing: put the point in *What* and drop the file. And a
 reference is not a spec: it pins data the loop would otherwise have to guess,
