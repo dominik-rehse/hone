@@ -18,8 +18,8 @@ and adapt it. It must honour this contract:
   reported total. An adapter that cannot read that total prints no line at all.
 
 Keep slow or external tests out of the unit tier. Put them under an
-`integration/` or `e2e/` directory, named so the runner still discovers them, or
-the gate becomes flaky and gets bypassed.
+`integration/` or `e2e/` directory, named so the runner still discovers them,
+or the gate becomes flaky and people start to bypass it.
 
 ## Tier summary lines
 
@@ -35,10 +35,10 @@ lines under `--all` alone. The gate runs the unit tier on every turn, and it
 reads nothing here.
 
 Print the count the runner itself reported, and nothing else. An adapter that
-cannot parse that total must stay silent rather than guess. A file count is the
-tempting guess and the wrong one. A file the runner skipped, or never collected,
-still sits on disk, so such a count never reaches 0. It hides the exact failure
-the line exists to show.
+cannot parse that total must stay silent rather than guess. The tempting guess
+is a file count, and it is wrong. A file the runner skipped, or never
+collected, still sits on disk, so a file count never reaches 0. That hides the
+exact failure the line exists to show.
 
 The shipped bun and python templates read the runner's own total. The node
 template recognizes the common Node reporters, and prints no line for a reporter
@@ -52,7 +52,7 @@ The gate also runs `scripts/typecheck.sh` and `scripts/lint.sh` *if they exist*
 running `eslint` or `ruff`. There is no template: they are one line each and
 project-specific.
 
-`typecheck.sh` must cover **everything the repo compiles** (`src/`, `tests/`,
+`typecheck.sh` must cover *everything the repo compiles* (`src/`, `tests/`,
 `scripts/`, tooling), not only production code. A tsconfig whose `include`
 stops at `src/` makes the gate's green overstate its own reach. Type errors
 then hide in exactly the code no test exercises, such as dev servers and deploy
@@ -61,12 +61,12 @@ tooling. They surface as broken tooling long after they landed.
 ## Real-environment proof (optional)
 
 `scripts/proof.sh` is a *different* adapter from the test tiers: it proves a
-change against the **real environment** (a browser journey, a canary, deployed
+change against the *real environment* (a browser journey, a canary, deployed
 health). It runs only when a change declared `Proof: real-environment — <the check>`,
 and only then at land. A green suite proves its assertions, not that the
 deployed system behaves.
 
-Its contract and templates live in `templates/proof/`: it is invoked as
+Its contract and templates live in `templates/proof/`. land invokes it as
 `proof.sh <change>` from the change's worktree, so it can reach the code under
 test. Without it, a real-environment change instead needs a human sign-off at
 `.hone-proof/<change>` naming the commit it proved.
