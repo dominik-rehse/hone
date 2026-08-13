@@ -57,6 +57,15 @@ what they must resolve before the loop runs unattended against it.
   level of observable outcomes is doing
   its job; demanding an artifact for that is noise, and a Plan that already names
   its references is not asked for more.
+- **Dependency and toolchain refreshes.** A version bump has no failing test to
+  write first, so a refresh Plan saying so is neither a placeholder nor a proof
+  at the wrong level. Its proof is the suite at the same counts before and after,
+  with those counts and any probe report pinned in the Plan as expected data.
+  Approve that shape. Reject a refresh Plan that instead tells the loop to sweep
+  every package to its latest version: nobody can state what that resolves to, so
+  it is a different build on every run (`ambiguity`). Reject one that hand-writes
+  a version string into a manifest, which leaves the manifest and the lockfile
+  out of step.
 - **Collision with an open change.** Given the other open Plans/worktrees in the
   brief, would this change fight one of them on the same `src/` files, type,
   Decision, or Note? If so it is not independent; say which change and which

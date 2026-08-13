@@ -35,9 +35,12 @@ target is whatever model drives the session (`--model opus`).
 `proof-altitude` and `ops-claim-unit-proof` (a user- or ops-level claim whose
 only proof is a unit assertion), `prose-for-artifact` and
 `prose-error-catalogue` (specific data spelled out in prose that a fixture
-should carry instead). APPROVE cases: `clean-scoped`, plus the near-misses
-`cohesive-two-files` (tempts scope), `named-references` (tempts
-missing-artifact), `adjacent-open-change` (tempts collision).
+should carry instead), `dep-refresh-blind-latest` (a refresh Plan sweeping every
+package to `latest`, so no one can say what it builds). APPROVE cases:
+`clean-scoped`, plus the near-misses `cohesive-two-files` (tempts scope),
+`named-references` (tempts missing-artifact), `adjacent-open-change` (tempts
+collision), `dep-refresh-no-red-test` (a toolchain refresh with no red test and
+its counts pinned as data, which tempts placeholder and proof-altitude).
 
 *`consolidate-critic`*, verdict `CLEAN`/`CUTS`. CUTS cases, two per category:
 `decision-restates-code` and `decision-narrates-diff`, `note-drift` and
