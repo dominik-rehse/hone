@@ -79,6 +79,11 @@ file:
 - `.hone-off` turns off every hook, for a quick manual edit outside the
   loop. Delete it when done. The `bash-guard` refuses to let the agent create
   it.
+
+  Delete the marker only after the commit that cleans the tree. The
+  dirty-guard blocks every command while a durable path is dirty. Remove the
+  marker before the commit, and the next command blocks. The order is:
+  create the marker, edit, run the checks, commit, then delete the marker.
 - `.hone-grant/<change>` is your authorization for one irreversible change.
   Its text lands in the merge commit body. Delete the file to revoke. Written
   by `worktree.sh grant`, or by hand (say who, when, and why).
@@ -114,9 +119,9 @@ is never gated, and enforcement assumes code lives under `src/<area>/`.
   the primary tree. Such a tool writes its own files, so no command text ever
   spells that write out. A bare sync install (`bun install`, `npm ci`, with
   flags only) passes, because it installs what the lockfile already says.
-  An install that names a package still asks. It is a deterrent, not a sandbox: it closes the
-  obvious shell routes; the settings.json deny rules (see *Install* in the
-  README) close the file-tool routes.
+  An install that names a package still asks. It is a deterrent, not a
+  sandbox: it closes the obvious shell routes; the settings.json deny rules
+  (see *Install* in the README) close the file-tool routes.
 - *dirty-guard* (PostToolUse on Bash) reads the effect instead of the command.
   In the primary tree it asks git what the command left dirty, and blocks when
   that list holds a protected path. This catches the writer the bash-guard's name
