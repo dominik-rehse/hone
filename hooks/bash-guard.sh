@@ -136,8 +136,23 @@ fi
 # anywhere in the command, so `bunx biome migrate` and `sudo npm install` both
 # match) and accept that prose quoting one of these names also escalates: an
 # ask costs one keystroke, and a missed dependency sweep costs a bad commit.
-SELF_WRITERS='(npm|pnpm|yarn|bun|deno)[[:space:]]+(add|install|i|ci|remove|rm|uninstall|update|upgrade|up|link|pkg)([[:space:]]|$)'
-SELF_WRITERS="$SELF_WRITERS"'|(pip|pip3|uv|poetry|cargo|bundle|gem|mix|composer)[[:space:]]+(add|install|remove|uninstall|sync|lock|update|upgrade|require|fmt|deps\.get)([[:space:]]|$)'
+#
+# A BARE SYNC INSTALL is the exception: `bun install`, `npm ci`, `poetry
+# install`, with flags only, installs what the lockfile already says and writes
+# no durable file. It is also the sanctioned next step after a land that changed
+# the lockfile, and this rule used to escalate it. Whatever such a command does
+# dirty, dirty-guard sees: the effect net behind this rule catches any write to
+# a durable path, so a preventive ask here buys nothing.
+#
+# The verb's argument tells the two apart: end of command or flag tokens only
+# means sync, and a non-flag argument names a package, which mutates the
+# manifest. So `npm install lodash`, `bun add x`, and `poetry add y` still
+# escalate, as does every add/remove/update/upgrade/link verb below.
+NAMED_ARG='([[:space:]]+-[^[:space:];&|]*)*[[:space:]]+[^-[:space:];&|]'
+SELF_WRITERS='(npm|pnpm|yarn|bun|deno)[[:space:]]+(add|remove|rm|uninstall|update|upgrade|up|link|pkg)([[:space:]]|$)'
+SELF_WRITERS="$SELF_WRITERS"'|(npm|pnpm|yarn|bun|deno)[[:space:]]+(install|i|ci)'"$NAMED_ARG"
+SELF_WRITERS="$SELF_WRITERS"'|(pip|pip3|uv|poetry|cargo|bundle|gem|mix|composer)[[:space:]]+(add|remove|uninstall|lock|update|upgrade|require|fmt)([[:space:]]|$)'
+SELF_WRITERS="$SELF_WRITERS"'|(pip|pip3|uv|poetry|cargo|bundle|gem|mix|composer)[[:space:]]+(install|sync|deps\.get)'"$NAMED_ARG"
 SELF_WRITERS="$SELF_WRITERS"'|go[[:space:]]+(get|mod)([[:space:]]|$)'
 SELF_WRITERS="$SELF_WRITERS"'|(biome|eslint|prettier|dprint|ruff|black|isort|rustfmt|gofmt|jscodeshift|codemod)[^|;&]*(migrate|--write|--fix|--apply|[[:space:]]-w([[:space:]]|$)|[[:space:]]fmt([[:space:]]|$)|[[:space:]]format([[:space:]]|$))'
 if [ "$IN_PRIMARY_TREE" -eq 1 ] && echo "$CMD" | grep -Eq "(^|[^A-Za-z0-9_.-])(${SELF_WRITERS})"; then

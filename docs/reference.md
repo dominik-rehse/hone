@@ -110,7 +110,9 @@ is never gated, and enforcement assumes code lives under `src/<area>/`.
   adapter, a hook, settings, a policy file) or move HEAD in the primary tree.
   It asks before a package manager, a formatter, or a migration tool runs in
   the primary tree. Such a tool writes its own files, so no command text ever
-  spells that write out. It is a deterrent, not a sandbox: it closes the
+  spells that write out. A bare sync install (`bun install`, `npm ci`, with
+  flags only) passes, because it installs what the lockfile already says.
+  An install that names a package still asks. It is a deterrent, not a sandbox: it closes the
   obvious shell routes; the settings.json deny rules (see *Install* in the
   README) close the file-tool routes.
 - *dirty-guard* (PostToolUse on Bash) reads the effect instead of the command.

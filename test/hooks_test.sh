@@ -125,6 +125,22 @@ echo "$(bgwt 'git checkout -- src/auth/login.ts')" | grep -q '"ask"' && bad "HEA
 echo "$(bg 'bun add -d dprint@latest')" | grep -q '"ask"' && ok "a package manager in the primary tree escalated" || bad "bun add in primary should ask"
 echo "$(bg 'bunx biome migrate --write')" | grep -q '"ask"' && ok "a migration tool in the primary tree escalated" || bad "biome migrate in primary should ask"
 echo "$(bg 'bun test')" | grep -q 'permissionDecision' && bad "a read-only runner should pass silently" || ok "a non-writing subcommand passes"
+# A bare sync install writes no durable file and is the sanctioned next step
+# after a land that changed the lockfile. Flags do not change that.
+for sync in 'bun install' 'npm ci' 'pnpm install' 'npm i' \
+            'bun install --frozen-lockfile' 'npm ci --ignore-scripts' \
+            'poetry install' 'uv sync' 'bun install && bun test'; do
+    echo "$(bg "$sync")" | grep -q 'permissionDecision' \
+        && bad "a bare sync install should pass rule 4: $sync" \
+        || ok "sync install passes rule 4: $sync"
+done
+# An install that NAMES a package rewrites the manifest, so it still escalates.
+for mutating in 'npm install lodash' 'bun add x' 'poetry add y' 'npm i -g typescript' \
+                'pnpm install --filter web lodash' 'cargo install ripgrep' 'bun update'; do
+    echo "$(bg "$mutating")" | grep -q '"ask"' \
+        && ok "a mutating install escalates: $mutating" \
+        || bad "an install naming a package should ask: $mutating"
+done
 echo "$(bgwt 'bun add -d dprint@latest')" | grep -q 'permissionDecision' && bad "a worktree is where dependency work belongs" || ok "a package manager inside a worktree passes"
 # Rules 3 and 4 must judge the tree the command WRITES IN. A hook runs in the
 # session cwd, so a command that cds into a worktree first is worktree work
