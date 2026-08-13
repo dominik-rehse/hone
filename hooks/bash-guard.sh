@@ -83,12 +83,32 @@ if echo "$CMD" | grep -Eq "(>>?|tee|sed -i|cp |mv |install |ln -s|chmod|chattr|r
     decision ask "$(msg_bashguard_protected)"
 fi
 
-# Rules 3 and 4 both apply to the primary tree alone. git-dir == common-dir ⇔
-# the hook's cwd is the primary tree, not a linked worktree (whose git-dir sits
-# under .git/worktrees/), so neither rule fires inside a worktree, which is
-# where both operations are safe and belong.
+# Rules 3 and 4 both apply to the primary tree alone. They need the tree the
+# command WRITES IN, which is not always the tree the hook stands in: a
+# PreToolUse hook runs in the session's cwd, so `cd .worktrees/x && bun install`
+# is worktree work judged from the primary tree. Both rules then misfire, and
+# rule 4 tells the agent to move work into a worktree that it already moved.
+# So read a leading `cd <target>` and resolve against that target instead.
+#
+# Fail closed on anything unclear, which keeps the escalation rather than
+# dropping it: more than one cd (a command that returns to the primary tree
+# must never read as worktree work), a cd that is not first, or a target that
+# is not a directory. Each case falls back to the hook's own cwd.
+TREE_DIR="$PWD"
+if [ "$(printf '%s\n' "$CMD" | grep -Eo '(^|[;&|][[:space:]]*)cd[[:space:]]' | wc -l)" -eq 1 ]; then
+    CD_TARGET=$(printf '%s' "$CMD" | sed -n \
+        "s/^[[:space:]]*cd[[:space:]]\{1,\}\(\"[^\"]*\"\|'[^']*'\|[^[:space:];&|]\{1,\}\).*/\1/p")
+    CD_TARGET=${CD_TARGET%\"}; CD_TARGET=${CD_TARGET#\"}
+    CD_TARGET=${CD_TARGET%\'}; CD_TARGET=${CD_TARGET#\'}
+    [ -n "$CD_TARGET" ] && [ -d "$CD_TARGET" ] && TREE_DIR="$CD_TARGET"
+fi
+
+# git-dir == common-dir ⇔ TREE_DIR is the primary tree, not a linked worktree
+# (whose git-dir sits under .git/worktrees/), so neither rule fires for work
+# aimed at a worktree, which is where both operations are safe and belong.
 IN_PRIMARY_TREE=0
-[ "$(git rev-parse --git-dir 2>/dev/null)" = "$(git rev-parse --git-common-dir 2>/dev/null)" ] \
+[ "$(git -C "$TREE_DIR" rev-parse --git-dir 2>/dev/null)" \
+  = "$(git -C "$TREE_DIR" rev-parse --git-common-dir 2>/dev/null)" ] \
     && IN_PRIMARY_TREE=1
 
 # 3. A HEAD-moving git op in the PRIMARY tree → ask. The primary tree is a merge

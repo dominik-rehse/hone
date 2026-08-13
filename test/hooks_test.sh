@@ -126,6 +126,15 @@ echo "$(bg 'bun add -d dprint@latest')" | grep -q '"ask"' && ok "a package manag
 echo "$(bg 'bunx biome migrate --write')" | grep -q '"ask"' && ok "a migration tool in the primary tree escalated" || bad "biome migrate in primary should ask"
 echo "$(bg 'bun test')" | grep -q 'permissionDecision' && bad "a read-only runner should pass silently" || ok "a non-writing subcommand passes"
 echo "$(bgwt 'bun add -d dprint@latest')" | grep -q 'permissionDecision' && bad "a worktree is where dependency work belongs" || ok "a package manager inside a worktree passes"
+# Rules 3 and 4 must judge the tree the command WRITES IN. A hook runs in the
+# session cwd, so a command that cds into a worktree first is worktree work
+# even though the hook stands in the primary tree.
+echo "$(bg "cd $WT && bun add -d dprint@latest")" | grep -q 'permissionDecision' && bad "a cd into a worktree makes this worktree work" || ok "cd into a worktree passes rule 4"
+echo "$(bg "cd $WT && git checkout some-commit")" | grep -q 'permissionDecision' && bad "a cd into a worktree makes this worktree work" || ok "cd into a worktree passes rule 3"
+# Fail closed wherever the target is unclear, so the escalation is kept.
+echo "$(bg "cd $WT && cd $REPO && bun add -d dprint@latest")" | grep -q '"ask"' && ok "a second cd fails closed and still asks" || bad "two cds should fail closed"
+echo "$(bg 'cd /nonexistent-tree && bun add -d dprint@latest')" | grep -q '"ask"' && ok "an unusable cd target fails closed and still asks" || bad "a missing cd target should fail closed"
+echo "$(bg 'bun add -d dprint@latest && cd '"$WT")" | grep -q '"ask"' && ok "a trailing cd does not excuse a primary-tree write" || bad "a cd that is not first should fail closed"
 
 echo "== dirty-guard: what a shell command leaves dirty in the primary tree =="
 dg() { echo '{"tool_input":{"command":"bun add -d dprint"}}' | (cd "$1" && bash "$DIRTY_GUARD"); }
