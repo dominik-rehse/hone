@@ -510,6 +510,20 @@ cmd_land() {
         msg_wt_land_suite_red "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
         return 6
     fi
+    # The gate holds every worktree to tests, type-check, and lint. The merge
+    # result is a third tree: two changes that each append to one file can be
+    # lint-green alone and lint-red merged. So land re-runs the same optional
+    # adapters the gate runs, into the same log, and a red adapter rolls the
+    # merge back exactly like a red suite.
+    local adapter
+    for adapter in typecheck lint; do
+        [ -f "$main_root/scripts/$adapter.sh" ] || continue
+        if ! ( cd "$main_root" && bash "scripts/$adapter.sh" ) >>"$land_log" 2>&1; then
+            git -C "$main_root" reset --hard "$pre" >/dev/null 2>&1
+            msg_wt_land_adapter_red "$adapter" "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+            return 6
+        fi
+    done
     # Green, but green over nothing is not green. A tier whose selection stopped
     # matching (a moved directory, a renamed suffix) exits 0 on zero tests, and
     # the land log is the one place that shows it. Advisory: the merge stands,

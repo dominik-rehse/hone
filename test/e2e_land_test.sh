@@ -143,6 +143,49 @@ git show-ref --verify --quiet refs/heads/hone/mathx-regress || die "branch shoul
 step "regression merged, rolled back, trunk green, evidence kept"
 bash "$WSH" remove "$WT_R" >/dev/null 2>&1; git branch -D hone/mathx-regress >/dev/null 2>&1
 
+echo "== 5b2. land re-runs the optional adapters and rolls back a red one =="
+# The gate keeps every worktree lint-green, but a merge result is a third tree:
+# two lint-green parents can merge lint-red. land must run the same optional
+# adapters the gate runs, and give a red one the suite's rollback.
+cat > scripts/lint.sh <<'EOF'
+#!/bin/bash
+! grep -rq "LINT-RED" src
+EOF
+git add scripts/lint.sh && git commit -qm "chore: add a lint adapter"
+WT_LR=$(bash "$WSH" add lint-red) || die "worktree add lint-red"
+echo "// LINT-RED" > "$WT_LR/src/mathx/styled.js"
+(cd "$WT_LR" && git add -A && git commit -qm "feat(mathx): a change lint rejects")
+PRE=$(git rev-parse HEAD)
+out=$(bash "$WSH" land lint-red 2>&1); rc=$?
+[ "$rc" -eq 6 ] || die "land should exit 6 on post-merge lint red (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "lint-red merge should be rolled back; HEAD moved"
+echo "$out" | grep -q "lint failed in the primary tree" || die "the refusal should name the failing adapter"
+echo "$out" | grep -q "hone-land.log" || die "the refusal should name the land log"
+[ -d "$WT_LR" ] || die "worktree should survive a lint-red land as evidence"
+git show-ref --verify --quiet refs/heads/hone/lint-red || die "branch should survive a lint-red land as evidence"
+bash scripts/lint.sh >/dev/null 2>&1 || die "trunk left lint-red after a rolled-back land"
+step "lint-red merge rolled back (exit 6), trunk lint-green, evidence kept"
+# Fixed in the same worktree, the change lands, so a green adapter never blocks.
+echo "// styled" > "$WT_LR/src/mathx/styled.js"
+(cd "$WT_LR" && git add -A && git commit -qm "fix(mathx): satisfy lint")
+bash "$WSH" land lint-red >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "a lint-green change should land (got $rc)"
+step "the fixed change lands under the same adapter"
+# A red typecheck adapter gets the identical treatment, named as itself.
+printf '#!/bin/bash\nexit 1\n' > scripts/typecheck.sh
+git add scripts/typecheck.sh && git commit -qm "chore: add a failing typecheck adapter"
+WT_TC=$(bash "$WSH" add type-red) || die "worktree add type-red"
+echo "// typed" > "$WT_TC/src/mathx/typed.js"
+(cd "$WT_TC" && git add -A && git commit -qm "feat(mathx): a change under red typecheck")
+PRE=$(git rev-parse HEAD)
+out=$(bash "$WSH" land type-red 2>&1); rc=$?
+[ "$rc" -eq 6 ] || die "land should exit 6 on post-merge typecheck red (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "typecheck-red merge should be rolled back; HEAD moved"
+echo "$out" | grep -q "typecheck failed in the primary tree" || die "the refusal should name typecheck"
+git rm -q scripts/typecheck.sh && git commit -qm "chore: drop the typecheck adapter"
+bash "$WSH" remove "$WT_TC" >/dev/null 2>&1; git branch -D hone/type-red >/dev/null 2>&1
+step "typecheck-red merge rolled back (exit 6), named as typecheck"
+
 echo "== 5c. land serializes: a held lock makes a concurrent land wait =="
 if command -v flock >/dev/null 2>&1; then
   LOCK="$(git rev-parse --git-common-dir)/hone-land.lock"

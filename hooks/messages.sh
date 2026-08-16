@@ -639,6 +639,17 @@ $(hone_msg_block "$tail")
 EOF
 }
 
+msg_wt_land_adapter_red() {
+    local adapter="$1" branch="$2" log="$3" tail="$4"
+    cat <<EOF
+hone worktree: $adapter failed in the primary tree after merging $branch.
+Do: read the tail below, fix what $adapter reports, then land again.
+Why: land rolled the merge back and kept the worktree.
+Last lines of $log:
+$(hone_msg_block "$tail")
+EOF
+}
+
 msg_wt_land_tier_empty() {
     local tiers="$1"
     cat <<EOF
@@ -903,6 +914,7 @@ worktree|human|msg_wt_land_proof_missing|hone/<change>|<the check the Plan decla
 worktree|human|msg_wt_land_proof_always_no_adapter|<plugin-root>/templates/proof/
 worktree|human|msg_wt_land_conflict|hone/<change>
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
+worktree|human|msg_wt_land_adapter_red|<typecheck or lint>|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_tier_empty|- <tier>
 worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>
 worktree|human|msg_wt_land_lockfile|- <lockfile>

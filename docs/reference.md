@@ -196,7 +196,7 @@ gate's error message prints the exact helper command with its full path.
 | 0 | landed and green |
 | 2 | usage or repo-state error (missing branch, detached HEAD) |
 | 5 | lock timeout: another land or full-suite run held the lock |
-| 6 | suite red after the merge; rolled back, worktree kept, output in the land log |
+| 6 | suite, type-check, or lint red after the merge; rolled back, worktree kept, output in the land log |
 | 7 | proof gate: real-environment proof missing |
 | 8 | authority gate: irreversible change without a grant |
 | 9 | merge conflict; aborted, tree restored, branch kept |
@@ -204,8 +204,15 @@ gate's error message prints the exact helper command with its full path.
 What to do at each code, in detail:
 [`skills/run/references/land.md`](../skills/run/references/land.md).
 
+After a green suite, land also runs `scripts/typecheck.sh` and
+`scripts/lint.sh` where they exist, the same optional adapters the gate runs.
+The merge result is a tree no gate has checked: two changes that each append
+to one file can be lint-green alone and lint-red merged. A red adapter rolls
+the merge back with the same exit 6, and the message names the adapter.
+
 The post-merge suite writes `<git-common-dir>/hone-land.log`, replaced on
-every land. Exit 6 prints that path and the last 20 lines of it.
+every land, and the adapter runs append to it. Exit 6 prints that path and
+the last 20 lines of it.
 
 After a green post-merge run, land reads the tier summary lines out of that
 log. It then warns about every tier that reported `ran=0`, because a tier
@@ -231,7 +238,7 @@ call them so hone itself stays language-agnostic.
   templates: [`templates/run-tests/README.md`](../templates/run-tests/README.md).
   Installed by `setup.sh`.
 - `typecheck.sh` and `lint.sh` are optional, one line each, run by the gate
-  when present.
+  and by land's post-merge check when present.
 - `proof.sh` is optional; it proves a change in the real environment for the
   proof gate. land executes the primary tree's copy, with the change's
   worktree as the working directory, so a change adding its own `proof.sh`
