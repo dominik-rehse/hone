@@ -24,6 +24,12 @@
 #   - Clean tree on any other branch → nothing in flight, no-op.
 #   - No git → the unit tier (can't tell what's in flight; adapter presence
 #     already scopes this to hone projects).
+#
+# The --ALL tier runs once per tree. A green run records the tree hash, and the
+# next Stop on that same tree skips the suite. The backstop's value is early
+# feedback on a newly committed state, and a re-run on unchanged input returns
+# the same answer by definition. The repeats also cost the most: they hold the
+# land lock, so redundant runs collide with each other and with lands.
 # (Adapters that express tier selection elsewhere, e.g. the Node template runs
 # the project's own "test" script, treat --unit and --all alike; the escalation
 # only bites where the adapter distinguishes tiers.)
@@ -98,6 +104,43 @@ fi
 # $1 = a template from messages.sh (already prefixed).
 block() { hone_stop_block "$1"; exit 0; }
 
+# The green receipt for the full tier: one line, "<plugin version> <tree hash>",
+# in <git-dir>/hone-gate-green. The key is the CONTENT hash, so an amend or a
+# rebase that reproduces the same tree still counts as verified, and any change
+# to code, tests, or the adapters themselves invalidates it. --git-dir resolves
+# to .git/worktrees/<name> in a linked worktree, so each worktree keeps its own
+# receipt. The version prefix makes a plugin upgrade a miss: a gate with new
+# steps must not trust a receipt an older gate wrote.
+#
+# An untracked input (a dependency install, a stale node_modules) can change the
+# result without changing the tree hash. The gate accepts that blind spot, the
+# same way it accepts the 600s hook timeout: land re-verifies authoritatively.
+#
+# The unit tier stays unmemoized. It runs on a dirty tree, whose state no commit
+# names, and it is cheap by design.
+GATE_RECEIPT=""
+GATE_KEY=""
+gate_receipt_key() {
+    local tree version
+    tree=$(git rev-parse 'HEAD^{tree}' 2>/dev/null) || return 1
+    [ -n "$tree" ] || return 1
+    version=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+        "$(dirname -- "${BASH_SOURCE[0]}")/../.claude-plugin/plugin.json" 2>/dev/null | head -1)
+    GATE_RECEIPT="$(git rev-parse --git-dir 2>/dev/null)/hone-gate-green"
+    GATE_KEY="${version:-unknown} $tree"
+}
+
+# Skip a repeat of the full tier BEFORE the lock block below, so a skip removes
+# contention instead of queueing on it. The skip still prints a receipt: silence
+# is indistinguishable from a gate that never fired.
+if [ "$TIER" = "--all" ] && gate_receipt_key; then
+    if [ "$(cat "$GATE_RECEIPT" 2>/dev/null)" = "$GATE_KEY" ]; then
+        printf '{"systemMessage":"%s"}\n' \
+            "$(hone_json_escape "$(msg_gate_green_cached "${GATE_KEY##* }")")"
+        exit 0
+    fi
+fi
+
 # Run an adapter, capturing a short tail of its output for the block reason.
 # On success, append the label to the green receipt.
 ran=""
@@ -132,6 +175,12 @@ fi
 run_step "tests ($TIER)" bash "$ADAPTER" "$TIER"
 [ -f "scripts/typecheck.sh" ] && run_step "type-check" bash "scripts/typecheck.sh"
 [ -f "scripts/lint.sh" ] && run_step "lint" bash "scripts/lint.sh"
+
+# Record the verified tree, so the next Stop on this same tree skips the suite.
+# Only after every step went green, and only for the full tier.
+if [ "$TIER" = "--all" ] && [ -n "$GATE_KEY" ]; then
+    printf '%s\n' "$GATE_KEY" > "$GATE_RECEIPT" 2>/dev/null || true
+fi
 
 # Green receipt: one visible line saying what actually ran, so a transcript can
 # confirm the gate fired rather than inferring it from silence.

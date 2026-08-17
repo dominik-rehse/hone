@@ -169,6 +169,10 @@ msg_gate_green() {
     printf 'hone gate: green (%s)\n' "$1"
 }
 
+msg_gate_green_cached() {
+    printf 'hone gate: the full suite already passed on this tree (%s), so the gate skipped it.\n' "$1"
+}
+
 # ------------------------------------------------------------------ nag
 
 msg_nag_header() {
@@ -865,6 +869,7 @@ dirty-guard|agent|msg_dirtyguard_primary_tree|src/<area>/<file>|git checkout HEA
 gate|agent|msg_gate_step_failed|<check>|<code>|<output-tail>
 gate|agent|msg_gate_suite_lock
 gate|plain|msg_gate_green|<checks that ran>
+gate|plain|msg_gate_green_cached|<tree-hash>
 nag|plain|msg_nag_header
 nag|human|msg_nag_plan_survived|.plans/<change>.md|<evidence>
 nag|human|msg_nag_plans_pending|<count>

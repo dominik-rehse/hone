@@ -274,6 +274,51 @@ out=$(cd "$REPO" && echo '{}' | bash "$GATE")
 echo "$out" | grep -q '"decision":"block"' && bad "dirty tree should run the unit tier (pass), not --all" || ok "dirty tree runs the unit tier (loop stays fast)"
 git -C "$REPO" checkout -q -- src/auth/login.ts
 
+echo "== gate: the full tier runs once per tree =="
+# An adapter that records every invocation, so a run the gate skipped is
+# countable. The record lives inside .git, so it never dirties the tree.
+RUNS="$REPO/.git/adapter-runs"
+RECEIPT="$REPO/.git/hone-gate-green"
+: > "$RUNS"
+cat > "$REPO/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+echo "\${1:-}" >> "$RUNS"
+exit 0
+EOF
+(cd "$REPO" && git add -A && git commit -qm "counting adapter")
+TREE=$(git -C "$REPO" rev-parse 'HEAD^{tree}')
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 1 ] && ok "the first Stop on a new tree runs the full suite" || bad "the first Stop should run the full suite"
+echo "$out" | grep -q '"systemMessage":"hone gate: green (tests (--all))"' && ok "the full run emits the green receipt" || bad "the full run should emit the green receipt"
+grep -q "$TREE" "$RECEIPT" && ok "a green full run records the verified tree" || bad "a green full run should record the tree"
+
+# Same tree again: the answer cannot differ, so the suite must not run.
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 1 ] && ok "an unchanged tree skips the full suite" || bad "an unchanged tree should skip the full suite"
+echo "$out" | grep -q 'already passed on this tree' && ok "the skip prints its own receipt" || bad "the skip should print a receipt, not stay silent"
+echo "$out" | grep -q '"decision":"block"' && bad "a skip must not block the stop" || ok "the skip does not block the stop"
+
+# A new commit changes the tree, so the receipt no longer covers it.
+echo "// more" >> "$REPO/src/auth/login.ts"
+(cd "$REPO" && git add -A && git commit -qm "durable change")
+TREE2=$(git -C "$REPO" rev-parse 'HEAD^{tree}')
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 2 ] && ok "a changed tree runs the full suite again" || bad "a changed tree should run the full suite"
+grep -q "$TREE2" "$RECEIPT" && ok "the receipt follows the new tree" || bad "the receipt should hold the new tree"
+
+# Uncommitted durable dirt runs the unit tier, which no receipt covers.
+echo "// dirt" >> "$REPO/src/auth/login.ts"
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(tail -n 1 "$RUNS")" = "--unit" ] && ok "the skip never applies to the unit tier" || bad "the unit tier should run on a dirty tree"
+grep -q "$TREE2" "$RECEIPT" && ok "the unit tier leaves the receipt alone" || bad "the unit tier should not write a receipt"
+git -C "$REPO" checkout -q -- src/auth/login.ts
+
+# A receipt an older plugin version wrote is a miss: a gate with new steps must
+# not trust what an older gate verified.
+printf '0.0.0-old %s\n' "$TREE2" > "$RECEIPT"
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 4 ] && ok "a receipt from another version runs the suite again" || bad "a version mismatch should re-run the suite"
+
 echo "== nag: leftover Plan (landed evidence only), oversized Note, orphan Note =="
 # No worktree and no landed evidence = the normal plan→run gap: pending, not
 # stale. No per-Plan finding; one aggregate advisory line instead.

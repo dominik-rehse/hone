@@ -133,7 +133,10 @@ is never gated, and enforcement assumes code lives under `src/<area>/`.
   On a clean `hone/<change>` branch it runs the full suite (the pre-land
   check). A dependency sweep dirties the manifest and the lockfile rather
   than `src/`, and it breaks the suite just as easily, so the gate reads the
-  whole durable perimeter and not `src/` and `tests/` alone.
+  whole durable perimeter and not `src/` and `tests/` alone. The full suite
+  runs once per tree. A green run records the tree hash in
+  `<git-dir>/hone-gate-green`. A later Stop on that same tree skips the run
+  and says so. Any commit, and any plugin upgrade, invalidates the record.
 - *nag* (Stop, advisory) reports hygiene findings as a visible message, never
   a block: a Plan that survived its landing, an oversized or orphan Note, a
   broken `Governs:` link, a merged `hone/*` branch left behind, a change
