@@ -117,6 +117,12 @@ and reconcile the repo's own artifacts.
 - `/hone:run <change>` executes that plan through the loop and merges it
   green. `/hone:run --all` runs every ready plan, in parallel worktrees
   where the plans are independent, sequentially where they overlap.
+- `/hone:herd` is `--all` spread over [herdr](https://github.com/dominik-rehse/herdr)
+  tabs. Your tab becomes `MAIN` and orchestrates, and each plan runs in a
+  fresh Claude Code session in its own `SUB` tab. A `SUB` tab closes once
+  the repository shows its change fully landed, and dependent plans wait for
+  that same evidence. Anything a human must do (a probe, a proof) happens in
+  the `SUB` tab, never in `MAIN`.
 - `/hone:garden` scans the whole repo for staleness between changes (stale
   docs, dead code, redundant tests) and lands the safe deletions. You
   invoke it when you want a maintenance pass. Small, frequent passes beat

@@ -713,6 +713,29 @@ git show-ref --verify --quiet refs/heads/hone/conflict-b || die "the conflicting
 step "conflict aborted with its own exit code (9), tree clean, branch kept"
 bash "$WSH" remove "$WT_CB" >/dev/null 2>&1; git branch -D hone/conflict-b >/dev/null 2>&1
 
+echo "== 6c. landed: the artifact predicate an orchestrator polls =="
+# conflict-a landed above: merge commit present, branch and worktree gone.
+out=$(bash "$WSH" landed conflict-a) || die "landed conflict-a should exit 0"
+[ "$out" = "landed" ] || die "landed should print 'landed' (got: $out)"
+# conflict-b never merged: no merge commit, so pending even with no branch left.
+out=$(bash "$WSH" landed conflict-b); rc=$?
+[ "$rc" -eq 1 ] || die "an unmerged change should be pending, exit 1 (got $rc)"
+[ "$out" = "pending" ] || die "landed should print 'pending' (got: $out)"
+# A change still in flight is pending: its branch and worktree are the claim.
+WT_IF=$(bash "$WSH" add inflight-x) || die "worktree add inflight-x"
+out=$(bash "$WSH" landed inflight-x); rc=$?
+[ "$rc" -eq 1 ] && [ "$out" = "pending" ] || die "an in-flight change should be pending"
+bash "$WSH" remove "$WT_IF" >/dev/null 2>&1
+# A Plan surviving at HEAD keeps the change pending: consolidate did not finish.
+# -f: track the Plan even if this scratch repo's .gitignore covers .plans/.
+mkdir -p "$REPO/.plans" && echo "# Plan" > "$REPO/.plans/conflict-a.md"
+git add -f .plans/conflict-a.md && git commit -qm "chore(plan): conflict-a"
+out=$(bash "$WSH" landed conflict-a); rc=$?
+[ "$rc" -eq 1 ] && [ "$out" = "pending" ] || die "a surviving Plan should keep the change pending"
+git rm -q .plans/conflict-a.md && git commit -qm "chore: drop the leftover plan"
+bash "$WSH" landed conflict-a >/dev/null || die "landed should be 0 again after the Plan is gone"
+step "landed reads the merge commit, claim, and Plan, never a report"
+
 echo "== 7. add from inside a sibling worktree: anchors to the main tree =="
 # An orchestrator's cwd drifts into change A's worktree before starting change B.
 # `add B` must land at <main_root>/.worktrees/B (not nested under A) and branch

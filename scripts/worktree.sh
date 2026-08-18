@@ -67,6 +67,18 @@
 #       the primary, detached-HEAD, and bare entries. Exit 0 if any, 1 if none,
 #       2 if not a git repo.
 #
+#   worktree.sh landed <change>
+#       Answer "has <change> fully landed?" from repo artifacts, printing one
+#       word: `landed` (exit 0) or `pending` (exit 1). Landed means all of:
+#       a "Merge branch 'hone/<change>'" commit reachable from the primary
+#       HEAD, no hone/<change> branch, no .worktrees/<change>, and no
+#       .plans/<change>.md at HEAD. The proof and authority gates run before
+#       the merge, so the merge commit's existence implies they were
+#       satisfied. This is the predicate an orchestrator (the herd's MAIN
+#       session) polls before it starts a dependent Plan or closes a SUB tab:
+#       it reads the repository, never a subagent's claim that it finished.
+#       Exit: 0 landed · 1 pending · 2 usage/not-a-repo.
+#
 #   worktree.sh status
 #       One-screen state of the control surface: hooks on/off, adapters
 #       present, policy files (and whether they are committed), pending Plans,
@@ -600,6 +612,29 @@ signer_stamp() {
         "$(date -Iseconds)"
 }
 
+# The mechanical landed predicate (header: `worktree.sh landed`). Like
+# review_scope it prints a bare word, because the caller reads the word and
+# the exit code, never its own judgment. The merge-commit grep is the positive
+# signal: without it, a change nobody ever started would also show no branch,
+# no worktree, and no Plan. -F pins the quotes, so `hone/a` never matches a
+# nested `hone/a/b`.
+cmd_landed() {
+    local change="${1:-}"
+    [ -n "$change" ] || { msg_wt_needs_change landed >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
+    local main_root branch
+    main_root=$(main_root_of)
+    branch="hone/$change"
+    if git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch" \
+        || [ -e "$main_root/.worktrees/$change" ] \
+        || git -C "$main_root" cat-file -e "HEAD:.plans/$change.md" 2>/dev/null \
+        || ! git -C "$main_root" log -F --grep="Merge branch '$branch'" --format=%H HEAD 2>/dev/null | grep -q .; then
+        printf 'pending\n'
+        return 1
+    fi
+    printf 'landed\n'
+}
+
 cmd_status() {
     git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
     local main_root primary
@@ -777,6 +812,7 @@ main() {
         verify)   cmd_verify "$@" ;;
         land)     cmd_land "$@" ;;
         remove)   cmd_remove "$@" ;;
+        landed)   cmd_landed "$@" ;;
         status)   cmd_status "$@" ;;
         grant)    cmd_grant "$@" ;;
         attest)   cmd_attest "$@" ;;

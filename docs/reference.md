@@ -17,6 +17,14 @@ Slash commands, in the order a change flows:
   the `plan-critic` while you are present. The only manual step.
 - `/hone:run <change>` executes the Plan unattended (worktree, build, verify,
   consolidate, review, land). `/hone:run --all` runs every ready Plan.
+- `/hone:herd` runs `--all` across herdr tabs, when the session runs inside
+  herdr. This tab becomes `MAIN:<short>` and orchestrates. Each Plan gets a
+  fresh Claude Code session in its own `SUB` tab (`--model` picks their
+  model). MAIN starts a dependent Plan only when `worktree.sh landed` shows
+  the predecessor landed, and closes a SUB tab only then. Probes, proofs, and
+  everything else plan-specific happen in the SUB tab, never in MAIN.
+  `--workspace` puts the herd in a workspace of its own, which you create and
+  start it in.
 - `/hone:garden` scans the repo for stale docs, dead code, and redundant tests
   between changes, and lands the safe deletions. You invoke it, as often as
   the repo needs it.
@@ -35,6 +43,11 @@ work. The loop calls it; you can too:
   sessions. The only sanctioned way to run `--all` by hand.
 - `worktree.sh land <change>` merges the branch into the primary tree,
   re-runs the suite there, and cleans up. Runs the land gates first.
+- `worktree.sh landed <change>` answers "has this change fully landed?" from
+  repo artifacts, printing `landed` (exit 0) or `pending` (exit 1). Landed
+  means the merge commit is on the primary branch and the branch, worktree,
+  and Plan are gone. An orchestrator polls this instead of trusting a
+  subagent's report.
 - `worktree.sh remove <worktree-path>` removes a worktree hone created, and
   its branch if fully merged.
 - `worktree.sh landable` lists worktrees whose branch is ahead of the
@@ -233,7 +246,8 @@ draws no warning.
 Other subcommands: `add` exits 4 when the change is already claimed by
 another run (0 created, 2 error); `remove` exits 3 when the path is not one
 hone created (0 removed, 2 error); `verify` passes through the adapter's exit
-(2 setup error, 5 lock timeout).
+(2 setup error, 5 lock timeout). `landed` exits 1 while the change is
+pending (0 landed, 2 error).
 
 ## Adapters
 
