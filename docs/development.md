@@ -58,6 +58,18 @@ real change or the loop takes a wrong turn, capture it as a new case.
 what licenses *deleting* prose as models improve: trim, re-run, keep what
 holds.
 
+## Change briefs
+
+A brief for work on hone itself lives at `.plans/<slug>.md`, in the shape the
+`plan` skill defines. This repo is not self-hosted, so no loop executes the
+brief and no consolidate deletes it. A human does both. The brief is still
+tracked, still one file, and still gone from the tree once the work lands. The
+commit that finishes the work deletes it, and git history keeps it. Do not
+invent a second place or a second shape for the same artifact.
+
+The `plan-critic` has usually not seen such a brief. Say so in the brief when
+it has not.
+
 ## Docs
 
 `docs/` here follows the same economy hone enforces elsewhere: `model.md`

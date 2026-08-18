@@ -103,6 +103,15 @@ the critics, and `garden`, so nothing ever corrects it. The nag flags such
 entries. The fix is to land the content in `docs/` through consolidate,
 where review and later cuts can reach it.
 
+*Outside the routing: forward-looking planning.* Everything above sorts what a
+change *leaves behind*. A document about work nobody has started leaves nothing
+behind, so none of these rules reach it, and a project may keep one. hone keeps
+[`roadmap.md`](roadmap.md) for its own build-out. Three limits stop such a
+document becoming the pile this model exists to prevent. It is one file. It
+describes work, never behaviour, because the code and the tests carry
+behaviour. And it shrinks as the work lands: whatever a landed change settles
+moves into a Decision at consolidate, and the entry goes.
+
 *Enforcement:* the guard, gate, nag, bash-guard, and dirty-guard hooks,
 described in
 [`reference.md`](reference.md). In short: no production code without a
