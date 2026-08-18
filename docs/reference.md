@@ -41,6 +41,10 @@ work. The loop calls it; you can too:
   the same name fails.
 - `worktree.sh verify` runs the full test suite, serialized against other
   sessions. The only sanctioned way to run `--all` by hand.
+- `worktree.sh review-scope <change>` prints how deep the change's review must
+  go: `full`, or `docs-only` when the diff touches nothing outside `docs/` and
+  `.plans/`. The loop skips `/code-review` only on `docs-only`, where a code
+  reviewer has no code to read. Anything it cannot classify is `full`.
 - `worktree.sh land <change>` merges the branch into the primary tree,
   re-runs the suite there, and cleans up. Runs the land gates first.
 - `worktree.sh landed <change>` answers "has this change fully landed?" from
@@ -78,6 +82,11 @@ file:
   irreversible, beyond the built-in signals (destructive SQL in a migration
   or `db/` file, a deletion under `db/`). One glob per line, `#` comments.
   The pre-0.19 name `.hone-consequential-paths` still works.
+- `.hone-review-always` lists path globs that force `review-scope` to answer
+  `full` even when the whole diff sits under `docs/`. One glob per line, `#`
+  comments. It exists for prose a project's own tooling *executes*: a prompt, a
+  policy file, a template. Without the file, every docs-only diff skips
+  `/code-review`.
 - `.hone-proof-always` makes the proof gate fire on *every* change, whether or
   not a commit declares the trailer. Its existence is the whole switch, and
   land ignores the contents, so use them for a `#` comment. Commit it, or it

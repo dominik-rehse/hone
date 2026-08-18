@@ -21,9 +21,10 @@ git init -q && git symbolic-ref HEAD refs/heads/main
 git config user.email t@t.t; git config user.name t
 
 # A minimal real project: a bash "adapter" running a tiny test file, and the
-# hone ephemeral ignores so worktrees/plans don't pollute the tree.
+# hone ephemeral ignores so worktrees don't pollute the tree. A Plan is tracked,
+# so .plans/ is NOT ignored here, exactly as setup.sh installs it.
 mkdir -p src/mathx scripts
-printf '.worktrees/\n.plans/\n' > .gitignore
+printf '.worktrees/\n' > .gitignore
 cat > scripts/run-tests.sh <<'EOF'
 #!/bin/bash
 # Trivial adapter: source src, assert add(2,3)==5. exit 0=pass.
@@ -662,6 +663,46 @@ out=$(bash "$WSH" land tier-silent 2>&1); rc=$?
 [ "$rc" -eq 0 ] || die "a silent adapter should land normally (got $rc)"
 echo "$out" | grep -q "ran no test at all" && die "a silent adapter should draw no tier warning"
 step "an adapter that reports no tiers draws no warning"
+
+echo "== 5i. review-scope: the diff decides how deep the review goes =="
+# review-scope is what stops the loop deciding for itself that a change is too
+# small to review. Only a diff confined to docs/ and .plans/ classifies as
+# docs-only; everything else, including a one-line source change, is full.
+WT_RD=$(bash "$WSH" add doc-prune) || die "worktree add doc-prune"
+mkdir -p "$WT_RD/docs/notes"
+echo "# mathx" > "$WT_RD/docs/notes/mathx.md"
+(cd "$WT_RD" && git add -A && git commit -qm "docs(mathx): add an area note")
+out=$(bash "$WSH" review-scope doc-prune 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "review-scope should succeed on a live branch (got $rc)"
+[ "$out" = "docs-only" ] || die "a docs-only diff should classify as docs-only (got '$out')"
+step "a diff confined to docs/ classifies as docs-only"
+
+# One source file alongside the prose is enough to demand the full review.
+echo "// mixed" > "$WT_RD/src/mathx/mixed.js"
+(cd "$WT_RD" && git add -A && git commit -qm "feat(mathx): a source file beside the note")
+out=$(bash "$WSH" review-scope doc-prune 2>&1)
+[ "$out" = "full" ] || die "a mixed diff should classify as full (got '$out')"
+step "one source file beside the prose makes it full"
+bash "$WSH" land doc-prune >/dev/null 2>&1 || die "land doc-prune"
+
+# .hone-review-always forces full for prose the project's own tooling executes.
+printf 'docs/prompts/**\n' > .hone-review-always
+git add .hone-review-always && git commit -qm "chore: prose that is executed, not read"
+WT_RA=$(bash "$WSH" add prompt-edit) || die "worktree add prompt-edit"
+mkdir -p "$WT_RA/docs/prompts"
+echo "# critic" > "$WT_RA/docs/prompts/critic.md"
+(cd "$WT_RA" && git add -A && git commit -qm "docs(prompts): edit an executed prompt")
+out=$(bash "$WSH" review-scope prompt-edit 2>&1)
+[ "$out" = "full" ] || die ".hone-review-always should force full (got '$out')"
+step ".hone-review-always forces the full review inside docs/"
+bash "$WSH" land prompt-edit >/dev/null 2>&1 || die "land prompt-edit"
+git rm -q .hone-review-always && git commit -qm "chore: drop the review-always list"
+
+# An unknown change is a usage error, never a silent default.
+out=$(bash "$WSH" review-scope no-such-change 2>&1); rc=$?
+[ "$rc" -eq 2 ] || die "review-scope on a missing branch should exit 2 (got $rc)"
+echo "$out" | grep -q "no diff to classify" || die "the refusal should say why"
+step "review-scope on a missing branch exits 2"
 
 echo "== 6. status: the control surface at a glance =="
 out=$(bash "$WSH" status) || die "status failed"

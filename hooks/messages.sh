@@ -391,7 +391,7 @@ hone_msg_attest_placeholders() {
 }
 
 msg_wt_usage() {
-    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|land <change>|landed <change>|remove <worktree-path>|status|grant <change> \"who/why\"|attest <change> \"$(hone_msg_attest_what)\"}"
+    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|land <change>|landed <change>|remove <worktree-path>|status|grant <change> \"who/why\"|attest <change> \"$(hone_msg_attest_what)\"}"
 }
 
 msg_wt_grant_usage() {
@@ -498,6 +498,14 @@ Why: a land or a full-suite run holds the lock.
 EOF
 }
 
+msg_wt_review_scope_no_branch() {
+    local branch="$1"
+    cat <<EOF
+hone worktree: branch $branch does not exist, so there is no diff to classify.
+Do: run review-scope from the change's own run, after its branch carries commits.
+Why: the scope reads the branch diff.
+EOF
+}
 msg_wt_land_no_branch() {
     local branch="$1"
     cat <<EOF
@@ -927,6 +935,7 @@ worktree|human|msg_wt_no_adapter
 worktree|human|msg_wt_no_flock|<land or full suite>
 worktree|human|msg_wt_lock_unopenable|<git-common-dir>/hone-land.lock
 worktree|human|msg_wt_lock_timeout|<seconds>
+worktree|human|msg_wt_review_scope_no_branch|hone/<change>
 worktree|human|msg_wt_land_no_branch|hone/<change>
 worktree|human|msg_wt_land_detached
 worktree|human|msg_wt_land_authority_missing|hone/<change>|- <signal>|<diffstat>|git -C <main-root> diff <base>...hone/<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "who/why"

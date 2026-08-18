@@ -68,7 +68,9 @@ hone_extract_field() {
 #
 # The .hone-proof-always marker counts as durable for the same reason: deleting
 # it is the cheapest way past the land proof gate, and the project's proof
-# policy is not a workspace edit.
+# policy is not a workspace edit. .hone-review-always is durable for the same
+# reason again: deleting it is the cheapest way to make a docs-only change skip
+# its review.
 #
 # Reads .hone-durable-paths from the caller's cwd, so the caller cds to the
 # project root first. guard.sh (the file-tool route) and dirty-guard.sh (the
@@ -78,7 +80,7 @@ hone_is_durable() {
     case "$1" in
         src/*|tests/*|docs/*|db/*|scripts/*) return 0 ;;
         .hone-durable-paths|.hone-irreversible-paths|.hone-consequential-paths) return 0 ;;
-        .hone-proof-always) return 0 ;;
+        .hone-proof-always|.hone-review-always) return 0 ;;
     esac
     [ -f ".hone-durable-paths" ] || return 1
     local entry

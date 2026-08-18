@@ -211,6 +211,68 @@ cmd_verify() {
     bash scripts/run-tests.sh --all
 }
 
+# Classify how deep a change's judgment review must go, printing one word:
+# `full` (the default) or `docs-only`.
+#
+# `/code-review` is the loop's most expensive step, and it reviews code. A diff
+# that changes no executable file gives it nothing to read, so the loop skips it
+# for such a change and the consolidate-critic stays that change's judgment
+# check. A garden pass that only deletes stale prose is the case this exists
+# for.
+#
+# The classification is mechanical on purpose. "Is this change small enough to
+# skip its review?" is exactly the judgment call an unattended loop must not
+# make about itself, so the loop reads this word and never its own opinion. The
+# rule is therefore narrow: every changed path sits under docs/ or .plans/.
+# Size is NOT a signal, because a five-line change to an auth path needs the
+# full review. Neither is "tests only", because a weakened test is one of the
+# things review exists to catch. Anything this cannot classify is `full`.
+#
+# .hone-review-always lists path globs that force `full` even inside docs/, for
+# prose a project's own tooling executes (a prompt, a policy file). Git
+# pathspecs do the matching, as in land_irreversible.
+#
+# Takes the same (root, base, branch) triple the land helpers take.
+review_scope() {
+    local root="$1" base="$2" branch="$3" files pat
+    [ -n "$base" ] || { printf 'full\n'; return 0; }
+    # --no-renames on purpose: with rename detection a move from src/ into docs/
+    # prints only the new path, and the diff would read as docs-only. Without it
+    # the same move prints the deletion and the addition, so src/ still shows.
+    files=$(git -C "$root" diff --no-renames --name-only "$base" "$branch" 2>/dev/null)
+    [ -n "$files" ] || { printf 'full\n'; return 0; }
+    if printf '%s\n' "$files" | grep -qvE '^(docs|\.plans)/'; then
+        printf 'full\n'; return 0
+    fi
+    if [ -f "$root/.hone-review-always" ]; then
+        while IFS= read -r pat; do
+            [ -n "$pat" ] || continue
+            case "$pat" in \#*) continue ;; esac
+            if git -C "$root" diff --name-only "$base" "$branch" -- ":(glob)$pat" 2>/dev/null | grep -q .; then
+                printf 'full\n'; return 0
+            fi
+        done < "$root/.hone-review-always"
+    fi
+    printf 'docs-only\n'
+}
+
+cmd_review_scope() {
+    local change="${1:-}"
+    [ -n "$change" ] || { msg_wt_needs_change review-scope >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
+
+    local common_dir main_root branch base
+    common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+    main_root=$(git -C "$common_dir/.." rev-parse --show-toplevel 2>/dev/null)
+    branch="hone/$change"
+    git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch" || {
+        msg_wt_review_scope_no_branch "$branch" >&2; return 2; }
+    # Resolve HEAD in the MAIN tree, as cmd_land does: the caller's shell may sit
+    # inside the change's own worktree, where HEAD is the branch itself.
+    base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
+    review_scope "$main_root" "$base" "$branch"
+}
+
 # Classify a branch about to land as IRREVERSIBLE (an effectively irreversible
 # or high-blast-radius change), printing one reason line per signal (empty output
 # = reversible). Reversibility is the axis: a bad reversible merge is undone with
@@ -657,7 +719,8 @@ cmd_status() {
     msg_status_adapters "$line"
 
     local pf n
-    for pf in .hone-durable-paths .hone-irreversible-paths .hone-consequential-paths; do
+    for pf in .hone-durable-paths .hone-irreversible-paths .hone-consequential-paths \
+              .hone-review-always; do
         [ -f "$pf" ] || continue
         n=$(grep -cvE '^[[:space:]]*(#|$)' "$pf" 2>/dev/null || true)
         if git ls-files --error-unmatch "$pf" >/dev/null 2>&1; then
@@ -810,6 +873,7 @@ main() {
         add)      cmd_add "$@" ;;
         landable) cmd_landable "$@" ;;
         verify)   cmd_verify "$@" ;;
+        review-scope) cmd_review_scope "$@" ;;
         land)     cmd_land "$@" ;;
         remove)   cmd_remove "$@" ;;
         landed)   cmd_landed "$@" ;;

@@ -195,6 +195,26 @@ redundant test, an abstraction not earning its keep. Apply its accepted findings
 
 ### 5. Review: native `/code-review`
 
+First ask the diff how deep its review must go:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" review-scope <change>
+```
+
+It prints one word.
+
+- **`full`**: the answer for every change that touches code. Run the review below.
+- **`docs-only`**: the diff changes nothing outside `docs/` and `.plans/`, so a
+  code reviewer has no code to read. Skip the review and go to *land*, stating
+  the skip and the word the script printed in your receipt, exactly as verify
+  states a skipped mutation check. The `consolidate-critic` already judged this
+  change at step 4, and prose is what it judges.
+
+Read that word; never form your own view of it. "This change looks too small to
+review" is not yours to decide, and a five-line change to a critical path still
+gets the full review. The word is the only input, and anything the script cannot
+classify comes back `full`.
+
 Run Claude Code's built-in `/code-review` on the finished change (the worktree
 diff) **once**: it is multi-agent (parallel finders plus a verification pass) and
 the loop's most expensive step, so it runs a single time and hone reuses it rather

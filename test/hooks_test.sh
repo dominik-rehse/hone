@@ -117,6 +117,9 @@ echo "$(bg 'echo db/ >> .hone-irreversible-paths')" | grep -q '"ask"' && ok "app
 # way past the land proof gate, so removing or rewriting it escalates.
 echo "$(bg 'rm .hone-proof-always')" | grep -q '"ask"' && ok "removing .hone-proof-always escalated" || bad "removing the proof-always marker should ask"
 echo "$(bg 'echo x > .hone-proof-always')" | grep -q '"ask"' && ok "rewriting .hone-proof-always escalated" || bad "rewriting the proof-always marker should ask"
+# .hone-review-always is the same class: deleting it is the cheapest way to make
+# a docs-only change skip its review.
+echo "$(bg 'rm .hone-review-always')" | grep -q '"ask"' && ok "removing .hone-review-always escalated" || bad "removing the review-always list should ask"
 # messages.sh carries hone's own prose, and it belongs to the same plugin-side
 # class as the other hooks the pattern already lists.
 echo "$(bg 'sed -i s/x/y/ hooks/messages.sh')" | grep -q '"ask"' && ok "editing hooks/messages.sh escalated" || bad "editing a plugin hook file should ask"
@@ -429,6 +432,10 @@ denied "$out" && ok "irreversible-paths policy file denied in primary tree" || b
 # empties it walks past the land proof gate in one step.
 out=$(guard_write ".hone-proof-always" "$REPO")
 denied "$out" && ok "proof-always marker denied in primary tree" || bad ".hone-proof-always should be guard-protected"
+# .hone-review-always decides which docs-only changes still get the full review,
+# so an agent that empties it reviews itself less.
+out=$(guard_write ".hone-review-always" "$REPO")
+denied "$out" && ok "review-always list denied in primary tree" || bad ".hone-review-always should be guard-protected"
 
 echo
 echo "== nag: zero-deletion change (advisory, pre-land) =="
