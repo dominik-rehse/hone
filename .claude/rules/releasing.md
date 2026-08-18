@@ -14,9 +14,13 @@ executes, so a reword changes behavior even when no code moves. Treat it like a
 code change, not like documentation. The same holds for the shipped docs a
 consumer reads.
 
+A docs change bumps too, whenever it alters what a user would do. `docs/` does
+not ship through the marketplace, but the bump is what tells a consumer repo to
+re-read it.
+
 Two things need no bump. The first is a typo or comment-level fix inside code.
-The second is a change to a repo-internal file that never ships: `test/`,
-`evals/`, `docs/`, `README.md`, and `.claude/`.
+The second is a change to the harness this repo never ships and no user reads:
+`test/`, `evals/`, and `.claude/`.
 
 hone is a distributed Claude Code plugin. Consumers only pick up changes through
 the marketplace version, so an unbumped change never reaches them.
