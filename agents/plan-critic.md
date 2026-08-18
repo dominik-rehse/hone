@@ -39,6 +39,17 @@ what they must resolve before the loop runs unattended against it.
 - **Ambiguity.** A requirement a reasonable builder could satisfy two materially
   different ways. Distinguish a genuine fork (reject: the human must pick) from
   detail the loop can reasonably decide (fine: don't invent objections).
+- **Missing baseline.** Does the Plan change behaviour that already exists, while
+  never saying what that behaviour is today? The loop is about to replace code
+  it did not write. Consolidate then deletes the Plan, so an unstated baseline
+  leaves nothing to check the loop's reading against, and the human at land time
+  sees only the commit. Signals that this is not new work: the Plan names
+  existing `src/` files, the *Why* reports a defect in shipped behaviour, or the
+  Notes and Decisions you were handed already cover the area. **One accurate
+  sentence discharges this.** Do not demand an inventory of the current code.
+  Do not raise it against a Plan that opens a new area, where no baseline
+  exists to state. A Plan that says what it preserves or removes has done the
+  work, whatever words it used.
 - **Scope.** Is this the *smallest unit worth its own review gate*? Reject if it's
   really several independent changes hiding in one Plan (they should split; name
   the split), or so trivial it shouldn't gate on its own. Does the change belong in
@@ -95,8 +106,8 @@ what they must resolve before the loop runs unattended against it.
 ## Output
 
 Return structured findings, most-severe first. For each: a category
-(`placeholder` | `contradiction` | `ambiguity` | `scope` | `missing-artifact` |
-`collision` | `contract-churn`), the
+(`placeholder` | `contradiction` | `ambiguity` | `missing-baseline` | `scope` |
+`missing-artifact` | `collision` | `contract-churn`), the
 specific location in the Plan, why it blocks an unattended run, and the concrete
 question or split the human must resolve. End with a one-line verdict:
 `APPROVE` or `REJECT`.

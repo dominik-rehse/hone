@@ -310,14 +310,16 @@ W = writes, M = amends, P = prunes/deletes, R = reads, . = untouched
 
 | Operation   | .plans/ | code | tests | decisions/ | notes/ | open-q | .git |
 |-------------|---------|------|-------|------------|--------|--------|------|
-| plan        | W       | .    | .     | .          | .      | (W)    | W    |
+| plan        | W       | R    | R     | R          | R      | (W)    | W    |
 | build       | R/P     | W    | W     | .          | .      | .      | .    |
 | verify      | .       | R    | R     | R          | R      | R      | .    |
 | consolidate | P       | .    | P     | W/M        | W/M    | M      | .    |
 | land        | .       | .    | .     | .          | .      | .      | W    |
 | garden      | P       | P    | P     | P          | P      | P      | W    |
 
-Notes on the rarer cells: plan's `(W)` on open questions covers only a new
+Notes on the rarer cells: plan's reads are its step 2, where it reads the code,
+the tests, and the area's Decisions and Notes. The Plan can then state what the
+change replaces. plan's `(W)` on open questions covers only a new
 question the Plan surfaces, and its `.git` write is the commit of the Plan
 and its references on the trunk. build's `.plans/` prune is a reference
 promoted out (`git mv`'d next to the test that reads it; build is the only

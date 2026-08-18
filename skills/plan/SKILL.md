@@ -45,7 +45,33 @@ One naming rule guards the layout's one ambiguity. A Plan's references live in
 State the conflict and agree on an alternative with the human; never silently
 rename.
 
-### 2. Size it to one review gate
+### 2. Read what the change will touch
+
+Start from the code, not from the sketch. A Plan that alters behaviour which
+already exists has to say what that behaviour is today. Nobody downstream can
+recover it: the loop reads the code it is about to replace, and the human at
+land time reads only the commit.
+
+Read three things for each area the sketch names: the files under `src/<area>/`,
+the tests beside them, and that area's Note and Decisions. The tests state what
+the system does now. A Decision may already settle the question the sketch
+reopens, which changes the Plan or cancels it.
+
+Then sort what you found into four outcomes, and carry each into the Plan:
+
+- *preserve*: behaviour the change keeps. Tests already pin it. Name it in
+  *What* so the loop does not rewrite it in passing.
+- *verify*: behaviour the change depends on that no test pins. Say so in *Notes
+  for the loop*. The build writes that test before it touches the code.
+- *redesign*: behaviour the change replaces. *What* opens with what the code
+  does today, then states the replacement.
+- *remove*: behaviour the change deletes. Name the files in *Notes for the
+  loop*. A deletion the loop has to infer is a deletion it skips.
+
+A change that opens a new area finds nothing to sort. Write one line saying the
+area is new, and go on. Never invent a baseline for code that does not exist.
+
+### 3. Size it to one review gate
 
 A change is the **smallest unit worth its own review gate**: split only where a
 reviewer could reject one part while approving its neighbour. Too large and the
@@ -57,10 +83,10 @@ review can't hold it; too small and you multiply merge overhead on shared files.
   before fanning out, and the merge verifies it).
 - If it's one indivisible change spanning several files, that's one Plan.
 
-Decide this now; the `plan-critic` (the Plan checker run at step 5) will
+Decide this now; the `plan-critic` (the Plan checker run at step 6) will
 challenge a Plan whose scope is wrong.
 
-### 3. Surface untested assumptions as open questions
+### 4. Surface untested assumptions as open questions
 
 If the change rests on an assumption only running code can settle (a driver's
 dialect, an SDK's headless behaviour, a library on this runtime), record it in
@@ -75,7 +101,7 @@ the answer in the Plan's *Notes for the loop*. Everything downstream hinges on
 it (disposable data collapses backfill design into drop-and-recreate), and the
 `plan-critic` rejects a schema-touching Plan that leaves it unstated.
 
-### 4. Write `.plans/<slug>.md`
+### 5. Write `.plans/<slug>.md`
 
 Keep it to what an unattended loop needs and no more:
 
@@ -84,6 +110,8 @@ Keep it to what an unattended loop needs and no more:
 
 ## What
 <2–4 sentences: the change, at the level of observable behaviour.>
+<Where the change alters behaviour that already exists, open with what that
+behaviour is today. One sentence, taken from the code you read at step 2.>
 
 ## Why
 <The reason now: the user need, the bug, the constraint. One short paragraph.>
@@ -101,6 +129,8 @@ suite covers it.>
 - <Critical path? Name it: it earns a mutation check and maybe a property test.>
 - <A Decision this change makes or changes (topic + the why), for consolidate.>
 - <Files/areas expected to change; whether this is independent of in-flight work.>
+- <Behaviour the change removes, and the files that hold it, named exactly.>
+- <Behaviour the change relies on that no test pins yet.>
 - <Open question OQ-N this change resolves, if any.>
 
 ## References (optional)
@@ -110,7 +140,7 @@ suite covers it.>
 Omit any section that would only restate another. No placeholders, no `TBD`: the
 `plan-critic` rejects them at the check, next.
 
-### 4a. Attach what prose describes badly
+### 5a. Attach what prose describes badly
 
 Some things a change depends on survive prose badly: a wire or file format, a
 response shape, a table or screen layout, an exact error string, a set of
@@ -140,7 +170,7 @@ prose in a file's clothing: put the point in *What* and drop the file. And a
 reference is not a spec: it pins data the loop would otherwise have to guess,
 never the acceptance criteria; those stay the tests' job.
 
-### 5. Check: `plan-critic`
+### 6. Check: `plan-critic`
 
 Submit the finished Plan to the `plan-critic` agent (Task tool,
 `subagent_type: plan-critic`). Give it a **constructed brief**: the Plan text,
@@ -154,7 +184,7 @@ human is still here. Present the findings, revise the Plan with the human (they
 own it), and resubmit the revised Plan. Never hand off a rejected Plan:
 `/hone:run` executes unattended and trusts that this check happened here.
 
-### 6. Commit the approved Plan
+### 7. Commit the approved Plan
 
 The Plan is a tracked artifact. Commit it now (only once the critic returns
 `APPROVE`) to the current branch:
@@ -174,7 +204,7 @@ Plan: an uncommitted reference is invisible inside the worktree, so the build
 fails on a missing file it was told to read. Commit nothing but the Plan and its
 references; the loop owns every other artifact.
 
-### 7. Confirm: the hand-off
+### 8. Confirm: the hand-off
 
 Close with an explicit hand-off. The slug you derived may differ from the name
 the user typed, so state it plainly:

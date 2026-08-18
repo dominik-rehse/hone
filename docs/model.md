@@ -204,6 +204,13 @@ Plan is the one manual step, and sizing the change is its main judgment
 call. Take the smallest unit worth its own review, and split only where a
 reviewer could reject one part while approving the other.
 
+Plan also starts from the code, not from the sketch. A change that alters
+behaviour which already exists states what that behaviour is today, in one
+sentence read from the files it will touch. Two readers need that sentence. The
+loop is about to replace code it did not write. And consolidate deletes the
+Plan, so the human at land time sees only the commit. A change that opens a new
+area has no baseline to state, and the `plan-critic` asks none of it.
+
 Rules that hold throughout: the artifacts confirm each step's completion,
 never a subagent's claim that it finished. The artifacts are the diff, the
 gate output, and the review's JSON envelope. A failed check is not a stop. Only the build⇄verify
