@@ -4,22 +4,32 @@ description: "Maintainer rule for the hone repo: every substantial change bumps 
 
 # Releasing hone
 
-Every substantial change (a feature, or a behavior change to the workflow,
-skills, hooks, or critic prompts) must be followed by a version bump. Typo and
-comment-level fixes need none.
+Bump the plugin version after every substantial change. That covers a feature,
+and a behavior change to the workflow, the skills, the hooks, or the critic
+prompts.
 
-hone is a distributed Claude Code plugin; consumers only pick up changes through
+A wording change to a skill, a critic prompt, or `rules/workflow.md` is
+substantial, and it bumps the version on its own. That prose is what the model
+executes, so a reword changes behavior even when no code moves. Treat it like a
+code change, not like documentation. The same holds for the shipped docs a
+consumer reads.
+
+Two things need no bump. The first is a typo or comment-level fix inside code.
+The second is a change to a repo-internal file that never ships: `test/`,
+`evals/`, `docs/`, `README.md`, and `.claude/`.
+
+hone is a distributed Claude Code plugin. Consumers only pick up changes through
 the marketplace version, so an unbumped change never reaches them.
 
 Bump `version` in **both** `.claude-plugin/plugin.json` and
-`.claude-plugin/marketplace.json` (they must always match), in a separate
-`chore: release X.Y.Z` commit whose body summarizes the release. Semver: a
-feature or behavior change is a minor bump; a fix is a patch.
+`.claude-plugin/marketplace.json`. The two must always match. Make the bump a
+separate `chore: release X.Y.Z` commit whose body summarizes the release. On
+semver, a feature or behavior change is a minor bump, and a fix is a patch.
 
 Before the release commit, the changed layer must pass its suite:
 
 - a change to a critic prompt (`agents/*.md`), to `skills/run/SKILL.md` or its
   references, or to `rules/workflow.md`: `bash evals/run.sh <target> --votes 3`
-  green, then `--holdout` green as the final check (see `evals/README.md` on
-  held-out cases; the loop target runs with `--model opus`);
+  green, then `--holdout` green as the final check. See `evals/README.md` on
+  held-out cases. The loop target runs with `--model opus`.
 - a change to hooks or scripts: `bash test/run.sh` green.
