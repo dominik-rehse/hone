@@ -133,7 +133,7 @@ cmd_add() {
     # Anchor to the MAIN tree, not cwd: an orchestrator's shell cwd may sit inside
     # a sibling change's linked worktree, which would otherwise nest the new
     # worktree under it and branch off that sibling's unlanded HEAD. `git -C
-    # "$main_root" … HEAD` resolves both the path and the base in the primary
+    # "$main_root" ... HEAD` resolves both the path and the base in the primary
     # checkout. Same provenance anchor cmd_remove uses.
     local main_root
     main_root=$(git -C "$(git rev-parse --git-common-dir 2>/dev/null)/.." rev-parse --show-toplevel 2>/dev/null)
@@ -228,7 +228,7 @@ land_irreversible() {
     [ -n "$base" ] || return 0
     if git -C "$root" diff "$base" "$branch" -- db ':(glob)**/migrations/**' 2>/dev/null \
         | grep -E '^\+' | grep -qiE 'DROP[[:space:]]+(TABLE|COLUMN)|TRUNCATE|DELETE[[:space:]]+FROM|ALTER[[:space:]].+DROP'; then
-        reasons+="- destructive SQL (DROP/TRUNCATE/DELETE/ALTER…DROP) in a migration or db/ file"$'\n'
+        reasons+="- destructive SQL (DROP/TRUNCATE/DELETE/ALTER...DROP) in a migration or db/ file"$'\n'
     fi
     if git -C "$root" diff --diff-filter=D --name-only "$base" "$branch" -- db 2>/dev/null | grep -q .; then
         reasons+="- a file under db/ is deleted"$'\n'

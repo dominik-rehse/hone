@@ -670,7 +670,7 @@ echo "$out" | grep -q "run-tests=yes" || die "status should see the test adapter
 echo "$out" | grep -q "plans: none pending" || die "status should report no pending Plans"
 echo "$out" | grep -q "worktrees: none in flight" || die "status should report no worktrees"
 echo "$out" | grep -q "settings deny rules: MISSING" || die "status should flag missing deny rules"
-# A partial set is still MISSING, and the warning names only what is absent —
+# A partial set is still MISSING, and the warning names only what is absent:
 # the semantic comparison against the canonical list, not a single-rule probe.
 mkdir -p "$REPO/.claude"
 printf '{"permissions":{"deny":["Edit(./scripts/run-tests.sh)"]}}\n' > "$REPO/.claude/settings.json"

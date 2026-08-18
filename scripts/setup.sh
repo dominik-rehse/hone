@@ -82,7 +82,7 @@ mkdir -p docs/decisions docs/notes .plans src
 [ -f docs/open-questions.md ] || printf '# Open questions\n\nAssumptions only running code can settle. Close or delete each entry once resolved; never grow it.\n' > docs/open-questions.md
 msg_setup_docs_created
 
-# 4. Report — never write — the settings deny rules. The block is installed by
+# 4. Report (never write) the settings deny rules. The block is installed by
 # hand (README, Install) and /hone:setup completes it with the human present;
 # a bare script run still names what is missing, so an upgrade that grew the
 # canonical list surfaces here as one paste instead of an investigation.

@@ -78,11 +78,11 @@ fi
 
 # The settings deny rules are the file-tool half of hone's tamper resistance
 # for the adapters (the bash-guard closes the shell routes). They are
-# installed by hand, so nothing else notices when they are missing — or, after
-# a plugin upgrade that grew the canonical list, incomplete. Compare against
-# the canonical list semantically (hone_missing_deny_rules: either settings
-# file, either spelling of a relative path) and name exactly what is missing,
-# so an upgrade is one paste instead of an investigation.
+# installed by hand, so nothing else notices when they are missing. A plugin
+# upgrade that grew the canonical list leaves them incomplete the same way.
+# Compare against the canonical list semantically (hone_missing_deny_rules:
+# either settings file, either spelling of a relative path) and name exactly
+# what is missing, so an upgrade is one paste instead of an investigation.
 if [ "$looks_like_hone" = true ]; then
     missing=$(hone_missing_deny_rules "$PROJECT_DIR" "$SCRIPT_DIR/../templates/settings/deny-rules.txt")
     if [ -n "$missing" ]; then

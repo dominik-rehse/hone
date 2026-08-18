@@ -21,8 +21,8 @@
 # and the rules deny the worktree copy. No project-relative pattern can tell
 # those two trees apart, because from the inside their paths are identical.
 
-# The adapters. Each defines a verdict the loop trusts — run-tests "green",
-# proof "proven" — so an agent that can edit one can wave itself through.
+# The adapters. Each defines a verdict the loop trusts (run-tests "green",
+# proof "proven"), so an agent that can edit one can wave itself through.
 # Deny them even where the file does not exist yet: the rule then also stops
 # the agent from authoring it.
 #
