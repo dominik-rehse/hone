@@ -505,6 +505,48 @@ bash "$WSH" land bootstrap-green >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a tip-naming sign-off should land the bootstrap change (got $rc)"
 rm -f "$REPO/.hone-proof/bootstrap-green" "$REPO/proof-context"
 step "a bootstrap change runs no adapter (exit 7), and a sign-off lands it"
+# (j) The adapter change gates on the FILE, not on the trailer. A branch that
+# rewrites scripts/proof.sh and declares nothing used to walk straight past this
+# gate and merge unseen, which made the adapter the one gate an unattended loop
+# could weaken by itself. It now refuses exactly like the declared case.
+WT_BQ=$(bash "$WSH" add bootstrap-silent) || die "worktree add bootstrap-silent"
+printf '#!/bin/bash\n# weakened, and nothing declared\nexit 0\n' > "$WT_BQ/scripts/proof.sh"
+(cd "$WT_BQ" && git add -A && git commit -qm "chore(proof): rewrite the adapter, no trailer")
+PRE=$(git rev-parse HEAD)
+out=$(bash "$WSH" land bootstrap-silent 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "an undeclared adapter change should exit 7 (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "an undeclared adapter change must not touch the trunk"
+[ -f "$REPO/proof-context" ] && die "land must run no adapter for an undeclared adapter change"
+echo "$out" | grep -q "land cannot use the copy it has" || die "the refusal should explain the bootstrap case"
+echo "$out" | grep -qF "bash scripts/proof.sh bootstrap-silent" || die "the refusal should print the by-hand proof command"
+# The refusal names the file change, never a trailer this branch does not carry.
+echo "$out" | grep -q "declares real-environment proof" && die "the refusal must not claim an absent trailer"
+# The human's sign-off is the only route, exactly as in the declared case.
+bash "$WSH" attest bootstrap-silent "ran the new adapter from the worktree: ok" >/dev/null \
+    || die "attest of the undeclared adapter change failed"
+bash "$WSH" land bootstrap-silent >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "a tip-naming sign-off should land the undeclared adapter change (got $rc)"
+rm -f "$REPO/.hone-proof/bootstrap-silent" "$REPO/proof-context"
+step "an adapter change with no trailer is gated too (exit 7), and a sign-off lands it"
+# A probe carries the same weight as the adapter, trailer or not.
+WT_BP=$(bash "$WSH" add probe-silent) || die "worktree add probe-silent"
+mkdir -p "$WT_BP/scripts/proof-probes"
+printf '#!/bin/bash\nexit 0\n' > "$WT_BP/scripts/proof-probes/journey.sh"
+(cd "$WT_BP" && git add -A && git commit -qm "chore(proof): add a probe, no trailer")
+out=$(bash "$WSH" land probe-silent 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "an undeclared probe change should exit 7 (got $rc)"
+echo "$out" | grep -q "land cannot use the copy it has" || die "the probe refusal should explain the bootstrap case"
+bash "$WSH" remove "$WT_BP" >/dev/null 2>&1; git branch -D hone/probe-silent >/dev/null 2>&1
+step "an undeclared probe change is gated too (exit 7)"
+# A change that leaves the adapter alone still needs no proof at all: the gate
+# widened to the adapter's own files, and to nothing else.
+WT_BN=$(bash "$WSH" add adapter-untouched) || die "worktree add adapter-untouched"
+echo "// nowhere near the adapter" > "$WT_BN/src/mathx/untouched.js"
+(cd "$WT_BN" && git add -A && git commit -qm "feat(mathx): a change that leaves the adapter alone")
+bash "$WSH" land adapter-untouched >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "a change away from the adapter should still land ungated (got $rc)"
+rm -f "$REPO/proof-context"
+step "the widened gate leaves an ordinary change ungated"
 
 echo "== 5g. proof-always: the marker gates every change =="
 # (a) With the marker and a green adapter, a change with NO trailer is proven

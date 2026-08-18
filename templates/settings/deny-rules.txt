@@ -12,10 +12,26 @@
 # counts: Claude Code matches file tools against Edit(path) only and rejects
 # a Write rule at startup.
 
+# Every rule below is anchored at the directory the session started in, which
+# for /hone:run is the primary tree. It does NOT reach the same file inside
+# .worktrees/<change>/, so the loop can still author a change to any of these
+# files where it belongs, in a worktree, and land it by a merge. Measured on
+# Claude Code 2.1.234, in all three spellings the comparison accepts. A session
+# started INSIDE a worktree is the exception: there the worktree is the anchor,
+# and the rules deny the worktree copy. No project-relative pattern can tell
+# those two trees apart, because from the inside their paths are identical.
+
 # The adapters. Each defines a verdict the loop trusts — run-tests "green",
 # proof "proven" — so an agent that can edit one can wave itself through.
 # Deny them even where the file does not exist yet: the rule then also stops
 # the agent from authoring it.
+#
+# proof.sh is the one the loop is expected to change on its own, so land gates
+# a change to it on the file change alone, with no trailer needed, and only the
+# human's sign-off discharges that gate. The other three need no such gate:
+# land re-runs the MERGED run-tests.sh, typecheck.sh, and lint.sh in the primary
+# tree after the merge, so a weakened adapter would be judging its own merge,
+# and the deny rule is what stops the agent writing one.
 Edit(./scripts/run-tests.sh)
 Edit(./scripts/typecheck.sh)
 Edit(./scripts/lint.sh)

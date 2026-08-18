@@ -51,6 +51,13 @@ That creates `.worktrees/<change>` on branch `hone/<change>` and prints its path
 `cd "$WT"`. All build/verify/consolidate work happens here; the primary tree is a
 merge target and the `guard` will block durable edits made in it.
 
+**Address every file you edit as `$WT/<path>`.** That `cd` moves the shell only.
+The file tools still resolve a bare `scripts/foo.sh` against the primary tree.
+A relative path therefore edits the wrong file. The settings deny rules refuse
+it there, and that refusal reads like a ban on the work itself. It is not one.
+The loop may author a change to `scripts/proof.sh` in the worktree. `land` then
+gates that change for the human (step 6, exit 7).
+
 Creating the worktree is what **claims the change**, and the creation is atomic:
 exit **4** means the change is already claimed: another `run` (in another
 session) owns it, or a crashed run left it behind. Do **not** adopt that

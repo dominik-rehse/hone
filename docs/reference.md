@@ -171,7 +171,8 @@ the worktree stays for inspection.
   change cannot ship its own green stub), or your sign-off after running the
   check yourself: `worktree.sh attest <change> "what you ran"`. A committed
   `.hone-proof-always` widens this gate to every change (see *Configuration
-  files*).
+  files*). A diff that touches the adapter itself arms the gate too, with no
+  trailer needed (below).
 
 The proof gate's refusal prints the check the trailer declared, the text
 after the dash on the `Proof: real-environment` line. You run that check, so
@@ -183,6 +184,12 @@ or anything under `scripts/proof-probes/`, land cannot prove it. The copy land
 holds is the one the change replaces. The refusal then
 tells you to run `bash scripts/proof.sh <change>` from the worktree in your
 own terminal, and to attest with its output.
+
+That same diff also *arms* the gate on its own. A change touching the adapter
+or a probe needs no trailer and no marker to reach exit 7. The adapter defines
+the verdict this gate trusts, so a change to it always reaches you. The loop
+may still write that change in its worktree, which is why the gate carries the
+weight instead of a ban on writing.
 
 The agent never writes a grant or sign-off and never runs the helpers: the
 guard denies the file-tool routes and the bash-guard the shell routes (a

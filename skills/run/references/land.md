@@ -41,10 +41,12 @@ state (from the primary tree) rather than retrying blindly.
 
 ## 7: the proof gate
 
-The change needs real-environment proof, and that proof is missing. Two things
+The change needs real-environment proof, and that proof is missing. Three things
 ask for it. A `Proof: real-environment` trailer on a branch commit asks for it.
 So does a committed `.hone-proof-always` marker, which gates every change, with
-a trailer or without one.
+a trailer or without one. So does the change editing `scripts/proof.sh` or a
+probe under `scripts/proof-probes/`. That third gate fires on the file change
+itself. It needs no trailer and no marker.
 
 Two things discharge it. A green `scripts/proof.sh` discharges it, and so does
 a `.hone-proof/<change>` sign-off naming the current branch tip. land runs the
@@ -55,7 +57,7 @@ must not outlive the code it vouched for.
 
 The merge did not happen and the worktree is kept. **Stop and escalate.** The
 real-environment check is outside the loop's boundary. Read the message to see
-which of the four refusals fired:
+which of the five refusals fired:
 
 - *No proof yet.* Where the trailer declared a check, the message prints it.
   The message then prints the full `worktree.sh attest` command with its path.
@@ -70,12 +72,20 @@ which of the four refusals fired:
   `scripts/proof.sh`, and prints no attest command. Never remove
   `.hone-proof-always` to get past it. The marker is project policy, and both
   guards protect it.
+- *The change edits the adapter.* The message names the file change as the
+  reason, because the branch declared nothing. It prints the same attest
+  command.
 
 One case has no automatic route. Where the change itself writes or edits
 `scripts/proof.sh` or a probe under `scripts/proof-probes/`, land runs no
 adapter for it. The copy land holds is the copy the change replaces. The human
 runs `bash scripts/proof.sh <change>` from the worktree, in their own terminal,
 and attests with its output.
+
+You may author that change in the worktree, and you should. The gate is what
+holds it, not a ban on writing it. land reads the diff, so the gate fires on
+any branch that touches those files. A branch that declares no trailer gets the
+same refusal as one that declares it.
 
 Never sign it off yourself, never run `attest`, and never write the commit id
 into a sign-off file to satisfy the check. The guard and bash-guard deny all of

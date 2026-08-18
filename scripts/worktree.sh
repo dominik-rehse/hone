@@ -38,6 +38,10 @@
 #       the merge. A committed .hone-proof-always marker widens the gate to
 #       EVERY change, trailer or not; with the marker present and no
 #       scripts/proof.sh, land refuses (7) rather than proving nothing.
+#       A change that edits scripts/proof.sh or scripts/proof-probes/ opens the
+#       gate on the file change alone, with no trailer and no marker, and only
+#       the human sign-off discharges it: land holds the copy such a change
+#       replaces, so no automatic route can judge it.
 #       On success it prints a receipt on stdout: the merge commit, the green
 #       post-merge suite, and the removed worktree and branch. When the merge
 #       changed a lockfile, the receipt also names it and asks for a reinstall
@@ -413,10 +417,24 @@ cmd_land() {
     # project has an adapter and wants it run each time, so a change that
     # forgot its trailer is still proven. Existence is the whole switch, and
     # the contents are free for a comment.
+    #
+    # A change to the adapter ITSELF gates on the file change, with no trailer
+    # and no marker needed. The adapter defines the verdict this gate trusts,
+    # so a change that rewrites it must not be judged by the copy it rewrites,
+    # and must not merge unseen either. Gating on the trailer alone left that
+    # hole open: a branch that weakened scripts/proof.sh and declared nothing
+    # never reached the bootstrap check below and merged with no human in the
+    # loop.
     local proof_always=""
     [ -f "$main_root/.hone-proof-always" ] && proof_always=yes
-    if [ -n "$proof_always" ] || [ -n "$(land_proof_required "$main_root" "$base" "$branch")" ]; then
-        local tip signoff="$main_root/.hone-proof/$change" discharged="" attest_cmd check bootstrap
+    # Classify the bootstrap case here, OUTSIDE the condition, because it is now
+    # one of the three things that open the gate rather than a branch taken
+    # inside it.
+    local bootstrap
+    bootstrap=$(land_proof_bootstrap "$main_root" "$base" "$branch" "$change")
+    if [ -n "$proof_always" ] || [ -n "$bootstrap" ] \
+       || [ -n "$(land_proof_required "$main_root" "$base" "$branch")" ]; then
+        local tip signoff="$main_root/.hone-proof/$change" discharged="" attest_cmd check
         tip=$(git -C "$main_root" rev-parse "$branch")
         attest_cmd="bash $HONE_WSH attest $change \"$(hone_msg_attest_what_full)\"   (stamps the tip commit)"
         if [ -f "$signoff" ] && [ -n "$(land_proof_signoff_names_tip "$signoff" "$tip")" ]; then
@@ -443,11 +461,8 @@ cmd_land() {
             # the worktree and attests with its output.
             local proof_root="$main_root" proof_wt=""
             [ -d "$wt" ] && { proof_root="$wt"; proof_wt="$wt"; }
-            # The bootstrap classification picks the branch below, so it runs
-            # here. The trailer's own description only ever appears in a
-            # refusal, so each refusal reads it for itself and a green land
-            # pays for neither.
-            bootstrap=$(land_proof_bootstrap "$main_root" "$base" "$branch" "$change")
+            # The trailer's own description only ever appears in a refusal, so
+            # each refusal reads it for itself and a green land pays for it.
             if [ -f "$main_root/scripts/proof.sh" ] && [ -z "$bootstrap" ]; then
                 if ! ( cd "$proof_root" \
                        && HONE_CHANGE="$change" HONE_BRANCH="$branch" \
@@ -476,7 +491,15 @@ cmd_land() {
                 return 7
             else
                 check=$(land_proof_trailer "$main_root" "$base" "$branch")
-                msg_wt_land_proof_missing "$branch" "$check" "$attest_cmd" "$bootstrap" >&2
+                if [ -n "$bootstrap" ] && [ -z "$check" ]; then
+                    # The change declared nothing, and the adapter edit alone
+                    # opened the gate. Saying "this branch declares
+                    # real-environment proof" would name a trailer that is not
+                    # there, so this refusal names the file change instead.
+                    msg_wt_land_proof_adapter_change "$branch" "$attest_cmd" "$bootstrap" >&2
+                else
+                    msg_wt_land_proof_missing "$branch" "$check" "$attest_cmd" "$bootstrap" >&2
+                fi
                 return 7
             fi
         fi

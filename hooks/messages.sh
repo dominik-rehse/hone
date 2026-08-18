@@ -610,6 +610,24 @@ EOF
     printf 'land kept the worktree as evidence.\n'
 }
 
+# The adapter-change gate: the branch edits scripts/proof.sh or a probe and
+# declares no trailer, so the file change alone is what land refuses on. Kept
+# apart from msg_wt_land_proof_missing, which opens by naming the trailer this
+# change does not have.
+msg_wt_land_proof_adapter_change() {
+    local branch="$1" attest_cmd="$2" bootstrap="$3"
+    cat <<EOF
+hone worktree: $branch changes the proof adapter, so land gates it whatever the Plan declared.
+Do: run the change's own adapter yourself, then record your sign-off.
+EOF
+    # No Why line here. The bootstrap block below opens with the reason, and a
+    # fourth line would push the paste block past the shape the reader expects.
+    hone_msg_proof_bootstrap "$bootstrap"
+    printf 'Record your sign-off, then re-run land:\n'
+    hone_msg_block "$attest_cmd"
+    printf 'land kept the worktree as evidence.\n'
+}
+
 msg_wt_land_proof_always_no_adapter() {
     local templates="$1"
     cat <<EOF
@@ -916,6 +934,7 @@ worktree|human|msg_wt_land_grant_empty|<change>|bash <plugin-root>/scripts/workt
 worktree|human|msg_wt_land_proof_adapter_failed|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_proof_signoff_stale|<change>|hone/<change>|<tip>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_proof_missing|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
+worktree|human|msg_wt_land_proof_adapter_change|hone/<change>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_proof_always_no_adapter|<plugin-root>/templates/proof/
 worktree|human|msg_wt_land_conflict|hone/<change>
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
