@@ -157,6 +157,24 @@ wait
 score_target() {
     local target="$1" pass=0 fail=0
     echo "== $target =="
+
+    # A target with no cases must FAIL, not report an empty green. Every case a
+    # target once had was cut because a model with none of hone's prose answered
+    # it correctly, so the target now pins nothing and a change to its prompt
+    # goes unchecked. Reporting "0 pass, 0 fail" as success would hide exactly
+    # the gap the cut opened.
+    local cases=0 d n
+    for d in evals/"$target"/*/; do
+        [ -f "$d/brief.md" ] || continue
+        n=$(basename "$d"); skip_case "$n" && continue
+        cases=$((cases+1))
+    done
+    if [ "$cases" -eq 0 ]; then
+        printf '  FAIL  %-30s → no cases; this target pins nothing\n' "$target"
+        echo "  $target: 0 pass, 1 fail"
+        return 1
+    fi
+
     local toks re
     toks=$(tokens_for "$target")
     re="\\b($(printf '%s' "$toks" | tr ' ' '|'))\\b"

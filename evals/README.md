@@ -1,15 +1,37 @@
 # Evals: pinning the judgment prose
 
-The two critics and the `run` skill's loop instructions are behaviour-shaping
-prose doing real judgment work, and unverified prose is the one part of hone's
-trust foundation that can go stale silently: nothing type-checks a prompt. These
-evals pin them to cases with known-good answers, so a reword that quietly weakens
-a critic, or a cut that quietly drops a loop behaviour, is caught.
+The critics and the `run` skill's loop instructions are prose that does real
+judgment work. Nothing type-checks a prompt, so that prose can go stale in
+silence. It is the one part of hone's trust foundation with that weakness. These
+evals pin it to cases with known-good answers. The suite then catches a reword
+that weakens a critic or a cut that drops a loop behaviour.
 
-They are equally the licence to *delete*. As models improve, prose a prompt used
-to need becomes prose the model no longer needs told, but which paragraphs those
-are is empirical, not a matter of taste. Trim, re-run, keep what holds. Without a
-suite, cutting a prompt is a guess about future behaviour.
+They are equally the licence to delete. As models improve, prose a prompt used to
+need becomes prose the model no longer needs told. Which paragraphs those are is
+empirical, not a matter of taste.
+
+## A case must discriminate
+
+A case earns its place only if hone's prose changes the answer. Take a model with
+none of hone's prose: if it already answers correctly, the case pins nothing.
+Such a case stays green whatever you do to the prompt, so it reports coverage the
+suite does not have.
+
+Check a case by ablation. Run the same brief and the same closing instruction.
+Replace the target's prose in the system slot with one neutral line:
+
+```
+You are a careful, experienced software engineering reviewer.
+Judge the case on its merits and follow the instruction exactly.
+```
+
+Take three votes. A case is discriminating if the stub's plurality answer differs
+from the expected one. Keep those. A case the stub answers correctly 3/3 is a
+no-op. Cut it, or make the brief harder than the model's default judgment.
+
+The 2026-08-18 measurement used sonnet for the critics and opus for the loop, and
+it found 44 no-ops among the 52 cases then present. The cut removed them. The
+eight cases below are what remained.
 
 ## Run
 
@@ -23,100 +45,102 @@ bash evals/run.sh --jobs 12             # up to 12 concurrent calls (default 8)
 bash evals/run.sh --dry-run             # list cases + expected answers, no calls
 ```
 
-Match the model to what actually runs in production, or the result means nothing:
-the critics are pinned to `model: sonnet` in their frontmatter, while the `loop`
-target is whatever model drives the session (`--model opus`).
+Match the model to what actually runs in production, or the result means nothing.
+The critics carry `model: sonnet` in their frontmatter. The `loop` target uses
+whatever model drives the session (`--model opus`).
 
 ## Targets and cases
 
-*`plan-critic`*, verdict `APPROVE`/`REJECT`. REJECT cases, two per category:
-`placeholder-tbd` and `placeholder-vague-proof`, `two-changes` and
-`bundled-refactor` (scope), `collision` (shared files) and `slug-collision`,
-`proof-altitude` and `ops-claim-unit-proof` (a user- or ops-level claim whose
-only proof is a unit assertion), `prose-for-artifact` and
-`prose-error-catalogue` (specific data spelled out in prose that a fixture
-should carry instead), `dep-refresh-blind-latest` (a refresh Plan sweeping every
-package to `latest`, so no one can say what it builds). APPROVE cases:
-`clean-scoped`, plus the near-misses `cohesive-two-files` (tempts scope),
-`named-references` (tempts missing-artifact), `adjacent-open-change` (tempts
-collision), `dep-refresh-no-red-test` (a toolchain refresh with no red test and
-its counts pinned as data, which tempts placeholder and proof-altitude).
+Each entry gives the expected answer, then what the stub answered without hone's
+prose. The gap between the two is what the case pins.
 
-*`consolidate-critic`*, verdict `CLEAN`/`CUTS`. CUTS cases, two per category:
-`decision-restates-code` and `decision-narrates-diff`, `note-drift` and
-`note-per-behaviour`, `single-caller-generic` and `wrapper-single-user`
-(over-abstraction), `garden-stale-decision` and `garden-superseded-decision`
-(Decisions a garden pass should cut). CLEAN cases: `lean-change`, plus the
-near-misses `decision-carries-why` (tempts decision-restates-code),
-`single-caller-helper` (tempts over-abstraction; rule of three, not rule of
-one), `example-beside-property` (tempts redundant-test; example, property, and
-golden tests are complementary).
+*`plan-critic`*, verdict `APPROVE`/`REJECT`:
 
-*`loop`*, the next action `run` takes, one of `STOP SKIP DISCARD NEST RECORD
-BACKGROUND ASK EXPAND HANDROLL PROCEED`: a claimed worktree under a single change
-(STOP) and under `--all` (SKIP), a red test that passes on its first run and a
-confirming test written after a fix (DISCARD), the `/code-review` refusal and the
-subagent-fan-out temptation (NEST, not HANDROLL), a confirmed out-of-scope
-finding, twice (RECORD, not EXPAND or ASK), exhausted verify and both land
-gates (STOP), a suite and a mutation run outlasting the foreground timeout
-(BACKGROUND), a mutation check with no critical path named (SKIP), a clean
-review, a red test failing for the right reason, and a clean worktree claim
-(PROCEED). The wrong tokens sit in the list on purpose: a case the skill fails
-is one where its prose was carrying the behaviour and the model does not supply
-it unprompted.
+- `named-references`: APPROVE, stub REJECT 3/3. The stub clears every rejection
+  category in turn. It calls the one loose end "not reject-worthy on its own",
+  then rejects anyway. This case pins the calibration that tells the critic not
+  to invent objections.
+- `dep-refresh-no-red-test`: APPROVE, stub REJECT 2/3. A toolchain refresh has no
+  red test to write first. Without the rule that says so, the missing test reads
+  as a placeholder.
 
-## Balance
+*`loop`*, the next action `run` takes:
 
-Both critics' likely failure mode under prompt editing is *over-strictness*:
-every hunting paragraph added makes them reject more, and the tie-break already
-leans conservative. A suite of only REJECT/CUTS cases cannot see that drift; an
-always-reject critic would score near-perfect. The near-miss cases exist for
-exactly this: each one is built to tempt a specific rejection category while the
-prompt's own calibration text says it must pass. A near-miss case going red
-after a prompt edit means the edit made the critic stricter than its own rules.
+- `land-authority-gate`: STOP, stub ASK 3/3.
+- `land-proof-gate`: STOP, stub ASK 3/3.
+- `review-fanout-temptation`: NEST, stub ASK 3/3.
+- `review-command-refused`: NEST, stub NEST 2/3, HANDROLL 1/3.
+- `worktree-claimed-single`: STOP, stub STOP 2/3, SKIP 1/3.
+- `missing-reference-holdout`: STOP, stub ASK 2/3, STOP 1/3.
+
+Read the loop gap precisely. On the two land gates the stub reasons the situation
+out correctly: it halts for the human, and picks `ASK` where hone says `STOP`. So
+those cases pin hone's action vocabulary, not judgment the model lacks. That is
+still worth pinning, because the loop dispatches on the word, though it is a
+weaker claim than the plan-critic pair, which pin judgment.
+
+## Known gaps
+
+The cut opened two holes. Both are deliberate, and the suite covers neither.
+
+*`consolidate-critic` has no cases.* All 13 were no-ops, because a model with no
+hone prose reached the same verdict on every one. A change to
+`agents/consolidate-critic.md` is therefore ungated. `run.sh` fails that target
+loudly rather than reporting an empty green, so the gap is visible on every run.
+Closing it needs briefs harder than the model's default judgment, not the old
+ones back.
+
+*`plan-critic` has no REJECT case.* Both survivors expect APPROVE, so an
+always-APPROVE critic scores 2/2. The suite can no longer see a critic that has
+gone permissive. The stub rejected every REJECT case too, which is why the cut
+took them all. State that finding from the other side: the rejection categories
+do not need pinning, the restraint does.
 
 ## Held-out cases
 
-Case dirs named `*-holdout` are skipped unless `--holdout` is passed. They are
-the check against tuning to the suite: "trim, re-run, keep what holds" is
-optimization against these cases, and prose can end up passing the briefs it was
-trimmed against while the behaviour is gone in any paraphrase. So: never read a
-holdout brief or edit prose with one in view; run `--holdout` once, as the last
-check before a release. A holdout failure after a green main suite is the
-overfitting signal, and the fix is the prose, never the holdout case.
+`run.sh` skips case dirs named `*-holdout` unless you pass `--holdout`, and they
+are the check against tuning to the suite. Trimming prose and re-running
+optimizes against the visible cases. Prose can then pass the very briefs you
+trimmed it against, while the behaviour can still be gone in any paraphrase. So:
+never read a holdout brief or edit prose with one in view. Run `--holdout` once,
+as the last check before a release. A holdout failure after a green main suite is
+the overfitting signal. Fix the prose, never the holdout case.
 
 ## How a case is scored
 
-Each case is `evals/<target>/<case>/` with a self-contained `brief.md` and an
-`expected` file whose first line is the token and whose further lines are
-substrings the reply must mention. The runner puts the prose under test in the
-system slot (the agent body for a critic, `skills/run/SKILL.md` for the loop), the
-brief in the user turn, calls `claude -p` headless, and takes the last token in
-the reply as that run's answer. Every target's instruction demands an exact
-final line (`ACTION:`/`VERDICT:`), so the extracted token is the stated answer,
-not one the model happened to name last while reasoning.
+Each case is `evals/<target>/<case>/`. It holds a self-contained `brief.md` and
+an `expected` file. The first line of `expected` is the token. Each further line
+is a substring the reply must mention, checked case-insensitively.
 
-Votes are scored by plurality, and `tokens_for` in `run.sh` lists each target's
-tokens most-conservative-first, so a tie breaks toward the conservative one: a
-split critic rejects, a split loop stops. The required substrings must appear in
-a vote that carried the verdict; a losing vote mentioning the term proves
-nothing about the judgment that won. A case where *every* vote failed to
-answer is a loud FAIL, never a pass, so a dead harness cannot green the suite by
-falling through to whichever token was expected.
+The runner puts the prose under test in the system slot: the agent body for a
+critic, and `skills/run/SKILL.md` for the loop. The brief goes in the user turn,
+and the runner calls `claude -p` headless. It takes the last token in the reply
+as that run's answer. Every target's instruction demands an exact final line
+(`ACTION:`/`VERDICT:`), so the token is the stated answer. It is not one the
+model happened to name last while reasoning.
 
-Each result line carries its vote count (`ok  collision → REJECT (3/3)`, or the
-split on a non-unanimous case). A pass at 2/3 is still a pass, but a case
-drifting from unanimous to split across prompt edits is degrading; the tally is
-where that shows before it flips.
+The runner scores votes by plurality. `tokens_for` in `run.sh` lists each
+target's tokens most-conservative-first. A tie therefore breaks toward the
+conservative token, so a split critic rejects and a split loop stops. The
+required substrings must appear in a vote that carried the verdict.
+
+A case where every vote failed to answer is a loud FAIL, never a pass. A dead
+harness therefore cannot green the suite, and it cannot fall through to whichever
+token the case expected. A target with no cases fails for the same reason.
+
+Each result line carries its vote count. An example: `ok  land-proof-gate → STOP
+(3/3)`. A non-unanimous case shows its split instead, and a pass at 2/3 is still
+a pass. But a case drifting from unanimous to split across prompt edits is
+degrading. The tally is where that shows, before it flips.
 
 Every `case × vote` call is independent and fans out concurrently, capped at
 `--jobs`. `--votes` exists because these are borderline judgments with real
 sampling variance. Raising `--jobs` is faster but can hit API concurrency limits
-and error a call (which scores as no answer).
+and error a call, which scores as no answer.
 
 ## Extending
 
-Add a case whenever a critic misjudges a real change or the loop takes a wrong
-turn: capture the brief that fooled it and the answer it should have reached. The
-suite is the regression net for every future edit to a critic prompt, to the run
-skill, or to the injected rule.
+Add a case whenever a critic misjudges a real change, or when the loop takes a
+wrong turn. Capture the brief that fooled it, and the answer it should have
+reached. Then ablate it before you keep it. A case that the stub answers
+correctly is not a regression net, however real the misjudgment that prompted it.
