@@ -91,7 +91,20 @@ fi
 # gate, and deleting the list is the cheapest way past a review. So both
 # escalate like the rest.
 PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common|messages)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths|\.hone-proof-always|\.hone-review-always'
-if echo "$CMD" | grep -Eq "(>>?|tee|sed -i|cp |mv |install |ln -s|chmod|chattr|rm |truncate|dd of=)[^|;&]*(${PROT})"; then
+# The two constructs need different shapes, so they get one branch each.
+#
+# A REDIRECT writes to the path that follows it, with nothing in between. So it
+# binds tightly, the way rule 1b already writes it. One loose rule for both
+# constructs read any '>' anywhere in the line as a write into any protected
+# path later in the line. A quoted message is prose, and prose carries angle
+# brackets: `attest <change> "ran PROOF_ROOT=<worktree> bash scripts/proof.sh"`
+# escalated on its own text. That ask stopped two unattended runs for 16 and 48
+# minutes, on the one helper the agent is meant to call by itself.
+#
+# A VERB takes a source and a target, so it keeps the loose gap.
+if echo "$CMD" | grep -Eq \
+        -e ">>?[[:space:]]*\"?'?[^[:space:]|;&]*(${PROT})" \
+        -e "(tee|sed -i|cp |mv |install |ln -s|chmod|chattr|rm |truncate|dd of=)[^|;&]*(${PROT})"; then
     decision ask "$(msg_bashguard_protected)"
 fi
 

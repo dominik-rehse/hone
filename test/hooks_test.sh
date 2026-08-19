@@ -141,6 +141,15 @@ echo "$(bg 'rm .hone-review-always')" | grep -q '"ask"' && ok "removing .hone-re
 # messages.sh carries hone's own prose, and it belongs to the same plugin-side
 # class as the other hooks the pattern already lists.
 echo "$(bg 'sed -i s/x/y/ hooks/messages.sh')" | grep -q '"ask"' && ok "editing hooks/messages.sh escalated" || bad "editing a plugin hook file should ask"
+# A redirect binds to the path right after it. An angle bracket inside a quoted
+# message is prose, and the sign-off text is prose the helper asks for. Reading
+# the two alike escalated the one helper the agent is meant to call by itself.
+echo "$(bg 'bash scripts/worktree.sh attest ui-flow ran PROOF_ROOT=<worktree> bash scripts/proof.sh ui-flow, exit 0')" | grep -q 'permissionDecision' && bad "prose naming an adapter after an angle bracket should pass" || ok "an angle bracket in a sign-off message passes"
+echo "$(bg 'git commit -m ran with PROOF_ROOT=<worktree> and then scripts/lint.sh')" | grep -q 'permissionDecision' && bad "a commit message is prose, not a write" || ok "an angle bracket in a commit message passes"
+# A real redirect into the same file still escalates, whatever precedes it.
+echo "$(bg 'echo x > scripts/lint.sh')" | grep -q '"ask"' && ok "a redirect into an adapter escalated" || bad "a redirect into scripts/lint.sh should ask"
+echo "$(bg 'cat template >> hooks/gate.sh')" | grep -q '"ask"' && ok "an append into a hook escalated" || bad "an append into hooks/gate.sh should ask"
+echo "$(bg 'cat x > /home/u/repo/scripts/proof.sh')" | grep -q '"ask"' && ok "a pathful redirect into an adapter escalated" || bad "a pathful redirect should ask"
 # A HEAD-move in the primary tree races other sessions → ask; the same op inside
 # a linked worktree is isolated → silent.
 echo "$(bg 'git checkout some-commit')" | grep -q '"ask"' && ok "git checkout in primary tree escalated" || bad "checkout in primary should ask"
