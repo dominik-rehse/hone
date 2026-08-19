@@ -52,22 +52,21 @@ else
 fi
 
 # 2. Gitignore the per-developer artifacts: the worktrees, the .hone-off kill
-# switch, the per-change grant/proof sign-offs, and spikes/ (throwaway
-# exploration code, which no hook guards and nothing commits; the finding worth
-# keeping goes to docs/spikes/ instead). NOT .plans/ (a Plan is
+# switch, and the per-change grant/proof sign-offs. NOT .plans/ (a Plan is
 # tracked; it lands in git history and consolidate removes it with a git rm the
 # landing merge carries) and NOT the policy files (.hone-durable-paths,
 # .hone-irreversible-paths): those are project policy, committed and shared.
-# Entries an earlier hone version ignored (markers removed in 0.19, and the
-# policy files back when they were per-developer) are stripped so they can be
-# committed or deleted.
+# Entries an earlier hone version ignored (markers removed in 0.19, the policy
+# files back when they were per-developer, and spikes/ from 0.33 before a spike
+# moved whole into docs/spikes/) are stripped so they can be committed or
+# deleted.
 touch .gitignore
-for entry in ".worktrees/" ".hone-off" ".hone-grant/" ".hone-proof/" "spikes/"; do
+for entry in ".worktrees/" ".hone-off" ".hone-grant/" ".hone-proof/"; do
     grep -qxF "$entry" .gitignore || printf '%s\n' "$entry" >> .gitignore
 done
 for stale in ".plans/" ".hone-test-globs" ".hone-gate-enforce" ".hone-nag-enforce" \
              ".hone-authority-off" ".hone-proof-off" ".hone-durable-paths" \
-             ".hone-consequential-paths" ".hone-irreversible-paths"; do
+             ".hone-consequential-paths" ".hone-irreversible-paths" "spikes/"; do
     if grep -qxF "$stale" .gitignore; then
         grep -vxF "$stale" .gitignore > .gitignore.hone-tmp && mv .gitignore.hone-tmp .gitignore
         msg_setup_gitignore_pruned "$stale"

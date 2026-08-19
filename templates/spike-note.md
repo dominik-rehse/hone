@@ -10,9 +10,8 @@ sentence, the spike has not started yet.>
 
 ## What I did
 
-<The probe: what you built or tried, where the throwaway code lived under
-`spikes/`, how you measured. Enough that a reader could run it again, and no
-more.>
+<The probe: what you built or tried, how you measured, and which file beside
+this note holds it. Enough that a reader could run it again, and no more.>
 
 ## Finding
 

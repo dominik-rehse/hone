@@ -96,19 +96,30 @@ consolidate). Don't invent questions to fill the file.
 
 Where the assumption decides the *shape* of the Plan, an open question is too
 slow. A Plan written on a guess is a Plan the loop builds wrong. Settle it now
-with a **spike**. Probe it in `spikes/`, which is gitignored and which no hook
-guards, so there is no test to write first and no worktree to spawn. Read the
-answer, delete the probe, and write the Plan from what you learned. The
-question never reaches `docs/open-questions.md`, because running code already
-answered it.
+with a **spike**. Probe it under `docs/spikes/`, where no hook guards what you
+write, so there is no test to write first and no worktree to spawn. Read the
+answer and write the Plan from what you learned. The question never reaches
+`docs/open-questions.md`, because running code already answered it.
 
-Keep a note only when the investigation outlives its conclusion. That means the
-method or the dead ends would save a future reader from running the probe again.
-That note is `docs/spikes/<YYYY-MM-DD>-<slug>.md`, copied from
-`${CLAUDE_PLUGIN_ROOT}/templates/spike-note.md`. Write it here, in the primary
-tree, and commit it with the Plan. It is dated and frozen, so the guard leaves
-`docs/spikes/` alone where it denies the rest of `docs/`. Most spikes need no
-note at all: the finding lands in the Plan and the probe is deleted.
+Then decide whether the spike is worth keeping, and keep or delete it whole:
+
+- *Delete it* when the conclusion is the whole value. This is the usual case.
+  The finding lands in the Plan, and nothing stays behind.
+- *Keep it* when the method or the dead ends would save a future reader from
+  running the same probe. Then everything the spike produced stays under one
+  dated stem, `docs/spikes/<YYYY-MM-DD>-<slug>`: the probe code, whatever it
+  captured, and a note at `<YYYY-MM-DD>-<slug>.md` copied from
+  `${CLAUDE_PLUGIN_ROOT}/templates/spike-note.md`. Use a directory of that name
+  where one file is not enough. Commit it with the Plan.
+
+You write all of this here, in the primary tree: `docs/spikes/` is the one path
+under `docs/` the guard leaves open, because a probe precedes the Plan. What
+you keep is dated and frozen from then on, so nobody updates it later.
+
+One warning about committed probe code. The project's test runner, linter, or
+type-checker may pick up a file under `docs/spikes/`, and the gate needs all
+three green. Exclude the directory in those adapters the first time a spike
+trips one.
 
 One question is never an open question. It goes to the caller, now. If the
 change touches a persistent schema (a migration, a stored format), ask **"is

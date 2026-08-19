@@ -75,14 +75,14 @@ flowchart TD
   `Governs:` line too.
 - *Open questions*: `docs/open-questions.md`. Assumptions only running code
   can settle. Entries get closed or deleted, never accumulated.
-- *Spike notes*: `docs/spikes/<YYYY-MM-DD>-<slug>.md`, plus any companion
-  evidence under the same stem. The one artifact hone allows to go stale, and
-  the date is what buys it that. A spike note is past-tense history. It carries
-  the question, the probe, the finding, and a forward pointer to the Decision
-  or Note that holds the finding now. Nobody maintains it against the code.
-  Nothing about it can drift, because it never claimed to describe the
-  present. Rare by design. The throwaway code behind it lives in the
-  gitignored `spikes/` and gets deleted.
+- *Spikes*: `docs/spikes/<YYYY-MM-DD>-<slug>`, one dated stem holding
+  everything one probe left behind, of any type: the note, the probe code, a
+  mockup, a capture. The one artifact hone allows to go stale, and the date is
+  what buys it that. Its note is past-tense history. It carries the question,
+  the probe, the finding, and a forward pointer to the Decision or Note that
+  holds the finding now. Nobody maintains it against the code. Nothing about it
+  can drift, because it never claimed to describe the present. Rare by design:
+  most probes answer their question and leave nothing behind.
 - *Git history*: what changed and why, at each point in time.
 
 *Tracked but temporary. These go away when the change lands:*

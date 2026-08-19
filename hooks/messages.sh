@@ -210,8 +210,8 @@ msg_nag_spike_undated() {
     local note="$1"
     cat <<EOF
 $note carries no date at the front of its name.
-Do: rename it to docs/spikes/YYYY-MM-DD-<slug>.md, taking the date it was written.
-Why: the date marks the note as frozen history.
+Do: rename it to docs/spikes/YYYY-MM-DD-<slug>, taking the date of the spike.
+Why: the date marks a spike as frozen history.
 EOF
 }
 
@@ -910,7 +910,7 @@ nag|human|msg_nag_plan_survived|.plans/<change>.md|<evidence>
 nag|human|msg_nag_plans_pending|<count>
 nag|human|msg_nag_note_oversized|docs/notes/<area>.md|<count>|<cap>
 nag|human|msg_nag_note_orphan|docs/notes/<area>.md|<area>
-nag|human|msg_nag_spike_undated|docs/spikes/<file>.md
+nag|human|msg_nag_spike_undated|docs/spikes/<entry>
 nag|human|msg_nag_governs_broken|docs/decisions/<topic>.md|<path>
 nag|human|msg_nag_no_deletions|<count>|<branch>
 nag|human|msg_nag_merged_branch|hone/<change>

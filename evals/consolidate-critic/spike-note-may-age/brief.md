@@ -56,7 +56,8 @@ Redis streams or kafka for the job queue?
 
 ## What I did
 Ran both under a 5k msg/s producer with one slow consumer, on the staging
-box, with throwaway harnesses under spikes/.
+box. The harnesses are beside this note, in
+`docs/spikes/2024-03-11-redis-vs-kafka/`.
 
 ## Finding
 Redis held 5k msg/s at a p99 of 40ms and blocked the producer at 10k pending

@@ -19,12 +19,12 @@
 #      map + one invariant, not a spec: half a screen).
 #   3. Orphan Note: a docs/notes/<area>.md with no corresponding src/<area>/.
 #      Notes are 1:1 with an existing area.
-#   8. Undated spike note: a docs/spikes/*.md whose name does not open with
-#      YYYY-MM-DD. The date is the whole signal that a spike note is frozen
-#      history, so garden leaves it alone and no reader mistakes it for a live
-#      document. Nothing else about a spike note is checkable: its size is
-#      whatever the investigation needed, and its content is past tense by
-#      construction.
+#   8. Undated spike entry: anything directly under docs/spikes/ whose name
+#      does not open with YYYY-MM-DD, of any type, file or directory. The date
+#      is the whole signal that a spike is frozen history, so garden leaves it
+#      alone and no reader mistakes it for a live document. Nothing else about
+#      a spike is checkable: its size is whatever the investigation needed, and
+#      its content is past tense by construction.
 #   6. Broken Governs link: a Decision or Note declaring `Governs: <path>` whose
 #      path no longer exists. The optional `Governs:` line pins durable prose to
 #      the code it explains: when the code moves or is deleted, the dangling
@@ -133,11 +133,15 @@ if [ -d "docs/notes" ]; then
     done
 fi
 
-# 8. Undated spike note. A spike note is frozen history, and the date at the
-# front of its name is what says so to a reader and to garden. An undated one
-# reads as a live document and starts competing with the Notes.
+# 8. Undated spike entry. Everything one spike leaves behind lives under
+# docs/spikes/ and shares a dated stem, whatever its type: the note, the probe
+# that produced it, a mockup, a captured payload. The date at the front is what
+# says "frozen history" to a reader and to garden, so check every entry at the
+# top level, not only the markdown. A spike with several files uses a dated
+# DIRECTORY, which this checks the same way, and never looks inside: what a
+# probe names its own files is the probe's business.
 if [ -d "docs/spikes" ]; then
-    for spike in docs/spikes/*.md; do
+    for spike in docs/spikes/*; do
         [ -e "$spike" ] || continue
         case "$(basename "$spike")" in
             [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*) ;;

@@ -50,14 +50,16 @@ see. Collect, don't act yet:
 - **Leftover artifact**: a landed Plan never deleted; a `.plans/<change>/`
   reference directory consolidate never settled; a merged `hone/*` branch land
   forgot to remove.
-- **Spike note gone wrong**: a `docs/spikes/<date>-<slug>.md` whose forward
-  pointer names a Decision, Note, or open question that no longer exists, or
-  one that has started describing what the system does *today*. Never cut a
-  spike note for being old, and never update one: the date says it is frozen
-  history, which is the whole reason it escapes the staleness rules. Cut a note
-  whose pointer is dead, and treat a note that drifted into a second spec as
-  judgment: the live sentence belongs in a Note or a Decision, and the rest of
-  the file goes.
+- **Spike gone wrong**: a `docs/spikes/<date>-<slug>` whose note points forward
+  at a Decision, Note, or open question that no longer exists, or whose note
+  has started describing what the system does *today*. Never cut a spike for
+  being old, and never update one: the date says it is frozen history, which is
+  the whole reason it escapes the staleness rules. Cut a spike whose pointer is
+  dead, and cut it **whole**, note and probe and captures together, because the
+  stem is the unit. Treat a note that drifted into a second spec as judgment:
+  the live sentence belongs in a Note or a Decision, and the spike then goes.
+  An undated entry under `docs/spikes/` is the `nag`'s finding, and it is a
+  rename, not a cut.
 - **Prompt-layer drift**: the project's own instructions to the agent
   (`CLAUDE.md`, `.claude/rules/`, project skills), describing a gotcha the code no
   longer has, a command that no longer exists, or a rule the model now follows

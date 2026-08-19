@@ -79,17 +79,22 @@ denied "$out" && ok ".hone-grant/ write denied in primary tree" || bad "should d
 out=$(guard_write ".hone-proof/ui-flow" "$WT")
 denied "$out" && ok ".hone-proof/ write denied in a worktree" || bad "should deny .hone-proof/ writes in a worktree"
 
-echo "== guard: docs/spikes/ is writable in the primary tree =="
-# A spike note is dated, frozen history written outside the loop, and the probe
-# it records usually precedes any Plan. So it is the one path under docs/ the
-# primary-tree rule lets through, exactly as it lets .plans/ through.
-out=$(guard_write "docs/spikes/2026-08-19-sse-backpressure.md" "$REPO")
-denied "$out" && bad "docs/spikes/ should be writable in the primary tree" || ok "docs/spikes/ note allowed in the primary tree"
-out=$(guard_write "docs/spikes/2026-08-19-sse-backpressure.html" "$REPO")
-denied "$out" && bad "spike evidence should be writable in the primary tree" || ok "spike companion evidence allowed"
+echo "== guard: docs/spikes/ is writable in the primary tree, whatever the type =="
+# A spike is dated, frozen history written outside the loop, and it usually
+# precedes any Plan. Everything one spike leaves behind lives here, of any
+# type: the note, the probe that produced it, a mockup, a captured payload. So
+# it is the one path under docs/ the primary-tree rule lets through, exactly as
+# it lets .plans/ through.
+for f in 2026-08-19-sse-backpressure.md \
+         2026-08-19-sse-backpressure.html \
+         2026-08-19-sse-backpressure.ts \
+         2026-08-19-sse-backpressure/probe.sh \
+         2026-08-19-sse-backpressure/capture.json; do
+    out=$(guard_write "docs/spikes/$f" "$REPO")
+    denied "$out" && bad "docs/spikes/$f should be writable in the primary tree" || ok "docs/spikes/$f allowed"
+done
 out=$(guard_write "docs/notes/auth.md" "$REPO")
-denied "$out" || bad "the rest of docs/ must stay denied in the primary tree"
-denied "$out" && ok "docs/ outside spikes/ still denied in the primary tree"
+denied "$out" && ok "docs/ outside spikes/ still denied in the primary tree" || bad "the rest of docs/ must stay denied in the primary tree"
 
 echo "== guard: .hone-off disables it =="
 touch "$REPO/.hone-off"
@@ -485,10 +490,10 @@ echo "$out" | grep -q "withrefs/cases" && bad "a reference must not be read as a
 rm -rf "$REPO/.plans/withrefs" "$REPO/.plans/withrefs.md"
 
 echo
-echo "== nag: undated spike note =="
-# The date at the front is the whole signal that a spike note is frozen
-# history. Without it the note reads as a live document, and garden would be
-# right to treat it as one.
+echo "== nag: undated spike entry, of any type =="
+# The date at the front is the whole signal that a spike is frozen history.
+# Without it the entry reads as a live document, and garden would be right to
+# treat it as one. Every top-level entry is checked, not only the markdown.
 mkdir -p "$REPO/docs/spikes"
 printf '# Spike\n' > "$REPO/docs/spikes/sse-backpressure.md"
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
@@ -496,6 +501,20 @@ echo "$out" | grep -q "sse-backpressure.md carries no date" && ok "undated spike
 mv "$REPO/docs/spikes/sse-backpressure.md" "$REPO/docs/spikes/2026-08-19-sse-backpressure.md"
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "carries no date" && bad "a dated spike note must not be flagged" || ok "dated spike note not flagged"
+# A probe is not markdown, and it is checked the same way.
+printf 'echo probe\n' > "$REPO/docs/spikes/probe.sh"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "probe.sh carries no date" && ok "undated spike probe flagged" || bad "should flag a non-markdown spike entry with no date"
+rm -f "$REPO/docs/spikes/probe.sh"
+# A spike of several files uses a dated directory, checked by its own name. The
+# nag never looks inside: what a probe names its files is the probe's business.
+mkdir -p "$REPO/docs/spikes/2026-08-19-multi/src"
+printf 'echo probe\n' > "$REPO/docs/spikes/2026-08-19-multi/src/run.sh"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "carries no date" && bad "a dated spike directory must not be flagged" || ok "dated spike directory not flagged, contents not checked"
+mv "$REPO/docs/spikes/2026-08-19-multi" "$REPO/docs/spikes/multi"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "spikes/multi carries no date" && ok "undated spike directory flagged" || bad "should flag an undated spike directory"
 rm -rf "$REPO/docs/spikes"
 
 echo

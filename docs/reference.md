@@ -313,12 +313,11 @@ repo/                            # the primary tree: a merge target, never a wor
 ├── docs/
 │   ├── decisions/<topic>.md     # one present-tense decision + why, per topic
 │   ├── notes/<area>.md          # optional per-area map + one invariant, size-capped
-│   ├── spikes/<date>-<slug>.md  # optional frozen note per spike, plus its evidence
+│   ├── spikes/<date>-<slug>*    # optional frozen spike: note, probe, captures, any type
 │   └── open-questions.md        # bets only running code can settle
 ├── scripts/run-tests.sh         # the test adapter (plus optional typecheck/lint/proof)
 ├── .plans/<change>.md           # tracked; written at plan, deleted at consolidate
 ├── .plans/<change>/             # optional reference files for the Plan
-├── spikes/                      # gitignored; throwaway exploration, no hook guards it
 ├── .worktrees/<change>/         # gitignored; one per change in flight
 ├── .hone-durable-paths          # committed policy (optional)
 ├── .hone-irreversible-paths     # committed policy (optional)
@@ -366,20 +365,30 @@ Plan and any references build did not promote. garden is not part of a
 change: it is the standalone maintenance loop, and every column it touches is
 a deletion.
 
-Spikes are outside the table, because a spike is not a change. Throwaway
-exploration code goes in the gitignored `spikes/`, which no hook guards and
-which you delete once it has answered its question. Where the method or the
-dead ends outlive the conclusion, one frozen note stays at
-`docs/spikes/<YYYY-MM-DD>-<slug>.md`, with any companion evidence under the
-same stem. Both `plan` (before a Plan exists) and `consolidate` (after the
-change) write such a note, and `docs/spikes/` is the one path under `docs/`
-the guard leaves writable in the primary tree, exactly as it leaves `.plans/`.
+Spikes are outside the table, because a spike is not a change. Everything one
+spike leaves behind lives under `docs/spikes/`, whatever its type: the note,
+the probe code that produced it, a mockup, a captured payload, a screenshot.
+One spike is one dated stem, `<YYYY-MM-DD>-<slug>`, a single file where one
+file is enough and a directory where it is not. No hook looks inside, so a
+probe needs no test and no worktree, and nothing there has to keep the suite
+green by itself.
 
-A spike note is write-once, past tense, and it always points forward to the
-Decision, Note, or open question that carries the finding. The date in the name
-is what says so: the `nag` reports a note without one, `garden` never cuts a
-note for being old, and nobody updates one. A note that starts describing what
-the system does today has become a second spec, and the
-`consolidate-critic` argues for that cut. Copy the shape from
-[`templates/spike-note.md`](../templates/spike-note.md). Do not create
-`docs/spikes/` before a spike's evidence actually outlives its conclusion.
+Both `plan` (before a Plan exists) and `consolidate` (after the change) write a
+spike, and `docs/spikes/` is the one path under `docs/` the guard leaves
+writable in the primary tree, exactly as it leaves `.plans/`. Most probes leave
+nothing behind: keep a spike only when its method or its dead ends would save a
+future reader from running it again.
+
+The note at `<YYYY-MM-DD>-<slug>.md` is the way in. It is write-once, past
+tense, and it always points forward to the Decision, Note, or open question
+that carries the finding. The date is what says so: the `nag` reports any entry
+under `docs/spikes/` without one, `garden` never cuts a spike for being old,
+and nobody updates one. A note that starts describing what the system does
+today has become a second spec, and the `consolidate-critic` argues for that
+cut. `garden` cuts a spike whole, stem and all, because the stem is the unit.
+Copy the shape from [`templates/spike-note.md`](../templates/spike-note.md).
+
+Committed probe code has one practical cost. A project's test runner, linter,
+or type-checker may pick up a file under `docs/spikes/`, and the gate needs all
+three green. Exclude the directory in those adapters the first time a spike
+trips one.

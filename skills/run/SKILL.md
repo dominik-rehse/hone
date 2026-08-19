@@ -170,12 +170,14 @@ build):
 - an assumption running code has now settled → **close** its
   `docs/open-questions.md` entry;
 - an investigation whose method or dead ends outlive its conclusion → a
-  **spike note** (`docs/spikes/<YYYY-MM-DD>-<slug>.md`, from
-  `${CLAUDE_PLUGIN_ROOT}/templates/spike-note.md`). Write it once, in the past
-  tense, pointing forward to the Decision or Note that now carries the finding.
-  This is rare, and the bar is high: the usual outcome of a probe is a Decision
-  plus a deleted probe, with no note at all. Never write one to record what the
-  change does, which is what the code and the tests already carry;
+  **spike**, kept whole under one dated stem,
+  `docs/spikes/<YYYY-MM-DD>-<slug>`: the probe code, whatever it captured, and
+  a note at `<YYYY-MM-DD>-<slug>.md` from
+  `${CLAUDE_PLUGIN_ROOT}/templates/spike-note.md`. Write the note once, in the
+  past tense, pointing forward to the Decision or Note that now carries the
+  finding. This is rare, and the bar is high: the usual outcome of a probe is a
+  Decision plus a deleted probe, with nothing kept. Never write one to record
+  what the change does, which is what the code and the tests already carry;
 - redundant tests the change revealed → **prune** them (deduplication is a real
   output of this step, not an afterthought).
 - **delete `.plans/<change>.md` with `git rm`, here in the worktree.** The Plan
