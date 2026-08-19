@@ -456,9 +456,9 @@ removed something dead. One that turns it red removed something
 load-bearing, and garden abandons it. Judgment calls (is this Decision
 stale, or rationale the code cannot show?) go to the
 `consolidate-critic`. What only a human can settle gets logged or
-escalated, never guessed. You invoke it, between changes: hone owns the
-loop, and you choose when it runs. Small, frequent passes work better
-than one large pass.
+escalated, never guessed. You invoke it between changes, and another
+agent may invoke it too: hone owns the loop, and the caller chooses when
+it runs. Small, frequent passes work better than one large pass.
 
 ## The always-on rule
 

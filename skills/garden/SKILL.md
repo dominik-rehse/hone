@@ -1,8 +1,7 @@
 ---
 name: garden
-description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, broken Governs links, redundant tests, dead code, stale open questions, drift in the project's own CLAUDE.md and skills), then land the safe cuts one at a time through the same worktree loop. Deletion-only: every garden change removes something and the suite proves the cut safe. Escalates judgment calls instead of forcing them. Invoke with /hone:garden."
+description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, broken Governs links, redundant tests, dead code, stale open questions, drift in the project's own CLAUDE.md and skills), then land the safe cuts one at a time through the same worktree loop. Deletion-only: every garden change removes something and the suite proves the cut safe. Escalates judgment calls instead of forcing them. Use it when the caller asks for a maintenance, cleanup, or staleness pass over the repo, or when a larger workflow schedules one between changes. Never start it on your own in the middle of other work. Invoke with /hone:garden."
 argument-hint: "[area-or-scope]"
-disable-model-invocation: true
 ---
 
 # /hone:garden (cut drift between changes)
@@ -13,9 +12,9 @@ Input: $ARGUMENTS
 own leftovers. But staleness also accumulates *between* changes: a Decision whose code
 moved, a Note nobody re-derived, a test made redundant by a later change, an open
 question running code already settled. Nothing in the change-triggered loop looks
-at the repo as a whole. `garden` is that standing look: a human invokes it between
-changes, it runs the same loop driven by a scan instead of a Plan, and its unit of
-work is a **cut**.
+at the repo as a whole. `garden` is that standing look. A human or another agent
+invokes it between changes. It runs the same loop, driven by a scan instead of a
+Plan, and its unit of work is a **cut**.
 
 `garden` writes no new behaviour. Every garden change is **deletion-only**, and
 the gate's suite is the proof a cut is safe: a deletion that keeps the suite green
@@ -164,7 +163,7 @@ sweep.
 
 ## Where it runs
 
-`garden` runs in the primary tree, in the session the human invoked it from. Each
+`garden` runs in the primary tree, in the session that invoked it. Each
 cut still lands through the worktree loop and the land lock, so a `garden` pass and
 a `run` in flight never collide: whichever reaches land first holds the lock, and
 the other waits or defers on a conflict (exit 9).

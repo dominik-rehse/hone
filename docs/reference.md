@@ -30,7 +30,7 @@ Slash commands, in the order a change flows:
   workspace and invoke the command in it.
 - `/hone:garden` scans the repo for stale docs, dead code, and redundant tests
   between changes, and lands the safe deletions. You invoke it, as often as
-  the repo needs it.
+  the repo needs it, and another agent may invoke it too.
 
 `worktree.sh` (in the plugin's `scripts/` directory) does the mechanical git
 work. The loop calls it, and you can too:

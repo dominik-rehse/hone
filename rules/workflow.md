@@ -46,7 +46,8 @@ it as background; when something in it belongs to the codebase, land it in
 
 A third command, `/hone:garden`, runs the same loop between changes and only
 deletes (stale docs, dead code, redundant tests), with the suite proving
-each removal safe. A human invokes it; it is maintenance, not a Plan.
+each removal safe. A human or another agent invokes it. It is maintenance,
+not a Plan.
 
 A shell command reaches the same durable paths the file tools do. Dependency
 work, a formatter run, and a schema migration all write their files from

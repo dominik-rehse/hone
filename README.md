@@ -151,8 +151,8 @@ setup and reconcile the repo's own artifacts.
   never in `MAIN`.
 - `/hone:garden` scans the whole repo for staleness between changes
   (stale docs, dead code, redundant tests) and lands the safe deletions.
-  You invoke it when you want a maintenance pass. Small, frequent passes
-  work better than one large pass.
+  You invoke it when you want a maintenance pass, and another agent may
+  invoke it too. Small, frequent passes work better than one large pass.
 
 Exploration sits outside that loop. A probe writes whatever it needs
 under `docs/spikes/`, where no hook guards it: no test first, no
@@ -164,9 +164,10 @@ a note. The date marks the spike as a record of its time, so it can go
 stale without misleading a reader. It is the one exemption from
 everything above.
 
-You normally type `/hone:plan` and `/hone:run` yourself. Another agent
-may invoke them too, so a larger workflow can drive a change end to end.
-Only you invoke `/hone:setup` and `/hone:garden`.
+You normally type `/hone:plan`, `/hone:run`, and `/hone:garden` yourself.
+Another agent may invoke them too, so a larger workflow can drive a
+change end to end and keep the repository trimmed between changes. Only
+you invoke `/hone:setup`.
 
 Everything after the plan is automatic. The run stops and reports instead
 of proceeding in exactly three cases:
