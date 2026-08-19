@@ -1,22 +1,22 @@
 ---
 name: plan
-description: "Author the temporary Plan for one change: .plans/<change>.md, the only hand-written artifact, plus any references under .plans/<change>/ that carry what prose would lose. Guides sizing a change to the smallest unit worth its own review gate, states what, why, and how you'll know it works, then submits it to the plan-critic for approval while the human is still present to revise. Does not write code, tests, or docs. Invoke with /hone:plan <change-name-or-sketch>."
+description: "Author the temporary Plan for one change: .plans/<change>.md, the one artifact written outside the loop, plus any references under .plans/<change>/ that carry what prose would lose. Guides sizing a change to the smallest unit worth its own review gate, states what, why, and how you'll know it works, then submits it to the plan-critic for approval while the caller is still present to revise. Does not write code, tests, or docs. Invoke with /hone:plan <change-name-or-sketch>."
 argument-hint: "[change-name-or-sketch]"
-disable-model-invocation: true
 ---
 
 # /hone:plan (author a change Plan)
 
 Input: $ARGUMENTS
 
-The Plan is the one hand-written artifact and the single manual step in hone.
+The Plan is the one artifact written outside the loop. It is the single step
+that still needs a caller, and that caller is a human or another agent.
 Everything after it (build, verify, consolidate, review, land) runs unattended
 from `/hone:run`. So the Plan is a short brief, not a spec: it says what to
 build, why, and how you'll know it works, and it is deleted at consolidate. It
 never accumulates acceptance-criteria bookkeeping; the tests are the permanent
 record of behaviour.
 
-This command helps a human write that brief. It writes **only** `.plans/<change>.md`
+This command helps its caller write that brief. It writes **only** `.plans/<change>.md`
 (and, when the change rests on an untested assumption, an entry in
 `docs/open-questions.md`). It does not write code, tests, or other docs.
 
@@ -42,7 +42,7 @@ One naming rule guards the layout's one ambiguity. A Plan's references live in
   with no `.plans/a.md` beside it), refuse it for the mirror reason: creating
   `.plans/a.md` would turn those Plans into apparent references.
 
-State the conflict and agree on an alternative with the human; never silently
+State the conflict and agree on an alternative with the caller. Never silently
 rename.
 
 ### 2. Read what the change will touch
@@ -94,7 +94,7 @@ dialect, an SDK's headless behaviour, a library on this runtime), record it in
 Distinct from a *decision already made* (that's a Decision, written at
 consolidate). Don't invent questions to fill the file.
 
-One question is never an open question; it goes to the human, now. If the
+One question is never an open question. It goes to the caller, now. If the
 change touches a persistent schema (a migration, a stored format), ask **"is
 the existing data worth preserving?"** before any migration design, and record
 the answer in the Plan's *Notes for the loop*. Everything downstream hinges on
@@ -180,7 +180,7 @@ transcript. It returns structured findings and an `APPROVE`/`REJECT` verdict.
 
 **If it rejects** (placeholder, contradiction, ambiguity, wrong scope, collision
 with an open change, or contract churn): this is the moment to fix it, while the
-human is still here. Present the findings, revise the Plan with the human (they
+caller is still here. Present the findings, revise the Plan with the caller (they
 own it), and resubmit the revised Plan. Never hand off a rejected Plan:
 `/hone:run` executes unattended and trusts that this check happened here.
 

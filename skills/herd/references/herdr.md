@@ -59,9 +59,7 @@ herdr agent prompt <agent-name> "/hone:run <change>"
 
 `agent start` returns when the Claude session is ready for input (30 s default
 timeout). `--permission-mode auto` is what keeps the SUB unattended: without
-it, the first approval prompt stalls the run. herdr types the prompt into
-the SUB's terminal, so it is a user invocation, and the user-invocation-only
-marker on `/hone:run` does not refuse it.
+it, the first approval prompt stalls the run.
 
 ## Watch one SUB
 

@@ -4,9 +4,10 @@ description: "hone: a human writes a short Plan, then an automated loop builds, 
 
 # hone workflow
 
-Every change runs `plan → run`. A human writes `.plans/<change>.md` with
-`/hone:plan`, the only hand-written artifact; the command ends with the
-`plan-critic` check while the human is still present. `/hone:run` then
+Every change runs `plan → run`. `/hone:plan` writes `.plans/<change>.md`, the
+one artifact written outside the loop. A human usually invokes it, and another
+agent may invoke it too. The command ends with the `plan-critic` check while
+its caller can still revise the Plan. `/hone:run` then
 executes the Plan unattended in a git worktree: build (test-first) → verify →
 consolidate → `/code-review` → land (merge into the primary tree, re-run the
 suite, remove the worktree). It proceeds without checking in, and stops only

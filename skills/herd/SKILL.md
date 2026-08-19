@@ -88,9 +88,8 @@ tree, and new approved Plans can join the herd.
    the herd owns it).
 3. **Spawn.** For each startable Plan: create the SUB tab, start a Claude
    Code agent in it with `--permission-mode auto` (plus `--model` when
-   given), and submit `/hone:run <change>`. The submitted prompt counts as a
-   user invocation, so the user-invocation-only guard on `run` does not
-   refuse it. Command sequence: `references/herdr.md`.
+   given), and submit `/hone:run <change>`. Command sequence:
+   `references/herdr.md`.
 4. **Watch.** Wait on each SUB with `herdr agent wait`, always in the Bash
    tool's background mode: a run outlasts the ~2 minute foreground timeout.
    Each time a SUB settles, run the `landed` predicate:

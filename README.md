@@ -128,6 +128,10 @@ and reconcile the repo's own artifacts.
   invoke it when you want a maintenance pass. Small, frequent passes beat
   one big sweep.
 
+You normally type `/hone:plan` and `/hone:run` yourself. Another agent may
+invoke them too, so a larger workflow can drive a change end to end.
+`/hone:setup`, `/hone:garden`, and `/hone:herd` stay yours alone.
+
 Everything after the plan is automatic. The run stops and reports instead
 of proceeding in exactly three cases:
 

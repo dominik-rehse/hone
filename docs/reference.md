@@ -14,7 +14,9 @@ Slash commands, in the order a change flows:
   short, execute every installed adapter, fix what fails, and complete the
   settings block. Interactive; run it with the human present.
 - `/hone:plan <change>` writes and commits the Plan for one change, checked by
-  the `plan-critic` while you are present. The only manual step.
+  the `plan-critic` while its caller is present. The one step outside the
+  loop. A human usually invokes it, and another agent may invoke it too, as
+  it may invoke `/hone:run`.
 - `/hone:run <change>` executes the Plan unattended (worktree, build, verify,
   consolidate, review, land). `/hone:run --all` runs every ready Plan.
 - `/hone:herd` runs `--all` across herdr tabs, when the session runs inside

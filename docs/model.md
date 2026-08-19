@@ -89,7 +89,7 @@ flowchart TD
   payload, a mockup. They exist because every gate in the loop catches a
   change that is *unproven*, but none catches one that is *misunderstood*.
   An ambiguous plan can pass every check and land green and wrong. A
-  concrete file removes the second reading while the human is still
+  concrete file removes the second reading while the Plan's caller is still
   present. Each reference has two exits. Build promotes it next to the test
   that reads it, and from then on the suite keeps it honest. Or consolidate
   deletes it with the Plan.
@@ -273,7 +273,7 @@ three judgment checks, and each runs once per change:
 
 - `plan-critic`: placeholders, contradictions, ambiguity, scope, prose
   carrying data a file should carry, collisions with open changes. It runs
-  inside `/hone:plan`, so rejections get fixed with the human present, and
+  inside `/hone:plan`, so its caller fixes a rejection on the spot, and
   no flawed plan reaches the unattended run.
 - `consolidate-critic`: is a Decision just restating code? has a Note grown
   into a spec? is a test redundant? is an abstraction earning its keep?

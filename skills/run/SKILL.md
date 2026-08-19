@@ -2,7 +2,6 @@
 name: run
 description: "Execute one or more Plans unattended through the hone loop: worktree, build (test-first), verify, consolidate, /code-review, land. Confirms each step by its artifacts, never a subagent's report; proceeds without checking in and stops only when blocked-unresolvable, genuinely ambiguous, or done, leaving the worktree as evidence. Invoke with /hone:run [change | --all]."
 argument-hint: "[change-name | --all]"
-disable-model-invocation: true
 ---
 
 # /hone:run (execute a Plan through the loop)
@@ -36,8 +35,8 @@ whose artifact does not confirm it.** Where a step can end the run instead of
 feeding the next, *The three ways to stop* at the end says how.
 
 The Plan check already happened: the `plan-critic` approved the Plan at
-`/hone:plan`, with the human present to revise a rejection. Do not re-run it
-here; spawn the worktree and build.
+`/hone:plan`, with the caller present to revise a rejection. Do not re-run it
+here. Spawn the worktree and build.
 
 ### 1. Worktree
 
