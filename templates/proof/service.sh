@@ -7,8 +7,8 @@
 #
 # Shape: start a SECOND instance of the service from the change's worktree,
 # beside production and never in place of it (own port, own database copy, same
-# real secrets and backends). Prove the behaviour against it, then tear it down.
-# Production keeps serving throughout; that is what makes this safe to run at
+# real secrets and backends). Prove the behavior against it, then tear it down.
+# Production keeps serving throughout. That is what makes this safe to run at
 # land on a live box.
 
 main() {

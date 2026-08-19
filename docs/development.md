@@ -50,13 +50,13 @@ makes them a gate.
 ## Changing judgment prose
 
 The critic prompts (`agents/`), the run skill and its references
-(`skills/run/`), and the injected rule (`rules/workflow.md`) are behaviour,
+(`skills/run/`), and the injected rule (`rules/workflow.md`) are behavior,
 not documentation. Treat an edit to them like a code change. Run the
 relevant eval target before and after the edit. When a critic misjudges a
 real change or the loop takes a wrong turn, capture it as a new case.
-*Extending* in [`evals/README.md`](../evals/README.md) shows how. The same suite is
-what licenses *deleting* prose as models improve: trim, re-run, keep what
-holds.
+*Extending* in [`evals/README.md`](../evals/README.md) shows how. The same
+suite is what makes *deleting* prose safe as models improve: trim, re-run,
+and keep what holds.
 
 ## Change briefs
 
@@ -72,8 +72,8 @@ it has not.
 
 ## Docs
 
-`docs/` here follows the same economy hone enforces elsewhere: `model.md`
+`docs/` here follows the same honing hone enforces elsewhere: `model.md`
 carries the why, and `reference.md` carries the detail. When the two
-disagree, `reference.md` wins, and the other page is the bug. A behaviour
+disagree, `reference.md` wins, and the other page is the bug. A behavior
 change is not done until the same commit updates the page that describes
-the old behaviour.
+the old behavior.

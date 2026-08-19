@@ -4,15 +4,15 @@ The critics and the `run` skill's loop instructions are prose that does real
 judgment work. Nothing type-checks a prompt, so that prose can go stale in
 silence. It is the one part of hone's trust foundation with that weakness. These
 evals pin it to cases with known-good answers. The suite then catches a reword
-that weakens a critic or a cut that drops a loop behaviour.
+that weakens a critic or a cut that drops a loop behavior.
 
-They are equally the licence to delete. As models improve, prose a prompt used to
-need becomes prose the model no longer needs told. Which paragraphs those are is
-empirical, not a matter of taste.
+They are also what makes deleting safe. As models improve, prose a prompt
+used to need becomes prose the model no longer needs. Which paragraphs those
+are is an empirical question, not a matter of taste.
 
 ## A case must discriminate
 
-A case earns its place only if hone's prose changes the answer. Take a model with
+A case belongs in the suite only if hone's prose changes the answer. Take a model with
 none of hone's prose: if it already answers correctly, the case pins nothing.
 Such a case stays green whatever you do to the prompt, so it reports coverage the
 suite does not have.
@@ -32,7 +32,7 @@ no-op. Cut it, or make the brief harder than the model's default judgment.
 The 2026-08-18 measurement used sonnet for the critics and opus for the loop, and
 it found 44 no-ops among the 52 cases then present. The cut removed them. Eight
 cases remained, and two land-gate cases joined them on 2026-08-19. The list
-below carries each case with the stub's answer that earned it a place.
+below carries each case with the stub's answer that justified keeping it.
 
 ## Run
 
@@ -68,13 +68,13 @@ prose. The gap between the two is what the case pins.
 *`consolidate-critic`*, the verdict on what a change left behind:
 
 - `spike-note-may-age`: CLEAN, stub CLEAN 3/3. The stub agrees, so by the rule
-  above this case is a no-op and belongs in the bin. It stays because the
+  above this case is a no-op that should go. It stays because the
   neutral stub is the wrong baseline here. What it pins is not judgment the
   model lacks. It is a guard against hone's *own* deletion bias, which the stub
   does not carry. The real baseline is the critic prompt with the spike
   paragraph removed. Measured against it, the critic cuts the aged spike note
   2/3, where the full prompt leaves it 3/3. The paragraph is load-bearing, and this case
-  is what keeps it honest.
+  is what pins it.
 
   Read that as a limit of the ablation rule, not an exception to it. The rule
   asks whether hone's prose changes the answer, and the stub is a cheap proxy
@@ -105,7 +105,7 @@ plan-critic pair do.
 
 ## Known gaps
 
-The cut opened two holes. Both are deliberate, and the suite barely covers
+The cut left two gaps. Both are deliberate, and the suite barely covers
 either.
 
 *`consolidate-critic` has one case, and most of the target stays ungated.* All
@@ -119,15 +119,15 @@ the model's default judgment, not the old ones back.
 *`plan-critic` has no REJECT case.* Both survivors expect APPROVE, so an
 always-APPROVE critic scores 2/2. The suite can no longer see a critic that has
 gone permissive. The stub rejected every REJECT case too, which is why the cut
-took them all. State that finding from the other side: the rejection categories
-do not need pinning, the restraint does.
+took them all. The same finding from the other side: the rejection categories need no
+pinning, and the restraint does.
 
 ## Held-out cases
 
 `run.sh` skips case dirs named `*-holdout` unless you pass `--holdout`, and they
 are the check against tuning to the suite. Trimming prose and re-running
 optimizes against the visible cases. Prose can then pass the very briefs you
-trimmed it against, while the behaviour can still be gone in any paraphrase. So:
+trimmed it against, while the behavior can still be gone in any paraphrase. So:
 never read a holdout brief or edit prose with one in view. Run `--holdout` once,
 as the last check before a release. A holdout failure after a green main suite is
 the overfitting signal. Fix the prose, never the holdout case.
@@ -136,7 +136,7 @@ the overfitting signal. Fix the prose, never the holdout case.
 
 Each case is `evals/<target>/<case>/`. It holds a self-contained `brief.md` and
 an `expected` file. The first line of `expected` is the token. Each further line
-is a substring the reply must mention, checked case-insensitively.
+is a substring the reply must mention. The check ignores case.
 
 The runner puts the prose under test in the system slot: the agent body for a
 critic, and `skills/run/SKILL.md` for the loop. The brief goes in the user turn,
@@ -151,12 +151,12 @@ conservative token, so a split critic rejects and a split loop stops. The
 required substrings must appear in a vote that carried the verdict.
 
 A case where every vote failed to answer is a loud FAIL, never a pass. A dead
-harness therefore cannot green the suite, and it cannot fall through to whichever
-token the case expected. A target with no cases fails for the same reason.
+harness therefore cannot turn the suite green, and it cannot fall through to
+whichever token the case expected. A target with no cases fails for the same reason.
 
 Each result line carries its vote count. An example: `ok  land-proof-gate → STOP
 (3/3)`. A non-unanimous case shows its split instead, and a pass at 2/3 is still
-a pass. But a case drifting from unanimous to split across prompt edits is
+a pass. But a case that moves from unanimous to split across prompt edits is
 degrading. The tally is where that shows, before it flips.
 
 Every `case × vote` call is independent and fans out concurrently, capped at

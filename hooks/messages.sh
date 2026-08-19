@@ -1,8 +1,8 @@
 #!/bin/bash
-# Every message hone prints, in one place. SOURCED by the hooks (guard.sh,
-# bash-guard.sh, gate.sh, nag.sh, session-start.sh) and by the scripts that
-# print to a human (scripts/worktree.sh, scripts/setup.sh). Defines functions
-# only; no side effects at source time.
+# Every message hone prints, in one place. The hooks (guard.sh, bash-guard.sh,
+# gate.sh, nag.sh, session-start.sh) and the scripts that print to a human
+# (scripts/worktree.sh, scripts/setup.sh) SOURCE this file. It defines
+# functions only, and it has no side effects at source time.
 #
 # Shape. A human-facing message is three lines:
 #
@@ -12,21 +12,21 @@
 #
 # A paste block (a rules list, a diffstat, a log tail) follows those lines,
 # indented by two spaces. An agent-facing deny or block keeps the same order,
-# verdict first and reason last, but its reason may run to a full sentence,
+# verdict first and reason last. But its reason may run to a full sentence,
 # because that reason is what steers the model.
 #
 # All prose follows Simplified Technical English: 25 words or fewer per
 # sentence, one idea per sentence, active voice, no semicolons, plain words.
-# Commands, paths, and identifiers inside a message are never reworded.
+# Never reword commands, paths, and identifiers inside a message.
 #
-# Executed directly, this file prints its own templates:
+# Execute this file directly and it prints its own templates:
 #
 #   bash hooks/messages.sh --dump   Markdown, for the ste lint (test/run.sh)
 #   bash hooks/messages.sh --raw    plain text, for the shape check
 #
 # Both walk hone_msg_catalog, which names every template once with placeholder
-# arguments, so a template that nobody registers is never linted and a template
-# that nobody prints is never kept alive by the catalog alone.
+# arguments. So a template that nobody registers never reaches the lint, and
+# the catalog alone never keeps an unprinted template alive.
 
 # Indent a multi-line value as a paste block. Empty input prints nothing.
 hone_msg_block() {
@@ -384,14 +384,14 @@ hone_msg_attest_what() { printf 'what you ran'; }
 hone_msg_attest_what_full() { printf 'what you ran and the outcome'; }
 
 # Every placeholder `attest` refuses as a sign-off text. An audit of a consumer
-# repo found three sign-offs holding exactly this text: the human pasted the
+# repo found three sign-offs holding exactly this text. The human pasted the
 # command and never edited it, so the file proved nothing while the gate read it
 # as proof.
 #
 # The two functions above are the single source, so a reworded placeholder can
-# never leave the refusal behind. Each first-person form gets its third-person
-# twin, because skills/run/references/land.md relays the command to the agent as
-# "what they ran".
+# never leave the refusal behind. Each first-person form has a third-person
+# variant, because skills/run/references/land.md relays the command to the agent
+# as "what they ran".
 hone_msg_attest_placeholders() {
     local what
     for what in "$(hone_msg_attest_what)" "$(hone_msg_attest_what_full)"; do
@@ -570,8 +570,8 @@ hone_msg_proof_check() {
 }
 
 # The bootstrap case, as a labelled paste block. land runs the PRIMARY tree's
-# proof.sh, so the change that writes or edits that adapter cannot be proven by
-# it: the copy land would run is the one this change replaces. $1 is the change
+# proof.sh, so that copy cannot prove the change that writes or edits it. The
+# copy land would run is the one this change replaces. $1 is the change
 # name, empty when the change leaves the adapter alone.
 hone_msg_proof_bootstrap() {
     [ -n "$1" ] || return 0
@@ -628,9 +628,9 @@ EOF
 }
 
 # The adapter-change gate: the branch edits scripts/proof.sh or a probe and
-# declares no trailer, so the file change alone is what land refuses on. Kept
-# apart from msg_wt_land_proof_missing, which opens by naming the trailer this
-# change does not have.
+# declares no trailer, so the file change alone is what land refuses on. It
+# stays apart from msg_wt_land_proof_missing, which opens by naming the trailer
+# this change does not have.
 msg_wt_land_proof_adapter_change() {
     local branch="$1" attest_cmd="$2" bootstrap="$3"
     cat <<EOF
@@ -886,7 +886,7 @@ msg_status_deny_missing() {
 # One line per template: section|kind|function|argument...
 # kind is human (a person reads it), agent (a deny or a block the model reads),
 # or plain (a receipt, a usage line, or one row of a status listing). human and
-# agent templates carry the three-line shape the header describes; plain ones
+# agent templates carry the three-line shape the header describes. Plain ones
 # do not, and the shape check skips them.
 hone_msg_catalog() {
     cat <<'CATALOG'
@@ -992,7 +992,7 @@ CATALOG
 }
 
 # Render one message as Markdown: prose stays prose, and a run of two-space
-# indented lines becomes a fenced block, so the lint reads the prose and leaves
+# indented lines becomes a fenced block. So the lint reads the prose and leaves
 # the commands alone.
 hone_msg_markdown() {
     awk '

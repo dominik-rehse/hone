@@ -1,47 +1,49 @@
 #!/bin/bash
 # Stop-hook gate (Claude Code). The mechanical verify law: the durable suite must
-# be green. Runs the project's one test adapter (scripts/run-tests.sh) and, where
-# the language has them, the optional type-check and lint adapters
+# be green. It runs the project's one test adapter (scripts/run-tests.sh) and,
+# where the language has them, the optional type-check and lint adapters
 # (scripts/typecheck.sh, scripts/lint.sh). Any failure BLOCKS the stop so the
 # model fixes it before finishing the turn. It never disables a gate to proceed.
 #
 # Which tier runs depends on where the work sits:
 #   - An uncommitted change to any durable path → the fast UNIT tier. src/ and
 #     tests/ are the red-green inner loop, and the gate must stay cheap on every
-#     turn or it gets disabled. A dependency sweep dirties other durable paths
+#     turn or someone disables it. A dependency sweep dirties other durable paths
 #     instead (the manifest, the lockfile, a tool config, wherever the project
-#     lists them), and it breaks the suite just as easily, so the same tier runs.
+#     lists them). It breaks the suite just as easily, so the same tier runs.
 #   - Clean tree on a hone/<change> worktree branch (work committed, about to
-#     land) → the full --ALL tier, including integration/e2e. This is the moment a
-#     change is about to merge, so an integration regression that a green unit
-#     tier would miss is caught here rather than trusting the run skill's prose
-#     --all step. This is a BACKSTOP, not the authoritative pre-merge check: a Stop
-#     hook is bounded by its hooks.json timeout (600s), and a suite that outruns it
-#     is killed and reads as a non-block, i.e. it fails OPEN. The authoritative
-#     --all runs inside `worktree.sh land`, under the land lock, after the merge:
-#     that one gates the trunk and rolls back on red. Keep the suite within the
-#     hook timeout to keep this backstop meaningful.
+#     land) → the full --ALL tier, including integration/e2e. This is the moment
+#     a change is about to merge. So this tier catches an integration regression
+#     that a green unit tier would miss, rather than trusting the run skill's
+#     prose --all step. This is a BACKSTOP, not the authoritative pre-merge
+#     check. The hooks.json timeout (600s) bounds a Stop hook. The harness kills
+#     a suite that outruns the timeout, which then reads as a non-block, so the
+#     gate fails OPEN. The authoritative --all runs inside `worktree.sh land`,
+#     under the land lock, after the merge: that one gates the trunk and rolls
+#     back on red. Keep the suite within the hook timeout to keep this backstop
+#     meaningful.
 #   - Clean tree on any other branch → nothing in flight, no-op.
-#   - No git → the unit tier (can't tell what's in flight; adapter presence
-#     already scopes this to hone projects).
+#   - No git → the unit tier (the gate cannot tell what is in flight, and
+#     adapter presence already scopes this to hone projects).
 #
 # The --ALL tier runs once per tree. A green run records the tree hash, and the
 # next Stop on that same tree skips the suite. The backstop's value is early
 # feedback on a newly committed state, and a re-run on unchanged input returns
 # the same answer by definition. The repeats also cost the most: they hold the
 # land lock, so redundant runs collide with each other and with lands.
-# (Adapters that express tier selection elsewhere, e.g. the Node template runs
-# the project's own "test" script, treat --unit and --all alike; the escalation
-# only bites where the adapter distinguishes tiers.)
+# (An adapter that expresses tier selection elsewhere, e.g. the Node template
+# runs the project's own "test" script, treats --unit and --all alike. The
+# escalation only matters where the adapter distinguishes tiers.)
 #
-# Absent the adapter the gate is a no-op, so a project that has not adopted hone
-# is never gated. Disabled entirely by .hone-off. Type-check/lint are opt-in by
-# their script existing; tests are the floor.
+# Without the adapter the gate is a no-op, so it never gates a project that has
+# not adopted hone. .hone-off disables it entirely. Type-check and lint are
+# opt-in by their script existing. Tests are the minimum.
 #
-# Mechanism: a Stop hook may return {"decision":"block","reason":...} to keep the
-# turn going with the reason fed back to the model. On green it returns
-# {"systemMessage":...} naming the checks that ran, so the transcript records
-# that the gate fired (silence would be indistinguishable from a skip).
+# Mechanism: a Stop hook may return {"decision":"block","reason":...} to keep
+# the turn going, and the harness feeds the reason back to the model. On green
+# it returns {"systemMessage":...} naming the checks that ran, so the
+# transcript records that the gate fired (silence would be indistinguishable
+# from a skip).
 
 set -uo pipefail
 
@@ -57,11 +59,11 @@ cd "$PROJECT_ROOT" || exit 0
 [ -f ".hone-off" ] && exit 0
 
 ADAPTER="scripts/run-tests.sh"
-[ -f "$ADAPTER" ] || exit 0   # project has no hone test adapter, not gated
+[ -f "$ADAPTER" ] || exit 0   # no hone test adapter, so the gate skips this project
 
 # Print "yes" when the working tree carries an uncommitted change to a durable
-# path. hone_is_durable owns the perimeter (src/ tests/ docs/ db/ scripts/, the
-# policy files, plus every .hone-durable-paths entry), so the gate, the guard,
+# path. hone_is_durable owns the perimeter: src/ tests/ docs/ db/ scripts/, the
+# policy files, plus every .hone-durable-paths entry. So the gate, the guard,
 # and the dirty-guard can never protect different sets.
 #
 # This used to read `git status --porcelain -- src tests`, which no-opped on a
@@ -106,14 +108,14 @@ block() { hone_stop_block "$1"; exit 0; }
 
 # The green receipt for the full tier: one line, "<plugin version> <tree hash>",
 # in <git-dir>/hone-gate-green. The key is the CONTENT hash, so an amend or a
-# rebase that reproduces the same tree still counts as verified, and any change
+# rebase that reproduces the same tree still counts as verified. Any change
 # to code, tests, or the adapters themselves invalidates it. --git-dir resolves
 # to .git/worktrees/<name> in a linked worktree, so each worktree keeps its own
 # receipt. The version prefix makes a plugin upgrade a miss: a gate with new
 # steps must not trust a receipt an older gate wrote.
 #
 # An untracked input (a dependency install, a stale node_modules) can change the
-# result without changing the tree hash. The gate accepts that blind spot, the
+# result without changing the tree hash. The gate accepts that gap, the
 # same way it accepts the 600s hook timeout: land re-verifies authoritatively.
 #
 # The unit tier stays unmemoized. It runs on a dirty tree, whose state no commit
@@ -157,7 +159,7 @@ run_step() {
     ran+="${ran:+, }$label"
 }
 
-# The full tier shares land's lock (<git-common-dir>/hone-land.lock): e2e tiers
+# The full tier shares land's lock (<git-common-dir>/hone-land.lock). e2e tiers
 # are load-sensitive, so a --all racing another session's suite or a land's
 # re-verify poisons both signals (phantom flakes, spurious land rollbacks).
 # Short wait only: if a suite is live, blocking the stop with "retry" beats

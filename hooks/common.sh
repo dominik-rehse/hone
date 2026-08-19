@@ -1,20 +1,20 @@
 #!/bin/bash
-# Shared helpers for hone's hooks. SOURCED by the hooks (guard.sh,
-# bash-guard.sh, gate.sh, nag.sh, session-start.sh) and by the scripts that
-# share their checks (setup.sh, worktree.sh), never executed directly. Defines
-# functions only; no side effects at source time. Keeping the JSON emit/escape,
-# the stdin-field parse, and the deny-rule comparison in one place stops the
-# consumers from drifting (they had already diverged).
+# Shared helpers for hone's hooks. The hooks (guard.sh, bash-guard.sh, gate.sh,
+# nag.sh, session-start.sh) and the scripts that share their checks (setup.sh,
+# worktree.sh) SOURCE this file, and nothing executes it directly. It defines
+# functions only, and it has no side effects at source time. Keeping the JSON
+# emit/escape, the stdin-field parse, and the deny-rule comparison in one place
+# stops the consumers from drifting (they had already diverged).
 
-# Escape a string for embedding as a JSON string value in a hook decision:
-# backslash first, then double-quote, then the control characters JSON spells
-# out (newline, carriage return, tab). Prints the escaped text (no trailing
-# newline).
+# Escape a string for embedding as a JSON string value in a hook decision.
+# The order: backslash first, then double-quote, then the control characters
+# JSON spells out (newline, carriage return, tab). Prints the escaped text (no
+# trailing newline).
 #
-# Every remaining C0 control character is dropped. JSON forbids a raw control
-# character inside a string, so one tab in a gate's output tail used to produce
-# invalid JSON. The harness then discards the whole decision, and a blocking
-# gate fails OPEN. A runner's progress output carries tabs and carriage returns
+# The function drops every remaining C0 control character. JSON forbids a raw
+# control character inside a string, so one tab in a gate's output tail used
+# to produce invalid JSON. The harness then discards the whole decision, and a
+# blocking gate fails OPEN. A runner's progress output carries tabs and carriage returns
 # routinely, so this is the common case, not an exotic one.
 hone_json_escape() {
     local s="$1"
@@ -45,9 +45,9 @@ hone_stop_block() {
 
 # Extract a tool_input string field from a hook's JSON stdin. $1 = the raw JSON,
 # $2 = the field name. Uses jq when available. The jq-less fallback uses `[^"]*`
-# so it stops at the first closing quote instead of a greedy `.*` swallowing
-# later fields; it cannot see through an escaped quote inside the value, so jq is
-# the correct path and this is a best-effort degrade.
+# so it stops at the first closing quote, where a greedy `.*` would also match
+# later fields. It cannot see through an escaped quote inside the value, so jq
+# is the correct path and this is a best-effort degrade.
 hone_extract_field() {
     local json="$1" field="$2"
     if command -v jq >/dev/null 2>&1; then
@@ -57,16 +57,17 @@ hone_extract_field() {
     fi
 }
 
-# True when path $1 is a durable committed artifact: anything under src/,
-# tests/, docs/, db/ (schema and migrations are as durable as code), or scripts/
-# (the adapters the gate runs live there), the policy files themselves (an edit
-# to them widens or shrinks the enforcement perimeter, which is a reviewed
-# change, not a workspace edit), plus any project-specific paths listed in the
-# committed .hone-durable-paths (one per line, # comments allowed): a directory
-# prefix (`deploy/`) or an exact file (`tsconfig.json`). The file EXTENDS the
-# defaults: the built-in protected set can grow, never shrink.
+# True when path $1 is a durable committed artifact. That covers anything under
+# src/, tests/, docs/, db/ (schema and migrations are as durable as code), or
+# scripts/ (the adapters the gate runs live there). It covers the policy files
+# themselves: an edit to them widens or shrinks the enforcement perimeter,
+# which is a reviewed change, not a workspace edit. It also covers any path the
+# project lists in the committed .hone-durable-paths (one per line, # comments
+# allowed): a directory prefix (`deploy/`) or an exact file (`tsconfig.json`).
+# The file EXTENDS the defaults: the built-in protected set can grow, never
+# shrink.
 #
-# The .hone-proof-always marker counts as durable for the same reason: deleting
+# The .hone-proof-always marker counts as durable for the same reason. Deleting
 # it is the cheapest way past the land proof gate, and the project's proof
 # policy is not a workspace edit. .hone-review-always is durable for the same
 # reason again: deleting it is the cheapest way to make a docs-only change skip
@@ -104,13 +105,14 @@ hone_is_durable() {
 
 # Print each canonical deny rule that appears in NEITHER settings file of
 # project $1. $2 is the canonical list (templates/settings/deny-rules.txt: one
-# rule per line, # comments). The match is semantic, not verbatim: a
+# rule per line, # comments). The match is semantic, not verbatim. A
 # project-relative Edit rule counts in either legal spelling (Edit(./x) or
-# Edit(x)), matched as a whole JSON string ("...") so a substring of a longer
-# rule never counts, and neither does an inert Write(path) rule (Claude Code
-# matches file tools against Edit(path) only and rejects a Write rule at
-# startup). Extra deny rules beyond the canonical list are the project's
-# business; nothing here reports them. Empty output = complete.
+# Edit(x)). The check matches a rule as a whole JSON string ("..."), so a
+# substring of a longer rule never counts. An inert Write(path) rule does not
+# count either: Claude Code matches file tools against Edit(path) only, and it
+# rejects a Write rule at startup. Extra deny rules beyond the canonical list
+# are the project's business, and nothing here reports them. Empty output =
+# complete.
 hone_missing_deny_rules() {
     local project="$1" canon="$2" rule alt
     [ -f "$canon" ] || return 0

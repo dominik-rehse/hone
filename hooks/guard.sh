@@ -1,33 +1,33 @@
 #!/bin/bash
-# PreToolUse guard for Write/Edit/MultiEdit (Claude Code). Enforces three laws
-# of the hone model, in this order:
+# PreToolUse guard for Write/Edit/MultiEdit (Claude Code). It enforces three
+# laws of the hone model, in this order:
 #
-#   0. A land-gate record (.hone-grant/, .hone-proof/) is written by the
-#      worktree.sh grant and attest helpers alone, in any tree (bash-guard
-#      denies the shell routes to the same files). The helpers stamp the
-#      signer, bind a sign-off to the commit it proves, and refuse an empty
-#      text; a raw file write produces a record no reader can trust.
+#   0. Only the worktree.sh grant and attest helpers write a land-gate record
+#      (.hone-grant/, .hone-proof/), in any tree (bash-guard denies the shell
+#      routes to the same files). The helpers stamp the signer, bind a sign-off
+#      to the commit it proves, and refuse an empty text. A raw file write
+#      produces a record no reader can trust.
 #
-#   1. The primary tree is a merge target, never a workspace. A Write/Edit to a
-#      durable committed artifact (src/, tests/, docs/, db/, scripts/, plus any
-#      paths the project lists in .hone-durable-paths) in the PRIMARY git tree is
-#      denied.
+#   1. The primary tree is a merge target, never a workspace. The guard denies
+#      a Write/Edit to a durable committed artifact (src/, tests/, docs/, db/,
+#      scripts/, plus any paths the project lists in .hone-durable-paths) in
+#      the PRIMARY git tree.
 #      That work belongs in a worktree, landed by a merge. The hand-written Plan
 #      (.plans/), tracked but authored and committed here in the primary tree,
 #      and local config are exempt.
 #
-#   2. No production code without a failing test. Creating a NEW non-test file
-#      under src/ is denied unless a test file for it already exists. Test files
-#      (the RED artifact) are always writable; editing an existing src/ file is
-#      allowed (its test was required when it was created).
+#   2. No production code without a failing test. The guard denies a NEW
+#      non-test file under src/ unless a test file for it already exists. Test
+#      files (the RED artifact) are always writable. The guard allows an edit
+#      to an existing src/ file, whose creation already required a test.
 #
-# Rule 1 needs a git repo to tell primary from worktree; without one it is a
+# Rule 1 needs a git repo to tell primary from worktree. Without one it is a
 # no-op (no worktrees exist, so the model does not apply) and only rule 2 runs.
 #
 # Input:  JSON on stdin from Claude Code's PreToolUse hook system.
 # Output: a deny is a structured PreToolUse decision on stdout
-#         (permissionDecision=deny); the process still exits 0. An allow is a
-#         silent exit 0.
+#         (permissionDecision=deny), and the process still exits 0. An allow
+#         is a silent exit 0.
 
 set -uo pipefail
 
@@ -36,10 +36,11 @@ set -uo pipefail
 # shellcheck source=hooks/messages.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/messages.sh"
 
-# Resolve the project root from the git worktree we are actually in (the hook's
-# cwd), so the guard is correct inside a linked worktree, including a
-# worktree-isolated subagent, whose cwd is the worktree while CLAUDE_PROJECT_DIR
-# stays pinned to the parent. Fall back to CLAUDE_PROJECT_DIR, then cwd.
+# Resolve the project root from the git worktree we are actually in (the
+# hook's cwd), so the guard is correct inside a linked worktree. That includes
+# a worktree-isolated subagent, whose cwd is the worktree while
+# CLAUDE_PROJECT_DIR stays pinned to the parent. Fall back to
+# CLAUDE_PROJECT_DIR, then cwd.
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
 [ -n "$PROJECT_ROOT" ] || PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
 cd "$PROJECT_ROOT" || exit 0
@@ -54,11 +55,11 @@ deny() { hone_pretool_decision deny "$1"; exit 0; }
 
 # Basename globs that identify a test file by suffix (jest/vitest, Go, Ruby,
 # Elixir). They feed both the "is this file itself a test?" check and the
-# does-a-test-exist candidate search. pytest's prefix convention (test_foo.py)
-# is handled separately in each: a prefix case in the recognition check, and
-# explicit test_<stem>.* candidates in the search (a bare 'test_*' glob here
+# does-a-test-exist candidate search. Each handles pytest's prefix convention
+# (test_foo.py) separately: a prefix case in the recognition check, and
+# explicit test_<stem>.* candidates in the search. A bare 'test_*' glob here
 # would substitute into a wildcard-free candidate, which the nullglob-based
-# existence check would count as a match for a file that does not exist).
+# existence check would count as a match for a file that does not exist.
 TEST_GLOBS=('*.test.*' '*.spec.*' '*_test.*' '*_spec.*')
 
 INPUT=$(cat)
@@ -68,9 +69,10 @@ FILE_PATH=$(hone_extract_field "$INPUT" file_path)
 
 FILE_PATH="${FILE_PATH#./}"
 # `-s` normalizes lexically (collapses ./ and ../) WITHOUT resolving symlinks,
-# so a write under a symlinked `src` stays under src/ and is still gated. A
-# symlink pointing outside the project is treated lexically as in-project and
-# gated, rather than resolved away and silently allowed (fail-closed).
+# so a write under a symlinked `src` stays under src/, and the guard still
+# gates it. The guard treats a symlink pointing outside the project lexically
+# as in-project and gates it, rather than resolving it away and silently
+# allowing it (fail-closed).
 case "$FILE_PATH" in
     /*) TARGET_PATH=$(realpath -m -s -- "$FILE_PATH") ;;
     *)  TARGET_PATH=$(realpath -m -s -- "$PROJECT_DIR/$FILE_PATH") ;;
@@ -83,9 +85,9 @@ esac
 
 # Rule 0: the land gates' records come from the helpers, in every tree. A grant
 # or sign-off written straight through the file tools skips the stamp, the
-# commit binding, and the placeholder check exactly as a shell write would
-# (bash-guard denies those), so deny the file-tool route too, regardless of
-# primary tree or worktree.
+# commit binding, and the placeholder check. A shell write skips them the same
+# way, and bash-guard denies those. So deny the file-tool route too, regardless
+# of primary tree or worktree.
 case "$REL" in
     .hone-grant/*|.hone-proof/*)
         deny "$(msg_guard_signoff "$REL")"
@@ -96,7 +98,7 @@ esac
 # as durable lives in hone_is_durable (common.sh), shared with dirty-guard.sh so
 # the file-tool route and the shell route protect one identical set.
 # Distinguish the primary tree from a linked worktree: in the primary tree the
-# per-worktree git dir equals the common git dir; in a linked worktree it does
+# per-worktree git dir equals the common git dir. In a linked worktree it does
 # not. Skip when not a git repo (no worktrees possible → the rule cannot apply).
 if git rev-parse --git-dir >/dev/null 2>&1; then
     GIT_DIR=$(git rev-parse --absolute-git-dir 2>/dev/null)
@@ -108,10 +110,10 @@ fi
 
 # Rule 2: no new production code in src/ without a failing test.
 [[ "$REL" == src/* ]] || exit 0
-[ -e "$TARGET_PATH" ] && exit 0   # editing an existing src/ file (its test was required at creation)
+[ -e "$TARGET_PATH" ] && exit 0   # editing an existing src/ file (creation already required its test)
 
-# Test files are the RED artifact, always allowed: the suffix conventions,
-# plus pytest's prefix convention (test_foo.py / spec_foo.rb).
+# Test files are the RED artifact, and the guard always allows them: the suffix
+# conventions, plus pytest's prefix convention (test_foo.py / spec_foo.rb).
 BN=$(basename "$REL")
 for _g in "${TEST_GLOBS[@]}"; do
     # shellcheck disable=SC2254
@@ -151,7 +153,7 @@ for _g in "${TEST_GLOBS[@]}"; do
         TEST_PATTERNS+=( "tests/${_g/\*/$_f}" )
     done
 done
-# pytest's prefix convention (test_foo.py) can't be a suffix glob; add it.
+# pytest's prefix convention (test_foo.py) cannot be a suffix glob, so add it.
 for _u in "$FEATURE_UNDER" "$STEM_UNDER"; do
     TEST_PATTERNS+=( "tests/test_${_u}".* )
     TEST_PATTERNS+=( "$DIR/test_${_u}".* )

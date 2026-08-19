@@ -3,7 +3,7 @@
 `scripts/run-tests.sh` is the one language adapter that keeps hone's `gate` hook
 language-agnostic. Install it with `/hone:setup` (which runs `scripts/setup.sh`
 to pick a template here, then verifies it by executing it) or copy a template
-and adapt it. It must honour this contract:
+and adapt it. It must follow this contract:
 
 - `run-tests.sh` runs the *unit* tier: every fast test that needs nothing
   outside the repo (no network, no DB, no browser). This is what
@@ -54,7 +54,7 @@ project-specific.
 
 `typecheck.sh` must cover *everything the repo compiles* (`src/`, `tests/`,
 `scripts/`, tooling), not only production code. A tsconfig whose `include`
-stops at `src/` makes the gate's green overstate its own reach. Type errors
+stops at `src/` makes the gate's green claim more than it checked. Type errors
 then hide in exactly the code no test exercises, such as dev servers and deploy
 tooling. They surface as broken tooling long after they landed.
 

@@ -1,7 +1,7 @@
 #!/bin/bash
 # hone project setup: the deterministic mechanics. Safe to run again. The
-# /hone:setup skill wraps it and then verifies the adapters by executing them;
-# to run just the mechanics:
+# /hone:setup skill wraps it and then verifies the adapters by executing them.
+# To run just the mechanics:
 #
 #   bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"
 #
@@ -10,7 +10,7 @@
 # creates the durable docs skeleton. It does NOT touch source, tests, or any
 # existing adapter. An install that would overwrite scripts/run-tests.sh stops
 # and tells you to diff instead. The optional type-check and lint adapters
-# (scripts/typecheck.sh, scripts/lint.sh) are yours to add; the gate runs them
+# (scripts/typecheck.sh, scripts/lint.sh) are yours to add. The gate runs them
 # when present.
 
 set -uo pipefail
@@ -51,15 +51,15 @@ else
     msg_setup_adapter_installed "$TEMPLATE"
 fi
 
-# 2. Gitignore the per-developer artifacts: the worktrees, the .hone-off kill
-# switch, and the per-change grant/proof sign-offs. NOT .plans/ (a Plan is
-# tracked; it lands in git history and consolidate removes it with a git rm the
-# landing merge carries) and NOT the policy files (.hone-durable-paths,
-# .hone-irreversible-paths): those are project policy, committed and shared.
-# Entries an earlier hone version ignored (markers removed in 0.19, the policy
-# files back when they were per-developer, and spikes/ from 0.33 before a spike
-# moved whole into docs/spikes/) are stripped so they can be committed or
-# deleted.
+# 2. Gitignore the per-developer artifacts: the worktrees, the .hone-off
+# marker, and the per-change grant/proof sign-offs. Do NOT ignore .plans/: a
+# Plan is tracked, lands in git history, and consolidate removes it with a git
+# rm the landing merge carries. Do NOT ignore the policy files
+# (.hone-durable-paths, .hone-irreversible-paths): those are project policy,
+# committed and shared. Setup strips entries an earlier hone version ignored,
+# so the human can commit or delete them. That covers markers removed in 0.19,
+# the policy files from when they were per-developer, and spikes/ from 0.33
+# before a spike moved whole into docs/spikes/.
 touch .gitignore
 for entry in ".worktrees/" ".hone-off" ".hone-grant/" ".hone-proof/"; do
     grep -qxF "$entry" .gitignore || printf '%s\n' "$entry" >> .gitignore
@@ -74,19 +74,21 @@ for stale in ".plans/" ".hone-test-globs" ".hone-gate-enforce" ".hone-nag-enforc
 done
 msg_setup_gitignore_ok
 
-# 3. Durable docs skeleton (empty dirs are fine; the loop fills them), plus the
-# src/ root. hone's enforcement keys off a src/<area>/ layout: the guard requires
-# a test before code under src/, the nag maps each Note to a src/<area>/, and the
-# gate watches src/ and tests/ for work in flight. Code must live under src/ for
-# these to apply, Python packages included (src/<pkg>/ is a supported layout).
+# 3. Durable docs skeleton (empty dirs are fine, and the loop fills them), plus
+# the src/ root. hone's enforcement keys off a src/<area>/ layout. The guard
+# requires a test before code under src/, and the nag maps each Note to a
+# src/<area>/. The gate watches src/ and tests/ for work in flight. Code must
+# live under src/ for these to apply, Python packages included (src/<pkg>/ is a
+# supported layout).
 mkdir -p docs/decisions docs/notes .plans src
 [ -f docs/open-questions.md ] || printf '# Open questions\n\nAssumptions only running code can settle. Close or delete each entry once resolved; never grow it.\n' > docs/open-questions.md
 msg_setup_docs_created
 
-# 4. Report (never write) the settings deny rules. The block is installed by
-# hand (README, Install) and /hone:setup completes it with the human present;
-# a bare script run still names what is missing, so an upgrade that grew the
-# canonical list surfaces here as one paste instead of an investigation.
+# 4. Report (never write) the settings deny rules. The human installs the
+# block by hand (README, Install), and /hone:setup completes it with the human
+# present. A bare script run still names what is missing. So an upgrade that
+# grew the canonical list appears here as one paste instead of an
+# investigation.
 MISSING_DENY=$(hone_missing_deny_rules "$PROJECT_DIR" "$PLUGIN_ROOT/templates/settings/deny-rules.txt")
 if [ -n "$MISSING_DENY" ]; then
     msg_setup_missing_deny "$MISSING_DENY"

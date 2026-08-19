@@ -1,22 +1,23 @@
 # Reference
 
 The complete control surface: commands, configuration files, hooks, land
-gates, exit codes, adapters, and layout. Everything else links here; when a
-detail on this page and prose elsewhere disagree, this page wins. Why the
-pieces exist is covered in [`model.md`](model.md).
+gates, exit codes, adapters, and layout. Everything else links here. When a
+detail on this page and prose elsewhere disagree, this page wins.
+[`model.md`](model.md) explains why the pieces exist.
 
 ## Commands
 
 Slash commands, in the order a change flows:
 
 - `/hone:setup` runs once per project: `scripts/setup.sh` for the mechanics,
-  then a verification of the install. Author the adapter where detection fell
-  short, execute every installed adapter, fix what fails, and complete the
-  settings block. Interactive; run it with the human present.
-- `/hone:plan <change>` writes and commits the Plan for one change, checked by
-  the `plan-critic` while its caller is present. The one step outside the
-  loop. A human usually invokes it, and another agent may invoke it too, as
-  it may invoke `/hone:run`.
+  then a verification of the install. The verification authors the adapter
+  where detection fell short, executes every installed adapter, fixes what
+  fails, and completes the settings block. It is interactive, so run it with
+  the human present.
+- `/hone:plan <change>` writes and commits the Plan for one change. The
+  `plan-critic` checks the Plan while its caller is present. This is the one
+  step outside the loop. A human usually invokes it, and another agent may
+  invoke it too, as it may invoke `/hone:run`.
 - `/hone:run <change>` executes the Plan unattended (worktree, build, verify,
   consolidate, review, land). `/hone:run --all` runs every ready Plan.
 - Inside [herdr](https://github.com/dominik-rehse/herdr), which `run` detects on
@@ -32,15 +33,15 @@ Slash commands, in the order a change flows:
   the repo needs it.
 
 `worktree.sh` (in the plugin's `scripts/` directory) does the mechanical git
-work. The loop calls it; you can too:
+work. The loop calls it, and you can too:
 
 - `worktree.sh status` shows the state of everything on this page in one
-  screen: hooks on or off, adapters present, policy files and whether they are
-  committed, pending Plans, worktrees in flight, grants and sign-offs, and
-  whether the settings deny rules are installed.
+  screen. That covers hooks, adapters, policy files and their commit state,
+  pending Plans, worktrees in flight, grants and sign-offs, and the settings
+  deny rules.
 - `worktree.sh add <change>` creates `.worktrees/<change>` on branch
-  `hone/<change>`. Creating it is what claims the change; a second `add` of
-  the same name fails.
+  `hone/<change>`. Creating it is what claims the change, so a second `add`
+  of the same name fails.
 - `worktree.sh verify` runs the full test suite, serialized against other
   sessions. The only sanctioned way to run `--all` by hand.
 - `worktree.sh review-scope <change>` prints how deep the change's review must
@@ -96,7 +97,7 @@ file:
   `scripts/proof.sh`, land refuses with exit 7 and asks you to add the
   adapter. The guard and the bash-guard protect the marker like the other
   policy files, so removing it stays your call. `worktree.sh status` reports
-  the marker and warns while it is uncommitted.
+  the marker and warns until you commit it.
 
 *Per-developer*, gitignored and never checked in:
 
@@ -115,25 +116,26 @@ file:
   that route.
 - `.hone-proof/<change>` is the sign-off that the real-environment check for
   one change ran. It must contain the commit hash it applies to (short or
-  full); after new commits it no longer counts. Same two writers and the same
-  rule: `worktree.sh attest`, or your own editor.
+  full). After new commits it no longer counts. Same two writers and the
+  same rule: `worktree.sh attest`, or your own editor.
 
-Two environment variables tune the cross-session locks:
-`HONE_LAND_LOCK_TIMEOUT` (seconds a land or full-suite run waits for the
-lock, default 600) and `HONE_SUITE_LOCK_TIMEOUT` (seconds the gate's
-pre-land full run waits, default 30).
+Two environment variables tune the cross-session locks.
+`HONE_LAND_LOCK_TIMEOUT` sets the seconds a land or full-suite run waits for
+the lock (default 600). `HONE_SUITE_LOCK_TIMEOUT` sets the seconds the
+gate's pre-land full run waits (default 30).
 
 ## Hooks
 
-All disabled at once by `.hone-off`. A project with no `scripts/run-tests.sh`
-is never gated, and enforcement assumes code lives under `src/<area>/`.
+`.hone-off` disables all of them at once. A project with no
+`scripts/run-tests.sh` is never gated, and enforcement assumes code lives
+under `src/<area>/`.
 
 - *guard* (PreToolUse on Write/Edit) enforces three rules. Anywhere, no
-  writes into `.hone-grant/` or `.hone-proof/` (the helpers write those)
-  and no new file under `src/` unless a test for it exists (test files
-  themselves are always writable). In the primary tree, no edits to the
-  protected paths at all, including the two policy files; that work belongs
-  in a worktree, landed by a merge.
+  writes into `.hone-grant/` or `.hone-proof/` (the helpers write those).
+  Anywhere, no new file under `src/` unless a test for it exists (test files
+  themselves stay writable). In the primary tree, no edits to the protected
+  paths at all, including the two policy files. That work belongs in a
+  worktree, landed by a merge.
 - *bash-guard* (PreToolUse on Bash) provides tamper resistance. It denies
   commands that would disable the gate (`--no-verify`, `core.hooksPath`,
   creating `.hone-off`) or write a grant or proof sign-off (those are the
@@ -146,8 +148,8 @@ is never gated, and enforcement assumes code lives under `src/<area>/`.
   spells that write out. A bare sync install (`bun install`, `npm ci`, with
   flags only) passes, because it installs what the lockfile already says.
   An install that names a package still asks. It is a deterrent, not a
-  sandbox: it closes the obvious shell routes; the settings.json deny rules
-  (see *Install* in the README) close the file-tool routes.
+  sandbox. It closes the obvious shell routes, and the settings.json deny
+  rules (see *Install* in the README) close the file-tool routes.
 - *dirty-guard* (PostToolUse on Bash) reads the effect instead of the command.
   In the primary tree it asks git what the command left dirty, and blocks when
   that list holds a protected path. This catches the writer the bash-guard's name
@@ -157,45 +159,49 @@ is never gated, and enforcement assumes code lives under `src/<area>/`.
   and `scripts/lint.sh` when they exist, and blocks the turn on any failure.
   With an uncommitted change to any durable path it runs the fast unit tier.
   On a clean `hone/<change>` branch it runs the full suite (the pre-land
-  check). A dependency sweep dirties the manifest and the lockfile rather
-  than `src/`, and it breaks the suite just as easily, so the gate reads the
-  whole durable perimeter and not `src/` and `tests/` alone. The full suite
+  check). A dependency refresh dirties the manifest and the lockfile rather
+  than `src/`, and it breaks the suite just as easily. So the gate reads the
+  whole durable perimeter, not `src/` and `tests/` alone. The full suite
   runs once per tree. A green run records the tree hash in
   `<git-dir>/hone-gate-green`. A later Stop on that same tree skips the run
   and says so. Any commit, and any plugin upgrade, invalidates the record.
-- *nag* (Stop, advisory) reports hygiene findings as a visible message, never
-  a block: a Plan that survived its landing, an oversized or orphan Note, a
-  broken `Governs:` link, a merged `hone/*` branch left behind, a change
-  about to land that deletes nothing, a `type: project` entry in the
-  harness's own memory store.
-- *session-start* injects the workflow rule from the plugin, and warns
-  when the test adapter or the `src/` layout is missing, or when the settings
-  lack any rule from the canonical deny list
-  (`templates/settings/deny-rules.txt`), naming the missing rules. The
-  comparison is semantic: `Edit(./x)` and `Edit(x)` both count, either
-  settings file counts, and extra project-specific denies are ignored.
+- *nag* (Stop, advisory) reports hygiene findings as a visible message,
+  never a block. The findings:
+  - a Plan that survived its landing
+  - an oversized or orphan Note
+  - a broken `Governs:` link
+  - a merged `hone/*` branch left behind
+  - a change about to land that deletes nothing
+  - a `type: project` entry in the harness's own memory store
+- *session-start* injects the workflow rule from the plugin. It warns when
+  the test adapter or the `src/` layout is missing. It also warns, naming
+  the missing rules, when the settings lack any rule from the canonical deny
+  list (`templates/settings/deny-rules.txt`). The comparison is semantic:
+  `Edit(./x)` and `Edit(x)` both count, either settings file counts, and
+  the warning ignores extra project-specific denies.
 
 ## Land gates
 
-`worktree.sh land` refuses two kinds of change until a human acts. Both
-checks run before the merge, so a refused change never touches the trunk, and
-the worktree stays for inspection.
+`worktree.sh land` refuses two kinds of change until a grant or a proof
+exists. Both checks run before the merge, so a refused change never touches
+the primary tree, and the worktree stays for inspection.
 
 - *Authority gate (exit 8)* fires when the diff is irreversible (see
   `.hone-irreversible-paths` above for the signals). Landing it needs your
   grant: review the diff, then `worktree.sh grant <change> "who/why"`, then
-  re-run land. The grant text is recorded in the merge commit body. The
+  re-run land. land records the grant text in the merge commit body. The
   refusal prints the signals that fired and a diffstat against the merge base.
   It also prints the `git diff` command for the whole change, and the grant
   command.
 - *Proof gate (exit 7)* fires when a commit on the branch carries a
   `Proof: real-environment — <the check>` trailer (copied verbatim from the
-  Plan), meaning no in-repo test can prove the change; a browser journey,
-  canary, or deployed check has to. Landing it needs one of: a green run of
-  the *primary tree's*
-  `scripts/proof.sh` (see *Adapters*: the reviewed copy is executed, so a
-  change cannot ship its own green stub), or your sign-off after running the
-  check yourself: `worktree.sh attest <change> "what you ran"`. A committed
+  Plan). The trailer means no in-repo test can prove the change: a browser
+  journey, a canary, or a deployed check has to. Landing it needs one of two
+  things. The first is a green run of the *primary tree's*
+  `scripts/proof.sh`. land executes the reviewed copy (see *Adapters*), so a
+  change cannot ship its own green stub. The second is your sign-off after
+  you ran the check yourself:
+  `worktree.sh attest <change> "what you ran"`. A committed
   `.hone-proof-always` widens this gate to every change (see *Configuration
   files*). A diff that touches the adapter itself arms the gate too, with no
   trailer needed (below).
@@ -241,8 +247,9 @@ lock.
 An unattended run discharges its own gates. On exit 8 it reads the diff the
 refusal printed and records why the irreversible change is right. On exit 7 it
 runs the check the refusal names and records what that run printed. It stops
-and reports instead in two cases: the check is out of its reach (a browser
-journey with no adapter), or the diff does something the Plan never asked for.
+and reports instead in two cases. Either the check is out of its reach (a
+browser journey with no adapter), or the diff does something the Plan never
+asked for.
 The gate's error message prints the exact helper command with its full path.
 
 ## Exit codes
@@ -278,30 +285,34 @@ that matched no test makes the green prove nothing. The warning never blocks:
 land exits 0 and the merge stands. An adapter that prints no summary lines
 draws no warning.
 
-Other subcommands: `add` exits 4 when the change is already claimed by
-another run (0 created, 2 error); `remove` exits 3 when the path is not one
-hone created (0 removed, 2 error); `verify` passes through the adapter's exit
-(2 setup error, 5 lock timeout). `landed` exits 1 while the change is
-pending (0 landed, 2 error).
+Other subcommands:
+
+- `add` exits 4 when another run has already claimed the change (0 created,
+  2 error).
+- `remove` exits 3 when the path is not one hone created (0 removed,
+  2 error).
+- `verify` passes through the adapter's exit (2 setup error, 5 lock
+  timeout).
+- `landed` exits 1 while the change is pending (0 landed, 2 error).
 
 ## Adapters
 
-One script per job, all under the project's `scripts/`; the gate and the loop
-call them so hone itself stays language-agnostic.
+One script per job, all under the project's `scripts/`. The gate and the
+loop call them, so hone itself stays language-agnostic.
 
-- `run-tests.sh` is required. Unit tier by default, `--all` for every tier,
-  `<files...>` for specific files. Under `--all` it should also print one
-  summary line per tier it ran, `hone tier: <name> ran=<count>`, taking the
-  count from the runner's own total. An adapter that cannot read that total
-  prints no line. Contract and per-ecosystem
+- `run-tests.sh` is the one required adapter. Unit tier by default, `--all`
+  for every tier, `<files...>` for specific files. Under `--all` it should
+  also print one summary line per tier it ran, `hone tier: <name>
+  ran=<count>`, taking the count from the runner's own total. An adapter
+  that cannot read that total prints no line. Contract and per-ecosystem
   templates: [`templates/run-tests/README.md`](../templates/run-tests/README.md).
-  Installed by `setup.sh`.
-- `typecheck.sh` and `lint.sh` are optional, one line each, run by the gate
-  and by land's post-merge check when present.
-- `proof.sh` is optional; it proves a change in the real environment for the
+  `setup.sh` installs it.
+- `typecheck.sh` and `lint.sh` are optional, one line each. The gate and
+  land's post-merge check run them when they exist.
+- `proof.sh` is optional. It proves a change in the real environment for the
   proof gate. land executes the primary tree's copy, with the change's
-  worktree as the working directory, so a change adding its own `proof.sh`
-  is only trusted after that adapter has landed. Invoked as
+  worktree as the working directory. So land trusts a change that adds its
+  own `proof.sh` only after that adapter has landed. land invokes it as
   `proof.sh <change>`. Contract and templates:
   [`templates/proof/README.md`](../templates/proof/README.md).
 
@@ -357,24 +368,25 @@ W = writes, M = amends, P = prunes/deletes, R = reads, . = untouched
 Notes on the rarer cells: plan's reads are its step 2, where it reads the code,
 the tests, and the area's Decisions and Notes. The Plan can then state what the
 change replaces. plan's `(W)` on open questions covers only a new
-question the Plan surfaces, and its `.git` write is the commit of the Plan
-and its references on the trunk. build's `.plans/` prune is a reference
-promoted out (`git mv`'d next to the test that reads it; build is the only
-step that writes tests). consolidate's `.plans/` prune is the `git rm` of the
+question the Plan surfaces. Its `.git` write is the commit of the Plan
+and its references on the primary branch. build's `.plans/` prune is a
+reference promoted out, `git mv`'d next to the test that reads it. (build
+is the only step that writes tests.) consolidate's `.plans/` prune is the `git rm` of the
 Plan and any references build did not promote. garden is not part of a
 change: it is the standalone maintenance loop, and every column it touches is
 a deletion.
 
 Spikes are outside the table, because a spike is not a change. Everything one
-spike leaves behind lives under `docs/spikes/`, whatever its type: the note,
-the probe code that produced it, a mockup, a captured payload, a screenshot.
+spike leaves behind lives under `docs/spikes/`, whatever its type. Examples:
+the note, the probe code that produced it, a mockup, a captured payload, a
+screenshot.
 One spike is one dated stem, `<YYYY-MM-DD>-<slug>`, a single file where one
 file is enough and a directory where it is not. No hook looks inside, so a
 probe needs no test and no worktree, and nothing there has to keep the suite
 green by itself.
 
 Both `plan` (before a Plan exists) and `consolidate` (after the change) write a
-spike, and `docs/spikes/` is the one path under `docs/` the guard leaves
+spike. `docs/spikes/` is the one path under `docs/` the guard leaves
 writable in the primary tree, exactly as it leaves `.plans/`. Most probes leave
 nothing behind: keep a spike only when its method or its dead ends would save a
 future reader from running it again.

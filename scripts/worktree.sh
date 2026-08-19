@@ -1,6 +1,6 @@
 #!/bin/bash
 # hone worktree helper. The deterministic parts of the run loop's worktree
-# handling, kept as a script so the parse is unit-testable; the run skill drives
+# handling, kept as a script so the parse is unit-testable. The run skill drives
 # the actual `git worktree add` and the build/verify/consolidate steps around it.
 #
 #   worktree.sh add <change>
@@ -13,34 +13,36 @@
 #
 #   worktree.sh land <change>
 #       Land hone/<change> into the primary tree, serialized against every other
-#       session that shares it. Takes an flock on <git-common-dir>/hone-land.lock
-#       (waits up to HONE_LAND_LOCK_TIMEOUT s, default 600) and, while held,
-#       merges --no-ff, re-runs scripts/run-tests.sh --all in the primary tree,
-#       and on green removes the worktree + deletes the branch. Any failure
-#       leaves the primary tree clean and green (a conflict is aborted, a
-#       post-merge regression is rolled back) with the worktree/branch kept as
-#       evidence. Run from the primary tree, after committing in the worktree.
+#       session that shares it. Takes a flock on <git-common-dir>/hone-land.lock
+#       (waits up to HONE_LAND_LOCK_TIMEOUT s, default 600). While it holds the
+#       lock, it merges --no-ff, re-runs scripts/run-tests.sh --all in the
+#       primary tree, and on green removes the worktree + deletes the branch.
+#       Any failure leaves the primary tree clean and green (land aborts a
+#       conflict and rolls back a post-merge regression), with the
+#       worktree/branch kept as evidence. Run from the primary tree, after
+#       committing in the worktree.
 #       Authority gate: an IRREVERSIBLE change (destructive SQL, a db/ deletion,
 #       or a .hone-irreversible-paths match) may not merge without a scoped
-#       grant at .hone-grant/<change>; without it land refuses BEFORE the merge
-#       and keeps the worktree as evidence. The grant's text rides into the
+#       grant at .hone-grant/<change>. Without it land refuses BEFORE the merge
+#       and keeps the worktree as evidence. The grant's text goes into the
 #       merge commit body, so the authorization lives in durable history rather
 #       than a chat.
 #       Proof gate: a change whose Plan declared real-environment proof (a
 #       `Proof: real-environment` trailer on a branch commit) may not land on
 #       the test suite alone. Satisfy it either with a green scripts/proof.sh
-#       (the PRIMARY tree's reviewed copy, executed from the change's WORKTREE,
-#       since that tree holds the code under test; running the change's own copy
-#       would let it ship a green stub, with HONE_CHANGE/HONE_BRANCH/
-#       HONE_WORKTREE/HONE_MAIN_ROOT in its environment) or with a human
-#       sign-off at .hone-proof/<change> that names the commit it proved, so a
-#       sign-off cannot outlive the code it attested. Else land refuses BEFORE
-#       the merge. A committed .hone-proof-always marker widens the gate to
-#       EVERY change, trailer or not; with the marker present and no
-#       scripts/proof.sh, land refuses (7) rather than proving nothing.
+#       or with a human sign-off at .hone-proof/<change>. land runs the PRIMARY
+#       tree's reviewed copy of proof.sh, from the change's WORKTREE, since
+#       that tree holds the code under test. Running the change's own copy
+#       would let it ship a green stub. The adapter gets HONE_CHANGE/
+#       HONE_BRANCH/HONE_WORKTREE/HONE_MAIN_ROOT in its environment. The
+#       sign-off names the commit it proved, so a sign-off cannot outlive the
+#       code it attested. Else land refuses BEFORE the merge. A committed
+#       .hone-proof-always marker widens the gate to EVERY change, trailer or
+#       not. With the marker present and no scripts/proof.sh, land refuses (7)
+#       rather than proving nothing.
 #       A change that edits scripts/proof.sh, or a probe under
 #       scripts/proof-probes/ that already exists, opens the gate on the file
-#       change alone, with no trailer and no marker, and only a sign-off
+#       change alone. It needs no trailer and no marker, and only a sign-off
 #       discharges it: land holds the copy such a change replaces, so no
 #       automatic route can judge it. Adding a NEW probe does not open it.
 #       On success it prints a receipt on stdout: the merge commit, the green
@@ -56,9 +58,9 @@
 #       Run the full suite (scripts/run-tests.sh --all) in the current tree,
 #       serialized under the SAME lock as land. e2e tiers are load-sensitive:
 #       two concurrent full suites poison each other's signal (phantom flakes),
-#       and a suite racing a land's re-verify produces spurious rollbacks, so
+#       and a suite racing a land's re-verify produces spurious rollbacks. So
 #       every full-suite run shares the one lock. This is the sanctioned way to
-#       run --all by hand; never invoke the adapter bare for a full run. The
+#       run --all by hand. Never invoke the adapter bare for a full run. The
 #       fast unit tier needs no lock and no wrapper. Exit: the adapter's exit ·
 #       2 usage/not-a-repo/no-adapter · 5 lock timeout.
 #
@@ -74,19 +76,19 @@
 #       a "Merge branch 'hone/<change>'" commit reachable from the primary
 #       HEAD, no hone/<change> branch, no .worktrees/<change>, and no
 #       .plans/<change>.md at HEAD. The proof and authority gates run before
-#       the merge, so the merge commit's existence implies they were
-#       satisfied. This is the predicate an orchestrator (the MAIN session of
+#       the merge, so the merge commit's existence implies both gates passed.
+#       This is the predicate an orchestrator (the MAIN session of
 #       `--all` under herdr) polls before it starts a dependent Plan or closes
-#       a SUB tab:
-#       it reads the repository, never a subagent's claim that it finished.
+#       a SUB tab.
+#       It reads the repository, never a subagent's claim that it finished.
 #       Exit: 0 landed · 1 pending · 2 usage/not-a-repo.
 #
 #   worktree.sh status
 #       One-screen state of the control surface: hooks on/off, adapters
 #       present, policy files (and whether they are committed), pending Plans,
-#       worktrees in flight, grants and proof sign-offs, and whether the
-#       settings.json deny rules are installed. Read-only; always exit 0 in a
-#       git repo.
+#       worktrees in flight, grants and proof sign-offs. It also says whether
+#       the settings.json deny rules are present. Read-only, and always exit 0
+#       in a git repo.
 #
 #   worktree.sh grant <change> "who/why"
 #       Record the authority grant for one irreversible change at
@@ -103,13 +105,13 @@
 #
 #   worktree.sh remove <worktree-path>
 #       Provenance-guarded cleanup. Removes the worktree ONLY if hone created it
-#       (path under the main tree's .worktrees/); anything elsewhere is left for
-#       its owner. Prunes stale registrations after; refuses to remove the tree
-#       you are standing in. Then finishes the land's hygiene: deletes the
-#       worktree's hone/* branch iff it is fully merged (`git branch -d`; an
-#       unmerged branch is evidence and stays, with a note), and removes
-#       now-empty parent dirs under .worktrees/ that a nested slug leaves
-#       behind. Exit: 0 removed · 2 usage/not-a-repo/failed/self ·
+#       (path under the main tree's .worktrees/). It leaves anything elsewhere
+#       for its owner. Prunes stale registrations after. Refuses to remove the
+#       tree you are standing in. Then finishes the land's hygiene. It deletes
+#       the worktree's hone/* branch iff it is fully merged (`git branch -d`),
+#       and an unmerged branch is evidence and stays, with a note. It also
+#       removes now-empty parent dirs under .worktrees/ that a nested slug
+#       leaves behind. Exit: 0 removed · 2 usage/not-a-repo/failed/self ·
 #       3 left in place (not hone's to remove).
 #
 # Runs relative to the project root (git toplevel, else CLAUDE_PROJECT_DIR, else
@@ -117,9 +119,9 @@
 
 set -uo pipefail
 
-# This script's own absolute path, for remedy messages: the human runs the
+# This script's own absolute path, for remedy messages. The human runs the
 # grant/attest helpers in their own terminal, where ${CLAUDE_PLUGIN_ROOT} is
-# not set, so a bare "worktree.sh ..." would be a dead end.
+# not set, so a bare "worktree.sh ..." would fail.
 HONE_WSH="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/worktree.sh"
 HONE_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -134,9 +136,9 @@ cmd_add() {
     [ -n "$change" ] || { msg_wt_needs_change add >&2; return 2; }
     git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
 
-    # Anchor to the MAIN tree, not cwd: an orchestrator's shell cwd may sit inside
-    # a sibling change's linked worktree, which would otherwise nest the new
-    # worktree under it and branch off that sibling's unlanded HEAD. `git -C
+    # Anchor to the MAIN tree, not cwd. An orchestrator's shell cwd may sit
+    # inside a sibling change's linked worktree. That would nest the new
+    # worktree under it, and branch it off that sibling's unlanded HEAD. `git -C
     # "$main_root" ... HEAD` resolves both the path and the base in the primary
     # checkout. Same provenance anchor cmd_remove uses.
     local main_root
@@ -219,8 +221,8 @@ cmd_verify() {
 # `full` (the default) or `docs-only`.
 #
 # `/code-review` is the loop's most expensive step, and it reviews code. A diff
-# that changes no executable file gives it nothing to read, so the loop skips it
-# for such a change and the consolidate-critic stays that change's judgment
+# that changes no executable file gives it nothing to read. So the loop skips
+# it for such a change, and the consolidate-critic stays that change's judgment
 # check. A garden pass that only deletes stale prose is the case this exists
 # for.
 #
@@ -279,15 +281,15 @@ cmd_review_scope() {
 
 # Classify a branch about to land as IRREVERSIBLE (an effectively irreversible
 # or high-blast-radius change), printing one reason line per signal (empty output
-# = reversible). Reversibility is the axis: a bad reversible merge is undone with
-# `git revert`; a dropped column is not. A project whose changes are all
-# reversible is never gated in practice. Signals: destructive SQL in a migration
-# or db/ file, a deletion under db/, and any path glob the project lists in the
-# committed .hone-irreversible-paths (.hone-consequential-paths is the pre-0.19
-# name, still honoured). Git pathspecs do the matching.
+# = reversible). Reversibility is the axis: `git revert` undoes a bad reversible
+# merge, and nothing undoes a dropped column. In practice this gate never fires
+# for a project whose changes are all reversible. Signals: destructive SQL in a
+# migration or db/ file, a deletion under db/, and any path glob the project
+# lists in the committed .hone-irreversible-paths. (.hone-consequential-paths
+# is the pre-0.19 name, still honoured.) Git pathspecs do the matching.
 #
 # Every land helper takes the same three leading arguments, (root, base,
-# branch), because cmd_land resolves the merge base once and hands it down. The
+# branch), because cmd_land resolves the merge base once and passes it down. The
 # base was a separate `git merge-base` call in four helpers before.
 land_irreversible() {
     local root="$1" base="$2" branch="$3" reasons=""
@@ -314,7 +316,7 @@ land_irreversible() {
 }
 
 # Print the branch's diffstat against its merge base, for the authority gate's
-# refusal. Capped at 20 file lines plus the summary line: the gate stops an
+# refusal. Capped at 20 file lines plus the summary line. The gate stops an
 # unattended run, and the human reading it needs the shape of the change, not
 # every file of a large one. $1 = main root, $2 = merge base, $3 = branch.
 land_diffstat() {
@@ -338,12 +340,12 @@ land_diffstat() {
 # must run. `plan` makes that description mandatory, so the gate can print the
 # exact check instead of sending the human back to the Plan.
 #
-# Exit 0 means the branch declares the trailer, and 1 means it does not, so a
+# Exit 0 means the branch declares the trailer, and 1 means it does not. So a
 # bare trailer (an older Plan, no description) is exit 0 with empty output.
 # Callers must read the exit code, never the emptiness of the output.
 #
-# The prefix and the separator come off case-insensitively (`sed s///I`), and
-# the separator may be an em dash, an en dash, one or more hyphens, or nothing
+# The prefix and the separator come off case-insensitively (`sed s///I`). The
+# separator may be an em dash, an en dash, one or more hyphens, or nothing
 # at all. A single parser is why `PROOF: REAL-ENVIRONMENT — x` no longer prints
 # its own prefix back, and why `-- x` no longer keeps a stray dash.
 land_proof_trailer() {
@@ -359,9 +361,9 @@ land_proof_trailer() {
 }
 
 # Print non-empty if the branch declares real-environment proof. A change with
-# no such trailer is assertion-class: the gate's suite already proves it, and it
-# is never gated here, so a project that never declares real-environment proof
-# is unaffected.
+# no such trailer is assertion-class: the gate's suite already proves it, and
+# this gate never fires for it. So a project that never declares
+# real-environment proof is unaffected.
 land_proof_required() {
     land_proof_trailer "$1" "$2" "$3" >/dev/null && echo yes
 }
@@ -375,9 +377,9 @@ land_proof_required() {
 # A change that only ADDS a new probe is not that case, and does not gate here.
 # The adapter decides what a green run means, and it stays the reviewed copy. A
 # new probe only adds a check for the one change that ships it, exactly as that
-# change ships its own tests, and /code-review reads it in the same diff. Gating
+# change ships its own tests. /code-review reads it in the same diff. Gating
 # an added probe cost a sign-off on every proof-carrying change in a project
-# whose adapter asks each change for its own probe, which is the shape
+# whose adapter asks each change for its own probe. That is the shape
 # templates/proof/README.md recommends. An edit to a probe that already exists
 # still gates: that probe guards a change that landed before this one.
 land_proof_bootstrap() {
@@ -396,11 +398,12 @@ land_proof_bootstrap() {
 }
 
 # Print non-empty if the sign-off at .hone-proof/<change> names the commit it
-# proved: any hex token of >=7 chars in the file that prefixes the branch tip (so
-# `git rev-parse --short` works as well as the full SHA). Binding the sign-off
-# to a commit is what stops it going stale: unbound, a sign-off written for one
-# commit would silently cover every later commit on the same branch, which is the
-# one failure mode a human gate cannot notice from the inside.
+# proved. Naming means any hex token of >=7 chars in the file that prefixes the
+# branch tip (so `git rev-parse --short` works as well as the full SHA).
+# Binding the sign-off to a commit is what stops it going stale. Unbound, a
+# sign-off written for one commit would silently cover every later commit on
+# the same branch. That is the one failure mode a human gate cannot notice from
+# the inside.
 land_proof_signoff_names_tip() {
     local file="$1" tip="$2" tok
     for tok in $(tr 'A-Z' 'a-z' < "$file" 2>/dev/null | grep -oE '[0-9a-f]{7,40}'); do
@@ -468,12 +471,12 @@ cmd_land() {
         msg_wt_land_detached >&2; return 2; }
 
     # Authority gate: an IRREVERSIBLE change needs a scoped human grant before
-    # it may merge. Capability (guard/bash-guard) is "can the agent act"; this
-    # is the separate contract: "may it, for this irreversible act". Checked
-    # BEFORE the merge so an ungranted irreversible change never touches the
-    # trunk. The grant is scoped (one change), revocable (delete the file),
-    # auditable (its text lands in the merge body below), and recoverable (the
-    # worktree stays until granted).
+    # it may merge. Capability (guard/bash-guard) is "can the agent act". This
+    # is the separate contract: "may it, for this irreversible act". land
+    # checks this BEFORE the merge, so an ungranted irreversible change never
+    # touches the trunk. The grant is scoped (one change), revocable (delete
+    # the file), auditable (its text lands in the merge body below), and
+    # recoverable (the worktree stays until granted).
     local grant_note="" reasons grant base grant_cmd
     base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
     grant_cmd="bash $HONE_WSH grant $change \"who/why\""
@@ -481,10 +484,11 @@ cmd_land() {
     if [ -n "$reasons" ]; then
         grant="$main_root/.hone-grant/$change"
         if [ ! -f "$grant" ]; then
-            # The refusal carries what the human needs to judge the change: the
-            # signals that classified it, a diffstat, and the exact command
-            # that shows the whole diff. Reading the branch is otherwise a
-            # detour through git plumbing at the moment the run stops.
+            # The refusal carries what the human needs to judge the change.
+            # That is the signals that classified it, a diffstat, and the exact
+            # command that shows the whole diff. Reading the branch is
+            # otherwise a detour through git plumbing at the moment the run
+            # stops.
             msg_wt_land_authority_missing "$branch" "$reasons" \
                 "$(land_diffstat "$main_root" "$base" "$branch")" \
                 "git -C $main_root diff $base...$branch" \
@@ -504,25 +508,25 @@ cmd_land() {
     # land on the gate's assertion-level suite alone. A green check proves only
     # its assertion, not a browser journey or deployed health. Prove it with a
     # real-environment adapter (scripts/proof.sh) or a human sign-off
-    # (.hone-proof/<change>); otherwise land refuses before the merge and
-    # escalates. A change with no such declaration is never gated.
+    # (.hone-proof/<change>). Otherwise land refuses before the merge and
+    # escalates. This gate never fires for a change with no such declaration.
     #
-    # A committed .hone-proof-always marker widens that to every change: the
-    # project has an adapter and wants it run each time, so a change that
-    # forgot its trailer is still proven. Existence is the whole switch, and
+    # A committed .hone-proof-always marker widens that to every change. The
+    # project has an adapter and wants it run each time, so land still proves
+    # a change that forgot its trailer. Existence is the whole switch, and
     # the contents are free for a comment.
     #
     # A change to the adapter ITSELF gates on the file change, with no trailer
-    # and no marker needed. The adapter defines the verdict this gate trusts,
-    # so a change that rewrites it must not be judged by the copy it rewrites,
-    # and must not merge unseen either. Gating on the trailer alone left that
-    # hole open: a branch that weakened scripts/proof.sh and declared nothing
-    # never reached the bootstrap check below and merged with no human in the
+    # and no marker needed. The adapter defines the verdict this gate trusts.
+    # So the copy a change rewrites must not judge that change, and the change
+    # must not merge unseen either. Gating on the trailer alone left that
+    # hole open. A branch that weakened scripts/proof.sh and declared nothing
+    # never reached the bootstrap check below, and merged with no human in the
     # loop.
     local proof_always=""
     [ -f "$main_root/.hone-proof-always" ] && proof_always=yes
-    # Classify the bootstrap case here, OUTSIDE the condition, because it is now
-    # one of the three things that open the gate rather than a branch taken
+    # Classify the bootstrap case here, OUTSIDE the condition. It is now
+    # one of the three things that open the gate, not a branch taken
     # inside it.
     local bootstrap
     bootstrap=$(land_proof_bootstrap "$main_root" "$base" "$branch" "$change")
@@ -536,12 +540,12 @@ cmd_land() {
         fi
         if [ -z "$discharged" ]; then
             # Execute the PRIMARY tree's copy of the adapter, the reviewed and
-            # already-landed one, so a change cannot ship an always-green
-            # proof.sh of its own and wave itself through the gate. The
+            # already-landed one. So a change cannot ship an always-green
+            # proof.sh of its own and pass the gate with it. The
             # working directory is still the change's WORKTREE when it exists:
             # that tree holds the code under test (the primary tree is still
             # pre-merge here). A proof.sh that first appears inside the change
-            # itself does not count until it has landed; that first change
+            # itself does not count until it has landed. That first change
             # needs the human sign-off. Pass the change through, by argument
             # and environment, so the adapter can address its own instance (a
             # per-change port, DB, output dir) instead of guessing.
@@ -549,7 +553,7 @@ cmd_land() {
             # A BOOTSTRAP change (one that writes or edits scripts/proof.sh or
             # a probe) runs no adapter at all. The copy land holds is the copy
             # this change replaces, so running it proves the OLD adapter passes
-            # against the new code, and a green run would auto-land a change to
+            # against the new code. A green run would auto-land a change to
             # the proof adapter itself. The documented contract gives this case
             # no automatic route: the human runs the branch's own adapter from
             # the worktree and attests with its output.
@@ -569,7 +573,7 @@ cmd_land() {
             elif [ -f "$signoff" ]; then
                 # A sign-off exists but does not name this tip. That is the
                 # precise diagnosis, and it comes BEFORE the marker's
-                # no-adapter refusal: the human already knows the attest route
+                # no-adapter refusal. The human already knows the attest route
                 # and only has to run it again for the new tip. The marker
                 # message would instead hide that route and offer removing
                 # project policy.
@@ -607,7 +611,7 @@ cmd_land() {
     [ -n "$grant_note" ] && merge_args+=(-m "Authorized (irreversible change):"$'\n'"$grant_note")
     if ! git -C "$main_root" "${merge_args[@]}" >/dev/null 2>&1; then
         # A conflict means the independence check missed an overlap. Restore the
-        # shared tree so the next lander starts clean; the branch stays as
+        # shared tree so the next lander starts clean. The branch stays as
         # evidence to fold in serially. Its own exit code (9), so a caller can
         # tell "fold in serially" from a usage or repo-state error (2).
         git -C "$main_root" merge --abort 2>/dev/null
@@ -615,8 +619,8 @@ cmd_land() {
         return 9
     fi
     # Keep the post-merge run's output. On red it is the only record of what
-    # broke, and the merge is rolled back before anyone can re-run it. One file
-    # per primary tree, overwritten by each land.
+    # broke, and land rolls the merge back before anyone can re-run it. One
+    # file per primary tree, and each land overwrites it.
     local land_log
     land_log="$(cd "$common_dir" 2>/dev/null && pwd || printf '%s' "$common_dir")/hone-land.log"
     if ! ( cd "$main_root" && bash scripts/run-tests.sh --all ) >"$land_log" 2>&1; then
@@ -630,7 +634,7 @@ cmd_land() {
     # The gate holds every worktree to tests, type-check, and lint. The merge
     # result is a third tree: two changes that each append to one file can be
     # lint-green alone and lint-red merged. So land re-runs the same optional
-    # adapters the gate runs, into the same log, and a red adapter rolls the
+    # adapters the gate runs, into the same log. A red adapter rolls the
     # merge back exactly like a red suite.
     local adapter
     for adapter in typecheck lint; do
@@ -642,14 +646,15 @@ cmd_land() {
         fi
     done
     # Green, but green over nothing is not green. A tier whose selection stopped
-    # matching (a moved directory, a renamed suffix) exits 0 on zero tests, and
-    # the land log is the one place that shows it. Advisory: the merge stands,
+    # matching (a moved directory, a renamed suffix) exits 0 on zero tests. The
+    # land log is the one place that shows it. Advisory: the merge stands,
     # and the human decides.
     local zero_tiers
     zero_tiers=$(land_zero_tiers "$land_log")
     [ -n "$zero_tiers" ] && msg_wt_land_tier_empty "$zero_tiers" >&2
-    # Green: the merge is confirmed. Retire the worktree and its branch (cmd_remove
-    # runs from the primary tree, so it never refuses "the tree you are in").
+    # Green: the suite confirms the merge. Retire the worktree and its branch
+    # (cmd_remove runs from the primary tree, so it never refuses "the tree
+    # you are in").
     # Read the merge commit and the landed lockfiles BEFORE the cleanup: it
     # deletes the branch, and the diff needs it.
     local merge_sha lockfiles
@@ -775,7 +780,7 @@ cmd_status() {
     while IFS= read -r plan; do
         [ -f "$(dirname "$plan").md" ] && continue   # a Plan's reference, not a Plan
         change=${plan#.plans/}; change=${change%.md}
-        [ -d ".worktrees/$change" ] && continue      # mid-run; its worktree is listed below
+        [ -d ".worktrees/$change" ] && continue      # mid-run, and its worktree appears below
         msg_status_plan_pending "$plan"
         pending=$((pending+1))
     done < <(find .plans -type f -name '*.md' 2>/dev/null | sort)
@@ -871,8 +876,8 @@ cmd_remove() {
     git worktree prune
 
     # Land hygiene 1: a landed change's branch goes with its worktree. `-d`
-    # (not -D) so an unmerged branch (abandoned or unlanded work) survives as
-    # evidence rather than being destroyed.
+    # (not -D), so an unmerged branch (abandoned or unlanded work) survives as
+    # evidence.
     case "$branch" in
         hone/*)
             if ! git branch -d "$branch" >/dev/null 2>&1; then
@@ -882,7 +887,7 @@ cmd_remove() {
     esac
 
     # Land hygiene 2: a nested slug (auth/refresh-token) leaves empty parent
-    # dirs under .worktrees/ after removal; sweep them up to (not including)
+    # dirs under .worktrees/ after removal. Remove them up to (not including)
     # .worktrees itself.
     local parent
     parent=$(dirname "$wt")

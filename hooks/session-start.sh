@@ -2,16 +2,18 @@
 # SessionStart hook (Claude Code). Two jobs:
 #
 # 1. Inject the lean workflow rule into the session context, read live from the
-#    plugin. No file is written into the project, so the rule never goes stale,
-#    never churns in git, and never fights the project's markdown formatter. A
-#    legacy vendored copy at .claude/rules/<name>.md is honoured in place: it
-#    loads natively, so it is NOT re-injected (no double-load).
+#    plugin. The hook writes no file into the project, so the rule never goes
+#    stale, never churns in git, and never conflicts with the project's
+#    markdown formatter. The hook honours a legacy vendored copy at
+#    .claude/rules/<name>.md in place: it loads natively, so the hook does NOT
+#    re-inject it (no double-load).
 #
-# 2. Nudge a project that looks like it wants hone but has no test adapter to run
-#    setup, so the gate has something to run.
+# 2. Tell a project that looks like it wants hone but has no test adapter to
+#    run setup, so the gate has something to run.
 #
-# Disabled by the same .hone-off marker that turns off the rest of hone.
-# Mechanism: SessionStart hook stdout is injected into the session context.
+# The same .hone-off marker that disables the rest of hone disables this hook.
+# Mechanism: the harness injects SessionStart hook stdout into the session
+# context.
 
 set -uo pipefail
 
@@ -45,7 +47,7 @@ emitted=0
 for f in "$SOURCE_DIR"/*.md; do
     [ -f "$f" ] || continue
     name=$(basename "$f")
-    # Honour a legacy tracked vendored copy: it loads natively, don't re-inject.
+    # Honour a legacy tracked vendored copy: it loads natively, so do not re-inject it.
     [ -f "$FLAT_DIR/$name" ] && continue
     if [ "$emitted" -eq 0 ]; then
         printf '<!-- hone workflow rule (injected live from the plugin; edit upstream, not here) -->\n\n'
@@ -56,10 +58,10 @@ for f in "$SOURCE_DIR"/*.md; do
 done
 
 # A hone project carries durable artifacts (docs/decisions, docs/notes) or the
-# temporary .plans/ but no test adapter → the gate can't run. Point at setup.
-# These warnings go to STDOUT: a SessionStart hook's stdout is injected into
-# the session context, so the model actually sees them; stderr on exit 0 is
-# effectively invisible.
+# temporary .plans/ but no test adapter → the gate cannot run. Point at setup.
+# These warnings go to STDOUT: the harness injects a SessionStart hook's stdout
+# into the session context, so the model actually sees them. Stderr on exit 0
+# is effectively invisible.
 looks_like_hone=false
 if [ -d "$PROJECT_DIR/docs/decisions" ] || [ -d "$PROJECT_DIR/docs/notes" ] || [ -d "$PROJECT_DIR/.plans" ]; then
     looks_like_hone=true
@@ -70,18 +72,18 @@ if [ "$looks_like_hone" = true ] && [ ! -f "$PROJECT_DIR/scripts/run-tests.sh" ]
 fi
 
 # hone keys its enforcement off a src/<area>/ layout. A hone project with no src/
-# means the guard, gate, and nag silently do nothing. Surface that instead of
+# means the guard, gate, and nag silently do nothing. Report that instead of
 # leaving it a silent gap.
 if [ "$looks_like_hone" = true ] && [ ! -d "$PROJECT_DIR/src" ]; then
     msg_session_no_src
 fi
 
 # The settings deny rules are the file-tool half of hone's tamper resistance
-# for the adapters (the bash-guard closes the shell routes). They are
-# installed by hand, so nothing else notices when they are missing. A plugin
-# upgrade that grew the canonical list leaves them incomplete the same way.
-# Compare against the canonical list semantically (hone_missing_deny_rules:
-# either settings file, either spelling of a relative path) and name exactly
+# for the adapters (the bash-guard closes the shell routes). The human
+# installs them by hand, so nothing else notices when they are missing. A
+# plugin upgrade that grew the canonical list leaves them incomplete the same
+# way. Compare against the canonical list semantically (hone_missing_deny_rules:
+# either settings file, either spelling of a relative path). Name exactly
 # what is missing, so an upgrade is one paste instead of an investigation.
 if [ "$looks_like_hone" = true ]; then
     missing=$(hone_missing_deny_rules "$PROJECT_DIR" "$SCRIPT_DIR/../templates/settings/deny-rules.txt")

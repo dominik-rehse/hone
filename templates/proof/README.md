@@ -20,7 +20,7 @@ before the merge. Copy a template here to `scripts/proof.sh` and adapt it.
 - `land` invokes it as `proof.sh <change>`, with the working directory set to
   the *change's worktree* when it exists. That tree holds the code under test.
   The primary tree is still pre-merge at this point, so a proof run against it
-  would validate the old code's behaviour, not the change.
+  would validate the old code's behavior, not the change.
 - Environment: `HONE_CHANGE` (the change name), `HONE_BRANCH` (`hone/<change>`),
   `HONE_WORKTREE` (absolute path, empty if the worktree is gone),
   `HONE_MAIN_ROOT` (the primary tree).
@@ -49,7 +49,7 @@ with an isolated config/state root so a proof run cannot touch real state.
 instance beside production: its own port, its own database copy, the same
 secrets. Start from `service.sh`. If a project can only run its real
 environment in production, you have to build that second instance before this
-adapter can exist. Until then, the honest way through the gate is the human
+adapter can exist. Until then, the way through the gate is the human
 sign-off.
 
 Name every instance after `$HONE_CHANGE` rather than hardcoding one. Two

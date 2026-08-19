@@ -1,11 +1,11 @@
 # Roadmap: evaluating and optimizing hone itself
 
 hone's deletion bias applies to hone itself. This roadmap answers two
-standing questions. The occasional one: does each building block still earn
-its keep, and can what stays be smaller and cheaper? A building block here
+standing questions. The occasional one: is each building block still worth
+its cost, and can what stays be smaller and cheaper? A building block here
 is every hook, critic, gate, and paragraph of prompt prose. The recurring
-one, forced by model churn: which model belongs in which slot, and what
-changes when a new model ships? Both questions take the same instruments.
+one, forced by the pace of model releases: which model belongs in which slot, and what
+changes when a new model ships? Both questions take the same tools.
 The four stages below build them in deliberate order: dataset and metric
 first, end-to-end lab second, optimization last. Each stage is useful on
 its own even if the next never happens. Status as of July 2026.
@@ -17,13 +17,13 @@ block. Each class has a different legitimate evaluator:
 
 - *Model-compensating prose and judgment* (skill instructions, the critics,
   the nag). These exist because models at writing time did not supply the
-  behaviour unprompted. They expire as models improve. The unit suite
+  behavior unprompted. They expire as models improve. The unit suite
   (stage 0/1) evaluates trims within them. The lab (stage 2) evaluates
   removing them whole.
 - *Mechanical safety against the model* (guard, bash-guard, the settings deny
-  rules, the land gates). These defend against rare misbehaviour, so
+  rules, the land gates). These defend against rare misbehavior, so
   average-case evals under-measure them by construction. Only adversarial
-  scenarios (stage 2) can price them. Their deletion bar is higher anyway.
+  scenarios (stage 2) can measure their value. Their deletion bar is higher anyway.
   They are deterministic, and they are nearly free when not triggered. They
   are also part of what makes a human willing to leave a run unattended.
 - *Mechanical coordination* (worktrees, locks, land's merge-and-reverify).
@@ -31,10 +31,10 @@ block. Each class has a different legitimate evaluator:
   not the model. Better models therefore never obsolete them. This class is
   out of scope. Only a workflow redesign would remove one.
 
-Three rules hold for every deletion, whichever instrument proposed it:
+Three rules hold for every deletion, whichever tool proposed it:
 
 1. Eval coverage sets the limit of every deletion. A cut can degrade a
-   behaviour that no case pins, so coverage keeps growing alongside the
+   behavior that no case pins, so coverage keeps growing alongside the
    cutting.
 2. Test every deletion on the *floor* model supported, not the best one. A
    cut that holds on opus can break the sonnet user. hone runs on whatever
@@ -61,13 +61,13 @@ Each slot's assignment is a measurable question, not taste:
   2/3 everywhere is not a safe assignment. Only unanimity is.
 - The loop target across models finds the floor model that the skill's
   prose still carries (rule 2 above).
-- The lab prices each assignment end-to-end, cost per run against outcome.
+- The lab measures each assignment end-to-end, cost per run against outcome.
 
 A new model release triggers recalibration in both directions:
 
 - *Downward guard*: does the existing prose still hold? A new model can
   read the same instructions differently. The suite plus the lab's
-  behavioural track is the migration test.
+  behavioral track is the migration test.
 - *Upward opportunity*: which prose is now unnecessary? Section ablation
   (stage 1) answers it for paragraphs. The ablation matrix (stage 3b)
   answers it for whole components. This makes "prose expires as models
@@ -81,7 +81,7 @@ The agent frontmatter pins the critics to the floating `sonnet` alias, so
 the provider re-pointing that alias silently recalibrates production with
 no commit here. Pin full model IDs in the agent frontmatter and the review
 command. Treat an alias move as a deliberate, suite-gated migration (a
-normal versioned change) rather than ambient drift.
+normal versioned change) rather than a silent change.
 
 ## Where things live
 
@@ -144,7 +144,7 @@ plugin*. The lab runs headless Claude Code with hone installed, in a
 sandbox with an isolated `$HOME`, against fixture repos seeded with
 scenarios. It runs on two tracks:
 
-- *behavioural*: a happy-path change, a review that injects a real finding,
+- *behavioral*: a happy-path change, a review that injects a real finding,
   a claimed worktree, a change that trips the proof or authority gate. Does
   the run end in the right terminal state?
 - *adversarial*: planted temptations, such as:
@@ -161,7 +161,7 @@ to the Plan. They also check that the run cleaned the worktree and that the
 gates actually fired. One LLM judge decides what post-checks cannot. The
 verdict is three-valued: pass, fail, or *indeterminate* for infrastructure
 failures. The third value exists so a broken sandbox never reads as a
-behavioural result. Per-run cost and transcript capture are first-class
+behavioral result. Per-run cost and transcript capture are first-class
 outputs. Per-component ablation switches come free: the lab edits the
 sandboxed plugin copy's `hooks.json`, so the product needs no feature for
 it.
@@ -193,15 +193,15 @@ under one budget:
   families. One is efficiency: critic model downgrades, pre-baked review
   briefs, terser critic output contracts. The other is the *ablation
   matrix*, component × scenario set × model. It asks whether a block still
-  earns its keep ("without plan-critic, bad-plan scenarios fail at rate
+  is still worth its cost ("without plan-critic, bad-plan scenarios fail at rate
   X"). The matrix ablates class-2 components only against the adversarial
   track.
 
 The expectations are modest. hone is deliberately lean: one loop, two
 small critics. So the realistic wins are prompt length and cheaper critic
-models, not the 50–60% a large multi-reviewer system harvested from the
+models, not the 50–60% a large multi-reviewer system gained from the
 same method. The likely ablation outcome is confirming that the blocks
-earn their keep, with the wins landing *inside* components rather than in
+are worth their cost, with the wins landing *inside* components rather than in
 removing them. That is a prior the deletion bias says to test, not trust.
 The lab is worth building regardless. Optimization is then a cheap add-on,
 not the justification.

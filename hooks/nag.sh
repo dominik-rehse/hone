@@ -8,12 +8,12 @@
 #      fully-merged hone/<change> branch. Consolidate should have deleted it.
 #      "No worktree" alone is NOT evidence: that is the normal plan→run gap
 #      (hone authors Plans first and runs them later, often from another
-#      session), and flagging it nags every queued Plan into alarm fatigue.
+#      session). Flagging it nags every queued Plan into alarm fatigue.
 #      Pending Plans get at most one aggregate advisory line. (A Plan whose
-#      worktree still exists is active work, not flagged either way.)
+#      worktree still exists is active work, and the nag does not flag it.)
 #      <change> may be nested (auth/refresh-token): the plan skill derives
 #      slugs mirroring src/, so the scan must recurse. The sibling-<dir>.md
-#      giveaway below stays unambiguous because the plan skill refuses a slug
+#      signal below stays unambiguous because the plan skill refuses a slug
 #      that collides with an existing Plan's directory (and vice versa).
 #   2. Oversized Note: a docs/notes/<area>.md over the size cap (a Note is a
 #      map + one invariant, not a spec: half a screen).
@@ -21,41 +21,41 @@
 #      Notes are 1:1 with an existing area.
 #   8. Undated spike entry: anything directly under docs/spikes/ whose name
 #      does not open with YYYY-MM-DD, of any type, file or directory. The date
-#      is the whole signal that a spike is frozen history, so garden leaves it
-#      alone and no reader mistakes it for a live document. Nothing else about
-#      a spike is checkable: its size is whatever the investigation needed, and
-#      its content is past tense by construction.
+#      is the whole signal that a spike is frozen history. So garden does not
+#      touch it, and no reader mistakes it for a live document. Nothing else
+#      about a spike is checkable: its size is whatever the investigation
+#      needed, and its content is past tense by construction.
 #   6. Broken Governs link: a Decision or Note declaring `Governs: <path>` whose
-#      path no longer exists. The optional `Governs:` line pins durable prose to
-#      the code it explains: when the code moves or is deleted, the dangling
-#      reference is mechanical proof the doc drifted. Only path-shaped tokens
-#      (containing "/") are checked (exact and unfoolable); symbol-level drift
-#      stays the consolidate-critic's judgment call. This is the mechanical half
-#      of catching the one staleness the model warns can pass silently (unverified
-#      prose): a hook, not a once-run critic.
+#      path no longer exists. The optional `Governs:` line pins durable prose
+#      to the code it explains. When the code moves or a change deletes it, the
+#      dangling reference is mechanical proof the doc drifted. The check reads
+#      only path-shaped tokens (containing "/"), so it is exact. Symbol-level
+#      drift stays the consolidate-critic's judgment call. This is the
+#      mechanical half of catching the one staleness the model warns can pass
+#      silently (unverified prose): a hook, not a once-run critic.
 #   4. Change that cuts nothing: on a clean hone/<change> branch (committed,
 #      about to land), the branch's whole diff against its merge base has zero
-#      deletions. "Every cycle removes something" is the model's principle 4;
-#      a purely additive change means consolidate pruned nothing. A hard rule
+#      deletions. "Every cycle removes something" is the model's principle 4.
+#      A purely additive change means consolidate pruned nothing. A hard rule
 #      here would incentivize token deletions, so the finding names the
 #      principle and leaves the judgment to consolidate.
 #   5. Landed branch left behind: in the PRIMARY tree, a hone/* branch fully
-#      merged into HEAD with no worktree attached. Land removes the worktree;
-#      the merged branch should go with it (git branch -d) or they accumulate
+#      merged into HEAD with no worktree attached. Land removes the worktree.
+#      The merged branch should go with it (git branch -d), or they accumulate
 #      one per change, forever.
 #   7. Durable truth stranded in harness memory: a `type: project` memory file
 #      under the harness's per-project memory directory. That directory is the
 #      agent harness's own store, outside the repo: per-user, uncommitted,
-#      unreviewed, and invisible to garden, so a decision or constraint left
+#      unreviewed, and invisible to garden. So a decision or constraint left
 #      there governs nothing. Types `user`/`feedback`/`reference` are the
-#      human's own and are not checked. The file belongs to the human, so hone
-#      names it and never touches it.
+#      human's own, and the nag does not check them. The file belongs to the
+#      human, so hone names it and never touches it.
 #
 # The nag is ADVISORY: it reports its findings and exits 0, never blocking the
-# stop (the gate is the blocking hook). Findings ride a {"systemMessage": ...}
-# on stdout, the one non-blocking channel a Stop hook has that is actually
-# shown (stderr on exit 0 reaches neither the model nor the user). Disabled
-# entirely by .hone-off.
+# stop (the gate is the blocking hook). Findings go out as a {"systemMessage":
+# ...} on stdout, the one non-blocking channel a Stop hook has that the harness
+# actually shows. Stderr on exit 0 reaches neither the model nor the user.
+# .hone-off disables the nag entirely.
 
 set -uo pipefail
 
@@ -71,7 +71,7 @@ cd "$PROJECT_ROOT" || exit 0
 [ -f ".hone-off" ] && exit 0
 
 # Note size cap: lines. "Half a screen". A Note past this has drifted toward a
-# spec and should be cut or split.
+# spec and needs a cut or a split.
 NOTE_MAX_LINES=40
 
 findings=""
@@ -82,14 +82,14 @@ add_finding() {
 }
 
 # 1. Leftover Plan. Recurse: slugs are nested (.plans/<area>/<change>.md).
-# Flag only on landed evidence (see the header); otherwise count as pending.
+# Flag only on landed evidence (see the header). Otherwise count as pending.
 if [ -d ".plans" ]; then
     pending=0
     while IFS= read -r plan; do
         # A markdown file inside .plans/<slug>/ is one of the Plan's REFERENCES,
-        # not a Plan: the plan skill puts them in a directory named for the Plan
-        # beside it, so the giveaway is a sibling <dir>.md. Without this, a
-        # reference would be counted as a pending Plan that never runs.
+        # not a Plan. The plan skill puts them in a directory named for the Plan
+        # beside it, so the signal is a sibling <dir>.md. Without this, the nag
+        # would count a reference as a pending Plan that never runs.
         [ -f "$(dirname "$plan").md" ] && continue
         change=${plan#.plans/}
         change=${change%.md}
@@ -122,7 +122,7 @@ if [ -d "docs/notes" ]; then
     done
 fi
 
-# 3. Orphan Note. area = the note's basename; expect src/<area>/ to exist.
+# 3. Orphan Note. area = the note's basename. Expect src/<area>/ to exist.
 if [ -d "docs/notes" ]; then
     for note in docs/notes/*.md; do
         [ -e "$note" ] || continue
@@ -134,12 +134,12 @@ if [ -d "docs/notes" ]; then
 fi
 
 # 8. Undated spike entry. Everything one spike leaves behind lives under
-# docs/spikes/ and shares a dated stem, whatever its type: the note, the probe
-# that produced it, a mockup, a captured payload. The date at the front is what
-# says "frozen history" to a reader and to garden, so check every entry at the
-# top level, not only the markdown. A spike with several files uses a dated
-# DIRECTORY, which this checks the same way, and never looks inside: what a
-# probe names its own files is the probe's business.
+# docs/spikes/ and shares a dated stem, whatever its type. That covers the
+# note, the probe that produced it, a mockup, a captured payload. The date at
+# the front is what says "frozen history" to a reader and to garden. So check
+# every entry at the top level, not only the markdown. A spike with several
+# files uses a dated DIRECTORY, which this checks the same way, and never looks
+# inside. What a probe names its own files is the probe's business.
 if [ -d "docs/spikes" ]; then
     for spike in docs/spikes/*; do
         [ -e "$spike" ] || continue
@@ -150,10 +150,11 @@ if [ -d "docs/spikes" ]; then
     done
 fi
 
-# 6. Broken Governs link. A Decision or Note may declare a `Governs:` line naming
-# the src/ paths it explains; a dangling path proves the prose drifted from the
-# code. Path-shaped tokens only (exact existence check); backticks and trailing
-# commas/periods are stripped so `Governs: `src/auth/token.ts`, ...` parses.
+# 6. Broken Governs link. A Decision or Note may declare a `Governs:` line
+# naming the src/ paths it explains. A dangling path proves the prose drifted
+# from the code. Path-shaped tokens only (exact existence check). The parse
+# strips backticks and trailing commas and periods, so
+# `Governs: `src/auth/token.ts`, ...` parses.
 if [ -d "docs/decisions" ] || [ -d "docs/notes" ]; then
     while IFS= read -r doc; do
         [ -e "$doc" ] || continue
@@ -173,9 +174,9 @@ fi
 # 7. Durable truth stranded in harness memory. The harness keys its per-project
 # memory directory by the project's absolute path with "/" replaced by "-". That
 # key is an undocumented harness detail, so this check FAILS OPEN: an absent or
-# renamed directory simply yields nothing, never a false finding. Both the
-# symlink-resolved and the as-given project path are tried, since the harness may
-# have keyed on either.
+# renamed directory simply yields nothing, never a false finding. The check
+# tries both the symlink-resolved and the as-given project path, since the
+# harness may have keyed on either.
 MEM_ROOT="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
 if [ -d "$MEM_ROOT" ]; then
     seen_mem=""
@@ -198,7 +199,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     COMMON_DIR=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P)
 
     # 4. Change that cuts nothing. Only on a clean hone/* branch (the pre-land
-    # moment, same trigger as the gate's --all tier); mid-build churn is noise.
+    # moment, same trigger as the gate's --all tier). Mid-build churn is noise.
     # The merge target is whatever branch the PRIMARY tree has checked out.
     case "$BRANCH" in
         hone/*)
