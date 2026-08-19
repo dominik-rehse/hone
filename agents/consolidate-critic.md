@@ -40,12 +40,21 @@ the code, and if it were expressible as a type it would already be one.
   three: duplication is cheaper than the wrong abstraction.
 - **A stale or leftover artifact.** The Plan not deleted; an open question resolved
   by this change but left open; a decision superseded but not collapsed.
+- **A spike note doing a spec's job.** A `docs/spikes/<date>-<slug>.md` is
+  frozen history: what somebody tried on that date, and where the finding went.
+  Argue for the cut when it instead describes what the system does today, or
+  when it has no forward pointer to the Decision, Note, or open question that
+  carries the finding, or when the change made that pointer dangle. A note
+  whose whole content is the conclusion is also a cut: the conclusion already
+  lives in its real home, and the note exists only for the method and the dead
+  ends. Never argue to cut one for being out of date, and never propose to
+  update one.
 
 ## Output
 
 First list your findings, most-severe first. For each: a category
 (`decision-restates-code` | `note-drift` | `redundant-test` |
-`over-abstraction` | `leftover`), the specific file/line, the argument for the
+`over-abstraction` | `leftover` | `spike-drift`), the specific file/line, the argument for the
 cut, and the concrete edit (delete X; move Y into a test; merge types A and B).
 Then, on the last line, a verdict that **follows from the list you just wrote**:
 `CUTS PROPOSED` if you listed at least one finding, `CLEAN` if the list is empty.
@@ -65,7 +74,10 @@ downgrades a change from `CLEAN`:
   test; these are **complementary**, not redundant (a property test hammers an
   invariant; example and golden tests pin specific behaviour), so proposing to cut
   one for the other is a wrong cut, not a finding;
-- a Decision or Note that genuinely carries why/intent the code can't show.
+- a Decision or Note that genuinely carries why/intent the code can't show;
+- a spike note that reads as out of date. It is dated, past-tense history, and
+  ageing is what it is for. Only a dead forward pointer or a drift into
+  present-tense behaviour makes it a finding.
 
 Keep the deletion bias for what truly fails the cut test, but a genuinely lean
 change earns an honest `CLEAN`, and that is a correct, expected result, not a

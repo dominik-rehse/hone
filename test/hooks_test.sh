@@ -79,6 +79,18 @@ denied "$out" && ok ".hone-grant/ write denied in primary tree" || bad "should d
 out=$(guard_write ".hone-proof/ui-flow" "$WT")
 denied "$out" && ok ".hone-proof/ write denied in a worktree" || bad "should deny .hone-proof/ writes in a worktree"
 
+echo "== guard: docs/spikes/ is writable in the primary tree =="
+# A spike note is dated, frozen history written outside the loop, and the probe
+# it records usually precedes any Plan. So it is the one path under docs/ the
+# primary-tree rule lets through, exactly as it lets .plans/ through.
+out=$(guard_write "docs/spikes/2026-08-19-sse-backpressure.md" "$REPO")
+denied "$out" && bad "docs/spikes/ should be writable in the primary tree" || ok "docs/spikes/ note allowed in the primary tree"
+out=$(guard_write "docs/spikes/2026-08-19-sse-backpressure.html" "$REPO")
+denied "$out" && bad "spike evidence should be writable in the primary tree" || ok "spike companion evidence allowed"
+out=$(guard_write "docs/notes/auth.md" "$REPO")
+denied "$out" || bad "the rest of docs/ must stay denied in the primary tree"
+denied "$out" && ok "docs/ outside spikes/ still denied in the primary tree"
+
 echo "== guard: .hone-off disables it =="
 touch "$REPO/.hone-off"
 out=$(guard_write "src/auth/login.ts" "$REPO")
@@ -471,6 +483,20 @@ printf '| in | out |\n' > "$REPO/.plans/withrefs/cases.md"
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "withrefs/cases" && bad "a reference must not be read as a Plan" || ok "markdown reference not counted as a Plan"
 rm -rf "$REPO/.plans/withrefs" "$REPO/.plans/withrefs.md"
+
+echo
+echo "== nag: undated spike note =="
+# The date at the front is the whole signal that a spike note is frozen
+# history. Without it the note reads as a live document, and garden would be
+# right to treat it as one.
+mkdir -p "$REPO/docs/spikes"
+printf '# Spike\n' > "$REPO/docs/spikes/sse-backpressure.md"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "sse-backpressure.md carries no date" && ok "undated spike note flagged" || bad "should flag a spike note with no date"
+mv "$REPO/docs/spikes/sse-backpressure.md" "$REPO/docs/spikes/2026-08-19-sse-backpressure.md"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "carries no date" && bad "a dated spike note must not be flagged" || ok "dated spike note not flagged"
+rm -rf "$REPO/docs/spikes"
 
 echo
 echo "== nag: durable truth stranded in harness memory =="

@@ -19,6 +19,12 @@
 #      map + one invariant, not a spec: half a screen).
 #   3. Orphan Note: a docs/notes/<area>.md with no corresponding src/<area>/.
 #      Notes are 1:1 with an existing area.
+#   8. Undated spike note: a docs/spikes/*.md whose name does not open with
+#      YYYY-MM-DD. The date is the whole signal that a spike note is frozen
+#      history, so garden leaves it alone and no reader mistakes it for a live
+#      document. Nothing else about a spike note is checkable: its size is
+#      whatever the investigation needed, and its content is past tense by
+#      construction.
 #   6. Broken Governs link: a Decision or Note declaring `Governs: <path>` whose
 #      path no longer exists. The optional `Governs:` line pins durable prose to
 #      the code it explains: when the code moves or is deleted, the dangling
@@ -124,6 +130,19 @@ if [ -d "docs/notes" ]; then
         if [ ! -d "src/$area" ]; then
             add_finding "$(msg_nag_note_orphan "$note" "$area")"
         fi
+    done
+fi
+
+# 8. Undated spike note. A spike note is frozen history, and the date at the
+# front of its name is what says so to a reader and to garden. An undated one
+# reads as a live document and starts competing with the Notes.
+if [ -d "docs/spikes" ]; then
+    for spike in docs/spikes/*.md; do
+        [ -e "$spike" ] || continue
+        case "$(basename "$spike")" in
+            [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*) ;;
+            *) add_finding "$(msg_nag_spike_undated "$spike")" ;;
+        esac
     done
 fi
 

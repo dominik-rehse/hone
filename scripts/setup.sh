@@ -52,7 +52,9 @@ else
 fi
 
 # 2. Gitignore the per-developer artifacts: the worktrees, the .hone-off kill
-# switch, and the per-change grant/proof sign-offs. NOT .plans/ (a Plan is
+# switch, the per-change grant/proof sign-offs, and spikes/ (throwaway
+# exploration code, which no hook guards and nothing commits; the finding worth
+# keeping goes to docs/spikes/ instead). NOT .plans/ (a Plan is
 # tracked; it lands in git history and consolidate removes it with a git rm the
 # landing merge carries) and NOT the policy files (.hone-durable-paths,
 # .hone-irreversible-paths): those are project policy, committed and shared.
@@ -60,7 +62,7 @@ fi
 # policy files back when they were per-developer) are stripped so they can be
 # committed or deleted.
 touch .gitignore
-for entry in ".worktrees/" ".hone-off" ".hone-grant/" ".hone-proof/"; do
+for entry in ".worktrees/" ".hone-off" ".hone-grant/" ".hone-proof/" "spikes/"; do
     grep -qxF "$entry" .gitignore || printf '%s\n' "$entry" >> .gitignore
 done
 for stale in ".plans/" ".hone-test-globs" ".hone-gate-enforce" ".hone-nag-enforce" \

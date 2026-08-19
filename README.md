@@ -128,6 +128,13 @@ and reconcile the repo's own artifacts.
   invoke it when you want a maintenance pass. Small, frequent passes beat
   one big sweep.
 
+Exploration sits outside that loop. Throwaway probe code goes in `spikes/`,
+which is gitignored and which no hook guards, and you delete it once it has
+answered its question. Where the method or the dead ends are worth keeping,
+one dated note stays at `docs/spikes/<YYYY-MM-DD>-<slug>.md`, written once and
+never updated. That date is what lets a spike note age without becoming a lie,
+which is the one exemption from everything above.
+
 You normally type `/hone:plan` and `/hone:run` yourself. Another agent may
 invoke them too, so a larger workflow can drive a change end to end.
 `/hone:setup`, `/hone:garden`, and `/hone:herd` stay yours alone.

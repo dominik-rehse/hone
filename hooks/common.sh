@@ -78,6 +78,13 @@ hone_extract_field() {
 # sets.
 hone_is_durable() {
     case "$1" in
+        # A spike note is dated, frozen history, and its author writes it
+        # outside the loop like a Plan. Exploration usually precedes any Plan,
+        # and often produces none, so the note has to be writable in the tree
+        # where the probe ran. The built-in docs/ rule therefore skips it. A
+        # project that wants it protected can still list it in
+        # .hone-durable-paths, which the loop below still reads.
+        docs/spikes/*) ;;
         src/*|tests/*|docs/*|db/*|scripts/*) return 0 ;;
         .hone-durable-paths|.hone-irreversible-paths|.hone-consequential-paths) return 0 ;;
         .hone-proof-always|.hone-review-always) return 0 ;;

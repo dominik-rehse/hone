@@ -16,8 +16,8 @@ mechanical steps.
    `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` is the non-interactive
    fallback. It is safe to repeat: it leaves your adapter, docs, and
    `.plans/` alone, keeps the per-developer files gitignored (`.hone-off`,
-   `.hone-grant/`, `.hone-proof/`), and strips `.gitignore` entries for
-   things hone no longer uses.
+   `.hone-grant/`, `.hone-proof/`, and `spikes/`), and strips `.gitignore`
+   entries for things hone no longer uses.
 
 3. *Reconcile what your version predates.* Check each of these against
    [`reference.md`](reference.md):

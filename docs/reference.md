@@ -313,10 +313,12 @@ repo/                            # the primary tree: a merge target, never a wor
 ├── docs/
 │   ├── decisions/<topic>.md     # one present-tense decision + why, per topic
 │   ├── notes/<area>.md          # optional per-area map + one invariant, size-capped
+│   ├── spikes/<date>-<slug>.md  # optional frozen note per spike, plus its evidence
 │   └── open-questions.md        # bets only running code can settle
 ├── scripts/run-tests.sh         # the test adapter (plus optional typecheck/lint/proof)
 ├── .plans/<change>.md           # tracked; written at plan, deleted at consolidate
 ├── .plans/<change>/             # optional reference files for the Plan
+├── spikes/                      # gitignored; throwaway exploration, no hook guards it
 ├── .worktrees/<change>/         # gitignored; one per change in flight
 ├── .hone-durable-paths          # committed policy (optional)
 ├── .hone-irreversible-paths     # committed policy (optional)
@@ -335,6 +337,7 @@ hone/
 ├── scripts/{worktree,setup}.sh
 ├── agents/                      # plan-critic, consolidate-critic
 ├── templates/{run-tests,proof}/ # adapter contracts and templates
+├── templates/spike-note.md      # the shape of a frozen spike note
 ├── templates/settings/          # the canonical deny-rules list
 └── evals/                       # known-good answers for the critics and the loop
 ```
@@ -362,3 +365,21 @@ step that writes tests). consolidate's `.plans/` prune is the `git rm` of the
 Plan and any references build did not promote. garden is not part of a
 change: it is the standalone maintenance loop, and every column it touches is
 a deletion.
+
+Spikes are outside the table, because a spike is not a change. Throwaway
+exploration code goes in the gitignored `spikes/`, which no hook guards and
+which you delete once it has answered its question. Where the method or the
+dead ends outlive the conclusion, one frozen note stays at
+`docs/spikes/<YYYY-MM-DD>-<slug>.md`, with any companion evidence under the
+same stem. Both `plan` (before a Plan exists) and `consolidate` (after the
+change) write such a note, and `docs/spikes/` is the one path under `docs/`
+the guard leaves writable in the primary tree, exactly as it leaves `.plans/`.
+
+A spike note is write-once, past tense, and it always points forward to the
+Decision, Note, or open question that carries the finding. The date in the name
+is what says so: the `nag` reports a note without one, `garden` never cuts a
+note for being old, and nobody updates one. A note that starts describing what
+the system does today has become a second spec, and the
+`consolidate-critic` argues for that cut. Copy the shape from
+[`templates/spike-note.md`](../templates/spike-note.md). Do not create
+`docs/spikes/` before a spike's evidence actually outlives its conclusion.

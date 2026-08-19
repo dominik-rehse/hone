@@ -65,6 +65,23 @@ prose. The gap between the two is what the case pins.
   red test to write first. Without the rule that says so, the missing test reads
   as a placeholder.
 
+*`consolidate-critic`*, the verdict on what a change left behind:
+
+- `spike-note-may-age`: CLEAN, stub CLEAN 3/3. The stub agrees, so by the rule
+  above this case is a no-op and belongs in the bin. It stays because the
+  neutral stub is the wrong baseline here. What it pins is not judgment the
+  model lacks. It is a guard against hone's *own* deletion bias, which the stub
+  does not carry. The real baseline is the critic prompt with the spike
+  paragraph removed. Measured against it, the critic cuts the aged spike note
+  2/3, where the full prompt leaves it 3/3. The paragraph is load-bearing, and this case
+  is what keeps it honest.
+
+  Read that as a limit of the ablation rule, not an exception to it. The rule
+  asks whether hone's prose changes the answer, and the stub is a cheap proxy
+  for that. Where a paragraph exists to counteract another paragraph, the
+  proxy breaks, and the ablation has to run against the prompt minus the
+  paragraph instead.
+
 *`loop`*, the next action `run` takes:
 
 - `land-authority-gate`: RECORD, stub ASK 3/3 (measured 2026-08-18, when the
@@ -88,14 +105,16 @@ plan-critic pair do.
 
 ## Known gaps
 
-The cut opened two holes. Both are deliberate, and the suite covers neither.
+The cut opened two holes. Both are deliberate, and the suite barely covers
+either.
 
-*`consolidate-critic` has no cases.* All 13 were no-ops, because a model with no
-hone prose reached the same verdict on every one. A change to
-`agents/consolidate-critic.md` is therefore ungated. `run.sh` fails that target
-loudly rather than reporting an empty green, so the gap is visible on every run.
-Closing it needs briefs harder than the model's default judgment, not the old
-ones back.
+*`consolidate-critic` has one case, and most of the target stays ungated.* All
+13 original cases were no-ops. A model with no hone prose reached the
+same verdict on every one. `spike-note-may-age` (2026-08-19) is the first
+replacement, and it pins one paragraph rather than the critic as a whole.
+`run.sh` fails an empty target loudly rather than reporting an empty green.
+The remaining gap therefore stays visible. Closing it needs briefs harder than
+the model's default judgment, not the old ones back.
 
 *`plan-critic` has no REJECT case.* Both survivors expect APPROVE, so an
 always-APPROVE critic scores 2/2. The suite can no longer see a critic that has

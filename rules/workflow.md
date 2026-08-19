@@ -24,6 +24,18 @@ if something can be a type, make it a type instead of prose. The Plan is
 committed at plan time but deleted at consolidate: git history keeps it, the
 working tree does not.
 
+Exploration has its own two homes, because a probe is not a change. Throwaway
+code lives in `spikes/`, which is gitignored and which no hook guards. Delete
+it once it has answered its question. Where the investigation is worth keeping
+after that, it becomes one frozen note at
+`docs/spikes/<YYYY-MM-DD>-<slug>.md`. Write that note once, in the past tense,
+and never maintain it against the code. It always points forward to the
+Decision, Note, or Plan that now carries the finding. Companion evidence shares
+the note's stem
+(`<YYYY-MM-DD>-<slug>.html`). The date is what exempts a spike note from the
+staleness rules above. Do not open `docs/spikes/` before a spike's evidence
+actually outlives its conclusion.
+
 Memory the harness saves outside the repo is not project documentation: it is
 per-user, unreviewed, uncommitted, and invisible to the hooks, the critics,
 and `garden`, so a decision or invariant stored there governs nothing. Read
