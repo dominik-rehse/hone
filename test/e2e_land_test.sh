@@ -356,28 +356,45 @@ $trailer")
     bash "$WSH" remove "$WT_S" >/dev/null 2>&1; git branch -D "hone/spelling-$n" >/dev/null 2>&1
 done
 step "one parser handles an uppercase, double-hyphen, and separatorless trailer"
-# (b4) The bootstrap case: a change that writes the proof adapter itself, or one
-# of its probes, cannot be proven by the copy land holds, so the refusal tells
-# the human to run the branch's own adapter from the worktree.
+# (b4) The bootstrap case: a change that rewrites the proof adapter, or a probe
+# that already exists, cannot be proven by the copy land holds, so the refusal
+# tells the caller to run the branch's own adapter from the worktree. Land a
+# probe first, so the second case below edits one that already exists.
+mkdir -p "$REPO/scripts/proof-probes"
+printf '#!/bin/bash\nexit 0\n' > "$REPO/scripts/proof-probes/journey.sh"
+git add scripts/proof-probes/journey.sh && git commit -qm "chore(proof): land the journey probe"
 n=0
 for target in scripts/proof.sh scripts/proof-probes/journey.sh; do
     n=$((n+1))
     WT_BS=$(bash "$WSH" add "bootstrap-$n") || die "worktree add bootstrap-$n"
     mkdir -p "$WT_BS/$(dirname "$target")"
-    printf '#!/bin/bash\nexit 0\n' > "$WT_BS/$target"
-    (cd "$WT_BS" && git add -A && git commit -qm "feat(proof): add $target
+    printf '#!/bin/bash\n# rewritten by bootstrap-%s\nexit 0\n' "$n" > "$WT_BS/$target"
+    (cd "$WT_BS" && git add -A && git commit -qm "feat(proof): rewrite $target
 
 Proof: real-environment - run the new adapter by hand")
     out=$(bash "$WSH" land "bootstrap-$n" 2>&1); rc=$?
-    [ "$rc" -eq 7 ] || die "a change writing $target should exit 7 (got $rc)"
+    [ "$rc" -eq 7 ] || die "a change rewriting $target should exit 7 (got $rc)"
     echo "$out" | grep -q "land cannot use the copy it has" || die "the gate should explain the bootstrap case for $target"
     echo "$out" | grep -qF "bash scripts/proof.sh bootstrap-$n" || die "the gate should print the by-hand proof command for $target"
     bash "$WSH" remove "$WT_BS" >/dev/null 2>&1; git branch -D "hone/bootstrap-$n" >/dev/null 2>&1
 done
+# A change that only ADDS its own probe is writing its own check, like a test,
+# and the adapter that judges it is untouched. Its trailer still gates it, but
+# the bootstrap rule never does.
+WT_NP=$(bash "$WSH" add new-probe) || die "worktree add new-probe"
+mkdir -p "$WT_NP/scripts/proof-probes"
+printf '#!/bin/bash\nexit 0\n' > "$WT_NP/scripts/proof-probes/new-probe.sh"
+(cd "$WT_NP" && git add -A && git commit -qm "feat(proof): add this change's own probe
+
+Proof: real-environment - run the probe by hand")
+out=$(bash "$WSH" land new-probe 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "the trailer should still gate the added-probe change (got $rc)"
+echo "$out" | grep -q "land cannot use the copy it has" && die "adding a new probe must not open the bootstrap gate"
+bash "$WSH" remove "$WT_NP" >/dev/null 2>&1; git branch -D "hone/new-probe" >/dev/null 2>&1
 # A change that leaves the adapter alone gets no bootstrap hint.
 out=$(bash "$WSH" land ui-flow 2>&1)
 echo "$out" | grep -q "land cannot use the copy it has" && die "an unrelated change should get no bootstrap hint"
-step "a change touching proof.sh or a probe gets the bootstrap instruction"
+step "proof.sh and an edited probe gate; a newly added probe does not"
 # (c) A sign-off that names no commit does not satisfy it: an unbound
 # sign-off would outlive the code it attested.
 mkdir -p "$REPO/.hone-proof"
@@ -529,16 +546,17 @@ bash "$WSH" land bootstrap-silent >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a tip-naming sign-off should land the undeclared adapter change (got $rc)"
 rm -f "$REPO/.hone-proof/bootstrap-silent" "$REPO/proof-context"
 step "an adapter change with no trailer is gated too (exit 7), and a sign-off lands it"
-# A probe carries the same weight as the adapter, trailer or not.
+# An EDIT to a probe that already exists carries the same weight as the adapter,
+# trailer or not: that probe guards a change that landed before this one.
 WT_BP=$(bash "$WSH" add probe-silent) || die "worktree add probe-silent"
 mkdir -p "$WT_BP/scripts/proof-probes"
-printf '#!/bin/bash\nexit 0\n' > "$WT_BP/scripts/proof-probes/journey.sh"
-(cd "$WT_BP" && git add -A && git commit -qm "chore(proof): add a probe, no trailer")
+printf '#!/bin/bash\n# weakened, and nothing declared\nexit 0\n' > "$WT_BP/scripts/proof-probes/journey.sh"
+(cd "$WT_BP" && git add -A && git commit -qm "chore(proof): weaken a probe, no trailer")
 out=$(bash "$WSH" land probe-silent 2>&1); rc=$?
-[ "$rc" -eq 7 ] || die "an undeclared probe change should exit 7 (got $rc)"
+[ "$rc" -eq 7 ] || die "an undeclared probe edit should exit 7 (got $rc)"
 echo "$out" | grep -q "land cannot use the copy it has" || die "the probe refusal should explain the bootstrap case"
 bash "$WSH" remove "$WT_BP" >/dev/null 2>&1; git branch -D hone/probe-silent >/dev/null 2>&1
-step "an undeclared probe change is gated too (exit 7)"
+step "an undeclared edit to an existing probe is gated too (exit 7)"
 # A change that leaves the adapter alone still needs no proof at all: the gate
 # widened to the adapter's own files, and to nothing else.
 WT_BN=$(bash "$WSH" add adapter-untouched) || die "worktree add adapter-untouched"

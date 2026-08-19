@@ -12,8 +12,11 @@ before the merge. Copy a template here to `scripts/proof.sh` and adapt it.
 - `land` executes the *primary tree's copy* of the adapter (the reviewed,
   already-landed one), so a change cannot ship an always-green `proof.sh` of
   its own. land trusts a change that introduces or edits `proof.sh` only after
-  that adapter change has landed. Until then, the human sign-off is the way
-  through the gate.
+  that adapter change has landed. Until then, the sign-off is the way through
+  the gate. The same holds for a change that edits a probe which already
+  exists. A change that only *adds* its own new probe is not gated this way.
+  The adapter that judges it stays the reviewed copy, and a new probe is a
+  check the change writes for itself, like its tests.
 - `land` invokes it as `proof.sh <change>`, with the working directory set to
   the *change's worktree* when it exists. That tree holds the code under test.
   The primary tree is still pre-merge at this point, so a proof run against it

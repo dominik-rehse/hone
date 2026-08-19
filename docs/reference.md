@@ -203,17 +203,26 @@ after the dash on the `Proof: real-environment` line. You run that check, so
 you should not have to open the Plan to read it. An older trailer carries no
 description, and the message stays generic.
 
-One change has no automatic route. Where the diff touches `scripts/proof.sh`
-or anything under `scripts/proof-probes/`, land cannot prove it. The copy land
-holds is the one the change replaces. The refusal then
-tells you to run `bash scripts/proof.sh <change>` from the worktree in your
-own terminal, and to attest with its output.
+One change has no automatic route. Where the diff rewrites the proof harness,
+land cannot prove it, because the copy land holds is the one the change
+replaces. Two diffs count as rewriting it: any change to `scripts/proof.sh`,
+and a change to a probe under `scripts/proof-probes/` that already exists. The
+refusal then tells you to run `bash scripts/proof.sh <change>` from the
+worktree in your own terminal, and to attest with its output.
 
-That same diff also *arms* the gate on its own. A change touching the adapter
-or a probe needs no trailer and no marker to reach exit 7. The adapter defines
-the verdict this gate trusts, so a change to it always reaches you. The loop
-may still write that change in its worktree, which is why the gate carries the
-weight instead of a ban on writing.
+That same diff also *arms* the gate on its own. Such a change needs no trailer
+and no marker to reach exit 7. The adapter defines the verdict this gate
+trusts, so a change to it always reaches you. The loop may still write that
+change in its worktree, which is why the gate carries the weight instead of a
+ban on writing.
+
+A change that only *adds* a new probe is outside this. It writes its own check,
+the way it writes its own tests, and the adapter that judges it stays the
+reviewed copy. Without this exception the gate fired on every proof-carrying
+change in a project whose adapter asks each change for its own probe. That is
+the shape [`templates/proof/README.md`](../templates/proof/README.md)
+recommends. An edit to a probe that already exists still arms the gate: that
+probe guards a change that landed earlier.
 
 The agent never writes a grant or sign-off and never runs the helpers: the
 guard denies the file-tool routes and the bash-guard the shell routes (a

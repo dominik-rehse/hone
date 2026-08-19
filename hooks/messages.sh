@@ -567,7 +567,7 @@ hone_msg_proof_check() {
 hone_msg_proof_bootstrap() {
     [ -n "$1" ] || return 0
     cat <<'EOF'
-This change edits scripts/proof.sh or its probes, so land cannot use the copy it has.
+This change rewrites scripts/proof.sh or an existing probe, so land cannot use the copy it has.
 Run the change's own adapter, from its worktree, in your own terminal:
 EOF
     hone_msg_block "bash scripts/proof.sh $1"

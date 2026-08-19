@@ -44,9 +44,11 @@ state (from the primary tree) rather than retrying blindly.
 The change needs real-environment proof, and that proof is missing. Three things
 ask for it. A `Proof: real-environment` trailer on a branch commit asks for it.
 So does a committed `.hone-proof-always` marker, which gates every change, with
-a trailer or without one. So does the change editing `scripts/proof.sh` or a
-probe under `scripts/proof-probes/`. That third gate fires on the file change
-itself. It needs no trailer and no marker.
+a trailer or without one. So does the change rewriting the proof harness: any
+edit to `scripts/proof.sh`, or an edit to a probe under
+`scripts/proof-probes/` that already exists. That third gate fires on the file
+change itself. It needs no trailer and no marker. Adding a *new* probe does
+not fire it.
 
 Two things discharge it. A green `scripts/proof.sh` discharges it, and so does
 a `.hone-proof/<change>` sign-off naming the current branch tip. land runs the
@@ -76,16 +78,22 @@ which of the five refusals fired:
   reason, because the branch declared nothing. It prints the same attest
   command.
 
-One case has no automatic route. Where the change itself writes or edits
-`scripts/proof.sh` or a probe under `scripts/proof-probes/`, land runs no
-adapter for it. The copy land holds is the copy the change replaces. The human
-runs `bash scripts/proof.sh <change>` from the worktree, in their own terminal,
-and attests with its output.
+One case has no automatic route. Where the change itself rewrites the proof
+harness, land runs no adapter for it, because the copy land holds is the copy
+the change replaces. The human runs `bash scripts/proof.sh <change>` from the
+worktree, in their own terminal, and attests with its output.
 
-You may author that change in the worktree, and you should. The gate is what
-holds it, not a ban on writing it. land reads the diff, so the gate fires on
-any branch that touches those files. A branch that declares no trailer gets the
-same refusal as one that declares it.
+Rewriting the harness means one of two diffs: any edit to `scripts/proof.sh`,
+or an edit to a probe under `scripts/proof-probes/` that already exists. A
+change that only *adds* a new probe is not rewriting the harness. It is
+writing its own check, the way it writes its own tests, and the adapter that
+will judge it is untouched. So an added probe lands on the ordinary route, and
+`/code-review` reads it in the same diff.
+
+You may author a harness change in the worktree, and you should. The gate is
+what holds it, not a ban on writing it. land reads the diff, so the gate fires
+on any branch that rewrites those files. A branch that declares no trailer gets
+the same refusal as one that declares it.
 
 Never sign it off yourself, never run `attest`, and never write the commit id
 into a sign-off file to satisfy the check. The guard and bash-guard deny all of

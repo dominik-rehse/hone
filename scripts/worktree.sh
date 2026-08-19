@@ -38,10 +38,11 @@
 #       the merge. A committed .hone-proof-always marker widens the gate to
 #       EVERY change, trailer or not; with the marker present and no
 #       scripts/proof.sh, land refuses (7) rather than proving nothing.
-#       A change that edits scripts/proof.sh or scripts/proof-probes/ opens the
-#       gate on the file change alone, with no trailer and no marker, and only
-#       the human sign-off discharges it: land holds the copy such a change
-#       replaces, so no automatic route can judge it.
+#       A change that edits scripts/proof.sh, or a probe under
+#       scripts/proof-probes/ that already exists, opens the gate on the file
+#       change alone, with no trailer and no marker, and only a sign-off
+#       discharges it: land holds the copy such a change replaces, so no
+#       automatic route can judge it. Adding a NEW probe does not open it.
 #       On success it prints a receipt on stdout: the merge commit, the green
 #       post-merge suite, and the removed worktree and branch. When the merge
 #       changed a lockfile, the receipt also names it and asks for a reinstall
@@ -362,16 +363,32 @@ land_proof_required() {
     land_proof_trailer "$1" "$2" "$3" >/dev/null && echo yes
 }
 
-# Print the change name when the branch itself writes or edits the proof
-# adapter (scripts/proof.sh) or a probe under scripts/proof-probes/. land runs
-# the PRIMARY tree's copy, which for this one change is the copy the change
-# replaces, so no automatic route exists. The human runs the branch's own
+# Print the change name when the branch rewrites the proof HARNESS: the adapter
+# scripts/proof.sh, or a probe under scripts/proof-probes/ that already exists.
+# land runs the PRIMARY tree's copy, which for such a change is the copy the
+# change replaces, so no automatic route exists. The caller runs the branch's own
 # adapter from the worktree and attests with its output.
+#
+# A change that only ADDS a new probe is not that case, and does not gate here.
+# The adapter decides what a green run means, and it stays the reviewed copy. A
+# new probe only adds a check for the one change that ships it, exactly as that
+# change ships its own tests, and /code-review reads it in the same diff. Gating
+# an added probe cost a sign-off on every proof-carrying change in a project
+# whose adapter asks each change for its own probe, which is the shape
+# templates/proof/README.md recommends. An edit to a probe that already exists
+# still gates: that probe guards a change that landed before this one.
 land_proof_bootstrap() {
     local root="$1" base="$2" branch="$3" change="$4"
     [ -n "$base" ] || return 0
-    git -C "$root" diff --name-only "$base" "$branch" \
-        -- scripts/proof.sh scripts/proof-probes 2>/dev/null \
+    if git -C "$root" diff --name-only "$base" "$branch" \
+        -- scripts/proof.sh 2>/dev/null | grep -q .; then
+        printf '%s' "$change"
+        return 0
+    fi
+    # Every status except A (added) and C (copied): a probe that already exists,
+    # modified, deleted, renamed, or type-changed.
+    git -C "$root" diff --name-only --diff-filter=MDRTUXB "$base" "$branch" \
+        -- scripts/proof-probes 2>/dev/null \
         | grep -q . && printf '%s' "$change"
 }
 
