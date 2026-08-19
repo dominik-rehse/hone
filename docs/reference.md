@@ -19,14 +19,14 @@ Slash commands, in the order a change flows:
   it may invoke `/hone:run`.
 - `/hone:run <change>` executes the Plan unattended (worktree, build, verify,
   consolidate, review, land). `/hone:run --all` runs every ready Plan.
-- `/hone:herd` runs `--all` across herdr tabs, when the session runs inside
-  herdr. This tab becomes `MAIN:<short>` and orchestrates. Each Plan gets a
-  fresh Claude Code session in its own `SUB` tab (`--model` picks their
-  model). MAIN starts a dependent Plan only when `worktree.sh landed` shows
-  the predecessor landed, and closes a SUB tab only then. Probes, proofs, and
-  everything else plan-specific happen in the SUB tab, never in MAIN.
-  `--workspace` puts the herd in a workspace of its own, which you create and
-  start it in.
+- Inside [herdr](https://github.com/dominik-rehse/herdr), which `run` detects on
+  its own, `--all` spreads those Plans over herdr tabs. This tab
+  becomes `MAIN:<short>` and orchestrates. Each Plan gets a fresh Claude Code
+  session in its own `SUB` tab (`--model` picks their model). MAIN starts a
+  dependent Plan only when `worktree.sh landed` shows the predecessor landed, and
+  closes a SUB tab only then. Probes, proofs, and everything else plan-specific
+  happen in the SUB tab, never in MAIN. For a workspace of their own, create the
+  workspace and invoke the command in it.
 - `/hone:garden` scans the repo for stale docs, dead code, and redundant tests
   between changes, and lands the safe deletions. You invoke it, as often as
   the repo needs it.

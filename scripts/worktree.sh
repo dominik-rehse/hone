@@ -75,8 +75,9 @@
 #       HEAD, no hone/<change> branch, no .worktrees/<change>, and no
 #       .plans/<change>.md at HEAD. The proof and authority gates run before
 #       the merge, so the merge commit's existence implies they were
-#       satisfied. This is the predicate an orchestrator (the herd's MAIN
-#       session) polls before it starts a dependent Plan or closes a SUB tab:
+#       satisfied. This is the predicate an orchestrator (the MAIN session of
+#       `--all` under herdr) polls before it starts a dependent Plan or closes
+#       a SUB tab:
 #       it reads the repository, never a subagent's claim that it finished.
 #       Exit: 0 landed · 1 pending · 2 usage/not-a-repo.
 #

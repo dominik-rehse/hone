@@ -39,6 +39,10 @@ mechanical steps.
      READMEs prescribed. You don't reconcile it by hand: `setup.sh`, the
      session-start warning, and `worktree.sh status` each name exactly the
      rules your settings lack; paste them from the README's install block.
+   - *`/hone:herd` is gone in 0.35*: `/hone:run --all` now detects herdr
+     itself and spreads the plans over tabs. Type that instead. The
+     `--workspace` flag went with the command: create the workspace yourself
+     and invoke `--all` in it. Nothing to install.
    - *A new hook in 0.26*: `dirty-guard` blocks a shell command that leaves a
      protected path dirty in the primary tree. Claude Code reads the hook set
      once, at session start, so restart every session in the repo before this

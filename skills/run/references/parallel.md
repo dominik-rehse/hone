@@ -8,6 +8,22 @@ assumed. **Check independence first, before spawning any worktree.** Each
 `plan-critic` ran at plan time, before later Plans existed, so this is the first
 moment the whole set is visible and the cross-check is yours.
 
+## Where the runs happen
+
+Ask the environment, before the partition:
+
+```bash
+test "${HERDR_ENV:-}" = 1
+```
+
+- It **fails**: run the Plans in this session, as the rest of this file
+  describes. That is the ordinary case.
+- It **passes**: this session runs inside herdr, so spread the Plans over herdr
+  tabs. This session becomes MAIN and orchestrates. Each Plan gets a fresh
+  Claude Code session in its own SUB tab. Read `references/herdr.md` and follow
+  it. Everything below still holds. The tabs only change where each run
+  executes.
+
 ## Partition
 
 Read every ready Plan and compare them pairwise:

@@ -1,7 +1,7 @@
 ---
 name: run
-description: "Execute one or more Plans unattended through the hone loop: worktree, build (test-first), verify, consolidate, /code-review, land. Confirms each step by its artifacts, never a subagent's report; proceeds without checking in and stops only when blocked-unresolvable, genuinely ambiguous, or done, leaving the worktree as evidence. Invoke with /hone:run [change | --all]."
-argument-hint: "[change-name | --all]"
+description: "Execute one or more Plans unattended through the hone loop: worktree, build (test-first), verify, consolidate, /code-review, land. Confirms each step by its artifacts, never a subagent's report; proceeds without checking in and stops only when blocked-unresolvable, genuinely ambiguous, or done, leaving the worktree as evidence. Inside herdr, --all spreads the Plans over tabs by itself: this session orchestrates, and each Plan runs in a fresh session in its own tab. Invoke with /hone:run [change | --all] [--model <model>]."
+argument-hint: "[change-name | --all] [--model <model>]"
 ---
 
 # /hone:run (execute a Plan through the loop)
@@ -19,6 +19,8 @@ Resolve `$ARGUMENTS`:
 - `--all`: run every ready Plan in `.plans/`, each in its own worktree, landing
   them one at a time (below).
 - empty: list the Plans in `.plans/`; if exactly one, run it; else ask which.
+- `--model <model>`: the model for the sessions `--all` spawns inside herdr
+  (below). It changes nothing about a run in this session.
 
 Setup check: if `scripts/run-tests.sh` is missing, stop and tell the user to run
 `/hone:setup` first; without the adapter the gate can't verify anything.
@@ -339,6 +341,13 @@ claimed by another run: skip it and say so.
 
 `references/parallel.md` carries the full comparison checklist, the claim rule,
 and the landing order. Read it whenever the invocation is `--all`.
+
+Where this session runs inside herdr (`HERDR_ENV=1`), `--all` spreads the Plans
+over herdr tabs rather than running them here. This session becomes MAIN and
+orchestrates. Each Plan gets a fresh Claude Code session in its own SUB tab,
+which runs the same `/hone:run <change>` loop with the same gates. `--model`
+picks the model for those sessions. `parallel.md` makes the check, and
+`references/herdr.md` carries the topology and the exact commands.
 
 ## The three ways to stop
 
