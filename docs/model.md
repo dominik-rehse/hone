@@ -310,9 +310,11 @@ So the Plan states the boundary explicitly: a Plan whose proof is user- or
 ops-level declares `Proof: real-environment — <the check>`. (The
 `plan-critic` rejects a plan whose named proof is categorically unable to
 settle its claim.) `land` refuses such a change until a reviewed
-real-environment check passes or a human runs the check and signs it off.
+real-environment check passes, or until whoever ran the check signs it off.
+The loop signs off for a check it ran itself, and stops for one it cannot
+reach. A sign-off naming a check nobody ran is evidence of nothing.
 The landing commit copies that whole line, because consolidate deletes the
-Plan and the trailer is all that reaches the human at land. The sign-off
+Plan and the trailer is all that reaches land. The sign-off
 names the commit it covers, so it expires when new commits arrive.
 Mechanics are in [`reference.md`](reference.md).
 
@@ -349,16 +351,23 @@ not delegate the second to the model. The dividing line is reversibility.
 refactor). Its cost stays bounded, so it lands unattended, as the vast
 majority do. Reverting the merge does not undo an irreversible change (a
 dropped column, a destructive backfill): the data is already gone. For that
-subset, green-and-reviewed is necessary but not sufficient. A human has to
-say yes.
+subset, green-and-reviewed is necessary but not sufficient. Somebody has to
+read the diff and say yes in writing.
 
 So `land` classifies the diff mechanically (destructive SQL, `db/`
 deletions, plus any glob the project declares). It refuses an irreversible
-change until a human grant exists for it. The grant is one file for one
+change until a grant exists for it. The grant is one file for one
 change, revocable by deleting it. The merge commit body records its text,
-so the authorization ends up in history rather than in a chat log. The
-guard and bash-guard deny the agent the file-tool and shell routes to
-writing a grant itself. Mechanics are in [`reference.md`](reference.md).
+so the authorization ends up in history rather than in a chat log.
+
+The loop may record that grant itself, after reading the diff the refusal
+printed. What the gate buys is not a person's presence. It is the forced
+stop, the reading, and the sentence that lands in history naming what is
+irreversible and why it is right anyway. The stamp says whether the agent or
+a person signed, so a later audit can separate them. A diff that does
+something the Plan never asked for is an escalation, not a grant. Both
+guards still deny every route into `.hone-grant/` except the helper, which is
+what stamps the record. Mechanics are in [`reference.md`](reference.md).
 
 ## Types and abstractions
 

@@ -30,8 +30,9 @@ from the expected one. Keep those. A case the stub answers correctly 3/3 is a
 no-op. Cut it, or make the brief harder than the model's default judgment.
 
 The 2026-08-18 measurement used sonnet for the critics and opus for the loop, and
-it found 44 no-ops among the 52 cases then present. The cut removed them. The
-eight cases below are what remained.
+it found 44 no-ops among the 52 cases then present. The cut removed them. Eight
+cases remained, and two land-gate cases joined them on 2026-08-19. The list
+below carries each case with the stub's answer that earned it a place.
 
 ## Run
 
@@ -66,18 +67,24 @@ prose. The gap between the two is what the case pins.
 
 *`loop`*, the next action `run` takes:
 
-- `land-authority-gate`: STOP, stub ASK 3/3.
+- `land-authority-gate`: RECORD, stub ASK 3/3 (measured 2026-08-18, when the
+  case expected STOP).
 - `land-proof-gate`: STOP, stub ASK 3/3.
+- `land-proof-bootstrap`: RECORD, stub HANDROLL 3/3 (measured 2026-08-19).
+- `land-grant-beyond-plan`: STOP, stub ASK 2/3, STOP 1/3 (measured 2026-08-19).
 - `review-fanout-temptation`: NEST, stub ASK 3/3.
 - `review-command-refused`: NEST, stub NEST 2/3, HANDROLL 1/3.
 - `worktree-claimed-single`: STOP, stub STOP 2/3, SKIP 1/3.
 - `missing-reference-holdout`: STOP, stub ASK 2/3, STOP 1/3.
 
-Read the loop gap precisely. On the two land gates the stub reasons the situation
-out correctly: it halts for the human, and picks `ASK` where hone says `STOP`. So
-those cases pin hone's action vocabulary, not judgment the model lacks. That is
-still worth pinning, because the loop dispatches on the word, though it is a
-weaker claim than the plan-critic pair, which pin judgment.
+Read the loop gap precisely. The stub halts on every land gate and picks `ASK`.
+`land-proof-gate` and `land-grant-beyond-plan` therefore pin hone's action
+vocabulary more than judgment the model lacks, since halting was the right
+instinct and only the word was wrong. That is still worth pinning, because the
+loop dispatches on the word. The other two are stronger. On
+`land-authority-gate` and `land-proof-bootstrap` the stub halts where hone
+discharges the gate and lands, so the case pins the action itself, as the
+plan-critic pair do.
 
 ## Known gaps
 

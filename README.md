@@ -137,10 +137,17 @@ of proceeding in exactly three cases:
 
 - A check will not go green and the fixes are exhausted.
 - The change turns out genuinely ambiguous.
-- Landing it needs something only you can give: a grant for an
-  irreversible change, or a sign-off that a real-environment check ran.
-  (`git revert` does not undo a dropped column, and a green test suite
-  proves nothing about a browser journey or a deployed service.)
+- Landing it needs a real-environment check the run cannot reach: a browser
+  journey with no adapter, a canary it cannot watch. A green test suite
+  proves nothing about a deployed service.
+
+The land gates are the third case's other half. An irreversible change stops
+at the gate, because `git revert` does not undo a dropped column. The run
+then reads the diff and records a grant naming what is irreversible and why.
+A real-environment change stops until the check has actually run. The run
+signs off for a check it ran, and stops for one it cannot. Each record is
+stamped with whether the agent or you signed it, and the grant's text lands
+in the merge commit.
 
 The run never weakens a check to get through. On a stop, the worktree
 stays for inspection, and `worktree.sh grant` / `attest` are the way to

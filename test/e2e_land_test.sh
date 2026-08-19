@@ -272,6 +272,15 @@ bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "granted irreversible land should succeed (got $rc)"
 git log --format=%B -1 | grep -q "legacy_sessions is unused" || die "grant text should be recorded in the merge commit body"
 step "grant helper wrote a stamped grant; change landed, authorization in history"
+# (c2) Both a person and the agent may record a grant, so the stamp says which.
+# The git identity is the same either way, and an unmarked stamp would read as
+# the person's authorization for a grant the loop recorded.
+env -u CLAUDECODE bash "$WSH" grant stamp-person "a person's own reason" >/dev/null || die "grant helper failed for a person"
+grep -q "^agent" "$REPO/.hone-grant/stamp-person" && die "a grant a person records should carry no agent mark"
+CLAUDECODE=1 bash "$WSH" grant stamp-agent "the loop's own reason" >/dev/null || die "grant helper failed under CLAUDECODE"
+grep -q "^agent, on behalf of .*t@t.t" "$REPO/.hone-grant/stamp-agent" || die "a grant the agent records should be stamped as the agent"
+rm -f "$REPO/.hone-grant/stamp-person" "$REPO/.hone-grant/stamp-agent"
+step "the grant stamp separates the agent from the person"
 # (d) The committed .hone-irreversible-paths extends the built-in signals: a
 # change touching a listed glob is gated exactly like destructive SQL. The
 # pre-0.19 name .hone-consequential-paths is still honoured.

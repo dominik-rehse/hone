@@ -31,12 +31,12 @@ decision() { hone_pretool_decision "$1" "$2"; exit 0; }
 # Sabotage tokens, defined ONCE and shared by both scan paths so they can't drift.
 # HARD_TOKENS always mean "disable the gate wholesale": sabotage on any path.
 # MARKER_TOKENS are context-dependent: CREATING .hone-off disables hone, and
-# WRITING a grant or proof sign-off usurps the two land gates reserved to the
-# human (both denied via the constructs below), but reading or removing one is
-# legitimate, so a bare mention only escalates on the fail-closed backstop,
-# never auto-denies.
+# HAND-WRITING a grant or proof sign-off bypasses the helpers that make the
+# record readable (both denied via the constructs below), but reading or
+# removing one is legitimate, so a bare mention only escalates on the
+# fail-closed backstop, never auto-denies.
 HARD_TOKENS='--no-verify|core\.hooksPath'
-MARKER_TOKENS='\.hone-off|\.hone-(grant|proof)/|worktree\.sh[^|;&]*[[:space:]](grant|attest)'
+MARKER_TOKENS='\.hone-off|\.hone-(grant|proof)/'
 
 INPUT=$(cat)
 CMD=$(hone_extract_field "$INPUT" command)
@@ -67,16 +67,18 @@ if echo "$CMD" | grep -Eq \
     decision deny "$(msg_bashguard_sabotage)"
 fi
 
-# 1b. Writing an authority grant or a proof sign-off → deny. The land gates'
-# exits 7 and 8 are reserved to the human: the agent never authorizes an
-# irreversible change or attests a real-environment check, by any route: a
-# file write into .hone-grant/ or .hone-proof/, or the grant/attest helper.
+# 1b. HAND-WRITING an authority grant or a proof sign-off → deny. The helpers
+# (worktree.sh grant and attest) are the only route to these files, for the
+# agent as much as for a person. They are what stamps the signer, binds a
+# sign-off to the commit it proves, and refuses an empty or placeholder text.
+# A raw write past them produces a file the gate may accept and no reader can
+# trust, so every shell route to the file itself stays denied. The helpers
+# themselves are allowed.
 # The mutating-op list is a superset of rule 2's below (creation verbs plus
 # every mutator), so a token rule 2 treats as a write cannot slip past here.
 if echo "$CMD" | grep -Eq \
         -e '(touch|install|printf|echo|tee|cp|mv|mkdir|ln|sed -i|rm |truncate|dd|chmod|chattr)[^|;&]*\.hone-(grant|proof)/' \
-        -e '>>?[[:space:]]*"?'"'"'?[^[:space:]|;&]*\.hone-(grant|proof)/' \
-        -e 'worktree\.sh"?'"'"'?[[:space:]]+(grant|attest)([[:space:]]|$)'; then
+        -e '>>?[[:space:]]*"?'"'"'?[^[:space:]|;&]*\.hone-(grant|proof)/'; then
     decision deny "$(msg_bashguard_signoff)"
 fi
 

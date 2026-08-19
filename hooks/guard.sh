@@ -2,9 +2,11 @@
 # PreToolUse guard for Write/Edit/MultiEdit (Claude Code). Enforces three laws
 # of the hone model, in this order:
 #
-#   0. A land-gate sign-off (.hone-grant/, .hone-proof/) is the human's and is
-#      never written by the agent, in any tree (bash-guard denies the shell
-#      routes to the same files).
+#   0. A land-gate record (.hone-grant/, .hone-proof/) is written by the
+#      worktree.sh grant and attest helpers alone, in any tree (bash-guard
+#      denies the shell routes to the same files). The helpers stamp the
+#      signer, bind a sign-off to the commit it proves, and refuse an empty
+#      text; a raw file write produces a record no reader can trust.
 #
 #   1. The primary tree is a merge target, never a workspace. A Write/Edit to a
 #      durable committed artifact (src/, tests/, docs/, db/, scripts/, plus any
@@ -79,10 +81,11 @@ case "$TARGET_PATH" in
     *) exit 0 ;;  # outside the project, not ours to guard
 esac
 
-# Rule 0: the land gates' sign-offs are the human's, in every tree. A grant or
-# proof sign-off written by the agent through the file tools would usurp the
-# gates exactly as a shell write would (bash-guard denies those), so deny the
-# file-tool route too, regardless of primary tree or worktree.
+# Rule 0: the land gates' records come from the helpers, in every tree. A grant
+# or sign-off written straight through the file tools skips the stamp, the
+# commit binding, and the placeholder check exactly as a shell write would
+# (bash-guard denies those), so deny the file-tool route too, regardless of
+# primary tree or worktree.
 case "$REL" in
     .hone-grant/*|.hone-proof/*)
         deny "$(msg_guard_signoff "$REL")"

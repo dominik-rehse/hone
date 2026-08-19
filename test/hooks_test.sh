@@ -91,12 +91,13 @@ echo "$(bg 'git commit --no-verify -m x')" | grep -q '"deny"' && ok "--no-verify
 echo "$(bg 'touch .hone-off')" | grep -q '"deny"' && ok "touch .hone-off denied" || bad "touch .hone-off should be denied"
 echo "$(bg 'sed -i s/x/y/ scripts/run-tests.sh')" | grep -q '"ask"' && ok "editing run-tests.sh escalated" || bad "editing adapter should ask"
 echo "$(bg 'ls -la')" | grep -q 'permissionDecision' && bad "benign command should pass silently" || ok "benign command passes"
-# The land gates' sign-offs are reserved to the human: any write route into
-# .hone-grant/ or .hone-proof/, including the helpers, is denied to the agent.
+# The helpers are the only route into .hone-grant/ and .hone-proof/. They are
+# allowed to the agent; every raw write past them stays denied, because the
+# stamp, the commit binding, and the placeholder check live in the helper.
 echo "$(bg 'echo signed > .hone-proof/ui-flow')" | grep -q '"deny"' && ok "writing a proof sign-off denied" || bad "writing .hone-proof/ should be denied"
 echo "$(bg 'mkdir -p .hone-grant && touch .hone-grant/db-drop')" | grep -q '"deny"' && ok "creating a grant denied" || bad "creating .hone-grant/<change> should be denied"
-echo "$(bg 'bash scripts/worktree.sh grant db-drop reason')" | grep -q '"deny"' && ok "grant helper denied to the agent" || bad "worktree.sh grant should be denied"
-echo "$(bg 'bash scripts/worktree.sh attest db-drop ran-it')" | grep -q '"deny"' && ok "attest helper denied to the agent" || bad "worktree.sh attest should be denied"
+echo "$(bg 'bash scripts/worktree.sh grant db-drop reason')" | grep -q 'permissionDecision' && bad "the grant helper should pass" || ok "grant helper allowed"
+echo "$(bg 'bash scripts/worktree.sh attest db-drop ran-it')" | grep -q 'permissionDecision' && bad "the attest helper should pass" || ok "attest helper allowed"
 echo "$(bg 'cat .hone-grant/db-drop')" | grep -q 'permissionDecision' && bad "reading a grant should pass silently" || ok "reading a grant allowed"
 # Only CREATING the off marker is sabotage. A read-only existence check names
 # the marker too, and denying that one cost a real session its diagnosis.

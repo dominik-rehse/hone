@@ -47,9 +47,9 @@ EOF
 msg_guard_signoff() {
     local rel="$1"
     cat <<EOF
-hone guard: $rel is a human sign-off for a land gate.
-Do: escalate to the human and wait for them.
-Why: the agent never writes a grant or a proof sign-off, by any route. The human runs worktree.sh grant or attest in their own terminal.
+hone guard: $rel is a land-gate record, and only the helpers write one.
+Do: run worktree.sh grant or worktree.sh attest instead.
+Why: the helper stamps the signer, binds a sign-off to the commit it proves, and refuses an empty text. A raw write gives a record nobody can trust.
 EOF
 }
 
@@ -91,9 +91,9 @@ EOF
 
 msg_bashguard_signoff() {
     cat <<'EOF'
-hone bash-guard: this command would write an authority grant or a proof sign-off.
-Do: escalate to the human and wait for them to run it.
-Why: .hone-grant/, .hone-proof/, and the worktree.sh grant and attest helpers belong to the human alone.
+hone bash-guard: this command would write straight into .hone-grant/ or .hone-proof/.
+Do: run worktree.sh grant or worktree.sh attest instead.
+Why: the helper stamps the signer, binds a sign-off to the commit it proves, and refuses an empty text. A raw write gives a record nobody can trust.
 EOF
 }
 

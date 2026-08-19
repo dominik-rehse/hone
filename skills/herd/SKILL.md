@@ -68,7 +68,8 @@ is the design, not an obstacle:
   tab, because the worktree under test lives with that SUB. The human splits
   a pane there when they need a shell.
 - MAIN never writes a grant or a sign-off, and never prompts a SUB to route
-  around a gate. Exits 7 and 8 are the human's, exactly as in `run`.
+  around a gate. A land gate belongs to the SUB that hit it, which discharges
+  it exactly as `run` does, or escalates.
 - MAIN never trusts a SUB's report. The only completion signal is
   `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" landed <change>`
   printing `landed` (exit 0): merge commit present, branch, worktree, and
@@ -97,9 +98,12 @@ tree, and new approved Plans can join the herd.
      was waiting on it.
    - `pending`: the SUB stopped mid-loop. Read its tail
      (`herdr agent read`) to classify, never to adopt its work:
-     - **A land gate fired (exit 7 or 8).** Send a herdr notification to the
-       human. It names the SUB tab, and the check or grant the gate printed.
-       The human proves or grants, then re-runs land in that SUB. MAIN waits.
+     - **A land gate fired (exit 7 or 8) and the SUB stopped there.** The SUB
+       discharges its own gates. A stop means it could not. Either the check is
+       out of its reach, or the diff is not what the Plan asked for. Send a
+       herdr notification to the human, naming the SUB tab and the check or
+       grant the gate printed. The human proves or grants, then re-runs land in
+       that SUB. MAIN waits.
      - **A question or an approval prompt.** Notify the human, name the tab,
        wait. Never answer for them.
      - **Blocked-unresolvable or genuinely ambiguous** (run's stop points 1

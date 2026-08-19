@@ -88,15 +88,17 @@
 #       git repo.
 #
 #   worktree.sh grant <change> "who/why"
-#       Record the human's authority grant for one irreversible change at
+#       Record the authority grant for one irreversible change at
 #       .hone-grant/<change>, stamped with the git user and the current time.
-#       FOR THE HUMAN's own terminal: the bash-guard denies an agent running
-#       it, because exits 7/8 are reserved to the human by design.
+#       A person and the agent both run it, and the stamp says which (see
+#       signer_stamp). It is the only route to the file: both guards deny a
+#       raw write, because the stamp lives here.
 #
 #   worktree.sh attest <change> "what you ran"
-#       Record the human's real-environment sign-off at .hone-proof/<change>,
-#       stamped with the branch tip it proves (so it stops counting after new
-#       commits), the git user, and the time. FOR THE HUMAN, like grant.
+#       Record the real-environment sign-off at .hone-proof/<change>, stamped
+#       with the branch tip it proves (so it stops counting after new commits),
+#       the git user, and the time. Same two callers as grant, and the same
+#       sole-route rule. Record only a check that actually ran.
 #
 #   worktree.sh remove <worktree-path>
 #       Provenance-guarded cleanup. Removes the worktree ONLY if hone created it
@@ -683,9 +685,18 @@ attest_is_placeholder() {
     done < <(hone_msg_attest_placeholders)
 }
 
-# "name <email> | timestamp" for grant/attest stamps.
+# "name <email> | timestamp" for grant/attest stamps, with "agent " in front
+# when the agent ran the helper rather than a person.
+#
+# Both may run it, and the record has to say which. The git identity is the
+# repository owner's either way, so an unmarked stamp would read as a person's
+# authorization for every grant the loop records. CLAUDECODE is set in the
+# agent's shell and unset in a terminal the person drives, which is the one
+# signal available here. It is a label, not a lock: the agent could unset it,
+# and this is a record for a reader, not a defence against one.
 signer_stamp() {
-    printf '%s <%s> | %s' \
+    printf '%s%s <%s> | %s' \
+        "${CLAUDECODE:+agent, on behalf of }" \
         "$(git config user.name 2>/dev/null || echo unknown)" \
         "$(git config user.email 2>/dev/null || echo unknown)" \
         "$(date -Iseconds)"

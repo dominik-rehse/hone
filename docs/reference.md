@@ -108,13 +108,15 @@ file:
   dirty-guard blocks every command while a durable path is dirty. Remove the
   marker before the commit, and the next command blocks. The order is:
   create the marker, edit, run the checks, commit, then delete the marker.
-- `.hone-grant/<change>` is your authorization for one irreversible change.
-  Its text lands in the merge commit body. Delete the file to revoke. Written
-  by `worktree.sh grant`, or by hand (say who, when, and why).
-- `.hone-proof/<change>` is your sign-off that the real-environment check for
+- `.hone-grant/<change>` is the authorization for one irreversible change.
+  Its text lands in the merge commit body. Delete the file to revoke. Write it
+  with `worktree.sh grant` (say who, when, and why), yourself or through the
+  loop. By hand in your own editor works too, and the guards deny the loop
+  that route.
+- `.hone-proof/<change>` is the sign-off that the real-environment check for
   one change ran. It must contain the commit hash it applies to (short or
-  full); after new commits it no longer counts. Written by
-  `worktree.sh attest`, or by hand.
+  full); after new commits it no longer counts. Same two writers and the same
+  rule: `worktree.sh attest`, or your own editor.
 
 Two environment variables tune the cross-session locks:
 `HONE_LAND_LOCK_TIMEOUT` (seconds a land or full-suite run waits for the
@@ -127,7 +129,7 @@ All disabled at once by `.hone-off`. A project with no `scripts/run-tests.sh`
 is never gated, and enforcement assumes code lives under `src/<area>/`.
 
 - *guard* (PreToolUse on Write/Edit) enforces three rules. Anywhere, no
-  writes into `.hone-grant/` or `.hone-proof/` (sign-offs are the human's)
+  writes into `.hone-grant/` or `.hone-proof/` (the helpers write those)
   and no new file under `src/` unless a test for it exists (test files
   themselves are always writable). In the primary tree, no edits to the
   protected paths at all, including the two policy files; that work belongs
@@ -224,11 +226,24 @@ the shape [`templates/proof/README.md`](../templates/proof/README.md)
 recommends. An edit to a probe that already exists still arms the gate: that
 probe guards a change that landed earlier.
 
-The agent never writes a grant or sign-off and never runs the helpers: the
-guard denies the file-tool routes and the bash-guard the shell routes (a
-deterrent, not a sandbox). When a gate fires during an unattended run, the
-run stops and reports; that is the intended behavior, not a failure. The
-gate's error message prints the exact helper command with its full path.
+Both you and the loop record a grant or a sign-off, and both do it with
+`worktree.sh grant` and `worktree.sh attest`. Every other route stays denied:
+the guard blocks the file-tool routes into `.hone-grant/` and `.hone-proof/`,
+and the bash-guard the shell routes (a deterrent, not a sandbox). The helper
+is what stamps the signer, binds a sign-off to the commit it proves, and
+refuses an empty or placeholder text.
+
+The stamp separates the two. A record the loop writes opens with
+`agent, on behalf of`, keyed off `CLAUDECODE` in the environment, so a later
+audit can tell an agent grant from yours. It is a label for a reader, not a
+lock.
+
+An unattended run discharges its own gates. On exit 8 it reads the diff the
+refusal printed and records why the irreversible change is right. On exit 7 it
+runs the check the refusal names and records what that run printed. It stops
+and reports instead in two cases: the check is out of its reach (a browser
+journey with no adapter), or the diff does something the Plan never asked for.
+The gate's error message prints the exact helper command with its full path.
 
 ## Exit codes
 

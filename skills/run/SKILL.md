@@ -298,8 +298,12 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    - **0**: landed and green. Continue.
    - **9**: merge conflict; aborted, tree restored. Fold in serially. Stop.
    - **6**: the merge regressed the trunk; rolled back, worktree kept. Stop.
-   - **7**: the proof gate wants real-environment proof only a human can give.
+   - **7**: the proof gate wants real-environment proof. Run the check the
+     refusal names, then record what you ran with `worktree.sh attest` and land
+     again. Where you cannot run any real check, stop instead.
    - **8**: the authority gate wants a scoped grant for an irreversible change.
+     Read the diff it printed, then record the authorization with
+     `worktree.sh grant` and land again.
    - **5**: another session held the land lock past the timeout. Wait, retry.
    - **2**: usage or repo-state error (missing branch, detached HEAD): read
      the stderr message.
@@ -307,9 +311,9 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    Any non-zero exit: read `references/land.md` before acting on it. It carries
    what each code means and what resolves it. Three rules hold whatever the
    code: never merge by hand, never move the primary tree's HEAD to investigate
-   (use a throwaway `git worktree add --detach` scratch tree), and never write the
-   grant or the sign-off yourself, because 7 and 8 are reserved to the human by
-   design.
+   (use a throwaway `git worktree add --detach` scratch tree), and never write a
+   grant or a sign-off through the file tools or a shell redirect, because the
+   `worktree.sh` helpers are what make the record readable.
 
 Confirm to the user: what landed, the Decisions/Notes written, what was deleted
 (the Plan, and any pruned tests; every cycle removes something).
@@ -341,9 +345,30 @@ On 1 or 2, leave the worktree in place as evidence and escalate with the specifi
 blocker. Never disable, weaken, or route around a check to proceed: stopping and
 reporting is a correct outcome; a forced pass is not.
 
-The land gates add a fourth stop that is neither a failure nor a fork: the
-authority gate (exit 8) awaits the human's scoped grant for an irreversible
-change, and the proof gate (exit 7) awaits real-environment proof the loop
-cannot give. Both are reserved to the human by design: escalate and wait;
-never write the grant or the sign-off yourself, and never run the grant or
-attest helpers.
+The land gates are not a fourth way to stop. Both ask you for something the
+suite cannot supply, and you supply it and land again:
+
+- **Exit 8, the authority gate.** The change is irreversible. Read the signals
+  and the diffstat the refusal printed, decide whether the change is what the
+  Plan asked for, then record the authorization with
+  `worktree.sh grant <change> "who/why"` and land again. The text you write
+  lands in the merge commit body, so write the reason a reader would need a
+  year from now, not "approved". If the diff does something the Plan never
+  asked for, that is stop-point 2, not a grant to write.
+- **Exit 7, the proof gate.** Run the check the refusal names. Where the change
+  rewrites the proof harness, that is `bash scripts/proof.sh <change>` from the
+  worktree. Elsewhere it is whatever the trailer declared, if you can reach it.
+  Then record **what you actually ran and what it printed** with
+  `worktree.sh attest <change> "<the check and its result>"`, and land again.
+
+One rule holds both: **record only what you did.** A sign-off naming a check
+nobody ran is worse than no gate, because it reads as evidence in git history
+and carries none. Where the declared check is outside your reach (a browser
+journey with no adapter, a canary you cannot watch), you have not proven it:
+**stop and escalate** with what you tried, and leave the sign-off to the human.
+The stamp records that the agent signed, so a later audit can tell the two
+apart.
+
+Write both records through the helpers only. A file write or a shell redirect
+into `.hone-grant/` or `.hone-proof/` skips the signer stamp, the commit
+binding, and the placeholder check, and both guards deny it.

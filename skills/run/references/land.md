@@ -57,9 +57,14 @@ the code under test. A proof.sh the change itself adds does not count until it
 lands. A sign-off written for an earlier commit stops counting, by design: it
 must not outlive the code it vouched for.
 
-The merge did not happen and the worktree is kept. **Stop and escalate.** The
-real-environment check is outside the loop's boundary. Read the message to see
-which of the five refusals fired:
+The merge did not happen and the worktree is kept. Run the check the refusal
+names, record what you ran with `worktree.sh attest <change> "<what you ran and
+what it printed>"`, and land again. Where the declared check is outside your
+reach, **stop and escalate** instead, and leave the sign-off to the human. A
+sign-off naming a check nobody ran reads as evidence in history and carries
+none.
+
+Read the message to see which of the five refusals fired:
 
 - *No proof yet.* Where the trailer declared a check, the message prints it.
   The message then prints the full `worktree.sh attest` command with its path.
@@ -80,8 +85,9 @@ which of the five refusals fired:
 
 One case has no automatic route. Where the change itself rewrites the proof
 harness, land runs no adapter for it, because the copy land holds is the copy
-the change replaces. The human runs `bash scripts/proof.sh <change>` from the
-worktree, in their own terminal, and attests with its output.
+the change replaces. Run `bash scripts/proof.sh <change>` from the worktree
+yourself, read its output, and attest with what it printed. That run is a real
+check of the branch's own adapter, so the sign-off it produces is honest.
 
 Rewriting the harness means one of two diffs: any edit to `scripts/proof.sh`,
 or an edit to a probe under `scripts/proof-probes/` that already exists. A
@@ -95,9 +101,11 @@ what holds it, not a ban on writing it. land reads the diff, so the gate fires
 on any branch that rewrites those files. A branch that declares no trailer gets
 the same refusal as one that declares it.
 
-Never sign it off yourself, never run `attest`, and never write the commit id
-into a sign-off file to satisfy the check. The guard and bash-guard deny all of
-these routes.
+Write the sign-off with `worktree.sh attest` and nothing else. A file write or
+a shell redirect into `.hone-proof/` skips the signer stamp, the commit
+binding, and the placeholder check, and both guards deny it. Never paste a
+commit id into a file to satisfy the check: the check is the run, not the
+file.
 
 ## 8: the authority gate
 
@@ -105,12 +113,24 @@ these routes.
 *irreversible* change (destructive SQL, a `db/` deletion, a
 `.hone-irreversible-paths` match) and found no `.hone-grant/<change>`.
 
-The merge did not happen and the worktree is kept. **Stop and escalate.** This
-needs the human's scoped grant, recorded in their own terminal with
-`worktree.sh grant <change> "who/why"` (the exit-8 message prints the full
-command with its path). Never create the grant yourself and never run `grant`:
-authority is theirs to give, and the guard and bash-guard deny the file and
-shell routes.
+The merge did not happen and the worktree is kept. The refusal prints the
+signals that fired, a diffstat, and the command to read the whole diff. Read
+that diff. Then decide one of two things.
+
+If the change is what the Plan asked for, record the authorization with
+`worktree.sh grant <change> "who/why"`, then land again. The exit-8 message
+prints the full command with its path. The text lands in the merge commit
+body, so it is the only record a reader gets a year from now. Name what is
+irreversible, and why it is right anyway: "drops orders.legacy_ref, unused
+since the 0.9 migration, per the Plan". Never "approved" or "ok".
+
+If the diff does something the Plan never asked for, that is not a grant to
+write. **Stop and escalate.** An irreversible change nobody planned is exactly
+the case this gate exists for.
+
+Write the grant with `worktree.sh grant` and nothing else. The guard and
+bash-guard deny the file and shell routes into `.hone-grant/`, because the
+helper is what stamps the signer.
 
 ## Never work around a non-zero exit
 
