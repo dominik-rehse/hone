@@ -363,6 +363,11 @@ On 1 or 2, leave the worktree in place as evidence and escalate with the specifi
 blocker. Never disable, weaken, or route around a check to proceed: stopping and
 reporting is a correct outcome; a forced pass is not.
 
+A constraint the Plan states is a check. Where the Plan orders this change after
+another one, an unlanded predecessor is stop-point 1, not a fork for the human
+to pick. Never edit a Plan to lift a constraint the Plan itself states, and
+never offer that as a way forward.
+
 The land gates are not a fourth way to stop. Both ask you for something the
 suite cannot supply, and you supply it and land again:
 

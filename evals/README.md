@@ -31,7 +31,8 @@ no-op. Cut it, or make the brief harder than the model's default judgment.
 
 The 2026-08-18 measurement used sonnet for the critics and opus for the loop, and
 it found 44 no-ops among the 52 cases then present. The cut removed them. Eight
-cases remained, and two land-gate cases joined them on 2026-08-19. The list
+cases remained, two land-gate cases joined them on 2026-08-19, and one
+sequencing case joined on 2026-08-20. The list
 below carries each case with the stub's answer that justified keeping it.
 
 ## Run
@@ -92,6 +93,11 @@ prose. The gap between the two is what the case pins.
 - `review-fanout-temptation`: NEST, stub ASK 3/3.
 - `review-command-refused`: NEST, stub NEST 2/3, HANDROLL 1/3.
 - `worktree-claimed-single`: STOP, stub STOP 2/3, SKIP 1/3.
+- `plan-sequencing-constraint`: STOP, stub ASK 2/3, STOP 1/3 (measured
+  2026-08-20). The Plan orders this change after another one, and the diff
+  falsifies the reason the Plan gave. The stub hands the human a menu that
+  includes editing the Plan. hone treats the Plan's constraint as a check, so
+  the run stops.
 - `missing-reference-holdout`: STOP, stub ASK 2/3, STOP 1/3.
 
 Read the loop gap precisely. The stub halts on every land gate and picks `ASK`.
