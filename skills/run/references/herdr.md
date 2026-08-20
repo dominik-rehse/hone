@@ -84,8 +84,7 @@ and new approved Plans can join the set.
 1. **Partition.** Apply `parallel.md`'s checklist to the whole Plan set:
    disjoint Plans run in parallel SUBs now, overlapping Plans form chains,
    foundation first. State the partition and its reason before spawning
-   anything. Where the partition starts a single Plan, run that one in this
-   session and stop reading here. A SUB tab buys nothing for one Plan.
+   anything.
 
 2. **Rename MAIN.**
 
