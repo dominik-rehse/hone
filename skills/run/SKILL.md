@@ -25,6 +25,62 @@ Resolve `$ARGUMENTS`:
 Setup check: if `scripts/run-tests.sh` is missing, stop and tell the user to run
 `/hone:setup` first; without the adapter the gate can't verify anything.
 
+## Reporting: progress lines, receipts, and the final report
+
+Everything `run` prints is one of three kinds, and each kind has a fixed shape.
+The shape is what lets a reader tell a status update from a receipt, and see
+where the run stands at a glance.
+
+**The progress line.** The steps form a fixed chain:
+`worktree > build > verify > consolidate > review > land`. Print the chain as
+one line, prefixed with the change name, when a step starts and again when it
+ends. Mark a finished step `✓`, the active step `…`, and a failed step `✗`.
+Leave a step not yet reached bare:
+
+```
+[csv-export] worktree ✓ > build ✓ > verify … > consolidate > review > land
+```
+
+When a step ends, its `✓` carries that step's artifact in short form, in
+parentheses. Earlier steps keep a bare `✓`:
+
+```
+[csv-export] worktree ✓ > build ✓ > verify ✓ (suite 212/212, typecheck ✓,
+lint ✓, mutation: skipped — no critical path named) > consolidate … > review > land
+```
+
+That annotated `✓` **is** the step's receipt. It states outcomes read from the
+artifact. It names every skipped check with its reason, because an unstated
+skip looks like a forgotten check. A line with no artifact is a status update,
+never a completion claim.
+
+**Status updates.** Between progress lines, narrate in plain one-sentence
+present tense ("Running the full suite in the background."). No checkmarks and
+no headers: those belong to progress lines and the final report.
+
+**Quoted subagent output.** Findings from the `consolidate-critic` or from
+`/code-review` are someone else's claims until you triage them. Frame them.
+Open with one line that names the source ("consolidate-critic findings, before
+triage:"). Close with your own verdict ("Triage: applied 2, declined 1 —
+decline recorded in the commit body."). Never let a quoted finding stand as if
+it were the run's own conclusion.
+
+**The final report.** Every run ends with one block in this shape, whatever the
+outcome:
+
+```
+## <change>: landed | stopped at <step>
+
+- Outcome: landed <merge commit> | stopped at <step> — <the blocker>
+- Cut: <what consolidate removed, or "nothing — <reason>">
+- Docs: <Decisions/Notes written, open questions closed, or "none">
+- Declined: <review findings declined + where recorded, or "none">
+- Next: <"nothing" | the check the human must run | the fork to decide>
+```
+
+On a stop, the last progress line (with its `✗`) sits directly above this
+block. The reader then sees where the run died and why in one place.
+
 ## The loop, per Plan
 
 Three hooks enforce the laws as you work: the `guard` (PreToolUse: test-first,
@@ -149,10 +205,11 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
   another red-green cycle. Skip it
   for non-critical or UI changes; never gate a trivial change on it.
 
-Close verify by stating each check's outcome (tests, type-check, lint,
-mutation), including any skip **with its reason** ("mutation: skipped, no
-critical path named in the Plan"). An unstated skip is indistinguishable from a
-forgotten check, and this receipt is what a later audit of the transcript reads.
+Close verify with its progress line: each check's outcome (tests, type-check,
+lint, mutation) goes in the verify `✓`'s artifact, including any skip **with
+its reason** ("mutation: skipped — no critical path named in the Plan"). An
+unstated skip is indistinguishable from a forgotten check, and this receipt is
+what a later audit of the transcript reads.
 
 If verify cannot go green and you have exhausted the fix, **stop and escalate**
 (stop-point 1), leaving the worktree as evidence.
@@ -216,8 +273,9 @@ It prints one word.
 - **`full`**: the answer for every change that touches code. Run the review below.
 - **`docs-only`**: the diff changes nothing outside `docs/` and `.plans/`, so a
   code reviewer has no code to read. Skip the review and go to *land*, stating
-  the skip and the word the script printed in your receipt, exactly as verify
-  states a skipped mutation check. The `consolidate-critic` already judged this
+  the skip and the word the script printed in the review `✓`'s artifact
+  ("review ✓ (skipped — review-scope: docs-only)"), exactly as verify states a
+  skipped mutation check. The `consolidate-critic` already judged this
   change at step 4, and prose is what it judges.
 
 Read that word; never form your own view of it. "This change looks too small to
@@ -326,8 +384,9 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    grant or a sign-off through the file tools or a shell redirect, because the
    `worktree.sh` helpers are what make the record readable.
 
-Confirm to the user: what landed, the Decisions/Notes written, what was deleted
-(the Plan, and any pruned tests; every cycle removes something).
+Confirm to the user with the final report block from *Reporting*. It names
+what landed, the Decisions/Notes written, what the change deleted (the Plan,
+and any pruned tests), and what is next. Every cycle removes something.
 
 ## `--all`: many changes at once
 
@@ -338,6 +397,17 @@ visible and the cross-check is yours. Partition the set into disjoint Plans (run
 in parallel) and overlapping ones (run sequentially, foundation first), state the
 partition and its reason, then land one at a time. A change whose `add` exits 4 is
 claimed by another run: skip it and say so.
+
+Under `--all`, every progress line keeps its `[<change>]` prefix, so interleaved
+steps stay readable. Also keep a status board: one line per Plan, reprinted
+whenever any Plan changes state, and again as the run's final report:
+
+```
+csv-export   landed a1b2c3d
+auth-retry   verify …
+rate-limit   queued (waits on auth-retry)
+pdf-export   stopped at review — genuinely ambiguous, worktree kept
+```
 
 `references/parallel.md` carries the full comparison checklist, the claim rule,
 and the landing order. Read it whenever the invocation is `--all`.
@@ -360,8 +430,10 @@ picks the model for those sessions. `parallel.md` makes the check, and
 3. **done**: landed and green.
 
 On 1 or 2, leave the worktree in place as evidence and escalate with the specific
-blocker. Never disable, weaken, or route around a check to proceed: stopping and
-reporting is a correct outcome; a forced pass is not.
+blocker. Print a last progress line with the failing step marked `✗`, then end
+with the final report block from *Reporting*. Never disable, weaken, or route
+around a check to proceed: stopping and reporting is a correct outcome; a forced
+pass is not.
 
 A constraint the Plan states is a check. Where the Plan orders this change after
 another one, an unlanded predecessor is stop-point 1, not a fork for the human

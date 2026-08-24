@@ -127,6 +127,22 @@ and new approved Plans can join the set.
    each time one settles. If the SUB is still `working` when the wait times out,
    wait again.
 
+   Keep a status board: one line per Plan, reprinted each time a SUB settles, a
+   Plan starts, or a tab closes. Every state on it comes from what MAIN can
+   verify itself:
+
+   ```
+   csv-export   landed a1b2c3d
+   auth-retry   running (SUB:mail:auth-retry)
+   rate-limit   queued (waits on auth-retry)
+   pdf-export   needs human — proof gate, tab kept
+   ```
+
+   `landed` comes from the predicate alone. `running` comes from the agent
+   state, and `needs human` from the tail read. When you relay a SUB's own
+   progress line, mark it as the SUB's claim ("SUB reports verify …"), never
+   as MAIN's knowledge.
+
    - `landed`: close that SUB tab, report the land, and start whatever Plan was
      waiting on it.
    - `pending`: the SUB stopped mid-loop. Read its tail to classify, never to
@@ -170,8 +186,9 @@ and new approved Plans can join the set.
    any accepted cuts through a worktree change of its own. Close its tab when
    that lands, or when it reports nothing to cut.
 
-7. **Report.** Per Plan: landed (with the merge commit) or stopped (with the
-   blocker and the tab left open). Name the tabs closed and the tabs kept.
+7. **Report.** Print the final status board. Per Plan: landed (with the merge
+   commit) or stopped (with the blocker and the tab left open). Name the tabs
+   closed and the tabs kept.
 
 ## Closing a SUB tab
 

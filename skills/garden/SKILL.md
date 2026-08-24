@@ -131,6 +131,12 @@ was unsafe, treat as red above; 9 conflict → another change owns these files, 
 7/8 → a land gate fired, discharge it as `run` does). Independent cuts may run in parallel
 worktrees; land them one at a time.
 
+Report each cut with a progress line on the chain `worktree > cut > verify >
+land`, prefixed `[garden/<slug>]`, printed when a step starts and when it ends.
+Mark a finished step `✓` with its artifact in parentheses ("verify ✓ (suite
+212/212)"), the active step `…`, and a red cut `✗`. A line with no artifact is
+a status update, never a completion claim.
+
 ## 4. Judgment: the consolidate-critic, repo-wide
 
 For the judgment findings, hand the `consolidate-critic` a **constructed brief**
@@ -146,9 +152,18 @@ recorded rationale just to have a cut to show.
 
 ## 5. Report: what was cut, what was deferred
 
-Close with the ledger: each cut landed (and its `Cut:` line), each finding
-abandoned because the suite went red (with what it revealed depends on it), and
-each judgment item deferred to a human. A garden run that cut nothing is a valid
+Close with the ledger, in one fixed block:
+
+```
+## garden: <n> landed, <m> abandoned, <k> deferred
+
+- Landed: <each cut, its merge commit, and its `Cut:` line>
+- Abandoned: <each red cut, and what the red run showed depends on it>
+- Deferred: <each judgment item, and where it is logged>
+- Scope: <what the scan covered, and every skip with its reason>
+```
+
+A garden run that cut nothing is a valid
 outcome: say so, and do not manufacture a cut to look busy. Silent truncation
 (a scan that stopped early, a cut skipped without a reason) reads as "clean" when
 it isn't, so name every skip.
