@@ -8,19 +8,19 @@ Every change runs `plan → run`. `/hone:plan` writes `.plans/<change>.md`, the
 one artifact written outside the loop. A human usually invokes it, and another
 agent may invoke it too. The command ends with the `plan-critic` check while
 its caller can still revise the Plan. `/hone:run` then
-executes the Plan unattended in a git worktree: build (test-first) → verify →
-consolidate → `/code-review` → land (merge into the primary tree, re-run the
-suite, remove the worktree). It proceeds without checking in, and stops only
-when a check cannot be made green, the change is genuinely ambiguous, or it
-is done. On a stop it keeps the worktree as evidence and reports the blocker;
-it never disables a check to proceed.
+executes the Plan unattended in a git worktree. The loop is build (test-first)
+→ verify → consolidate → `/code-review` → land (merge into the primary tree,
+re-run the suite, remove the worktree). It proceeds without checking in, and
+stops only when a check cannot be made green, the change is genuinely
+ambiguous, or it is done. On a stop it keeps the worktree as evidence and
+reports the blocker. It never disables a check to proceed.
 
 Permanent documentation lives only in forms that get checked or stay small:
 types (make invalid states impossible to express), code and behavior-named
-tests in `src/<area>/`, present-tense Decisions
+tests in `src/<area>/`. The rest is present-tense Decisions
 (`docs/decisions/<topic>.md`), small per-area Notes (`docs/notes/<area>.md`),
-and git history. Never write down what an agent could work out from the code;
-if something can be a type, make it a type instead of prose. The Plan is
+and git history. Never write down what an agent could work out from the code.
+If something can be a type, make it a type instead of prose. The Plan is
 committed at plan time but deleted at consolidate: git history keeps it, the
 working tree does not.
 
@@ -38,15 +38,15 @@ a spike from the staleness rules above. So nothing here is ever updated, only
 added or removed whole. Commit a spike only when its method or its dead ends
 are worth keeping. Most probes answer their question and leave nothing behind.
 
-Memory the harness saves outside the repo is not project documentation: it is
+Memory the harness saves outside the repo is not project documentation. It is
 per-user, unreviewed, uncommitted, and invisible to the hooks, the critics,
 and `garden`, so a decision or invariant stored there governs nothing. Read
-it as background; when something in it belongs to the codebase, land it in
+it as background. When something in it belongs to the codebase, land it in
 `docs/` through consolidate.
 
 A third command, `/hone:garden`, runs the same loop between changes and only
-deletes (stale docs, dead code, redundant tests), with the suite proving
-each removal safe. A human or another agent invokes it. It is maintenance,
+deletes (stale docs, dead code, redundant tests). The suite proves each
+removal safe. A human or another agent invokes it. It is maintenance,
 not a Plan.
 
 A shell command reaches the same durable paths the file tools do. Dependency
@@ -57,9 +57,9 @@ hook reports such a write after the fact, and a report is not a prevention. A
 dependency or toolchain refresh has a named shape, and the `plan` and `run`
 skills point to it.
 
-The hooks enforce: the primary tree is a merge target, never a workspace
-(`guard`); no production code without a failing test (`guard`); tests,
-type-check, and lint stay green (`gate`); Plans and Notes stay small and
-owned (`nag`). `docs/` is written only at consolidate; code and tests only at
-build. The detail lives in the `plan`, `run`, and `garden` skills, loaded
-when invoked.
+The hooks enforce these rules. The primary tree is a merge target, never a
+workspace (`guard`). No production code without a failing test (`guard`).
+Tests, type-check, and lint stay green (`gate`). Plans and Notes stay small
+and owned (`nag`). `docs/` is written only at consolidate. Code and tests are
+written only at build. The detail lives in the `plan`, `run`, and `garden`
+skills, loaded when invoked.

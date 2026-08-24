@@ -1,10 +1,10 @@
 # `worktree.sh land`: exit codes and what each one means
 
-Background for step 6 of `run`. `SKILL.md` carries the compact table; read this
+Background for step 6 of `run`. `SKILL.md` carries the compact table. Read this
 when land returns something other than 0, before you act on it.
 
 `land` takes the **land lock**, so it is safe even when another `run` is landing
-into the same primary tree at the same time: it waits its turn instead of
+into the same primary tree at the same time. It waits its turn instead of
 interleaving. Under the lock it merges `--no-ff`, **re-runs the whole suite** in
 the primary tree, and on green removes the worktree and deletes the branch. The
 confirmation is the suite, not the merge succeeding.
@@ -31,12 +31,12 @@ not force the merge.
 
 Another session held the land lock (a land or a full-suite run) past the
 timeout. Nothing happened to the trunk. Wait for that run to finish, then
-re-run land; never work around the lock.
+re-run land. Never work around the lock.
 
 ## 2: usage or repo-state error
 
 The branch does not exist, the primary tree is on a detached HEAD, or the
-invocation was malformed. Nothing was merged. Read the stderr line; fix the
+invocation was malformed. Nothing was merged. Read the stderr line. Fix the
 state (from the primary tree) rather than retrying blindly.
 
 ## 7: the proof gate
@@ -135,7 +135,7 @@ helper is what stamps the signer.
 ## Never work around a non-zero exit
 
 Never merge by hand, and never move the primary tree's HEAD
-(`git checkout`/`switch`/`stash`/`reset`) to investigate: that races every other
+(`git checkout`/`switch`/`stash`/`reset`) to investigate. That races every other
 session sharing the tree, and the `bash-guard` will stop you. The primary tree
-stays on the trunk as a merge target; do any investigation in a throwaway
+stays on the trunk as a merge target. Do any investigation in a throwaway
 `git worktree add --detach` scratch tree.

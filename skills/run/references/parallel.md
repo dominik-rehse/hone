@@ -1,12 +1,12 @@
 # `--all`: running many Plans at once
 
-Background for `/hone:run --all`. Read this when the invocation is `--all`; a
+Background for `/hone:run --all`. Read this when the invocation is `--all`. A
 single named change never needs it.
 
 Parallelism is `run` over several Plans, not a special mode, and it is never
 assumed. **Check independence first, before spawning any worktree.** Each
-`plan-critic` ran at plan time, before later Plans existed, so this is the first
-moment the whole set is visible and the cross-check is yours.
+`plan-critic` ran at plan time, before later Plans existed. This is the first
+moment the whole set is visible, and the cross-check is yours.
 
 ## Where the runs happen
 
@@ -29,10 +29,10 @@ test "${HERDR_ENV:-}" = 1
 Read every ready Plan and compare them pairwise:
 
 - the files and areas each expects to change (its *Notes for the loop*, its
-  *What*, a quick look at `src/`);
+  *What*, a quick look at `src/`).
 - any shared type or persistent contract (a DB schema, a public API, a wire or
-  file format);
-- any Decision or Note more than one would touch;
+  file format).
+- any Decision or Note more than one would touch.
 - any **reference** two Plans both name. A shared fixture or schema file is a
   hard signal: they are not independent even if their `src/` files are disjoint.
 
@@ -40,18 +40,18 @@ Then partition:
 
 - **Disjoint Plans** run in parallel: steps 1–5 each in its own worktree,
   concurrently.
-- **Overlapping Plans** run sequentially: order them (foundation first: the Plan
-  the others build on), and run each fully through step 6 before starting the
-  next, so the later change builds on the landed result instead of fighting it at
-  the merge. Sequencing is your call; it needs no escalation.
+- **Overlapping Plans** run sequentially. Order them (foundation first: the Plan
+  the others build on). Run each fully through step 6 before starting the next.
+  The later change then builds on the landed result instead of fighting it at
+  the merge. Sequencing is your call. It needs no escalation.
 
 State the partition and its reason before starting ("`a` and `b` are disjoint:
-parallel; `c` touches the same schema as `a`: after `a` lands").
+parallel. `c` touches the same schema as `a`: after `a` lands").
 
 ## Claims
 
 A change whose `add` exits **4** is already claimed by another `run` sharing this
-repo: **skip it** and note the skip in the partition report; never adopt its
+repo. **Skip it** and note the skip in the partition report. Never adopt its
 worktree. This is what keeps two concurrent `/hone:run` invocations from both
 building the same Plan: the worktree is a single atomic claim.
 
@@ -59,12 +59,12 @@ building the same Plan: the worktree is a single atomic claim.
 
 Land them one at a time through step 6:
 
-- Lands are serialized by the land lock even across sessions, so `worktree.sh
-  land` never interleaves two merges; within this run, still drive them one at a
+- The land lock serializes lands even across sessions, so `worktree.sh land`
+  never interleaves two merges. Within this run, still drive them one at a
   time so each builds on the last landed result.
-- The upfront check is a judgment; the **merge verifies it**. A merge collision
+- The upfront check is a judgment. The **merge verifies it**. A merge collision
   on a shared type, Decision, or Note (`land` exit 9) means the check missed an
-  overlap: fold it into one serial change and flag it for a Decision-level look.
+  overlap. Fold it into one serial change and flag it for a Decision-level look.
   Do not force the merge.
 - After all merges, run one **global consolidate pass** (a `consolidate-critic`
   over the combined result) to catch cross-change duplication no single worktree

@@ -1,7 +1,7 @@
 # `/code-review` in the run loop: rationale and failure modes
 
-Background for step 5 of `run`. The essential instruction lives in `SKILL.md`;
-consult this when the review step misbehaves or a shortcut around it looks
+Background for step 5 of `run`. The essential instruction lives in `SKILL.md`.
+Consult this when the review step misbehaves or a shortcut around it looks
 tempting.
 
 ## Why the command refuses model invocation
@@ -20,7 +20,7 @@ When the refusal appears, the nested `claude -p` call is the one and only next
 move. Do not assemble a reviewer: no `Workflow`, no fan-out of `Agent`/`Task`
 finders, no "faithful equivalent" or "same multi-agent shape." Each silently
 abandons the native review (parallel finders plus a verification pass) this step
-exists to reuse, and is a step failure even when it produces findings.
+exists to reuse. Each is a step failure even when it produces findings.
 
 ## The JSON envelope is the proof the review ran
 
@@ -37,17 +37,17 @@ once the envelope confirms do you read the review from its `.result`.
 The multi-agent fan-out takes several minutes, longer than the foreground Bash
 timeout, which kills it at ~2 minutes regardless of any inner `timeout`. Run it in
 the Bash tool's background mode (not a shell `&`, which the harness won't keep
-alive), redirect the JSON to an output file, and poll that file until the run
+alive). Redirect the JSON to an output file, and poll that file until the run
 finishes.
 
 ## Don't land on the decoy
 
 The `--allowedTools` allowlist (`Task Agent Read Grep Glob Bash(git *)`) lets the
-finders fan out without granting full `bypassPermissions`: a trivial diff reviews
+finders fan out without granting full `bypassPermissions`. A trivial diff reviews
 cleanly even in the default mode, but the heavy fan-out wants its tools. Do not
 locate, read, or execute a command file on disk, and do not add a marketplace
 `code-review` plugin to the path. That plugin is GitHub-PR-shaped (it wants a PR
 number and `gh pr comment`) and does not fit a worktree. A literal `/code-review`
-in the nested session resolves deterministically to the built-in command, but a
+in the nested session resolves deterministically to the built-in command. But a
 fuzzy skill lookup or disk search can still land on the decoy and make the review
 balk.

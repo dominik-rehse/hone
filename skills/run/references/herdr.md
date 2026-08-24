@@ -135,12 +135,12 @@ and new approved Plans can join the set.
    csv-export   landed a1b2c3d
    auth-retry   running (SUB:mail:auth-retry)
    rate-limit   queued (waits on auth-retry)
-   pdf-export   needs human — proof gate, tab kept
+   pdf-export   needs human: proof gate, tab kept
    ```
 
    `landed` comes from the predicate alone. `running` comes from the agent
    state, and `needs human` from the tail read. When you relay a SUB's own
-   progress line, mark it as the SUB's claim ("SUB reports verify …"), never
+   progress line, mark it as the SUB's claim ("SUB reports verify ..."), never
    as MAIN's knowledge.
 
    - `landed`: close that SUB tab, report the land, and start whatever Plan was

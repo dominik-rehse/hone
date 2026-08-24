@@ -11,9 +11,9 @@ Input: $ARGUMENTS
 The Plan is the one artifact written outside the loop. It is the single step
 that still needs a caller, and that caller is a human or another agent.
 Everything after it (build, verify, consolidate, review, land) runs unattended
-from `/hone:run`. So the Plan is a short brief, not a spec: it says what to
+from `/hone:run`. So the Plan is a short brief, not a spec. It says what to
 build, why, and how you'll know it works, and it is deleted at consolidate. It
-never accumulates acceptance-criteria bookkeeping; the tests are the permanent
+never accumulates acceptance-criteria bookkeeping. The tests are the permanent
 record of behaviour.
 
 This command helps its caller write that brief. It writes **only** `.plans/<change>.md`
@@ -26,20 +26,20 @@ This command helps its caller write that brief. It writes **only** `.plans/<chan
 
 Derive a short, domain-named slug from `$ARGUMENTS` (`auth/refresh-token`,
 `export/csv-escaping`), mirroring `src/`. Never a positional name (`change-3`).
-The Plan lands at `.plans/<slug>.md`; if that file already exists, ask whether to
+The Plan lands at `.plans/<slug>.md`. If that file already exists, ask whether to
 resume or overwrite it.
 
 One naming rule guards the layout's one ambiguity. A Plan's references live in
-`.plans/<slug>/`, so a markdown file whose parent directory has a sibling
-`<dir>.md` is read as a *reference*, not a Plan, by the nag and by
-`worktree.sh status`. A slug therefore may not double as a Plan directory:
+`.plans/<slug>/`. So the nag and `worktree.sh status` read a markdown file whose
+parent directory has a sibling `<dir>.md` as a *reference*, not a Plan. A slug
+therefore may not double as a Plan directory:
 
-- If the slug is nested (`a/b`) and `.plans/a.md` exists, refuse the name: the
+- If the slug is nested (`a/b`) and `.plans/a.md` exists, refuse the name. The
   new Plan at `.plans/a/b.md` would look like a reference of Plan `a` and drop
   out of every pending-Plan scan. Propose a sibling name instead (`a-b`, or a
   different area).
 - If the slug is `a` and `.plans/a/` already holds other Plans (an `a/x.md`
-  with no `.plans/a.md` beside it), refuse it for the mirror reason: creating
+  with no `.plans/a.md` beside it), refuse it for the mirror reason. Creating
   `.plans/a.md` would turn those Plans into apparent references.
 
 State the conflict and agree on an alternative with the caller. Never silently
@@ -75,21 +75,21 @@ area is new, and go on. Never invent a baseline for code that does not exist.
 
 A change is the **smallest unit worth its own review gate**: split only where a
 reviewer could reject one part while approving its neighbour. Too large and the
-review can't hold it; too small and you multiply merge overhead on shared files.
+review can't hold it. Too small and you multiply merge overhead on shared files.
 
 - If the sketch is really several independent changes, say so and propose the
   split: one Plan each, each landable alone. Independent means disjoint `src/`
-  files (they can run in parallel worktrees; `run` re-checks independence
-  before fanning out, and the merge verifies it).
+  files (they can run in parallel worktrees). `run` re-checks independence
+  before fanning out, and the merge verifies it.
 - If it's one indivisible change spanning several files, that's one Plan.
 
-Decide this now; the `plan-critic` (the Plan checker run at step 6) will
+Decide this now. The `plan-critic` (the Plan checker run at step 6) will
 challenge a Plan whose scope is wrong.
 
 ### 4. Surface untested assumptions as open questions
 
-If the change rests on an assumption only running code can settle (a driver's
-dialect, an SDK's headless behaviour, a library on this runtime), record it in
+The change may rest on an assumption only running code can settle: a driver's
+dialect, an SDK's headless behaviour, a library on this runtime. Record it in
 `docs/open-questions.md` as a question gated to this change, not in the Plan.
 Distinct from a *decision already made* (that's a Decision, written at
 consolidate). Don't invent questions to fill the file.
@@ -123,7 +123,7 @@ trips one.
 
 One question is never an open question. It goes to the caller, now. If the
 change touches a persistent schema (a migration, a stored format), ask **"is
-the existing data worth preserving?"** before any migration design, and record
+the existing data worth preserving?"** before any migration design. Record
 the answer in the Plan's *Notes for the loop*. Everything downstream hinges on
 it (disposable data collapses backfill design into drop-and-recreate), and the
 `plan-critic` rejects a schema-touching Plan that leaves it unstated.
@@ -170,9 +170,9 @@ Omit any section that would only restate another. No placeholders, no `TBD`: the
 ### 5a. Attach what prose describes badly
 
 Some things a change depends on survive prose badly: a wire or file format, a
-response shape, a table or screen layout, an exact error string, a set of
-escaping or boundary cases. Describing one costs paragraphs and still loses
-detail, and because the Plan is deleted at consolidate, nothing remains to
+response shape, a table or screen layout. Others are an exact error string, a
+set of escaping or boundary cases. Describing one costs paragraphs and still
+loses detail, and because the Plan is deleted at consolidate, nothing remains to
 check the loop's reading against. Hand over the file instead: the loop reads
 it directly, and it is often the fixture the first red test consumes.
 
@@ -182,35 +182,37 @@ A reference is a **file that exists**, never prose moved into a second file:
   name its path and stop. Do not copy it into the Plan.
 - *Written for this change* (a table of input/expected rows, a sample payload, an
   HTML mockup of a screen): put it under `.plans/<slug>/`. That directory belongs
-  to the Plan, and it is also the only place you can write one here: `guard`
+  to the Plan, and it is also the only place you can write one here. `guard`
   denies writes to `docs/`, `src/`, and `tests/` in the primary tree, which is
   where `/hone:plan` runs. (`docs/spikes/` is the one exception, and it takes
   a frozen spike note, never a Plan's reference.)
 
-When the sketch is a **dependency or toolchain refresh** (a version bump of a
-library, linter, formatter, build tool, or runtime), read
+The sketch may be a **dependency or toolchain refresh**: a version bump of a
+library, linter, formatter, build tool, or runtime. Then read
 `${CLAUDE_PLUGIN_ROOT}/skills/run/references/dependency-refresh.md` before
 writing the Plan. It carries the probe to run, the counts and findings the Plan
 must pin as expected data, and the test-first exemption a bump gets.
 
 Two limits. If you need a paragraph to explain what a reference *means*, it is
-prose in a file's clothing: put the point in *What* and drop the file. And a
-reference is not a spec: it pins data the loop would otherwise have to guess,
-never the acceptance criteria; those stay the tests' job.
+prose in a file's clothing. Put the point in *What* and drop the file. And a
+reference is not a spec. It pins data the loop would otherwise have to guess,
+never the acceptance criteria. Those stay the tests' job.
 
 ### 6. Check: `plan-critic`
 
 Submit the finished Plan to the `plan-critic` agent (Task tool,
 `subagent_type: plan-critic`). Give it a **constructed brief**: the Plan text,
-the list of open changes (other `.plans/**/*.md`, since slugs nest, and existing
-`hone/*` worktrees), and the relevant existing Decisions/Notes, never your own
-transcript. It returns structured findings and an `APPROVE`/`REJECT` verdict.
+the list of open changes, and the relevant existing Decisions/Notes, never your
+own transcript. Open changes are other `.plans/**/*.md`, since slugs nest, and
+existing `hone/*` worktrees. It returns structured findings and an
+`APPROVE`/`REJECT` verdict.
 
-**If it rejects** (placeholder, contradiction, ambiguity, wrong scope, collision
-with an open change, or contract churn): this is the moment to fix it, while the
-caller is still here. Present the findings, revise the Plan with the caller (they
-own it), and resubmit the revised Plan. Never hand off a rejected Plan:
-`/hone:run` executes unattended and trusts that this check happened here.
+**It may reject** for a placeholder, contradiction, ambiguity, wrong scope,
+collision with an open change, or contract churn. Then this is the moment to fix
+it, while the caller is still here. Present the findings, revise the Plan with
+the caller (they own it), and resubmit the revised Plan. Never hand off a
+rejected Plan: `/hone:run` executes unattended and trusts that this check
+happened here.
 
 ### 7. Commit the approved Plan
 
@@ -222,15 +224,15 @@ git add .plans/<slug>.md .plans/<slug>/   # the second path only if you wrote re
 git commit -m "chore(plan): <slug>"
 ```
 
-Two reasons it must be committed here, not left loose: `/hone:run` builds its
-worktree off the trunk's HEAD, so the Plan has to be on HEAD for the run to see
-it; and committing it is what lets consolidate remove it cleanly (a `git rm`
-inside the worktree that the landing merge carries back to the primary tree)
-instead of an out-of-band delete of an untracked file (which the unattended run
-cannot perform). Both reasons apply to a reference exactly as they do to the
-Plan: an uncommitted reference is invisible inside the worktree, so the build
-fails on a missing file it was told to read. Commit nothing but the Plan and its
-references; the loop owns every other artifact.
+Two reasons it must be committed here, not left loose. First, `/hone:run` builds
+its worktree off the trunk's HEAD, so the Plan has to be on HEAD for the run to
+see it. Second, committing it is what lets consolidate remove it cleanly. That
+removal is a `git rm` inside the worktree that the landing merge carries back to
+the primary tree. The alternative is an out-of-band delete of an untracked file,
+which the unattended run cannot perform. Both reasons apply to a reference
+exactly as they do to the Plan. An uncommitted reference is invisible inside the
+worktree, so the build fails on a missing file it was told to read. Commit
+nothing but the Plan and its references. The loop owns every other artifact.
 
 ### 8. Confirm: the hand-off
 
