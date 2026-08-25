@@ -33,21 +33,34 @@ where the run stands.
 
 **The progress line.** The steps form a fixed chain:
 `worktree > build > verify > consolidate > review > land`. Print the chain as
-one line, prefixed with the change name, when a step starts and again when it
-ends. Mark a finished step `✓`, the active step `...`, and a failed step `✗`.
-Leave a step not yet reached bare:
+one line when a step starts and again when it ends. Open the line with the
+marker `◆` and the change name, each wrapped in backticks. Mark a finished
+step `✓`, the active step `...`, and a failed step `✗`. Leave a step not yet
+reached bare.
 
-```
-[csv-export] worktree ✓ > build ✓ > verify ... > consolidate > review > land
-```
+Backticks also wrap exactly one step: the step where the run stands. That is
+the active step while the run works, and the failed step on a stop. After the
+run lands, it is the land step with its receipt. The terminal renders a backticked
+span in the inline-code color, so the highlight shows where the run stands at
+a glance. Print the line as plain markdown, never inside a code fence. A fence
+stops that rendering. A mid-run line looks like this:
+
+`◆` `[csv-export]` worktree ✓ > build ✓ > `verify ...` > consolidate > review > land
 
 When a step ends, its `✓` carries that step's artifact in short form, in
 parentheses. Earlier steps keep a bare `✓`:
 
-```
-[csv-export] worktree ✓ > build ✓ > verify ✓ (suite 212/212, typecheck ✓,
-lint ✓, mutation: skipped, no critical path named) > consolidate ... > review > land
-```
+`◆` `[csv-export]` worktree ✓ > build ✓ > verify ✓ (suite 212/212, typecheck ✓,
+lint ✓, mutation: skipped, no critical path named) > `consolidate ...` > review > land
+
+On a stop, the highlight sits on the failed step:
+
+`◆` `[csv-export]` worktree ✓ > `build ✗` > verify > consolidate > review > land
+
+After the run lands, the highlight rests on land:
+
+`◆` `[csv-export]` worktree ✓ > build ✓ > verify ✓ > consolidate ✓ > review ✓ >
+`land ✓ (merged 3f2a1c9)`
 
 That annotated `✓` **is** the step's receipt. It states outcomes read from the
 artifact. It names every skipped check with its reason, because an unstated

@@ -132,10 +132,14 @@ was unsafe, treat as red above. 9 conflict → another change owns these files, 
 parallel worktrees. Land them one at a time.
 
 Report each cut with a progress line on the chain `worktree > cut > verify >
-land`, prefixed `[garden/<slug>]`. Print it when a step starts and when it ends.
-Mark a finished step `✓` with its artifact in parentheses ("verify ✓ (suite
-212/212)"), the active step `...`, and a red cut `✗`. A line with no artifact is
-a status update, never a completion claim.
+land`. Open the line with the marker `◆` and the name `[garden/<slug>]`, each
+wrapped in backticks. Print it when a step starts and when it ends. Mark a
+finished step `✓` with its artifact in parentheses ("verify ✓ (suite
+212/212)"), the active step `...`, and a red cut `✗`. Also wrap one step in
+backticks: the active step, the failed step on a stop, or the land step after
+the cut lands. Print the line as plain markdown, never inside a code fence,
+so the terminal highlights the backticked spans. A line with no artifact is a
+status update, never a completion claim.
 
 ## 4. Judgment: the consolidate-critic, repo-wide
 
