@@ -1,16 +1,21 @@
 #!/bin/bash
-# Eval harness for hone's judgment prose: the two critic agents and the run
-# skill's loop instructions. Prose is the one part of the trust foundation that
-# can go stale silently (nothing type-checks a prompt), so this pins it to a
-# suite of cases with known-good answers. It is also what makes *cutting* prose
-# safe: trim the skill or a critic, re-run, and see whether the behaviour held.
+# Eval harness for hone's judgment prose: the two critic agents, the run skill's
+# loop instructions, and the garden skill's classification. Prose is the one
+# part of the trust foundation that can go stale silently (nothing type-checks a
+# prompt), so this pins it to a suite of cases with known-good answers. It is
+# also what makes *cutting* prose safe: trim the skill or a critic, re-run, and
+# see whether the behaviour held.
 #
-# Three targets:
+# Four targets:
 #   plan-critic, consolidate-critic: the critic agents. System prompt is the
 #     agent body; the case is a constructed brief; the answer is its verdict.
 #   loop: the run skill's own instructions. System prompt is skills/run/SKILL.md;
 #     the case is a situation mid-run; the answer is the next action it picks.
 #     These are the cases that say which paragraphs of the skill are load-bearing.
+#   garden: the garden skill's own instructions. System prompt is
+#     skills/garden/SKILL.md; the case is one scan finding; the answer is what
+#     the pass does with it. This target pins the classification, which is the
+#     judgment garden makes on every finding it reports.
 #
 # Each case is a directory under evals/<target>/<case>/ with:
 #   brief.md   is the case handed to the model (self-contained; no file reads
@@ -23,8 +28,9 @@
 # (throttled by --jobs) and scoring happens after they land.
 #
 # Usage:
-#   bash evals/run.sh [plan-critic|consolidate-critic|loop|all] \
-#                     [--model NAME] [--votes N] [--jobs N] [--holdout] [--dry-run]
+#   bash evals/run.sh [plan-critic|consolidate-critic|loop|garden|all] \
+#                     [--model NAME] [--votes N] [--jobs N] [--holdout]
+#                     [--dry-run] [--ablate]
 #   --votes N   plurality vote over N runs per case (default 1); use 3 pre-release.
 #   --jobs N    max concurrent model calls (default 8); raise for speed, but too
 #               high can hit API concurrency limits and error a call.
@@ -32,22 +38,28 @@
 #               otherwise skipped; run them last before a release, and never
 #               read or tune against them while editing a prompt.
 #   --dry-run   list the cases and expected answers without calling the model.
+#   --ablate    swap the prose under test for a neutral reviewer stub, keeping
+#               the brief and the closing instruction identical. This is the
+#               discrimination check the README prescribes: a case the stub
+#               answers correctly pins nothing, so it belongs in no suite. Read
+#               the result as a case audit, never as a pass/fail run.
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 cd "$ROOT" || exit 1
 
-ALL_TARGETS=(plan-critic consolidate-critic loop)
+ALL_TARGETS=(plan-critic consolidate-critic loop garden)
 
-WHICH="all"; MODEL="sonnet"; DRY=0; VOTES=1; JOBS=8; HOLDOUT=0
+WHICH="all"; MODEL="sonnet"; DRY=0; VOTES=1; JOBS=8; HOLDOUT=0; ABLATE=0
 while [ $# -gt 0 ]; do
     case "$1" in
-        plan-critic|consolidate-critic|loop|all) WHICH="$1" ;;
+        plan-critic|consolidate-critic|loop|garden|all) WHICH="$1" ;;
         --model) shift; MODEL="$1" ;;
         --votes) shift; VOTES="$1" ;;
         --jobs) shift; JOBS="$1" ;;
         --holdout) HOLDOUT=1 ;;
         --dry-run) DRY=1 ;;
+        --ablate) ABLATE=1 ;;
         *) echo "unknown arg: $1" >&2; exit 2 ;;
     esac
     shift
@@ -66,6 +78,7 @@ tokens_for() {
         plan-critic)        echo 'REJECT APPROVE' ;;
         consolidate-critic) echo 'CUTS CLEAN' ;;
         loop)               echo 'STOP SKIP DISCARD NEST RECORD BACKGROUND ASK EXPAND HANDROLL PROCEED' ;;
+        garden)             echo 'NEXTPASS ESCALATE REPAIR CUT' ;;
     esac
 }
 
@@ -74,11 +87,18 @@ strip_fm() {
     awk 'BEGIN{fm=0} NR==1&&/^---[[:space:]]*$/{fm=1;next} fm&&/^---[[:space:]]*$/{fm=0;next} fm{next} {print}' "$1"
 }
 
+# The neutral baseline for --ablate. It carries no hone prose at all, so what it
+# measures is the model's own default judgment on the same brief.
+STUB='You are a careful, experienced software engineering reviewer.
+Judge the case on its merits and follow the instruction exactly.'
+
 # The prose under test goes in the SYSTEM slot, exactly as the harness loads it.
 sys_for() {
+    [ "$ABLATE" -eq 1 ] && { printf '%s\n' "$STUB"; return 0; }
     case "$1" in
-        loop) strip_fm "skills/run/SKILL.md" ;;
-        *)    strip_fm "agents/$1.md" ;;
+        loop)   strip_fm "skills/run/SKILL.md" ;;
+        garden) strip_fm "skills/garden/SKILL.md" ;;
+        *)      strip_fm "agents/$1.md" ;;
     esac
 }
 
@@ -91,6 +111,10 @@ instruction_for() {
         loop)               printf 'You are part-way through a hone run. Decide the single next action for the situation below, following your instructions exactly. State your reasoning briefly, then end with a final line of exactly:\nACTION: <TOKEN>\nwhere <TOKEN> is one of: %s\n' "$(tokens_for loop | tr ' ' ' ')" ;;
         plan-critic)        printf 'Review this case per your instructions. List your findings, then end with a final line of exactly:\nVERDICT: <TOKEN>\nwhere <TOKEN> is APPROVE or REJECT.\n' ;;
         consolidate-critic) printf 'Review this case per your instructions. List your findings, then end with a final line of exactly:\nVERDICT: <TOKEN>\nwhere <TOKEN> is CUTS PROPOSED or CLEAN.\n' ;;
+        # The garden gloss names what each token MEANS and never which one to
+        # pick. The rule that decides is the prose under test, so an ablation
+        # run keeps the same gloss and still measures the prose.
+        garden)             printf 'You are running a /hone:garden pass over this repository. Decide what the pass does with the finding below, following your instructions exactly. State your reasoning briefly, then end with a final line of exactly:\nACTION: <TOKEN>\nwhere <TOKEN> is one of: CUT (land a deletion now), REPAIR (land a pointer change now), ESCALATE (hand it over as proposed Plan work for a human or a critic), NEXTPASS (not this pass'"'"'s work at all; record it for the next scan).\n' ;;
     esac
 }
 
@@ -134,7 +158,7 @@ $(cat "$dir/brief.md")"
 # --- Phase 1: fan out every call, capped at $JOBS concurrent. -------------------
 # Record the run's context first: "sonnet" is a floating alias, so a saved log
 # is only interpretable later with the date and CLI version alongside it.
-echo "$(date -Iseconds) | model=$MODEL | claude $(claude --version 2>/dev/null | head -1)"
+echo "$(date -Iseconds) | model=$MODEL | claude $(claude --version 2>/dev/null | head -1)$([ "$ABLATE" -eq 1 ] && printf ' | ABLATION: neutral stub, not the real prose')"
 total_calls=0
 running=0
 for target in "${TARGETS[@]}"; do

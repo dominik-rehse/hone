@@ -29,6 +29,41 @@ Take three votes. A case is discriminating if the stub's plurality answer differ
 from the expected one. Keep those. A case the stub answers correctly 3/3 is a
 no-op. Cut it, or make the brief harder than the model's default judgment.
 
+`--ablate` runs exactly that swap, keeping the brief and the closing instruction
+identical:
+
+```bash
+bash evals/run.sh garden --votes 3 --model opus --ablate
+```
+
+Read its output backwards. A `FAIL` line is a case that discriminates, and an
+`ok` line is a case that pins nothing.
+
+### The second baseline: the prompt minus the paragraph
+
+The stub is a cheap proxy, and it breaks in one direction that matters. A
+paragraph sometimes exists to counteract the model's default. The stub then
+agrees with the expected answer for its own reasons, and the ablation calls a
+load-bearing case a no-op. The `consolidate-critic` case below is one instance.
+The `garden` classification is another, and a broader one. Three of its four
+tokens name actions any careful reviewer would also pick, so the vocabulary alone
+carries the stub to the right answer.
+
+The fix is the baseline the spike case already uses. Run the case against hone's
+prose **minus the paragraph the case pins**, rather than against no prose at all.
+The cheapest way to build that baseline is the prose as it stood before the
+change under test, which `git show` prints:
+
+```bash
+git show <commit-before>:skills/garden/SKILL.md > skills/garden/SKILL.md
+bash evals/run.sh garden --votes 3 --model opus
+git checkout skills/garden/SKILL.md
+```
+
+A case earns its place by discriminating against **either** baseline, and the
+list below records which one. A case that survives neither pins nothing, whatever
+behaviour it describes.
+
 The 2026-08-18 measurement used sonnet for the critics and opus for the loop, and
 it found 44 no-ops among the 52 cases then present. The cut removed them. Eight
 cases remained, two land-gate cases joined them on 2026-08-19, and one
@@ -41,15 +76,17 @@ below carries each case with the stub's answer that justified keeping it.
 bash evals/run.sh                       # every case, one vote, model=sonnet
 bash evals/run.sh plan-critic           # one target
 bash evals/run.sh loop --model opus     # the run skill's instructions
+bash evals/run.sh garden --model opus   # the garden skill's classification
 bash evals/run.sh --votes 3             # plurality-of-3 per case (use pre-release)
 bash evals/run.sh --votes 3 --holdout   # include the held-out cases (see below)
 bash evals/run.sh --jobs 12             # up to 12 concurrent calls (default 8)
 bash evals/run.sh --dry-run             # list cases + expected answers, no calls
+bash evals/run.sh garden --ablate       # the discrimination check, not a suite run
 ```
 
 Match the model to what actually runs in production, or the result means nothing.
-The critics carry `model: sonnet` in their frontmatter. The `loop` target uses
-whatever model drives the session (`--model opus`).
+The critics carry `model: sonnet` in their frontmatter. The `loop` and `garden`
+targets use whatever model drives the session (`--model opus`).
 
 ## Targets and cases
 
@@ -100,6 +137,37 @@ prose. The gap between the two is what the case pins.
   the run stops.
 - `missing-reference-holdout`: STOP, stub ASK 2/3, STOP 1/3.
 
+*`garden`*, what a maintenance pass does with one scan finding. Tokens are
+`CUT`, `REPAIR`, `ESCALATE`, and `NEXTPASS`. Every case here was measured against
+both baselines on 2026-08-25, opus, three votes. The stub answered seven of the
+eight candidate cases correctly. So the second baseline is what most of these
+pin. That baseline is garden's prose before the repair, the batching, and the
+bounded-pass rules landed.
+Three cases that survived neither baseline were cut the same day:
+`claim-moved-too`, `two-candidate-targets`, and `prompt-gotcha-no-evals`.
+
+- `moved-governs-path`: REPAIR. Stub REPAIR 3/3, so it is a no-op by the cheap
+  proxy. The prior prose answered ESCALATE 3/3, and that is what it pins. A
+  `Governs:` path whose code merely moved used to cost a whole `plan → run`
+  cycle. The required substring is the new path, so a vague "repoint it" does
+  not pass.
+- `src-comment-reference`: ESCALATE. Stub REPAIR 3/3. This is the only case that
+  discriminates against the neutral stub, and the clearest one. Fixing a stale
+  path in a `src/` comment is what any reviewer would do. It is also exactly
+  what garden may not do, because *build* owns code.
+- `midpass-review-finding`: NEXTPASS. Stub NEXTPASS 3/3, prior prose **CUT
+  3/3**. It pins the bound on a pass. The finding is real, it is garden's own
+  scan class, and the pass still refuses it because its own scan did not report
+  it. This is the case that stands between a maintenance pass and an open-ended
+  one.
+- `same-area-escalations`: ESCALATE, and the token is not what it pins. Both
+  baselines answer ESCALATE. The prior prose omits the required substring
+  `auth-staleness`, because it proposes a Plan per finding instead of one per
+  area. The substring is the whole case.
+- `renamed-governs-holdout`: REPAIR, held out. It paraphrases
+  `moved-governs-path` with different content, and it measured the same way:
+  stub REPAIR 3/3, prior prose ESCALATE 3/3.
+
 Read the loop gap precisely. The stub halts on every land gate and picks `ASK`.
 `land-proof-gate` and `land-grant-beyond-plan` therefore pin hone's action
 vocabulary more than judgment the model lacks, since halting was the right
@@ -111,8 +179,8 @@ plan-critic pair do.
 
 ## Known gaps
 
-The cut left two gaps. Both are deliberate, and the suite barely covers
-either.
+The cut left two gaps, and the `garden` target opened a third. All three are
+deliberate, and the suite barely covers any of them.
 
 *`consolidate-critic` has one case, and most of the target stays ungated.* All
 13 original cases were no-ops. A model with no hone prose reached the
@@ -127,6 +195,18 @@ always-APPROVE critic scores 2/2. The suite can no longer see a critic that has
 gone permissive. The stub rejected every REJECT case too, which is why the cut
 took them all. The same finding from the other side: the rejection categories need no
 pinning, and the restraint does.
+
+*The prompt layer stays unpinned, in `garden` as everywhere else.* garden refuses
+to cut a `CLAUDE.md` paragraph in a repo with no eval suite. That is one of its
+sharper rules. The case written for it (`prompt-gotcha-no-evals`, 2026-08-25)
+died in the ablation. Both baselines answered ESCALATE 3/3, because the model is
+already reluctant to delete instructions someone handed it. The rule may still be
+load-bearing under a model that is less reluctant. No brief written so far shows
+it. The same measurement retired `claim-moved-too` and `two-candidate-targets`.
+Both described repair conditions that a careful reader applies unprompted.
+What `garden` pins is therefore the four cases above, not the skill as a whole.
+Its landing mechanics (the `Cut:` and `Repair:` lines, the progress line, the
+ledger) stay ungated, as the loop's do.
 
 ## Held-out cases
 

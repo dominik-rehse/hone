@@ -33,7 +33,12 @@ semver, a feature or behavior change is a minor bump, and a fix is a patch.
 Before the release commit, the changed layer must pass its suite:
 
 - a change to a critic prompt (`agents/*.md`), to `skills/run/SKILL.md` or its
-  references, or to `rules/workflow.md`: `bash evals/run.sh <target> --votes 3`
-  green, then `--holdout` green as the final check. See `evals/README.md` on
-  held-out cases. The loop target runs with `--model opus`.
+  references, to `skills/garden/SKILL.md`, or to `rules/workflow.md`:
+  `bash evals/run.sh <target> --votes 3` green, then `--holdout` green as the
+  final check. See `evals/README.md` on held-out cases. The `loop` and `garden`
+  targets run with `--model opus`.
+- a new eval case, before you keep it: `bash evals/run.sh <target> --ablate`,
+  and the second baseline in `evals/README.md` when the stub agrees with the
+  expected answer. A case that discriminates against neither baseline pins
+  nothing, so it does not go in.
 - a change to hooks or scripts: `bash test/run.sh` green.
