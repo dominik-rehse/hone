@@ -85,7 +85,7 @@ permissions yourself, so the complete block in your project's
 The first `allow` entry lets the loop's review step run the native
 `/code-review` in a nested headless Claude Code. The second lets a
 `/hone:run --all` session inside herdr prompt the sessions it starts in
-the SUB tabs. Without the entry it needs, the run cannot stay unattended. The second
+the SUB tabs. Without it, that run cannot stay unattended. The second
 entry does nothing in a project that never runs herdr.
 
 The `deny` entries stop the file tools from editing the four adapters,

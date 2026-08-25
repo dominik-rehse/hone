@@ -387,14 +387,14 @@ its text, so the authorization ends up in history rather than in a chat
 log.
 
 The loop may record that grant itself, after reading the diff the refusal
-printed. What the gate buys is not a person's presence. It is the forced
-stop, the reading, and the sentence that lands in history naming what is
-irreversible and why it is right anyway. The stamp says whether the agent
-or a person signed, so a later audit can separate them. A diff that does
-something the Plan never asked for is an escalation, not a grant. Both
-guards still deny every route into `.hone-grant/` except the helper,
-which is what stamps the record. Mechanics are in
-[`reference.md`](reference.md).
+printed. The gate does not guarantee that a person is present. It forces
+a stop and makes the signer read the diff. It then puts a sentence in
+history that names what is irreversible, and why the change is right
+anyway. The stamp says whether the agent or a person signed, so a later
+audit can separate them. A diff that does something the Plan never asked
+for is an escalation, not a grant. Both guards still deny every route
+into `.hone-grant/` except the helper, which is what stamps the record.
+Mechanics are in [`reference.md`](reference.md).
 
 ## Types and abstractions
 

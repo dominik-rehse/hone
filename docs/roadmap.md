@@ -192,8 +192,8 @@ under one budget:
   against the lab). This stage tests pre-registered hypotheses, in two
   families. One is efficiency: critic model downgrades, pre-baked review
   briefs, terser critic output contracts. The other is the *ablation
-  matrix*, component × scenario set × model. It asks whether a block still
-  is still worth its cost ("without plan-critic, bad-plan scenarios fail at rate
+  matrix*, component × scenario set × model. It asks whether a block is
+  still worth its cost ("without plan-critic, bad-plan scenarios fail at rate
   X"). The matrix ablates class-2 components only against the adversarial
   track.
 
