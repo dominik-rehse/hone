@@ -155,6 +155,15 @@ echo "$(bg 'cat x > /home/u/repo/scripts/proof.sh')" | grep -q '"ask"' && ok "a 
 echo "$(bg 'git checkout some-commit')" | grep -q '"ask"' && ok "git checkout in primary tree escalated" || bad "checkout in primary should ask"
 echo "$(bg 'git stash push -- IDEAS.md')" | grep -q '"ask"' && ok "git stash in primary tree escalated" || bad "stash in primary should ask"
 echo "$(bg 'git reset --hard HEAD^')" | grep -q '"ask"' && ok "git reset --hard in primary tree escalated" || bad "hard reset in primary should ask"
+# `git stash list` and `git stash show` only read the stash. Escalating them
+# stopped unattended runs on a read. Every other stash form still asks, judged
+# per segment, and an unknown subcommand fails closed.
+echo "$(bg 'git stash list')" | grep -q 'permissionDecision' && bad "git stash list only reads" || ok "git stash list passes"
+echo "$(bg 'git stash show -p stash@{0}')" | grep -q 'permissionDecision' && bad "git stash show only reads" || ok "git stash show passes"
+echo "$(bg 'git stash')" | grep -q '"ask"' && ok "a bare git stash escalated" || bad "a bare git stash pushes, so it should ask"
+echo "$(bg 'git stash -u')" | grep -q '"ask"' && ok "a flags-first git stash escalated" || bad "git stash -u pushes, so it should ask"
+echo "$(bg 'git stash drop')" | grep -q '"ask"' && ok "git stash drop escalated" || bad "git stash drop mutates, so it should ask"
+echo "$(bg 'git stash list; git stash pop')" | grep -q '"ask"' && ok "a read does not excuse a pop in the next segment" || bad "a pop after a list should still ask"
 bgwt() { echo "{\"tool_input\":{\"command\":\"$1\"}}" | (cd "$WT" && bash "$BASH_GUARD"); }
 echo "$(bgwt 'git checkout some-commit')" | grep -q '"ask"' && bad "HEAD-move inside a worktree should not ask" || ok "HEAD-move allowed inside a worktree"
 # `git checkout -- <paths>` restores files and moves no HEAD, so it passes even
@@ -197,6 +206,22 @@ echo "$(bg "cd $WT && git checkout some-commit")" | grep -q 'permissionDecision'
 echo "$(bg "cd $WT && cd $REPO && bun add -d dprint@latest")" | grep -q '"ask"' && ok "a second cd fails closed and still asks" || bad "two cds should fail closed"
 echo "$(bg 'cd /nonexistent-tree && bun add -d dprint@latest')" | grep -q '"ask"' && ok "an unusable cd target fails closed and still asks" || bad "a missing cd target should fail closed"
 echo "$(bg 'bun add -d dprint@latest && cd '"$WT")" | grep -q '"ask"' && ok "a trailing cd does not excuse a primary-tree write" || bad "a cd that is not first should fail closed"
+# A subshell wraps the same cd idiom. The wrapped and unwrapped forms must
+# read as the same command.
+echo "$(bg "(cd $WT && bun add -d dprint@latest)")" | grep -q 'permissionDecision' && bad "a subshell cd into a worktree is worktree work" || ok "a subshell cd into a worktree passes"
+echo "$(bg "(cd $REPO && bun add -d dprint@latest)")" | grep -q '"ask"' && ok "a subshell cd back to the primary tree still asks" || bad "a subshell cd to the primary tree should ask"
+# A write-mode formatter passes when it is scoped to non-durable relative
+# paths, the same perimeter the file tools apply. The Plan is the case that
+# matters: /hone:plan writes it in the primary tree, and the lint gate wants
+# it formatted before its commit.
+echo "$(bg 'bunx dprint fmt .plans/auth-login.md')" | grep -q 'permissionDecision' && bad "a formatter scoped to .plans/ should pass" || ok "a formatter scoped to .plans/ passes"
+echo "$(bg 'bunx dprint fmt .plans/auth-login.md && git add .plans/auth-login.md')" | grep -q 'permissionDecision' && bad "the scoped fmt-then-commit idiom should pass" || ok "the scoped fmt-then-commit idiom passes"
+# Everything unscoped or aimed at a durable path keeps the ask.
+echo "$(bg 'bunx dprint fmt')" | grep -q '"ask"' && ok "a bare formatter run escalated" || bad "a bare fmt formats docs/, so it should ask"
+echo "$(bg 'bunx dprint fmt docs/notes/auth.md')" | grep -q '"ask"' && ok "a formatter aimed at docs/ escalated" || bad "a durable path should ask"
+echo "$(bg 'bunx dprint fmt .plans/../docs/x.md')" | grep -q '"ask"' && ok "a traversal out of .plans/ escalated" || bad "a .. traversal should fail closed"
+echo "$(bg 'bunx dprint fmt --config other.json .plans/x.md')" | grep -q '"ask"' && ok "a config swap escalated" || bad "a non-write-mode flag should fail closed"
+echo "$(bg 'bunx biome check --write src/auth/login.ts')" | grep -q '"ask"' && ok "a write-mode formatter on src/ escalated" || bad "biome --write on src/ should ask"
 
 echo "== dirty-guard: what a shell command leaves dirty in the primary tree =="
 dg() { echo '{"tool_input":{"command":"bun add -d dprint"}}' | (cd "$1" && bash "$DIRTY_GUARD"); }

@@ -120,10 +120,15 @@ fi
 # dropping it. Unclear means more than one cd, a cd that is not first, or a
 # target that is not a directory. A command that returns to the primary tree
 # must never read as worktree work. Each case falls back to the hook's own cwd.
+#
+# A subshell wraps the same idiom: `(cd <worktree> && <tool>)`. The `(` counts
+# as a separator here, and the extractor accepts one before a leading cd.
+# Without that, the wrapped form read as primary-tree work while the unwrapped
+# form passed, and the hook told the agent to move work it had already moved.
 TREE_DIR="$PWD"
-if [ "$(printf '%s\n' "$CMD" | grep -Eo '(^|[;&|][[:space:]]*)cd[[:space:]]' | wc -l)" -eq 1 ]; then
+if [ "$(printf '%s\n' "$CMD" | grep -Eo '(^|[;&|(][[:space:]]*)cd[[:space:]]' | wc -l)" -eq 1 ]; then
     CD_TARGET=$(printf '%s' "$CMD" | sed -n \
-        "s/^[[:space:]]*cd[[:space:]]\{1,\}\(\"[^\"]*\"\|'[^']*'\|[^[:space:];&|]\{1,\}\).*/\1/p")
+        "s/^[[:space:]]*(\{0,1\}[[:space:]]*cd[[:space:]]\{1,\}\(\"[^\"]*\"\|'[^']*'\|[^[:space:];&|]\{1,\}\).*/\1/p")
     CD_TARGET=${CD_TARGET%\"}; CD_TARGET=${CD_TARGET#\"}
     CD_TARGET=${CD_TARGET%\'}; CD_TARGET=${CD_TARGET#\'}
     [ -n "$CD_TARGET" ] && [ -d "$CD_TARGET" ] && TREE_DIR="$CD_TARGET"
@@ -145,8 +150,24 @@ IN_PRIMARY_TREE=0
 # belongs in a throwaway `git worktree add --detach`. `git checkout` has its own rule below, because
 # one of its forms restores files and moves no HEAD.
 if [ "$IN_PRIMARY_TREE" -eq 1 ] \
-   && echo "$CMD" | grep -Eq '(^|[^A-Za-z_])git[[:space:]]+((switch|stash)([[:space:]]|$)|reset[^|;&]*--(hard|merge|keep))'; then
+   && echo "$CMD" | grep -Eq '(^|[^A-Za-z_])git[[:space:]]+(switch([[:space:]]|$)|reset[^|;&]*--(hard|merge|keep))'; then
     decision ask "$(msg_bashguard_head_move)"
+fi
+
+# 3a. `git stash` reads in two of its forms and mutates in every other. `list`
+# and `show` only read the stash, and the rule used to escalate them with the
+# rest. That ask stopped unattended runs on a read, and one agent paged the
+# operator to confirm a `git stash list`. So the two read verbs pass, judged
+# per segment the way rule 3b judges checkout. Everything else still asks:
+# `pop`, `drop`, `clear`, a bare `git stash`, a flags-first form like
+# `git stash -u`, and any subcommand this rule does not know. Unknown fails
+# closed, so a new stash verb escalates until someone reads it.
+if [ "$IN_PRIMARY_TREE" -eq 1 ]; then
+    while IFS= read -r seg; do
+        printf '%s\n' "$seg" | grep -Eq '(^|[^A-Za-z_])git[[:space:]]+stash([[:space:]]|$)' || continue
+        printf '%s\n' "$seg" | grep -Eq '(^|[^A-Za-z_])git[[:space:]]+stash[[:space:]]+(list|show)([[:space:]]|$)' && continue
+        decision ask "$(msg_bashguard_head_move)"
+    done < <(printf '%s\n' "$CMD" | tr '|;&' '\n\n\n')
 fi
 
 # 3b. `git checkout` moves HEAD in one form and restores files in another, so it
@@ -200,9 +221,73 @@ SELF_WRITERS="$SELF_WRITERS"'|(npm|pnpm|yarn|bun|deno)[[:space:]]+(install|i|ci)
 SELF_WRITERS="$SELF_WRITERS"'|(pip|pip3|uv|poetry|cargo|bundle|gem|mix|composer)[[:space:]]+(add|remove|uninstall|lock|update|upgrade|require|fmt)([[:space:]]|$)'
 SELF_WRITERS="$SELF_WRITERS"'|(pip|pip3|uv|poetry|cargo|bundle|gem|mix|composer)[[:space:]]+(install|sync|deps\.get)'"$NAMED_ARG"
 SELF_WRITERS="$SELF_WRITERS"'|go[[:space:]]+(get|mod)([[:space:]]|$)'
-SELF_WRITERS="$SELF_WRITERS"'|(biome|eslint|prettier|dprint|ruff|black|isort|rustfmt|gofmt|jscodeshift|codemod)[^|;&]*(migrate|--write|--fix|--apply|[[:space:]]-w([[:space:]]|$)|[[:space:]]fmt([[:space:]]|$)|[[:space:]]format([[:space:]]|$))'
 if [ "$IN_PRIMARY_TREE" -eq 1 ] && echo "$CMD" | grep -Eq "(^|[^A-Za-z0-9_.-])(${SELF_WRITERS})"; then
     decision ask "$(msg_bashguard_self_writer)"
+fi
+
+# 4b. A FORMATTER in write mode, in the PRIMARY tree. A formatter differs from
+# the package managers above in one way that matters: its command names the
+# paths it writes. So the hook can apply the same perimeter the file tools
+# already apply. `Write` to `.plans/<change>.md` is allowed in the primary tree,
+# because the Plan is the one artifact written outside the loop, and the lint
+# gate wants that file formatted before its commit. The formatter run that does
+# the formatting is the same write through the shell route. Escalating it asked
+# the operator to approve a step the workflow itself requires, fifteen times in
+# one week.
+#
+# So a write-mode formatter passes only when it is SCOPED: at least one path
+# argument, and every argument a relative, non-durable path. Everything else
+# still asks. That includes a bare `dprint fmt` (it formats docs/), any durable
+# path, any flag beyond the write-mode flags themselves (a `--config` swap can
+# repoint the tool), a glob in a directory part, and every token this walk does
+# not recognise. Fail closed keeps the ask; the exemption has to be earned.
+FMT_WRITERS='(biome|eslint|prettier|dprint|ruff|black|isort|rustfmt|gofmt|jscodeshift|codemod)[^|;&]*(migrate|--write|--fix|--apply|[[:space:]]-w([[:space:]]|$)|[[:space:]]fmt([[:space:]]|$)|[[:space:]]format([[:space:]]|$))'
+
+# True when segment $1 scopes its formatter to non-durable relative paths.
+# A subshell body: `set -f` must not leak, and the tokens must be judged as
+# written, not as whatever they happen to glob to in the hook's cwd.
+hone_fmt_scoped() (
+    set -f
+    local tok dir n=0
+    for tok in $1; do
+        tok=${tok%\"}; tok=${tok#\"}; tok=${tok%\'}; tok=${tok#\'}
+        while [ "${tok#./}" != "$tok" ]; do tok=${tok#./}; done
+        case "$tok" in
+            ''|bunx|npx|sudo|--bun|deno|run|exec|dlx) continue ;;
+            biome|eslint|prettier|dprint|ruff|black|isort|rustfmt|gofmt|jscodeshift|codemod) continue ;;
+            fmt|format|check|lint|migrate) continue ;;
+            --write|--fix|--apply|-w) continue ;;
+            [0-9]">"*|">"*|"<"*) continue ;;
+            -*) return 1 ;;
+            *..*|*'$'*|*'`'*|/*|"~"*|.) return 1 ;;
+            */*|*.*)
+                case "$tok" in
+                    */*) dir=${tok%/*} ;;
+                    *) dir='' ;;
+                esac
+                case "$tok" in
+                    *[\*\?\[]*)
+                        # A glob is judged by its literal directory part. A glob
+                        # in the directory, or a rootless glob, stays an ask.
+                        [ -n "$dir" ] || return 1
+                        case "$dir" in *[\*\?\[]*) return 1 ;; esac
+                        hone_is_durable "$dir/x" && return 1 ;;
+                    *)
+                        hone_is_durable "$tok" && return 1 ;;
+                esac
+                n=$((n+1)) ;;
+            *) return 1 ;;
+        esac
+    done
+    [ "$n" -ge 1 ]
+)
+
+if [ "$IN_PRIMARY_TREE" -eq 1 ]; then
+    while IFS= read -r seg; do
+        printf '%s\n' "$seg" | grep -Eq "(^|[^A-Za-z0-9_.-])(${FMT_WRITERS})" || continue
+        hone_fmt_scoped "$seg" && continue
+        decision ask "$(msg_bashguard_self_writer)"
+    done < <(printf '%s\n' "$CMD" | tr '|;&' '\n\n\n')
 fi
 
 exit 0
