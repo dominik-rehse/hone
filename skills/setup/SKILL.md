@@ -71,8 +71,13 @@ and verify each the same way (execute it, exit 0 = clean):
   code. A checker whose scope stops at `src/` makes the gate's green
   overstate what was checked.
 - `scripts/lint.sh` when there is a linter config (`eslint`, `ruff`).
+- `scripts/setup-tree.sh` when the ecosystem has an install step (`bun.lock`
+  → `bun install`, `package-lock.json` → `npm ci`, `uv.lock` → `uv sync`).
+  It makes the current tree runnable. `worktree.sh add` runs it in every
+  fresh worktree, and land runs it in the primary tree when the merged diff
+  touched a lockfile. Verify it by executing it once here.
 
-Skip both where the language has no such tool. The gate simply does not run
+Skip these where the language has no such tool. The gate simply does not run
 them. `scripts/proof.sh` stays with the human: mention the templates under
 `${CLAUDE_PLUGIN_ROOT}/templates/proof/` for changes that will need
 real-environment proof, but do not author it unprompted.

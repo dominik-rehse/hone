@@ -60,6 +60,17 @@ skills point to it.
 The hooks enforce these rules. The primary tree is a merge target, never a
 workspace (`guard`). No production code without a failing test (`guard`).
 Tests, type-check, and lint stay green (`gate`). Plans and Notes stay small
-and owned (`nag`). `docs/` is written only at consolidate. Code and tests are
-written only at build. The detail lives in the `plan`, `run`, and `garden`
-skills, loaded when invoked.
+and owned (`nag`). `docs/` is written only at consolidate, apart from spikes
+and plan-time open questions. Code and tests are written only at build. The
+detail lives in the `plan`, `run`, and `garden` skills, loaded when invoked.
+
+Work with a denied action, never around it. A denied write in the primary
+tree is a routing signal. The work belongs in a worktree, and a docs edit
+belongs in that change's consolidate step. Creating the `.hone-off` marker is
+the human's act alone, so ask them to create it. Removing an existing marker
+is a legitimate agent action. Write a grant or a proof sign-off only through
+`worktree.sh grant` / `worktree.sh attest`, and record only a check that
+actually ran, quoting its output. Never attest a failed or partial run. The
+`bash-guard` reads command text, so it can escalate an innocent command that
+merely mentions a protected path. Rephrase such a command instead of routing
+around the hook.

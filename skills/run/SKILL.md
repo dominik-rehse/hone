@@ -118,6 +118,10 @@ WT=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" add <change>)
 ```
 
 That creates `.worktrees/<change>` on branch `hone/<change>` and prints its path.
+When the project ships `scripts/setup-tree.sh`, `add` has already run it in the
+new worktree, so dependencies are installed before the first verify. A failed
+adapter is exit 2 with the worktree kept: fix the install, never adopt the red
+as a build failure.
 `cd "$WT"`. All build/verify/consolidate work happens here. The primary tree is a
 merge target and the `guard` will block durable edits made in it.
 

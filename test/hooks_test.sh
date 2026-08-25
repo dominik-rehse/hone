@@ -96,6 +96,21 @@ done
 out=$(guard_write "docs/notes/auth.md" "$REPO")
 denied "$out" && ok "docs/ outside spikes/ still denied in the primary tree" || bad "the rest of docs/ must stay denied in the primary tree"
 
+echo "== guard: docs/open-questions.md is writable in the primary tree =="
+# The plan skill records a plan-time open question in this ledger, and
+# /hone:plan runs in the primary tree. So the guard leaves this one file
+# open, exactly as it leaves docs/spikes/.
+out=$(guard_write "docs/open-questions.md" "$REPO")
+denied "$out" && bad "docs/open-questions.md should be writable in the primary tree" || ok "docs/open-questions.md allowed"
+# The exemption is the exact file, never a lookalike.
+out=$(guard_write "docs/open-questions-draft.md" "$REPO")
+denied "$out" && ok "a lookalike docs file is still denied" || bad "only the exact ledger file is exempt"
+# .hone-durable-paths re-protects it for a project that wants that.
+printf 'docs/open-questions.md\n' > "$REPO/.hone-durable-paths"
+out=$(guard_write "docs/open-questions.md" "$REPO")
+denied "$out" && ok ".hone-durable-paths re-protects the ledger" || bad ".hone-durable-paths should re-protect the ledger"
+rm "$REPO/.hone-durable-paths"
+
 echo "== guard: .hone-off disables it =="
 touch "$REPO/.hone-off"
 out=$(guard_write "src/auth/login.ts" "$REPO")

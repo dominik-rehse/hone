@@ -79,7 +79,10 @@ review can't hold it. Too small and you multiply merge overhead on shared files.
 
 - If the sketch is really several independent changes, say so and propose the
   split: one Plan each, each landable alone. Independent means disjoint `src/`
-  files (they can run in parallel worktrees). `run` re-checks independence
+  files (they can run in parallel worktrees) AND disjoint consolidate
+  footprints: the Decisions, Notes, and open-question entries each change
+  will edit. A Plan's file list names only the first, so read each Plan for
+  the doc topics its consolidate will touch. `run` re-checks independence
   before fanning out, and the merge verifies it.
 - If it's one indivisible change spanning several files, that's one Plan.
 
@@ -91,8 +94,10 @@ challenge a Plan whose scope is wrong.
 The change may rest on an assumption only running code can settle: a driver's
 dialect, an SDK's headless behaviour, a library on this runtime. Record it in
 `docs/open-questions.md` as a question gated to this change, not in the Plan.
-Distinct from a *decision already made* (that's a Decision, written at
-consolidate). Don't invent questions to fill the file.
+The guard leaves that file open in the primary tree exactly for this step, and
+the entry commits together with the Plan (step 7). Distinct from a *decision
+already made* (that's a Decision, written at consolidate). Don't invent
+questions to fill the file.
 
 Where the assumption decides the *shape* of the Plan, an open question is too
 slow. A Plan written on a guess is a Plan the loop builds wrong. Settle it now
@@ -112,8 +117,9 @@ Then decide whether the spike is worth keeping, and keep or delete it whole:
   `${CLAUDE_PLUGIN_ROOT}/templates/spike-note.md`. Use a directory of that name
   where one file is not enough. Commit it with the Plan.
 
-You write all of this here, in the primary tree: `docs/spikes/` is the one path
-under `docs/` the guard leaves open, because a probe precedes the Plan. What
+You write all of this here, in the primary tree. `docs/spikes/` and
+`docs/open-questions.md` are the two paths under `docs/` the guard leaves
+open, because a probe and an open question both precede the Plan. What
 you keep is dated and frozen from then on, so nobody updates it later.
 
 One warning about committed probe code. The project's test runner, linter, or
@@ -184,8 +190,8 @@ A reference is a **file that exists**, never prose moved into a second file:
   HTML mockup of a screen): put it under `.plans/<slug>/`. That directory belongs
   to the Plan, and it is also the only place you can write one here. `guard`
   denies writes to `docs/`, `src/`, and `tests/` in the primary tree, which is
-  where `/hone:plan` runs. (`docs/spikes/` is the one exception, and it takes
-  a frozen spike note, never a Plan's reference.)
+  where `/hone:plan` runs. (`docs/spikes/` and `docs/open-questions.md` are
+  the two exceptions, and neither takes a Plan's reference.)
 
 The sketch may be a **dependency or toolchain refresh**: a version bump of a
 library, linter, formatter, build tool, or runtime. Then read
@@ -221,6 +227,7 @@ The Plan is a tracked artifact. Commit it now (only once the critic returns
 
 ```bash
 git add .plans/<slug>.md .plans/<slug>/   # the second path only if you wrote references
+git add docs/open-questions.md            # only if step 4 added an entry
 git commit -m "chore(plan): <slug>"
 ```
 
@@ -231,8 +238,10 @@ removal is a `git rm` inside the worktree that the landing merge carries back to
 the primary tree. The alternative is an out-of-band delete of an untracked file,
 which the unattended run cannot perform. Both reasons apply to a reference
 exactly as they do to the Plan. An uncommitted reference is invisible inside the
-worktree, so the build fails on a missing file it was told to read. Commit
-nothing but the Plan and its references. The loop owns every other artifact.
+worktree, so the build fails on a missing file it was told to read. The same
+holds for a step-4 open question: the run cuts its worktree from HEAD, so an
+uncommitted entry is invisible to the run. Commit nothing but the Plan, its
+references, and that entry. The loop owns every other artifact.
 
 ### 8. Confirm: the hand-off
 

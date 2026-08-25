@@ -41,7 +41,8 @@ work. The loop calls it, and you can too:
   deny rules.
 - `worktree.sh add <change>` creates `.worktrees/<change>` on branch
   `hone/<change>`. Creating it is what claims the change, so a second `add`
-  of the same name fails.
+  of the same name fails. When the project ships `scripts/setup-tree.sh`,
+  `add` then runs it inside the new worktree (see *Adapters*).
 - `worktree.sh verify` runs the full test suite, serialized against other
   sessions. The only sanctioned way to run `--all` by hand.
 - `worktree.sh review-scope <change>` prints how deep the change's review must
@@ -59,13 +60,14 @@ work. The loop calls it, and you can too:
   its branch if fully merged.
 - `worktree.sh landable` lists worktrees whose branch is ahead of the
   primary branch.
-- `worktree.sh grant <change> "who/why"` records your authorization for one
-  irreversible change (writes `.hone-grant/<change>`, stamped with your git
-  user and the time). *For you, in your own terminal*: the `bash-guard`
-  denies it to the agent.
-- `worktree.sh attest <change> "what you ran"` records your sign-off that
+- `worktree.sh grant <change> "who/why"` records the authorization for one
+  irreversible change (writes `.hone-grant/<change>`, stamped with the git
+  user and the time). A person and the agent both run it, and the stamp says
+  which. It is the only route to the file: both guards deny a raw write.
+- `worktree.sh attest <change> "what you ran"` records the sign-off that
   the real-environment check ran (writes `.hone-proof/<change>`, stamped with
-  the branch tip, your git user, and the time). Also denied to the agent.
+  the branch tip, the git user, and the time). Same two callers and the same
+  sole-route rule.
   It refuses a description that is empty or only whitespace. It also refuses
   the unedited placeholder from this page: `what you ran`, or `what you ran
   and the outcome`. Case and surrounding quotes make no difference. Both
@@ -138,8 +140,8 @@ under `src/<area>/`.
   worktree, landed by a merge.
 - *bash-guard* (PreToolUse on Bash) provides tamper resistance. It denies
   commands that would disable the gate (`--no-verify`, `core.hooksPath`,
-  creating `.hone-off`) or write a grant or proof sign-off (those are the
-  human's). It asks before commands that modify a protected artifact (an
+  creating `.hone-off`) or hand-write a grant or proof sign-off past the
+  `worktree.sh` helpers. It asks before commands that modify a protected artifact (an
   adapter, a hook, settings, a policy file) or move HEAD in the primary tree.
   `git checkout -- <paths>` and `git checkout <ref> -- <paths>` restore files
   and move no HEAD, so both pass.
@@ -288,7 +290,8 @@ draws no warning.
 Other subcommands:
 
 - `add` exits 4 when another run has already claimed the change (0 created,
-  2 error).
+  2 error). A failed `setup-tree.sh` run is exit 2 with the worktree kept:
+  the claim stands, and the message carries the adapter's output tail.
 - `remove` exits 3 when the path is not one hone created (0 removed,
   2 error).
 - `verify` passes through the adapter's exit (2 setup error, 5 lock
@@ -309,6 +312,13 @@ loop call them, so hone itself stays language-agnostic.
   `setup.sh` installs it.
 - `typecheck.sh` and `lint.sh` are optional, one line each. The gate and
   land's post-merge check run them when they exist.
+- `setup-tree.sh` is optional, one line for most ecosystems (`bun install`,
+  `uv sync`). It makes the current tree runnable: dependencies installed,
+  local hooks wired. `worktree.sh add` runs it inside every fresh worktree,
+  so the first verify never reds on a missing install. `land` runs it in the
+  primary tree, before the post-merge suite, when the merged diff touched a
+  lockfile. Without it, a change that adds a package its tests import rolls
+  back at land on the stale primary-tree install.
 - `proof.sh` is optional. It proves a change in the real environment for the
   proof gate. land executes the primary tree's copy, with the change's
   worktree as the working directory. So land trusts a change that adds its
@@ -326,7 +336,7 @@ repo/                            # the primary tree: a merge target, never a wor
 │   ├── notes/<area>.md          # optional per-area map + one invariant, size-capped
 │   ├── spikes/<date>-<slug>*    # optional frozen spike: note, probe, captures, any type
 │   └── open-questions.md        # bets only running code can settle
-├── scripts/run-tests.sh         # the test adapter (plus optional typecheck/lint/proof)
+├── scripts/run-tests.sh         # the test adapter (plus optional typecheck/lint/proof/setup-tree)
 ├── .plans/<change>.md           # tracked; written at plan, deleted at consolidate
 ├── .plans/<change>/             # optional reference files for the Plan
 ├── .worktrees/<change>/         # gitignored; one per change in flight
@@ -386,10 +396,11 @@ probe needs no test and no worktree, and nothing there has to keep the suite
 green by itself.
 
 Both `plan` (before a Plan exists) and `consolidate` (after the change) write a
-spike. `docs/spikes/` is the one path under `docs/` the guard leaves
-writable in the primary tree, exactly as it leaves `.plans/`. Most probes leave
-nothing behind: keep a spike only when its method or its dead ends would save a
-future reader from running it again.
+spike. `docs/spikes/` and `docs/open-questions.md` are the two paths under
+`docs/` the guard leaves writable in the primary tree, exactly as it leaves
+`.plans/`. A probe and a plan-time open question both precede the Plan. Most
+probes leave nothing behind: keep a spike only when its method or its dead
+ends would save a future reader from running it again.
 
 The note at `<YYYY-MM-DD>-<slug>.md` is the way in. It is write-once, past
 tense, and it always points forward to the Decision, Note, or open question

@@ -21,6 +21,15 @@ what was deleted.
 worktree as evidence. This is stop-point 1 surfacing at land: the change passed
 in isolation but not against what else has landed since. **Stop and escalate.**
 
+Read the message first: it names what failed (the suite, `typecheck`, `lint`,
+or `setup-tree`). A `setup-tree` red means the install step failed in the
+primary tree, not that the change regressed anything. One more case wears this
+exit. Take a project with **no** `setup-tree.sh`, and a land that changed a
+lockfile. There, the suite red can be the stale primary-tree install rather
+than the change. The tell is a lockfile in the branch diff plus a
+missing-module error in the land log. Shipping a `scripts/setup-tree.sh` is
+the durable fix.
+
 ## 9: merge conflict
 
 Aborted, tree restored. Under `--all` this means the independence check missed an

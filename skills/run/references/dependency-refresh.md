@@ -121,10 +121,13 @@ non-zero count. A tier reporting `ran=0` is a red result here, not a pass.
 
 ## Land and after
 
-`land` prints a receipt naming every lockfile the merge touched, and asks for a
-reinstall in the primary tree. Do it. The merge updates the lockfile and installs
-nothing. Until the reinstall, the primary tree runs the versions this change
-replaced, and its next suite run tests the old install. A bare sync install
-(`bun install`, `npm ci`, `poetry install`, flags only) passes the bash-guard
-there. It installs what the lockfile already says, and it is the one dependency
+`land` prints a receipt naming every lockfile the merge touched. When the
+project ships `scripts/setup-tree.sh`, land has already run it in the primary
+tree before the post-merge suite. The receipt then says so, and nothing is
+left to do. Without that adapter, the receipt asks for a reinstall in the primary
+tree. Do it. The merge updates the lockfile and installs nothing. Until the
+reinstall, the primary tree runs the versions this change replaced, and its
+next suite run tests the old install. A bare sync install (`bun install`,
+`npm ci`, `poetry install`, flags only) passes the bash-guard there. It
+installs what the lockfile already says, and it is the one dependency
 command that belongs in the primary tree.

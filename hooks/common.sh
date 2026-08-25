@@ -86,6 +86,12 @@ hone_is_durable() {
         # project that wants it protected can still list it in
         # .hone-durable-paths, which the loop below still reads.
         docs/spikes/*) ;;
+        # The plan skill records a plan-time open question in this ledger, and
+        # /hone:plan runs in the primary tree. So the file has to be writable
+        # where the Plan is written, exactly like a spike. The same
+        # .hone-durable-paths escape hatch re-protects it for a project that
+        # wants that.
+        docs/open-questions.md) ;;
         src/*|tests/*|docs/*|db/*|scripts/*) return 0 ;;
         .hone-durable-paths|.hone-irreversible-paths|.hone-consequential-paths) return 0 ;;
         .hone-proof-always|.hone-review-always) return 0 ;;

@@ -850,5 +850,90 @@ base=$(git merge-base main hone/sib-b)
 step "sib-b branched off the primary, not A's unlanded HEAD"
 bash "$WSH" remove "$WT_B" >/dev/null 2>&1; bash "$WSH" remove "$WT_A" >/dev/null 2>&1
 
+echo "== 8. setup-tree adapter: add makes the tree runnable, land reinstalls =="
+# 8a. add runs the adapter inside the new worktree.
+cat > scripts/setup-tree.sh <<'EOF'
+#!/bin/bash
+# Test adapter: prove where it ran.
+touch .setup-tree-ran
+EOF
+git add scripts/setup-tree.sh && git commit -qm "chore: add the setup-tree adapter"
+WT_ST=$(bash "$WSH" add st-probe) || die "worktree add with setup-tree"
+[ -f "$WT_ST/.setup-tree-ran" ] || die "add should run setup-tree inside the new worktree"
+[ -f "$REPO/.setup-tree-ran" ] && die "setup-tree must run in the worktree, not the primary tree"
+step "add ran setup-tree in the new worktree"
+rm "$WT_ST/.setup-tree-ran"
+bash "$WSH" remove "$WT_ST" >/dev/null 2>&1
+git branch -q -d hone/st-probe 2>/dev/null
+
+# 8b. a failing adapter keeps the claim and exits 2, naming the failure.
+cat > scripts/setup-tree.sh <<'EOF'
+#!/bin/bash
+echo "install exploded" >&2
+exit 1
+EOF
+git add scripts/setup-tree.sh && git commit -qm "chore: break the setup-tree adapter"
+err=$(bash "$WSH" add st-broken 2>&1 >/dev/null); rc=$?
+[ "$rc" -eq 2 ] || die "a failed setup-tree should exit 2 (got $rc)"
+echo "$err" | grep -q "setup-tree.sh failed" || die "the message should name the adapter"
+echo "$err" | grep -q "install exploded" || die "the message should carry the adapter's output tail"
+[ -d "$REPO/.worktrees/st-broken" ] || die "the claim should stand: worktree kept as evidence"
+bash "$WSH" remove "$REPO/.worktrees/st-broken" >/dev/null 2>&1
+git branch -q -d hone/st-broken 2>/dev/null
+step "a failing setup-tree exits 2 and keeps the worktree"
+
+# 8c. land runs the adapter in the primary tree, before the post-merge suite,
+# when the merged diff touched a lockfile. The receipt then reports the
+# reinstall instead of asking for one.
+cat > scripts/setup-tree.sh <<'EOF'
+#!/bin/bash
+echo "setup-tree ran in $(pwd)"
+EOF
+git add scripts/setup-tree.sh && git commit -qm "chore: fix the setup-tree adapter"
+WT_SL=$(bash "$WSH" add st-lock) || die "worktree add st-lock"
+printf '{"lockfileVersion":2}\n' > "$WT_SL/bun.lock"
+(cd "$WT_SL" && git add -A && git commit -qm "chore(deps): bump the lockfile")
+out=$(bash "$WSH" land st-lock 2>/dev/null); rc=$?
+[ "$rc" -eq 0 ] || die "a lockfile change with setup-tree should land (got $rc)"
+echo "$out" | grep -q "setup-tree reinstalled" || die "the receipt should report the setup-tree run"
+echo "$out" | grep -q "reinstall dependencies" && die "the reinstall ask should give way to the adapter"
+echo "$out" | grep -qx "  bun.lock" || die "the receipt should still name the lockfile"
+grep -q "setup-tree ran in $REPO" "$(git rev-parse --git-common-dir)/hone-land.log" \
+    || die "the land log should show setup-tree ran in the primary tree"
+step "land ran setup-tree in the primary tree and said so"
+
+# 8d. a change with no lockfile in its diff triggers no setup-tree run.
+WT_SN=$(bash "$WSH" add st-nolock) || die "worktree add st-nolock"
+printf '// note\n' > "$WT_SN/src/mathx/note.js"
+(cd "$WT_SN" && git add -A && git commit -qm "chore: non-dependency change")
+out=$(bash "$WSH" land st-nolock 2>/dev/null); rc=$?
+[ "$rc" -eq 0 ] || die "st-nolock should land (got $rc)"
+echo "$out" | grep -q "setup-tree" && die "no lockfile change: land should not report setup-tree"
+step "no lockfile in the diff, no setup-tree run"
+
+# 8e. a red setup-tree at land rolls the merge back, exit 6. The adapter
+# passes inside a worktree (so `add` succeeds) and fails in the primary tree
+# (the run land triggers).
+cat > scripts/setup-tree.sh <<'EOF'
+#!/bin/bash
+case "$(pwd)" in */.worktrees/*) exit 0 ;; esac
+echo "primary install exploded" >&2
+exit 1
+EOF
+git add scripts/setup-tree.sh && git commit -qm "chore: break the setup-tree adapter again"
+pre_land=$(git rev-parse HEAD)
+WT_SR=$(bash "$WSH" add st-red) || die "worktree add st-red"
+printf '{"lockfileVersion":3}\n' > "$WT_SR/bun.lock"
+(cd "$WT_SR" && git add -A && git commit -qm "chore(deps): bump the lockfile")
+err=$(bash "$WSH" land st-red 2>&1 >/dev/null); rc=$?
+[ "$rc" -eq 6 ] || die "a red setup-tree at land should exit 6 (got $rc)"
+echo "$err" | grep -q "setup-tree failed in the primary tree" || die "the message should name setup-tree"
+[ "$(git rev-parse HEAD)" = "$pre_land" ] || die "land should roll the merge back on a red setup-tree"
+[ -d "$WT_SR" ] || die "the worktree should survive as evidence"
+git rm -q scripts/setup-tree.sh && git commit -qm "chore: drop the test setup-tree adapter"
+bash "$WSH" remove "$WT_SR" >/dev/null 2>&1
+git branch -q -D hone/st-red 2>/dev/null
+step "a red setup-tree rolls the merge back and keeps the worktree"
+
 echo
 echo "e2e land path: PASS"

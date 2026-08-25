@@ -463,6 +463,17 @@ Why: hone could not create the worktree.
 EOF
 }
 
+msg_wt_add_setup_tree_failed() {
+    local path="$1" tail="$2"
+    cat <<EOF
+hone worktree: scripts/setup-tree.sh failed in the new worktree.
+Do: read the tail below, fix the install, then run the adapter again in $path.
+Why: the worktree is claimed but not runnable.
+Last lines of its output:
+$(hone_msg_block "$tail")
+EOF
+}
+
 msg_wt_landable_none() {
     local target="$1"
     cat <<EOF
@@ -721,6 +732,26 @@ $(hone_msg_block "$files")
 EOF
 }
 
+msg_wt_land_setup_tree_red() {
+    local branch="$1" log="$2" tail="$3"
+    cat <<EOF
+hone worktree: setup-tree failed in the primary tree after merging $branch.
+Do: read the tail below, fix the install step, then land again.
+Why: land rolled the merge back and kept the worktree.
+Last lines of $log:
+$(hone_msg_block "$tail")
+EOF
+}
+
+msg_wt_land_setup_tree_receipt() {
+    local files="$1"
+    cat <<EOF
+hone worktree: this land changed a lockfile, and setup-tree reinstalled the primary tree before the post-merge suite.
+Lockfiles this land changed:
+$(hone_msg_block "$files")
+EOF
+}
+
 msg_wt_grant_recorded() {
     local change="$1"
     cat <<EOF
@@ -940,6 +971,7 @@ worktree|human|msg_wt_add_path_claimed|<main-root>/.worktrees/<change>
 worktree|human|msg_wt_add_branch_claimed|hone/<change>
 worktree|human|msg_wt_add_race|hone/<change>
 worktree|human|msg_wt_add_failed
+worktree|human|msg_wt_add_setup_tree_failed|<main-root>/.worktrees/<change>|<output-tail>
 worktree|human|msg_wt_landable_none|<branch>
 worktree|human|msg_wt_no_adapter
 worktree|human|msg_wt_no_flock|<land or full suite>
@@ -961,6 +993,8 @@ worktree|human|msg_wt_land_adapter_red|<typecheck or lint>|hone/<change>|<git-co
 worktree|human|msg_wt_land_tier_empty|- <tier>
 worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>
 worktree|human|msg_wt_land_lockfile|- <lockfile>
+worktree|human|msg_wt_land_setup_tree_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
+worktree|plain|msg_wt_land_setup_tree_receipt|- <lockfile>
 worktree|human|msg_wt_grant_recorded|<change>
 worktree|human|msg_wt_attest_recorded|<change>|<tip>
 worktree|human|msg_wt_attest_empty

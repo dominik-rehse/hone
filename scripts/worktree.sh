@@ -9,7 +9,11 @@
 #       creation is atomic (git makes the branch ref), so of two runs racing on
 #       one change exactly one wins. Refuses if the worktree or branch already
 #       exists: another run owns it, or it is leftover evidence to resume by
-#       hand. Exit: 0 created · 4 already claimed · 2 usage/not-a-repo/failed.
+#       hand. When the project ships the optional scripts/setup-tree.sh
+#       adapter, add then runs it inside the new worktree, so the tree is
+#       runnable (dependencies installed) before the first verify. A failed
+#       adapter keeps the worktree as evidence and exits 2.
+#       Exit: 0 created · 4 already claimed · 2 usage/not-a-repo/failed.
 #
 #   worktree.sh land <change>
 #       Land hone/<change> into the primary tree, serialized against every other
@@ -45,10 +49,16 @@
 #       change alone. It needs no trailer and no marker, and only a sign-off
 #       discharges it: land holds the copy such a change replaces, so no
 #       automatic route can judge it. Adding a NEW probe does not open it.
+#       When the merged diff touched a lockfile and the project ships
+#       scripts/setup-tree.sh, land runs that adapter in the primary tree
+#       BEFORE the post-merge suite. Without it, a change that adds a package
+#       its tests import reds the post-merge suite on the stale install and
+#       rolls back, though the worktree was green and the trunk never moved.
+#       A red adapter rolls the merge back like a red suite (exit 6).
 #       On success it prints a receipt on stdout: the merge commit, the green
 #       post-merge suite, and the removed worktree and branch. When the merge
-#       changed a lockfile, the receipt also names it and asks for a reinstall
-#       in the primary tree.
+#       changed a lockfile, the receipt also names it, and asks for a reinstall
+#       in the primary tree when no setup-tree adapter ran.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached · 5 lock timeout ·
 #       6 post-merge regression (rolled back) · 7 real-environment proof
 #       missing · 8 ungranted irreversible change · 9 merge conflict
@@ -177,6 +187,21 @@ cmd_add() {
         fi
         msg_wt_add_failed >&2
         return 2
+    fi
+    # A fresh worktree shares no installed dependencies with the primary tree,
+    # so its first verify can red for an environment reason that reads like a
+    # real break. The optional setup-tree adapter is the project's "make this
+    # tree runnable" step. Run the worktree's own copy: the tree was just cut
+    # from HEAD, so it is HEAD's copy. stdout stays the worktree path alone
+    # (the caller captures it), so the adapter's output is buffered and only a
+    # failure prints its tail. On failure the claim stands and the worktree
+    # stays as evidence: the caller fixes the install and resumes by hand.
+    if [ -f "$path/scripts/setup-tree.sh" ]; then
+        local setup_out
+        if ! setup_out=$( (cd "$path" && bash scripts/setup-tree.sh) 2>&1 ); then
+            msg_wt_add_setup_tree_failed "$path" "$(printf '%s\n' "$setup_out" | tail -n 20)" >&2
+            return 2
+        fi
     fi
     printf '%s\n' "$path"
 }
@@ -617,6 +642,11 @@ cmd_land() {
     fi
 
     local pre; pre=$(git -C "$main_root" rev-parse HEAD)
+    # Read the landed lockfiles BEFORE the merge and cleanup below: the
+    # setup-tree run keys on them, and the cleanup deletes the branch the
+    # diff needs.
+    local lockfiles
+    lockfiles=$(land_lockfiles "$main_root" "$base" "$branch")
     local -a merge_args=(merge --no-ff "$branch" -m "Merge branch '$branch'")
     # The grant's text becomes a second commit paragraph. The authorization is
     # then in git history. The first line stays "Merge branch 'hone/<change>'" so
@@ -636,7 +666,24 @@ cmd_land() {
     # file per primary tree, and each land overwrites it.
     local land_log
     land_log="$(cd "$common_dir" 2>/dev/null && pwd || printf '%s' "$common_dir")/hone-land.log"
-    if ! ( cd "$main_root" && bash scripts/run-tests.sh --all ) >"$land_log" 2>&1; then
+    : >"$land_log"
+    # The merge moved a lockfile, so the primary tree's installed dependencies
+    # sit behind the manifest the suite below runs against. A change that adds
+    # a package its tests import would red that suite and roll back, though
+    # the worktree was green and the trunk never moved. The optional
+    # setup-tree adapter closes the gap: run the MERGED copy here, before the
+    # suite, so the suite judges the change rather than the stale install. A
+    # red adapter rolls the merge back exactly like a red suite.
+    local setup_tree_ran=""
+    if [ -n "$lockfiles" ] && [ -f "$main_root/scripts/setup-tree.sh" ]; then
+        if ! ( cd "$main_root" && bash scripts/setup-tree.sh ) >>"$land_log" 2>&1; then
+            git -C "$main_root" reset --hard "$pre" >/dev/null 2>&1
+            msg_wt_land_setup_tree_red "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+            return 6
+        fi
+        setup_tree_ran=yes
+    fi
+    if ! ( cd "$main_root" && bash scripts/run-tests.sh --all ) >>"$land_log" 2>&1; then
         # Green confirms the merge. Red means it regressed the trunk, so roll
         # the merge back and leave the shared tree green for the next lander.
         # The worktree and branch survive for investigation.
@@ -668,18 +715,21 @@ cmd_land() {
     # Green: the suite confirms the merge. Retire the worktree and its branch
     # (cmd_remove runs from the primary tree, so it never refuses "the tree
     # you are in").
-    # Read the merge commit and the landed lockfiles BEFORE the cleanup: it
-    # deletes the branch, and the diff needs it.
-    local merge_sha lockfiles
+    local merge_sha
     merge_sha=$(git -C "$main_root" rev-parse --short HEAD)
-    lockfiles=$(land_lockfiles "$main_root" "$base" "$branch")
     cmd_remove "$wt" || return $?
 
     # Say what happened. A silent exit 0 made the caller re-derive the outcome
     # from `git log`, so the receipt names the merge commit, the green suite,
     # and the cleanup. It goes to stdout, because it is the success path.
     msg_wt_land_receipt "$merge_sha" "$branch"
-    [ -n "$lockfiles" ] && msg_wt_land_lockfile "$lockfiles"
+    if [ -n "$lockfiles" ]; then
+        if [ -n "$setup_tree_ran" ]; then
+            msg_wt_land_setup_tree_receipt "$lockfiles"
+        else
+            msg_wt_land_lockfile "$lockfiles"
+        fi
+    fi
     return 0
 }
 
@@ -767,7 +817,7 @@ cmd_status() {
     fi
 
     local a line=""
-    for a in run-tests typecheck lint proof; do
+    for a in run-tests typecheck lint proof setup-tree; do
         if [ -f "scripts/$a.sh" ]; then line+=" $a=yes"; else line+=" $a=no"; fi
     done
     msg_status_adapters "$line"
