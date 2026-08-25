@@ -119,6 +119,17 @@
 
 set -uo pipefail
 
+# pipefail makes SIGPIPE observable, and `grep -q` provokes it. The grep exits
+# on its first match. The writer then takes SIGPIPE (exit 141) on its next
+# write. pipefail reports the 141 as the pipeline's status, so a condition
+# reads failure exactly when a match exists. That made `landed` print pending
+# for a landed change, and it can silence a land gate. So in this file, no
+# pipeline whose STATUS is tested may end in a reader that quits early
+# (`grep -q`, `head`). Test `[ -n "$(...)" ]` on captured output instead, or
+# keep a final grep that reads its whole input and sends its print to
+# /dev/null. A pipeline whose status nothing reads (a capture, a display cap)
+# may keep `head`.
+
 # This script's own absolute path, for remedy messages. The human runs the
 # grant/attest helpers in their own terminal, where ${CLAUDE_PLUGIN_ROOT} is
 # not set, so a bare "worktree.sh ..." would fail.
@@ -247,14 +258,14 @@ review_scope() {
     # the same move prints the deletion and the addition, so src/ still shows.
     files=$(git -C "$root" diff --no-renames --name-only "$base" "$branch" 2>/dev/null)
     [ -n "$files" ] || { printf 'full\n'; return 0; }
-    if printf '%s\n' "$files" | grep -qvE '^(docs|\.plans)/'; then
+    if printf '%s\n' "$files" | grep -vE '^(docs|\.plans)/' >/dev/null; then
         printf 'full\n'; return 0
     fi
     if [ -f "$root/.hone-review-always" ]; then
         while IFS= read -r pat; do
             [ -n "$pat" ] || continue
             case "$pat" in \#*) continue ;; esac
-            if git -C "$root" diff --name-only "$base" "$branch" -- ":(glob)$pat" 2>/dev/null | grep -q .; then
+            if [ -n "$(git -C "$root" diff --name-only "$base" "$branch" -- ":(glob)$pat" 2>/dev/null)" ]; then
                 printf 'full\n'; return 0
             fi
         done < "$root/.hone-review-always"
@@ -294,11 +305,14 @@ cmd_review_scope() {
 land_irreversible() {
     local root="$1" base="$2" branch="$3" reasons=""
     [ -n "$base" ] || return 0
+    # The final grep runs without -q on purpose. With -q it quit on its first
+    # match, the diff writer took SIGPIPE on a migration larger than the pipe,
+    # and this gate stayed quiet on exactly the diff that carried a real DROP.
     if git -C "$root" diff "$base" "$branch" -- db ':(glob)**/migrations/**' 2>/dev/null \
-        | grep -E '^\+' | grep -qiE 'DROP[[:space:]]+(TABLE|COLUMN)|TRUNCATE|DELETE[[:space:]]+FROM|ALTER[[:space:]].+DROP'; then
+        | grep -E '^\+' | grep -iE 'DROP[[:space:]]+(TABLE|COLUMN)|TRUNCATE|DELETE[[:space:]]+FROM|ALTER[[:space:]].+DROP' >/dev/null; then
         reasons+="- destructive SQL (DROP/TRUNCATE/DELETE/ALTER...DROP) in a migration or db/ file"$'\n'
     fi
-    if git -C "$root" diff --diff-filter=D --name-only "$base" "$branch" -- db 2>/dev/null | grep -q .; then
+    if [ -n "$(git -C "$root" diff --diff-filter=D --name-only "$base" "$branch" -- db 2>/dev/null)" ]; then
         reasons+="- a file under db/ is deleted"$'\n'
     fi
     local pf pat
@@ -307,7 +321,7 @@ land_irreversible() {
         while IFS= read -r pat; do
             [ -n "$pat" ] || continue
             case "$pat" in \#*) continue ;; esac
-            if git -C "$root" diff --name-only "$base" "$branch" -- ":(glob)$pat" 2>/dev/null | grep -q .; then
+            if [ -n "$(git -C "$root" diff --name-only "$base" "$branch" -- ":(glob)$pat" 2>/dev/null)" ]; then
                 reasons+="- touches a path listed in $pf: $pat"$'\n'
             fi
         done < "$root/$pf"
@@ -385,16 +399,15 @@ land_proof_required() {
 land_proof_bootstrap() {
     local root="$1" base="$2" branch="$3" change="$4"
     [ -n "$base" ] || return 0
-    if git -C "$root" diff --name-only "$base" "$branch" \
-        -- scripts/proof.sh 2>/dev/null | grep -q .; then
+    if [ -n "$(git -C "$root" diff --name-only "$base" "$branch" \
+        -- scripts/proof.sh 2>/dev/null)" ]; then
         printf '%s' "$change"
         return 0
     fi
     # Every status except A (added) and C (copied): a probe that already exists,
     # modified, deleted, renamed, or type-changed.
-    git -C "$root" diff --name-only --diff-filter=MDRTUXB "$base" "$branch" \
-        -- scripts/proof-probes 2>/dev/null \
-        | grep -q . && printf '%s' "$change"
+    [ -n "$(git -C "$root" diff --name-only --diff-filter=MDRTUXB "$base" "$branch" \
+        -- scripts/proof-probes 2>/dev/null)" ] && printf '%s' "$change"
 }
 
 # Print non-empty if the sign-off at .hone-proof/<change> names the commit it
@@ -498,7 +511,7 @@ cmd_land() {
         grant_note=$(cat "$grant" 2>/dev/null)
         # An empty grant authorizes nothing and would leave no audit trail in
         # the merge commit body, so it does not open the gate.
-        if ! printf '%s' "$grant_note" | grep -q '[^[:space:]]'; then
+        if ! printf '%s' "$grant_note" | grep '[^[:space:]]' >/dev/null; then
             msg_wt_land_grant_empty "$change" "$grant_cmd" >&2
             return 8
         fi
@@ -721,10 +734,17 @@ cmd_landed() {
     local main_root branch
     main_root=$(main_root_of)
     branch="hone/$change"
+    # -n 1 and a capture, never `| grep -q .`. The grep quit on the first hash,
+    # git took SIGPIPE writing the next one, and pipefail turned that 141 into
+    # "no merge found". A rolled-back and re-landed change carries several
+    # matching merge subjects, so exactly the landed changes read as pending,
+    # and a ready --all chain stalled on its one completion signal.
+    local merge
+    merge=$(git -C "$main_root" log -F --grep="Merge branch '$branch'" --format=%H -n 1 HEAD 2>/dev/null)
     if git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch" \
         || [ -e "$main_root/.worktrees/$change" ] \
         || git -C "$main_root" cat-file -e "HEAD:.plans/$change.md" 2>/dev/null \
-        || ! git -C "$main_root" log -F --grep="Merge branch '$branch'" --format=%H HEAD 2>/dev/null | grep -q .; then
+        || [ -z "$merge" ]; then
         printf 'pending\n'
         return 1
     fi
@@ -834,7 +854,7 @@ cmd_attest() {
     # A sign-off IS its text: land reads the commit id, a human reads the rest.
     # Whitespace records nothing, and the unedited placeholder records less than
     # nothing, because it reads as evidence while carrying none.
-    if ! printf '%s' "$what" | grep -q '[^[:space:]]'; then
+    if ! printf '%s' "$what" | grep '[^[:space:]]' >/dev/null; then
         msg_wt_attest_empty >&2; return 2
     fi
     if [ -n "$(attest_is_placeholder "$what")" ]; then

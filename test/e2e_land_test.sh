@@ -257,6 +257,21 @@ bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "ungranted irreversible change must not touch the trunk"
 [ -d "$WT_C" ] || die "worktree should survive an ungranted irreversible land as evidence"
 step "irreversible change without a grant refused (exit 8), trunk untouched"
+# (b1) The same gate on a LARGE migration. The destructive-SQL grep used to
+# run with -q, quit on its first match, and the diff writer took SIGPIPE on a
+# diff larger than the pipe. Under pipefail the condition then read false with
+# a real DROP on line one, and the gate stayed silently open. A 2MB migration
+# with an early DROP makes that deterministic: the old code lands this change
+# with exit 0, every run.
+WT_BIG=$(bash "$WSH" add db-big-drop) || die "worktree add db-big-drop"
+mkdir -p "$WT_BIG/db/migrations"
+{ echo "DROP TABLE early_match;"; seq 1 60000 | sed 's/^/INSERT INTO filler VALUES (/;s/$/);/'; } \
+    > "$WT_BIG/db/migrations/0003_big.sql"
+(cd "$WT_BIG" && git add -A && git commit -qm "feat(db): a large migration with an early drop")
+bash "$WSH" land db-big-drop >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 8 ] || die "a large migration with destructive SQL should exit 8 (got $rc)"
+bash "$WSH" remove "$WT_BIG" >/dev/null 2>&1; git branch -D hone/db-big-drop >/dev/null 2>&1
+step "authority gate fires on a 2MB migration (no SIGPIPE fail-open)"
 # (b2) An empty grant authorizes nothing and leaves no audit trail: still 8.
 mkdir -p "$REPO/.hone-grant" && : > "$REPO/.hone-grant/db-drop"
 out=$(bash "$WSH" land db-drop 2>&1); rc=$?
@@ -803,6 +818,23 @@ out=$(bash "$WSH" landed conflict-a); rc=$?
 git rm -q .plans/conflict-a.md && git commit -qm "chore: drop the leftover plan"
 bash "$WSH" landed conflict-a >/dev/null || die "landed should be 0 again after the Plan is gone"
 step "landed reads the merge commit, claim, and Plan, never a report"
+
+echo "== 6d. landed: several matching merge subjects, spread through history =="
+# The shape a rolled-back and re-landed change leaves behind: more than one
+# 'Merge branch' subject for the same change, separated by other commits. The
+# old `| grep -q .` read the first hash and quit, git took SIGPIPE flushing a
+# later one, and pipefail turned that into pending, so exactly the landed
+# changes stalled their --all chain. Two matches with 30000 commits between
+# them make the old failure deterministic. fast-import builds the filler in
+# one process; every commit reuses HEAD's tree, so the checkout stays clean.
+{
+    printf 'commit refs/heads/main\ncommitter t <t@t.t> 1700000000 +0000\ndata 28\nMerge branch %s\nfrom refs/heads/main^0\n' "'hone/sig-many'"
+    seq 1 30000 | awk '{print "commit refs/heads/main"; print "committer t <t@t.t> 1700000000 +0000"; print "data 6"; print "filler"}'
+    printf 'commit refs/heads/main\ncommitter t <t@t.t> 1700000000 +0000\ndata 28\nMerge branch %s\n' "'hone/sig-many'"
+} | git fast-import --quiet || die "fast-import for the sig-many history"
+out=$(bash "$WSH" landed sig-many); rc=$?
+[ "$rc" -eq 0 ] && [ "$out" = "landed" ] || die "spread merge subjects must read landed (got rc=$rc out=$out)"
+step "landed reads landed across spread-out matching merges (no SIGPIPE)"
 
 echo "== 7. add from inside a sibling worktree: anchors to the main tree =="
 # An orchestrator's cwd drifts into change A's worktree before starting change B.
