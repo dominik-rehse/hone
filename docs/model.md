@@ -448,17 +448,35 @@ redundant, an open question that running code has answered. No
 diff-scoped hook can see any of that.
 
 `garden` (`/hone:garden`) closes the gap. It scans the whole repo for
-that staleness and lands the safe removals through the same worktree
-loop, one at a time. Two properties keep it safe. It is *deletion-only*:
-a garden change removes and never adds. And it is *self-verifying*,
-because the suite is the proof. A deletion that keeps the suite green
-removed something dead. One that turns it red removed something
-load-bearing, and garden abandons it. Judgment calls (is this Decision
-stale, or rationale the code cannot show?) go to the
-`consolidate-critic`. What only a human can settle gets logged or
-escalated, never guessed. You invoke it between changes, and another
-agent may invoke it too: hone owns the loop, and the caller chooses when
-it runs. Small, frequent passes work better than one large pass.
+that staleness and lands the safe changes through the same worktree
+loop, one at a time. It has two units of work, and each carries its own
+proof.
+
+A *cut* removes something, and the suite is the proof. A deletion that
+keeps the suite green removed something dead. One that turns it red
+removed something load-bearing, and garden abandons it. That is what
+makes the loop self-verifying.
+
+A *repair* repoints a reference in `docs/` whose target moved, and the
+proof is the target, not the suite. No test reads a Decision's prose, so
+green says nothing about a pointer. What garden checks instead is that
+the old target is gone, that the new one exists, and that exactly one
+candidate matches. The change replaces one target with one other target
+and touches no claim around it. The repair exists because a strictly
+deletion-only pass has no cheap outcome for a Decision whose code merely
+*moved*. Deleting a true line loses it, and escalating a one-token
+repoint buys a whole `plan → run` cycle.
+
+Judgment calls (is this Decision stale, or rationale the code cannot
+show?) go to the `consolidate-critic`. What only a human can settle gets
+logged or escalated, never guessed. Garden escalates in batches: one
+proposed Plan per area, never one per finding, because each Plan costs a
+full cycle. A pass is bounded by its own scan. Work that surfaces while
+discharging its report belongs to the next pass, which is what keeps a
+maintenance pass from becoming an open-ended project. You invoke it
+between changes, and another agent may invoke it too: hone owns the
+loop, and the caller chooses when it runs. Small, frequent passes work
+better than one large pass.
 
 ## The always-on rule
 
@@ -475,8 +493,9 @@ split works as a lean `CLAUDE.md` pointing at local skills.)
 1. Each artifact has exactly one writer among the steps (the full grid is
    in [`reference.md`](reference.md)). Code and tests come only from
    *build*, and `docs/` prose only from *consolidate*. Only *consolidate*
-   prunes permanent artifacts, or, between changes, the deletion-only
-   *garden*. Exactly two steps empty `.plans/`: *build* promotes a
+   prunes permanent artifacts, or, between changes, *garden*, whose one
+   non-deleting change repoints a `docs/` reference whose target moved.
+   Exactly two steps empty `.plans/`: *build* promotes a
    reference out, and *consolidate* deletes the Plan and whatever
    remains. Work-in-progress therefore cannot leak into the permanent
    record, which is the structural cure for the spec pile.

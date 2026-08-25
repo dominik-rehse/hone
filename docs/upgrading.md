@@ -61,5 +61,6 @@ Two capabilities cost nothing until used, so enable them at any time:
   disappears. Add the lines as you next touch each doc. You need no
   upfront pass.
 - *The garden loop.* Run `/hone:garden` between changes to trim stale
-  docs, dead code, and redundant tests. Worth starting once there is
-  enough written down to go stale.
+  docs, dead code, and redundant tests, and to repoint a `docs/`
+  reference whose target moved. Worth starting once there is enough
+  written down to go stale.

@@ -156,8 +156,11 @@ setup and reconcile the repo's own artifacts.
   never in `MAIN`.
 - `/hone:garden` scans the whole repo for staleness between changes
   (stale docs, dead code, redundant tests) and lands the safe deletions.
-  You invoke it when you want a maintenance pass, and another agent may
-  invoke it too. Small, frequent passes work better than one large pass.
+  It also repoints a reference in `docs/` whose target merely moved,
+  which is the one change it makes that deletes nothing. Anything needing
+  prose written it escalates, as one proposed Plan per area. You invoke
+  it when you want a maintenance pass, and another agent may invoke it
+  too. Small, frequent passes work better than one large pass.
 
 Exploration sits outside that loop. A probe writes whatever it needs
 under `docs/spikes/`, where no hook guards it: no test first, no

@@ -44,10 +44,11 @@ and `garden`, so a decision or invariant stored there governs nothing. Read
 it as background. When something in it belongs to the codebase, land it in
 `docs/` through consolidate.
 
-A third command, `/hone:garden`, runs the same loop between changes and only
-deletes (stale docs, dead code, redundant tests). The suite proves each
-removal safe. A human or another agent invokes it. It is maintenance,
-not a Plan.
+A third command, `/hone:garden`, runs the same loop between changes. It deletes
+(stale docs, dead code, redundant tests), and it repoints a reference in `docs/`
+whose target moved. The suite proves each removal safe, and the new target
+proves each repoint. Everything else it escalates, batched as one Plan per area.
+A human or another agent invokes it. It is maintenance, not a Plan.
 
 A shell command reaches the same durable paths the file tools do. Dependency
 work, a formatter run, and a schema migration all write their files from

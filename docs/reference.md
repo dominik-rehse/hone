@@ -29,8 +29,10 @@ Slash commands, in the order a change flows:
   happen in the SUB tab, never in MAIN. For a workspace of their own, create the
   workspace and invoke the command in it.
 - `/hone:garden` scans the repo for stale docs, dead code, and redundant tests
-  between changes, and lands the safe deletions. You invoke it, as often as
-  the repo needs it, and another agent may invoke it too.
+  between changes, and lands the safe deletions. It also repoints a `docs/`
+  reference whose target moved, and escalates the rest as one proposed Plan per
+  area. You invoke it, as often as the repo needs it, and another agent may
+  invoke it too.
 
 `worktree.sh` (in the plugin's `scripts/` directory) does the mechanical git
 work. The loop calls it, and you can too:
@@ -373,7 +375,7 @@ W = writes, M = amends, P = prunes/deletes, R = reads, . = untouched
 | verify      | .       | R    | R     | R          | R      | R      | .    |
 | consolidate | P       | .    | P     | W/M        | W/M    | M      | .    |
 | land        | .       | .    | .     | .          | .      | .      | W    |
-| garden      | P       | P    | P     | P          | P      | P      | W    |
+| garden      | P       | P    | P     | P/M        | P/M    | P/M    | W    |
 
 Notes on the rarer cells: plan's reads are its step 2, where it reads the code,
 the tests, and the area's Decisions and Notes. The Plan can then state what the
@@ -383,8 +385,12 @@ and its references on the primary branch. build's `.plans/` prune is a
 reference promoted out, `git mv`'d next to the test that reads it. (build
 is the only step that writes tests.) consolidate's `.plans/` prune is the `git rm` of the
 Plan and any references build did not promote. garden is not part of a
-change: it is the standalone maintenance loop, and every column it touches is
-a deletion.
+change, but the standalone maintenance loop. Every column it touches is
+a deletion, apart from the three `M` cells. Those carry its one non-deleting
+change, the repair. It replaces a reference under `docs/` whose target moved,
+one target for one target, and leaves the claim around it untouched. Code keeps
+no `M`: a dangling reference in a `src/` comment sits beside code, and only
+build writes code.
 
 Spikes are outside the table, because a spike is not a change. Everything one
 spike leaves behind lives under `docs/spikes/`, whatever its type. Examples:
