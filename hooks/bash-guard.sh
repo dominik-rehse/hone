@@ -109,28 +109,49 @@ if echo "$CMD" | grep -Eq \
 fi
 
 # Rules 3 and 4 both apply to the primary tree alone. They need the tree the
-# command WRITES IN, which is not always the tree the hook stands in. A
-# PreToolUse hook runs in the session's cwd, so `cd .worktrees/x && bun install`
-# is worktree work that the hook judges from the primary tree. Both rules then
-# misfire, and rule 4 tells the agent to move work into a worktree that it
-# already moved. So read a leading `cd <target>` and resolve against that
-# target instead.
+# command WRITES IN, which is not the tree the hook stands in. The hook process
+# starts in the directory the session started in, and it stays there for the
+# whole session. The shell that runs the command does not. `cd "$WT"` moves that
+# shell, and every later Bash call runs in the worktree while the hook still
+# stands in the primary tree.
+#
+# The harness reports the shell's directory in the top-level `cwd` field of the
+# hook input. Claude Code updates that field after each `cd`, and when Claude
+# enters a worktree, while ${CLAUDE_PROJECT_DIR} and the hook's own cwd stay
+# put. Reading it is the whole fix for the common misfire: the run loop cds into
+# its worktree once (skills/run/SKILL.md step 1) and works there, so every
+# formatter run and every package install after that cd read as primary-tree
+# work. Rule 4 then told the agent to move work into a worktree it was already
+# standing in.
+#
+# Fall back to the hook's own cwd when the field is absent or names no directory
+# (an older harness, a hand-driven test).
+SHELL_CWD=$(hone_extract_top_field "$INPUT" cwd)
+[ -n "$SHELL_CWD" ] && [ -d "$SHELL_CWD" ] || SHELL_CWD="$PWD"
+
+# A leading `cd <target>` moves the shell once more, inside the command itself,
+# so it wins over the field above. A relative target resolves against the
+# shell's directory, not the hook's.
 #
 # Fail closed on anything unclear, which keeps the escalation rather than
 # dropping it. Unclear means more than one cd, a cd that is not first, or a
 # target that is not a directory. A command that returns to the primary tree
-# must never read as worktree work. Each case falls back to the hook's own cwd.
+# must never read as worktree work. Each case falls back to the shell's cwd.
 #
 # A subshell wraps the same idiom: `(cd <worktree> && <tool>)`. The `(` counts
 # as a separator here, and the extractor accepts one before a leading cd.
 # Without that, the wrapped form read as primary-tree work while the unwrapped
 # form passed, and the hook told the agent to move work it had already moved.
-TREE_DIR="$PWD"
+TREE_DIR="$SHELL_CWD"
 if [ "$(printf '%s\n' "$CMD" | grep -Eo '(^|[;&|(][[:space:]]*)cd[[:space:]]' | wc -l)" -eq 1 ]; then
     CD_TARGET=$(printf '%s' "$CMD" | sed -n \
         "s/^[[:space:]]*(\{0,1\}[[:space:]]*cd[[:space:]]\{1,\}\(\"[^\"]*\"\|'[^']*'\|[^[:space:];&|]\{1,\}\).*/\1/p")
     CD_TARGET=${CD_TARGET%\"}; CD_TARGET=${CD_TARGET#\"}
     CD_TARGET=${CD_TARGET%\'}; CD_TARGET=${CD_TARGET#\'}
+    case "$CD_TARGET" in
+        ''|/*) ;;
+        *) CD_TARGET="$SHELL_CWD/$CD_TARGET" ;;
+    esac
     [ -n "$CD_TARGET" ] && [ -d "$CD_TARGET" ] && TREE_DIR="$CD_TARGET"
 fi
 
@@ -241,6 +262,12 @@ fi
 # path, any flag beyond the write-mode flags themselves (a `--config` swap can
 # repoint the tool), a glob in a directory part, and every token this walk does
 # not recognise. Fail closed keeps the ask; the exemption has to be earned.
+#
+# Residual hole: the walk reads a path token as written, and hone_is_durable
+# reads a project-relative path. So a formatter run from a SUBDIRECTORY of the
+# primary tree judges `notes.md` and not `docs/notes.md`, and the exemption is
+# wider there than the file tools' perimeter. dirty-guard.sh reads the effect,
+# so it still blocks that write.
 FMT_WRITERS='(biome|eslint|prettier|dprint|ruff|black|isort|rustfmt|gofmt|jscodeshift|codemod)[^|;&]*(migrate|--write|--fix|--apply|[[:space:]]-w([[:space:]]|$)|[[:space:]]fmt([[:space:]]|$)|[[:space:]]format([[:space:]]|$))'
 
 # True when segment $1 scopes its formatter to non-durable relative paths.

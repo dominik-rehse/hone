@@ -151,7 +151,10 @@ under `src/<area>/`.
   the primary tree. Such a tool writes its own files, so no command text ever
   spells that write out. A bare sync install (`bun install`, `npm ci`, with
   flags only) passes, because it installs what the lockfile already says.
-  An install that names a package still asks. It is a deterrent, not a
+  An install that names a package still asks. Every primary-tree rule reads the
+  directory the *shell* stands in, which the harness reports in the hook input.
+  So the loop's one `cd` into its worktree is enough, and the commands after it
+  pass. It is a deterrent, not a
   sandbox. It closes the obvious shell routes, and the settings.json deny
   rules (see *Install* in the README) close the file-tool routes.
 - *dirty-guard* (PostToolUse on Bash) reads the effect instead of the command.

@@ -57,6 +57,20 @@ hone_extract_field() {
     fi
 }
 
+# Extract a TOP-LEVEL string field from a hook's JSON stdin. $1 = the raw JSON,
+# $2 = the field name. Same contract as hone_extract_field, one level up: that
+# one reads .tool_input, and the fields the harness itself sets (cwd,
+# session_id) sit beside it. The jq-less fallback is the same best-effort
+# degrade, and it cannot tell the two levels apart.
+hone_extract_top_field() {
+    local json="$1" field="$2"
+    if command -v jq >/dev/null 2>&1; then
+        printf '%s' "$json" | jq -r --arg f "$field" '.[$f] // empty'
+    else
+        printf '%s' "$json" | sed -n "s/.*\"$field\"[[:space:]]*:[[:space:]]*\"\([^\"]*\)\".*/\1/p" | head -1
+    fi
+}
+
 # True when path $1 is a durable committed artifact. That covers anything under
 # src/, tests/, docs/, db/ (schema and migrations are as durable as code), or
 # scripts/ (the adapters the gate runs live there). It covers the policy files

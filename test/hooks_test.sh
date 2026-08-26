@@ -119,6 +119,10 @@ rm -f "$REPO/.hone-off"
 
 echo "== bash-guard: tamper resistance =="
 bg() { echo "{\"tool_input\":{\"command\":\"$1\"}}" | (cd "$REPO" && bash "$BASH_GUARD"); }
+# The same, plus the top-level `cwd` field the harness sets: $2 = the directory
+# the SHELL stands in. The hook process still runs in the primary tree, which is
+# what Claude Code does after Claude cds into a worktree.
+bgcwd() { echo "{\"cwd\":\"$2\",\"tool_input\":{\"command\":\"$1\"}}" | (cd "$REPO" && bash "$BASH_GUARD"); }
 echo "$(bg 'git commit --no-verify -m x')" | grep -q '"deny"' && ok "--no-verify denied" || bad "--no-verify should be denied"
 echo "$(bg 'touch .hone-off')" | grep -q '"deny"' && ok "touch .hone-off denied" || bad "touch .hone-off should be denied"
 echo "$(bg 'sed -i s/x/y/ scripts/run-tests.sh')" | grep -q '"ask"' && ok "editing run-tests.sh escalated" || bad "editing adapter should ask"
@@ -225,6 +229,19 @@ echo "$(bg 'bun add -d dprint@latest && cd '"$WT")" | grep -q '"ask"' && ok "a t
 # read as the same command.
 echo "$(bg "(cd $WT && bun add -d dprint@latest)")" | grep -q 'permissionDecision' && bad "a subshell cd into a worktree is worktree work" || ok "a subshell cd into a worktree passes"
 echo "$(bg "(cd $REPO && bun add -d dprint@latest)")" | grep -q '"ask"' && ok "a subshell cd back to the primary tree still asks" || bad "a subshell cd to the primary tree should ask"
+# The loop cds into its worktree ONCE and then works there, so most commands
+# carry no cd at all. The harness reports that shell directory in the top-level
+# `cwd` field, and the hook has to read it: the hook process itself never
+# leaves the primary tree.
+echo "$(bgcwd 'bunx dprint fmt' "$WT")" | grep -q 'permissionDecision' && bad "a bare fmt in the worktree shell is worktree work" || ok "a persisted cd into a worktree passes rule 4b"
+echo "$(bgcwd 'bun add -d dprint@latest' "$WT")" | grep -q 'permissionDecision' && bad "an install in the worktree shell is worktree work" || ok "a persisted cd into a worktree passes rule 4"
+echo "$(bgcwd 'git switch main' "$WT")" | grep -q 'permissionDecision' && bad "a branch switch in the worktree shell is worktree work" || ok "a persisted cd into a worktree passes rule 3"
+# The same field names the primary tree just as often, and nothing changes then.
+echo "$(bgcwd 'bunx dprint fmt' "$REPO")" | grep -q '"ask"' && ok "a bare fmt in the primary-tree shell still asks" || bad "the primary tree keeps its rules"
+echo "$(bgcwd 'bun add -d dprint@latest' /nonexistent-tree)" | grep -q '"ask"' && ok "an unusable cwd field falls back to the hook's tree" || bad "a missing cwd directory should fall back"
+# A leading cd moves the shell once more, and a relative target resolves
+# against the shell's directory rather than the hook's.
+echo "$(bgcwd 'cd auth-login && bun add -d dprint@latest' "$REPO/.worktrees")" | grep -q 'permissionDecision' && bad "a relative cd resolves against the shell cwd" || ok "a relative cd resolves against the shell cwd"
 # A write-mode formatter passes when it is scoped to non-durable relative
 # paths, the same perimeter the file tools apply. The Plan is the case that
 # matters: /hone:plan writes it in the primary tree, and the lint gate wants
