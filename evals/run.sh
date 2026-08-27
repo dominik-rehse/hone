@@ -43,6 +43,10 @@
 #               discrimination check the README prescribes: a case the stub
 #               answers correctly pins nothing, so it belongs in no suite. Read
 #               the result as a case audit, never as a pass/fail run.
+#
+# Every call runs isolated from this repository: an empty working directory,
+# --safe-mode, and no tools. See call_one for what each one closes off, and why
+# an ablation without them measures the wrong thing.
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
@@ -141,17 +145,51 @@ if [ "$DRY" -eq 1 ]; then
 fi
 
 TMP=$(mktemp -d)
-trap 'rm -rf "$TMP"' EXIT
+# Every model call runs with SANDBOX as its working directory, and SANDBOX stays
+# empty. See call_one for why. It is a second mktemp dir rather than a child of
+# TMP, so a call cannot reach the other calls' replies by walking up one level.
+SANDBOX=$(mktemp -d)
+trap 'rm -rf "$TMP" "$SANDBOX"' EXIT
+
+# Every tool that can reach a file, a command, or the network. A case is a
+# judgment on a self-contained brief, so a call needs none of them.
+NO_TOOLS="Read Grep Glob Bash Task Agent Edit Write NotebookEdit WebFetch WebSearch"
 
 # One model call, writing its reply to a per-(target,case,vote) file. Runs in the
 # background; failures degrade to an empty file (scored as no answer), never abort.
+#
+# The call is ISOLATED from this repository, and that isolation is what makes the
+# measurement mean anything. Three things carry it, and each closes a different
+# channel:
+#
+#   cd "$SANDBOX"    puts an empty directory in front of the model. It also drops
+#                    the project's auto-memory, which is keyed to the repo path.
+#   --safe-mode      turns off CLAUDE.md, hooks, plugins, agents, skills, MCP
+#                    servers, and settings. Auth, model choice, and the built-in
+#                    tools keep working, so the call still runs.
+#   --disallowedTools blocks every tool that could reach a file. An empty working
+#                    directory is NOT enough on its own: measured 2026-08-27, a
+#                    call from an empty directory still read
+#                    agents/consolidate-critic.md by absolute path and quoted it.
+#
+# Without all three, `--ablate` is not a neutral baseline at all. Measured 2026-08-27:
+# a stub run from the repo root quoted a paragraph of the real critic prompt
+# back, verbatim, including a category label that existed only in an uncommitted
+# edit. That makes the stub look smarter than the model's own default judgment,
+# and a case the contaminated stub answers correctly reads as a no-op that should
+# go. So the contamination cuts load-bearing cases. `--bare` would isolate more,
+# and it is the wrong tool: it reads auth from ANTHROPIC_API_KEY alone, so it
+# breaks the harness for anybody on OAuth.
+#
+# Every brief is self-contained by design, so nothing here needs a file read.
 call_one() {
     local target="$1" dir="$2" name="$3" v="$4" sys user
     sys=$(sys_for "$target")
     user="$(instruction_for "$target")
 
 $(cat "$dir/brief.md")"
-    claude -p "$user" --append-system-prompt "$sys" --model "$MODEL" \
+    (cd "$SANDBOX" && claude -p "$user" --append-system-prompt "$sys" \
+        --model "$MODEL" --safe-mode --disallowedTools "$NO_TOOLS") \
         > "$TMP/${target}~${name}~${v}.out" 2>/dev/null || true
 }
 
