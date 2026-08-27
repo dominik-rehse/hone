@@ -183,7 +183,7 @@ msg_gate_green() {
 }
 
 msg_gate_green_cached() {
-    printf 'hone gate: the full suite already passed on this tree (%s), so the gate skipped it.\n' "$1"
+    printf 'hone gate: the full suite already passed on this branch (at tree %s), so the gate skipped it. land re-runs --all before the merge.\n' "$1"
 }
 
 # ------------------------------------------------------------------ nag

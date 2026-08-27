@@ -170,9 +170,12 @@ under `src/<area>/`.
   check). A dependency refresh dirties the manifest and the lockfile rather
   than `src/`, and it breaks the suite just as easily. So the gate reads the
   whole durable perimeter, not `src/` and `tests/` alone. The full suite
-  runs once per tree. A green run records the tree hash in
-  `<git-dir>/hone-gate-green`. A later Stop on that same tree skips the run
-  and says so. Any commit, and any plugin upgrade, invalidates the record.
+  runs once per change branch. A green run records the branch and the tree it
+  verified in `<git-dir>/hone-gate-green`. Every later Stop on that branch
+  skips the run and says so, and a plugin upgrade invalidates the record. One
+  early warning per change is what this backstop is for. `land` re-runs the
+  full suite after the merge, so it still catches a regression that a later
+  commit introduces.
 - *nag* (Stop, advisory) reports hygiene findings as a visible message,
   never a block. The findings:
   - a Plan that survived its landing

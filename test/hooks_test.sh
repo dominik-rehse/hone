@@ -366,7 +366,7 @@ out=$(cd "$REPO" && echo '{}' | bash "$GATE")
 echo "$out" | grep -q '"decision":"block"' && bad "dirty tree should run the unit tier (pass), not --all" || ok "dirty tree runs the unit tier (loop stays fast)"
 git -C "$REPO" checkout -q -- src/auth/login.ts
 
-echo "== gate: the full tier runs once per tree =="
+echo "== gate: the full tier runs once per change branch =="
 # An adapter that records every invocation, so a run the gate skipped is
 # countable. The record lives inside .git, so it never dirties the tree.
 RUNS="$REPO/.git/adapter-runs"
@@ -380,36 +380,46 @@ EOF
 (cd "$REPO" && git add -A && git commit -qm "counting adapter")
 TREE=$(git -C "$REPO" rev-parse 'HEAD^{tree}')
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
-[ "$(wc -l < "$RUNS")" -eq 1 ] && ok "the first Stop on a new tree runs the full suite" || bad "the first Stop should run the full suite"
+[ "$(wc -l < "$RUNS")" -eq 1 ] && ok "the first Stop on a change branch runs the full suite" || bad "the first Stop should run the full suite"
 echo "$out" | grep -q '"systemMessage":"hone gate: green (tests (--all))"' && ok "the full run emits the green receipt" || bad "the full run should emit the green receipt"
+grep -q "hone/verify-tier" "$RECEIPT" && ok "a green full run records the branch" || bad "a green full run should record the branch"
 grep -q "$TREE" "$RECEIPT" && ok "a green full run records the verified tree" || bad "a green full run should record the tree"
 
 # Same tree again: the answer cannot differ, so the suite must not run.
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
 [ "$(wc -l < "$RUNS")" -eq 1 ] && ok "an unchanged tree skips the full suite" || bad "an unchanged tree should skip the full suite"
-echo "$out" | grep -q 'already passed on this tree' && ok "the skip prints its own receipt" || bad "the skip should print a receipt, not stay silent"
+echo "$out" | grep -q 'already passed on this branch' && ok "the skip prints its own receipt" || bad "the skip should print a receipt, not stay silent"
 echo "$out" | grep -q '"decision":"block"' && bad "a skip must not block the stop" || ok "the skip does not block the stop"
 
-# A new commit changes the tree, so the receipt no longer covers it.
+# A later commit on the SAME branch skips too. One early warning per change is
+# the whole value of the backstop, and land re-runs --all after the merge.
 echo "// more" >> "$REPO/src/auth/login.ts"
 (cd "$REPO" && git add -A && git commit -qm "durable change")
-TREE2=$(git -C "$REPO" rev-parse 'HEAD^{tree}')
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
-[ "$(wc -l < "$RUNS")" -eq 2 ] && ok "a changed tree runs the full suite again" || bad "a changed tree should run the full suite"
-grep -q "$TREE2" "$RECEIPT" && ok "the receipt follows the new tree" || bad "the receipt should hold the new tree"
+[ "$(wc -l < "$RUNS")" -eq 1 ] && ok "a later commit on the same branch skips the full suite" || bad "a later commit on the same branch should skip"
+grep -q "$TREE" "$RECEIPT" && ok "the receipt keeps the tree its run verified" || bad "a skip should leave the receipt alone"
+
+# Another change branch is another change, so it earns its own run.
+git -C "$REPO" checkout -q -b hone/second-change
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 2 ] && ok "another change branch runs the full suite" || bad "another change branch should run the full suite"
+grep -q "hone/second-change" "$RECEIPT" && ok "the receipt follows the new branch" || bad "the receipt should hold the new branch"
+git -C "$REPO" checkout -q hone/verify-tier
 
 # Uncommitted durable dirt runs the unit tier, which no receipt covers.
 echo "// dirt" >> "$REPO/src/auth/login.ts"
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
 [ "$(tail -n 1 "$RUNS")" = "--unit" ] && ok "the skip never applies to the unit tier" || bad "the unit tier should run on a dirty tree"
-grep -q "$TREE2" "$RECEIPT" && ok "the unit tier leaves the receipt alone" || bad "the unit tier should not write a receipt"
+grep -q "hone/second-change" "$RECEIPT" && ok "the unit tier leaves the receipt alone" || bad "the unit tier should not write a receipt"
 git -C "$REPO" checkout -q -- src/auth/login.ts
 
 # A receipt an older plugin version wrote is a miss: a gate with new steps must
-# not trust what an older gate verified.
-printf '0.0.0-old %s\n' "$TREE2" > "$RECEIPT"
+# not trust what an older gate verified. The gate before this one recorded no
+# branch, so its two-field line misses as well.
+RUNS_BEFORE=$(wc -l < "$RUNS")
+printf '0.0.0-old %s\n' "$TREE" > "$RECEIPT"
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
-[ "$(wc -l < "$RUNS")" -eq 4 ] && ok "a receipt from another version runs the suite again" || bad "a version mismatch should re-run the suite"
+[ "$(wc -l < "$RUNS")" -eq $((RUNS_BEFORE + 1)) ] && ok "a receipt from another version runs the suite again" || bad "a version mismatch should re-run the suite"
 
 echo "== nag: leftover Plan (landed evidence only), oversized Note, orphan Note =="
 # No worktree and no landed evidence = the normal plan→run gap: pending, not
