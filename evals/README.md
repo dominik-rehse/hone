@@ -48,16 +48,20 @@ denied. `call_one` carries the detail.
 
 Before 2026-08-27 it ran the call from the repository root with tools on. A stub
 run then quoted a paragraph of `agents/consolidate-critic.md` back verbatim,
-including a category label that existed only in an uncommitted edit. A
-contaminated stub looks smarter than the model's own default. It therefore
-answers a case correctly for a reason the suite never sees, and the case reads
-as a no-op that should go.
+including a category label that existed only in an uncommitted edit.
 
-That direction matters for how you read this file. Every measurement dated
-before 2026-08-27 came off the contaminated harness, the 44-case cut of
-2026-08-18 included. A case those runs **kept** is still safe, because a
-dumber stub only discriminates harder. A case those runs **cut** may have been
-load-bearing. Nobody has re-measured them.
+The contamination has **no single direction**, and that is what makes it
+expensive. Repo context sometimes carried the stub toward hone's answer, which
+reads as a no-op and cuts a load-bearing case. It sometimes carried the stub
+away from it, which reads as discrimination a clean stub does not show. Both
+happened on 2026-08-27, in the same target, on the same day.
+`consolidate-proof-forecast` is the second kind: the contaminated stub answered
+RECORD, the isolated stub answers DISCARD, and the case pins nothing.
+
+So every measurement in this file dated before 2026-08-27 is unsound in both
+directions. That covers the 44-case cut of 2026-08-18 and the recorded stub
+answer beside every surviving case. Re-measure a case before you lean on its
+number.
 
 ### The second baseline: the prompt minus the paragraph
 
@@ -112,6 +116,21 @@ targets use whatever model drives the session (`--model opus`).
 
 Each entry gives the expected answer, then what the stub answered without hone's
 prose. The gap between the two is what the case pins.
+
+Each entry below carries the stub answer measured on the date it names, on the
+contaminated harness. A re-measurement of all 15 surviving cases on 2026-08-27,
+isolated, three votes, moved three numbers and left the rest standing:
+
+- `dep-refresh-no-red-test`: the isolated stub APPROVES 3/3, so it no longer
+  discriminates against the neutral stub at all. It survives on the second
+  baseline instead. The plan-critic prompt minus its *Dependency and toolchain
+  refreshes* bullet rejects the Plan 2/3.
+- `named-references`: the isolated stub rejects 2/3 rather than 3/3. It still
+  discriminates.
+- `loop`: the isolated stub now misses **all 8** remaining cases, against 6 of 9
+  before. Every one of them discriminates harder than its entry claims.
+
+`garden` and `spike-note-may-age` measured the same either way.
 
 *`plan-critic`*, verdict `APPROVE`/`REJECT`:
 
