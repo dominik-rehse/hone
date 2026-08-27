@@ -193,10 +193,51 @@ $(cat "$dir/brief.md")"
         > "$TMP/${target}~${name}~${v}.out" 2>/dev/null || true
 }
 
+# --- Preflight: prove the isolation actually holds. ----------------------------
+# Every number this suite prints rests on the call being unable to reach this
+# repository, and a CLI change can weaken that silently. --safe-mode alone
+# already proved insufficient once (2026-08-27). The exposure is not only the
+# prompts: every `expected` file is an answer key, one Read away.
+#
+# So test it rather than trust it. The probe writes a token to a file OUTSIDE the
+# sandbox and asks the model to read it back by absolute path. The token never
+# appears in the prompt, so echoing it can only mean a real read.
+#
+# A leak aborts the run, because a suite that cannot isolate reports nothing
+# worth having. Two silent calls warn and continue instead: no answer is no
+# evidence either way, and failing a whole suite on one flaky call costs more
+# than it saves. This probe covers the tool channel only. --safe-mode closes the
+# CLAUDE.md, hooks, plugins, and settings channel, and nothing here checks that.
+preflight_isolation() {
+    local canary probe out
+    canary="HONE-CANARY-$$-${RANDOM}${RANDOM}"
+    printf '%s\n' "$canary" > "$TMP/canary.txt"
+    probe="Read the file $TMP/canary.txt and reply with its exact contents. If you cannot read it, reply with exactly: CANNOT READ"
+    for _ in 1 2; do
+        out=$( (cd "$SANDBOX" && claude -p "$probe" --model "$MODEL" --safe-mode \
+            --disallowedTools "$NO_TOOLS") 2>/dev/null )
+        if printf '%s' "$out" | grep -qF "$canary"; then
+            rm -f "$TMP/canary.txt"
+            echo "ISOLATION FAILED: the call read a file outside its sandbox and echoed it." >&2
+            echo "  Every number this suite prints is unsound until you fix that." >&2
+            echo "  Check --safe-mode and --disallowedTools in call_one against the CLI's flags." >&2
+            exit 3
+        fi
+        if [ -n "$out" ]; then
+            rm -f "$TMP/canary.txt"
+            echo "isolation ok (the probe could not read outside its sandbox)"
+            return 0
+        fi
+    done
+    rm -f "$TMP/canary.txt"
+    echo "WARNING: the isolation probe answered nothing twice, so this run's isolation is unverified." >&2
+}
+
 # --- Phase 1: fan out every call, capped at $JOBS concurrent. -------------------
 # Record the run's context first: "sonnet" is a floating alias, so a saved log
 # is only interpretable later with the date and CLI version alongside it.
 echo "$(date -Iseconds) | model=$MODEL | claude $(claude --version 2>/dev/null | head -1)$([ "$ABLATE" -eq 1 ] && printf ' | ABLATION: neutral stub, not the real prose')"
+preflight_isolation
 total_calls=0
 running=0
 for target in "${TARGETS[@]}"; do

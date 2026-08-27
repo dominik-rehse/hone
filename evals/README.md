@@ -70,6 +70,15 @@ directions. That covers the 44-case cut of 2026-08-18 and the recorded stub
 answer beside every surviving case. Re-measure a case before you lean on its
 number.
 
+`run.sh` proves that isolation on every run rather than trusting it. Before the
+fan-out it writes a token to a file outside the sandbox and asks the model to
+read it back by absolute path. The token is never in the prompt, so echoing it
+can only mean a real read. A leak aborts the run, because a suite that cannot
+isolate reports nothing worth having. Two silent probes warn and continue, since
+no answer is no evidence either way. The probe covers the tool channel only.
+`--safe-mode` closes the CLAUDE.md, hooks, plugins, and settings channel, and
+nothing checks that.
+
 ### The second baseline: the prompt minus the paragraph
 
 The stub is a cheap proxy, and it breaks in one direction that matters. A
@@ -151,6 +160,14 @@ isolated, three votes, moved three numbers and left the rest standing:
 - `dep-refresh-no-red-test`: APPROVE, stub REJECT 2/3. A toolchain refresh has no
   red test to write first. Without the rule that says so, the missing test reads
   as a placeholder.
+- `schema-silent-on-data`: REJECT, and the required substring is the whole case.
+  The stub rejects too, 3/3, so the token discriminates against nothing. What
+  separates them is the reason. The Plan changes `invoices.amount` from `REAL`
+  to `INTEGER` over 2.3 million rows and never says whether that data is
+  preserved or disposable. Everything else about it is exemplary, and the flaw
+  is an absence. hone's critic names the preservation question 3/3 and files it
+  under `contract-churn`. The stub names it 0/3 and rejects on unrelated
+  grounds. Measured 2026-08-27, isolated.
 
 *`consolidate-critic`*, the verdict on what a change left behind:
 
@@ -286,11 +303,24 @@ DISCARD. **Treat that as the template for a weak case anywhere in this suite.**
 A brief that names the thing under test measures agreement. A brief that buries
 it measures whether the prose makes the model look.
 
-*`plan-critic` has no REJECT case.* Both survivors expect APPROVE, so an
-always-APPROVE critic scores 2/2. The suite can no longer see a critic that has
-gone permissive. The stub rejected every REJECT case too, which is why the cut
-took them all. The same finding from the other side: the rejection categories need no
-pinning, and the restraint does.
+*`plan-critic` had no REJECT case until 2026-08-27.* Both earlier survivors
+expect APPROVE, so an always-APPROVE critic scored 2/2. The suite could not see
+a critic that had gone permissive. `schema-silent-on-data` closes that. It
+does not close the underlying problem, and the entry above says why. The stub
+rejects everything, so no REJECT case can ever discriminate on the token, and
+the substring carries the whole pin. Read a REJECT case here as pinning what
+the critic *says* when it rejects, never whether it rejects at all.
+
+That is also why the 2026-08-18 cut took every REJECT case: the stub rejected
+them all. A sample of five cut cases, re-ablated isolated on 2026-08-27,
+mostly confirmed the cut. `plan-critic/collision`, `plan-critic/two-changes`,
+`consolidate-critic/note-drift`, and `loop/mutation-no-critical-path` stay
+no-ops, each answered correctly by the isolated stub 3/3. Only
+`plan-critic/proof-altitude` moved, and only on its required substring: the
+stub rejects 3/3 without ever writing the word "proof". That word is common
+enough that one run is not evidence, so the case stays cut. The sample is what
+closes the question the contaminated harness opened. Recovering the other 39 is
+not worth the calls.
 
 *The prompt layer stays unpinned, in `garden` as everywhere else.* garden refuses
 to cut a `CLAUDE.md` paragraph in a repo with no eval suite. That is one of its
