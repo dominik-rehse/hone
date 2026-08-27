@@ -48,7 +48,14 @@ denied. `call_one` carries the detail.
 
 Before 2026-08-27 it ran the call from the repository root with tools on. A stub
 run then quoted a paragraph of `agents/consolidate-critic.md` back verbatim,
-including a category label that existed only in an uncommitted edit.
+including a category label that existed only in an uncommitted edit. The
+exposure covered more than the prompts. Every `expected` file, which is the
+answer key, sat one `Read` away, for suite runs as much as for ablations. So
+a pre-fix green suite is as unsound as a pre-fix ablation. One swing that day
+fits the answer key. A critic-prompt variant scored CLEAN 9/10 from the repo
+root and CUTS 5/6 isolated, on the same prompt, brief, and model. Nobody
+separated how much of that swing was repo reads and how much was the mere
+presence of tools. The fix removes both.
 
 The contamination has **no single direction**, and that is what makes it
 expensive. Repo context sometimes carried the stub toward hone's answer, which
@@ -127,8 +134,11 @@ isolated, three votes, moved three numbers and left the rest standing:
   refreshes* bullet rejects the Plan 2/3.
 - `named-references`: the isolated stub rejects 2/3 rather than 3/3. It still
   discriminates.
-- `loop`: the isolated stub now misses **all 8** remaining cases, against 6 of 9
-  before. Every one of them discriminates harder than its entry claims.
+- `loop`: the isolated stub now misses **all 8** remaining cases, where the
+  same day's contaminated run missed 6 of 9. The two that moved are
+  `review-command-refused` and `worktree-claimed-single`. Their entries record
+  the stub answering correctly, and the isolated stub answers both wrong. The
+  other six match their entries within a vote, two of them a vote softer.
 
 `garden` and `spike-note-may-age` measured the same either way.
 
