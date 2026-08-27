@@ -74,9 +74,11 @@ flowchart TD
   pin. They both verify and document what the system does.
 - *Decisions*: `docs/decisions/<topic>.md`. Present tense: the current
   decision and why. Record a rejected alternative when that stops a dead
-  option from coming up again. One file per topic, edited in place,
-  landing with the code it governs. An optional `Governs:` line names the
-  `src/` paths the decision explains. The nag flags the file when a named
+  option from coming up again. A claim a later proof run will settle is
+  not a decision. It stays in the open question below, and consolidate
+  writes nothing that predicts its answer. One file per topic, edited in
+  place, landing with the code it governs. An optional `Governs:` line
+  names the `src/` paths the decision explains. The nag flags the file when a named
   path stops existing. That is how the hooks catch stale prose
   mechanically.
 - *Notes*: `docs/notes/<area>.md`. An optional per-area map plus its one

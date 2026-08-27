@@ -247,6 +247,14 @@ build.
   (`docs/decisions/<topic>.md`, present-tense, one per topic, edited in place).
 - an assumption running code has now settled → **close** its
   `docs/open-questions.md` entry.
+- an assumption this change's proof run has **not** settled yet → **leave** its
+  `docs/open-questions.md` entry open, and write no Decision that states or
+  predicts the answer. A Decision states what is settled. The open question
+  holds the rest, and consolidate stays silent on it. A change whose Plan
+  carries a `Proof: real-environment` line can never report its own proof
+  result here, because that proof runs at land, after this step. So a forecast
+  written now reads as a finding later, and nothing in the loop comes back to
+  correct it.
 - an investigation whose method or dead ends outlive its conclusion → a
   **spike**, kept whole under one dated stem,
   `docs/spikes/<YYYY-MM-DD>-<slug>`. It holds the probe code, whatever it

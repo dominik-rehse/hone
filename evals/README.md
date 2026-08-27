@@ -39,6 +39,26 @@ bash evals/run.sh garden --votes 3 --model opus --ablate
 Read its output backwards. A `FAIL` line is a case that discriminates, and an
 `ok` line is a case that pins nothing.
 
+### The stub only means something in isolation
+
+The ablation asks what the model answers with **none** of hone's prose. So the
+call must not be able to reach that prose. `run.sh` runs every call from an
+empty directory, under `--safe-mode`, with every file, shell, and network tool
+denied. `call_one` carries the detail.
+
+Before 2026-08-27 it ran the call from the repository root with tools on. A stub
+run then quoted a paragraph of `agents/consolidate-critic.md` back verbatim,
+including a category label that existed only in an uncommitted edit. A
+contaminated stub looks smarter than the model's own default. It therefore
+answers a case correctly for a reason the suite never sees, and the case reads
+as a no-op that should go.
+
+That direction matters for how you read this file. Every measurement dated
+before 2026-08-27 came off the contaminated harness, the 44-case cut of
+2026-08-18 included. A case those runs **kept** is still safe, because a
+dumber stub only discriminates harder. A case those runs **cut** may have been
+load-bearing. Nobody has re-measured them.
+
 ### The second baseline: the prompt minus the paragraph
 
 The stub is a cheap proxy, and it breaks in one direction that matters. A
@@ -189,6 +209,36 @@ replacement, and it pins one paragraph rather than the critic as a whole.
 `run.sh` fails an empty target loudly rather than reporting an empty green.
 The remaining gap therefore stays visible. Closing it needs briefs harder than
 the model's default judgment, not the old ones back.
+
+On 2026-08-27 a change tried to add a seventh target to this critic,
+`decision-forecasts`. It cuts a Decision sentence that predicts what a proof
+run will show. Neither the case nor the target survived measurement, and the
+attempt is worth recording.
+
+The case died in the ablation. Both baselines cut the forecasting paragraph
+3/3. The neutral stub cut it on the merits, and the critic prose from before
+the rule cut it as a `leftover` that duplicates the open question. A second,
+harder brief removed the word-for-word duplication, and both baselines still
+cut it.
+
+The target then failed the suite. Three shapes went through the fixed harness:
+a gated bullet, a short bullet, and one sentence folded into
+`decision-restates-code`. Each flipped `spike-note-may-age` from `CLEAN` 5/5
+to `CUTS`, at 4/5, 3/5, and 5/5. What the critic proposed to cut was never the
+spike note, whose guard held every time. It was the Decision's opening
+sentence, on a `decision-restates-code` reading that stands up by itself. So
+another cut target does not sharpen this critic. It raises what the critic
+cuts anywhere in the brief, and the marginal call goes with it.
+
+A `loop` case for the same rule died the same day, and it died for a reason
+worth separating from the two above. Asked point-blank what to do with a
+drafted Decision paragraph that forecasts, every baseline answers DISCARD.
+The isolated stub answered it 2/3, and the loop prose from before the rule
+answered it 3/3. The question carries its own answer. The real failure had nobody asking it. An
+agent at consolidate wrote the forecast unprompted. The Decision wanted
+present-tense prose, and no measurement existed yet. A brief that hands
+the model the suspect paragraph cannot reproduce that. So the rule ships in
+`skills/run/SKILL.md` unpinned, and the gap is the brief, not the rule.
 
 *`plan-critic` has no REJECT case.* Both survivors expect APPROVE, so an
 always-APPROVE critic scores 2/2. The suite can no longer see a critic that has
