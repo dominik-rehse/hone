@@ -105,14 +105,16 @@ and new approved Plans can join the set.
 
    ```bash
    herdr agent start <agent-name> --kind claude --pane <pane-id> \
-     -- --permission-mode auto [--model <model>]
+     -- --permission-mode auto --model <model>
    herdr agent prompt <agent-name> "/hone:run <change>"
    ```
 
    `agent start` returns when the Claude session is ready for input (30 s
    default timeout). `--permission-mode auto` is what keeps the SUB unattended:
-   without it, the first approval prompt stalls the run. Pass `--model` only
-   when the invocation carried it.
+   without it, the first approval prompt stalls the run. Always pass `--model`.
+   Use the model the invocation carried. Where the invocation carried none, use
+   `opus`. Never start a SUB on `fable` unless the user asked for that model by
+   name.
 
 4. **Watch.** Wait on each SUB, always in the Bash tool's background mode. Then
    poll the output file. A run outlasts the ~2 minute foreground timeout, and so

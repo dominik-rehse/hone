@@ -23,7 +23,8 @@ Slash commands, in the order a change flows:
 - Inside [herdr](https://github.com/dominik-rehse/herdr), which `run` detects on
   its own, `--all` spreads those Plans over herdr tabs. This tab
   becomes `MAIN:<short>` and orchestrates. Each Plan gets a fresh Claude Code
-  session in its own `SUB` tab (`--model` picks their model). MAIN starts a
+  session in its own `SUB` tab. Those sessions run on `opus`, and `--model`
+  picks another model where you want one. MAIN starts a
   dependent Plan only when `worktree.sh landed` shows the predecessor landed, and
   closes a SUB tab only then. Probes, proofs, and everything else plan-specific
   happen in the SUB tab, never in MAIN. For a workspace of their own, create the
