@@ -174,6 +174,14 @@ isolated, three votes, moved three numbers and left the rest standing:
   falsifies the reason the Plan gave. The stub hands the human a menu that
   includes editing the Plan. hone treats the Plan's constraint as a check, so
   the run stops.
+- `consolidate-forecast-unprompted`: DISCARD, stub RECORD 2/3, PROCEED 1/3
+  (measured 2026-08-27, isolated). The brief never points at the offending
+  sentence. It lists a finished consolidate step. One line of the Decision it
+  wrote states the answer to an open question the proof run has not reached.
+  The loop has to notice that by itself. Read the second baseline before you
+  trust this one. The loop prose from before the rule still answers DISCARD
+  2/3. So the case pins the action hardest, and the new bullet only at the
+  margin.
 - `missing-reference-holdout`: STOP, stub ASK 2/3, STOP 1/3.
 
 *`garden`*, what a maintenance pass does with one scan finding. Tokens are
@@ -249,15 +257,24 @@ sentence, on a `decision-restates-code` reading that stands up by itself. So
 another cut target does not sharpen this critic. It raises what the critic
 cuts anywhere in the brief, and the marginal call goes with it.
 
-A `loop` case for the same rule died the same day, and it died for a reason
-worth separating from the two above. Asked point-blank what to do with a
-drafted Decision paragraph that forecasts, every baseline answers DISCARD.
+A first `loop` case for the same rule died the same day, and what killed it is
+the most useful thing measured here. It asked point-blank what to do with a
+drafted Decision paragraph that forecasts. Every baseline then answers DISCARD.
 The isolated stub answered it 2/3, and the loop prose from before the rule
-answered it 3/3. The question carries its own answer. The real failure had nobody asking it. An
-agent at consolidate wrote the forecast unprompted. The Decision wanted
-present-tense prose, and no measurement existed yet. A brief that hands
-the model the suspect paragraph cannot reproduce that. So the rule ships in
-`skills/run/SKILL.md` unpinned, and the gap is the brief, not the rule.
+answered it 3/3. The question carried its own answer.
+
+The real failure had nobody asking it. An agent at consolidate wrote the
+forecast unprompted, because the Decision wanted present-tense prose and no
+measurement existed yet. So a brief that hands the model the suspect paragraph
+cannot reproduce the failure. It can only ask whether the model agrees, and the
+model always agrees.
+
+`consolidate-forecast-unprompted` is the rewrite that works. It lists a
+finished consolidate step, mentions the forecasting sentence nowhere, and asks
+only for the next action. The stub then answers RECORD and the loop answers
+DISCARD. **Treat that as the template for a weak case anywhere in this suite.**
+A brief that names the thing under test measures agreement. A brief that buries
+it measures whether the prose makes the model look.
 
 *`plan-critic` has no REJECT case.* Both survivors expect APPROVE, so an
 always-APPROVE critic scores 2/2. The suite can no longer see a critic that has
