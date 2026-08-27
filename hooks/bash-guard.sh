@@ -263,6 +263,11 @@ fi
 # repoint the tool), a glob in a directory part, and every token this walk does
 # not recognise. Fail closed keeps the ask; the exemption has to be earned.
 #
+# The ask prints msg_bashguard_formatter, not rule 4's message. Scoping the run
+# is the remedy here, and a package manager has no such remedy. The shared
+# message named the worktree alone, so a bare `dprint fmt` in the primary tree
+# sent the operator to a worktree while the one-word fix went unmentioned.
+#
 # Residual hole: the walk reads a path token as written, and hone_is_durable
 # reads a project-relative path. So a formatter run from a SUBDIRECTORY of the
 # primary tree judges `notes.md` and not `docs/notes.md`, and the exemption is
@@ -313,7 +318,7 @@ if [ "$IN_PRIMARY_TREE" -eq 1 ]; then
     while IFS= read -r seg; do
         printf '%s\n' "$seg" | grep -Eq "(^|[^A-Za-z0-9_.-])(${FMT_WRITERS})" || continue
         hone_fmt_scoped "$seg" && continue
-        decision ask "$(msg_bashguard_self_writer)"
+        decision ask "$(msg_bashguard_formatter)"
     done < <(printf '%s\n' "$CMD" | tr '|;&' '\n\n\n')
 fi
 

@@ -254,6 +254,11 @@ echo "$(bg 'bunx dprint fmt docs/notes/auth.md')" | grep -q '"ask"' && ok "a for
 echo "$(bg 'bunx dprint fmt .plans/../docs/x.md')" | grep -q '"ask"' && ok "a traversal out of .plans/ escalated" || bad "a .. traversal should fail closed"
 echo "$(bg 'bunx dprint fmt --config other.json .plans/x.md')" | grep -q '"ask"' && ok "a config swap escalated" || bad "a non-write-mode flag should fail closed"
 echo "$(bg 'bunx biome check --write src/auth/login.ts')" | grep -q '"ask"' && ok "a write-mode formatter on src/ escalated" || bad "biome --write on src/ should ask"
+# Each rule prints its own remedy. A formatter can be scoped, and the reader
+# has to learn that from the ask itself. A package manager cannot, so it keeps
+# the worktree message.
+echo "$(bg 'bunx dprint fmt')" | grep -q 'name the paths' && ok "the formatter ask offers scoping" || bad "the formatter ask should name scoping as the remedy"
+echo "$(bg 'bun add -d dprint@latest')" | grep -q 'run it in a worktree' && ok "the package-manager ask keeps the worktree remedy" || bad "rule 4 should keep msg_bashguard_self_writer"
 
 echo "== dirty-guard: what a shell command leaves dirty in the primary tree =="
 dg() { echo '{"tool_input":{"command":"bun add -d dprint"}}' | (cd "$1" && bash "$DIRTY_GUARD"); }

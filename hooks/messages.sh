@@ -121,6 +121,19 @@ Why: a package manager, a formatter, or a migration tool edits a durable file fr
 EOF
 }
 
+# The formatter half of rule 4. It stays apart from msg_bashguard_self_writer,
+# because a formatter names the paths it writes and a package manager does not.
+# So this reader has a second remedy the other one lacks: scope the run. The
+# shared message offered the worktree alone, and it sent the operator to a
+# worktree for a file the guard already lets them write in the primary tree.
+msg_bashguard_formatter() {
+    cat <<'EOF'
+hone bash-guard: this formatter run can write a durable file in the primary tree.
+Do: name the paths you want formatted, such as 'dprint fmt .plans/<change>.md'.
+Why: an unscoped run also formats src/ and docs/, which change through a worktree and a merge. A run scoped to relative non-durable paths passes here.
+EOF
+}
+
 # ----------------------------------------------------------- dirty-guard
 
 # The restore command, as a labelled paste block. An untracked path sits in no
@@ -931,6 +944,7 @@ bash-guard|agent|msg_bashguard_signoff
 bash-guard|agent|msg_bashguard_protected
 bash-guard|agent|msg_bashguard_head_move
 bash-guard|agent|msg_bashguard_self_writer
+bash-guard|agent|msg_bashguard_formatter
 dirty-guard|agent|msg_dirtyguard_primary_tree|src/<area>/<file>|git checkout HEAD -- 'src/<area>/<file>'
 gate|agent|msg_gate_step_failed|<check>|<code>|<output-tail>
 gate|agent|msg_gate_suite_lock
