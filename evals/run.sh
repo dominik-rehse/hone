@@ -204,10 +204,13 @@ $(cat "$dir/brief.md")"
 # appears in the prompt, so echoing it can only mean a real read.
 #
 # A leak aborts the run, because a suite that cannot isolate reports nothing
-# worth having. Two silent calls warn and continue instead: no answer is no
-# evidence either way, and failing a whole suite on one flaky call costs more
-# than it saves. This probe covers the tool channel only. --safe-mode closes the
-# CLAUDE.md, hooks, plugins, and settings channel, and nothing here checks that.
+# worth having. The pass condition is the literal CANNOT READ. Any other reply
+# warns instead of passing, because a model that read the file and paraphrased
+# it would otherwise pass. Two silent calls warn and continue too: no answer is
+# no evidence either way, and failing a whole suite on one flaky call costs
+# more than it saves. This probe covers the tool channel only. --safe-mode
+# closes the CLAUDE.md, hooks, plugins, and settings channel, and nothing here
+# checks that.
 preflight_isolation() {
     local canary probe out
     canary="HONE-CANARY-$$-${RANDOM}${RANDOM}"
@@ -223,9 +226,14 @@ preflight_isolation() {
             echo "  Check --safe-mode and --disallowedTools in call_one against the CLI's flags." >&2
             exit 3
         fi
-        if [ -n "$out" ]; then
+        if printf '%s' "$out" | grep -qiF "CANNOT READ"; then
             rm -f "$TMP/canary.txt"
             echo "isolation ok (the probe could not read outside its sandbox)"
+            return 0
+        fi
+        if [ -n "$out" ]; then
+            rm -f "$TMP/canary.txt"
+            echo "WARNING: the isolation probe gave an unexpected reply, so this run's isolation is unverified." >&2
             return 0
         fi
     done

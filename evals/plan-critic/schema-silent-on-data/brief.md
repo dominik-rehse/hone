@@ -20,7 +20,7 @@ The finance export goes to an external auditor from October, so the cent
 disagreement stops being a support annoyance and starts being an audit finding.
 
 ### How I'll know it works
-`docs/../.plans/billing/amounts-in-cents/rounding-cases.md` holds 40 rows of
+`.plans/billing/amounts-in-cents/rounding-cases.md` holds 40 rows of
 `stored value → expected cents → expected formatted string`, taken from the nine
 support tickets and from the boundaries around `x.005`. The suite reads that
 file. A line-item total and its invoice total agree to the cent for all 40. The

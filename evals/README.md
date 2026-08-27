@@ -74,8 +74,9 @@ number.
 fan-out it writes a token to a file outside the sandbox and asks the model to
 read it back by absolute path. The token is never in the prompt, so echoing it
 can only mean a real read. A leak aborts the run, because a suite that cannot
-isolate reports nothing worth having. Two silent probes warn and continue, since
-no answer is no evidence either way. The probe covers the tool channel only.
+isolate reports nothing worth having. The pass condition is the literal CANNOT
+READ. An unexpected reply, or two silent probes, warns and continues instead,
+since neither is evidence either way. The probe covers the tool channel only.
 `--safe-mode` closes the CLAUDE.md, hooks, plugins, and settings channel, and
 nothing checks that.
 
@@ -137,12 +138,14 @@ Each entry below carries the stub answer measured on the date it names, on the
 contaminated harness. A re-measurement of all 15 surviving cases on 2026-08-27,
 isolated, three votes, moved three numbers and left the rest standing:
 
-- `dep-refresh-no-red-test`: the isolated stub APPROVES 3/3, so it no longer
-  discriminates against the neutral stub at all. It survives on the second
-  baseline instead. The plan-critic prompt minus its *Dependency and toolchain
-  refreshes* bullet rejects the Plan 2/3.
-- `named-references`: the isolated stub rejects 2/3 rather than 3/3. It still
-  discriminates.
+- `dep-refresh-no-red-test`: the isolated stub approves by plurality in every
+  run, so it no longer discriminates against the neutral stub. It survives on
+  the second baseline instead. The plan-critic prompt minus its *Dependency
+  and toolchain refreshes* bullet rejects the Plan 2/3.
+- `named-references`: borderline. Across three isolated stub runs the votes
+  went REJECT 2/3, APPROVE 3/3, and REJECT 2/3. The next time this case is in
+  question, measure it against the second baseline, which is the calibration
+  paragraph it pins.
 - `loop`: the isolated stub now misses **all 8** remaining cases, where the
   same day's contaminated run missed 6 of 9. The two that moved are
   `review-command-refused` and `worktree-claimed-single`. Their entries record
@@ -160,14 +163,18 @@ isolated, three votes, moved three numbers and left the rest standing:
 - `dep-refresh-no-red-test`: APPROVE, stub REJECT 2/3. A toolchain refresh has no
   red test to write first. Without the rule that says so, the missing test reads
   as a placeholder.
-- `schema-silent-on-data`: REJECT, and the required substring is the whole case.
-  The stub rejects too, 3/3, so the token discriminates against nothing. What
-  separates them is the reason. The Plan changes `invoices.amount` from `REAL`
-  to `INTEGER` over 2.3 million rows and never says whether that data is
-  preserved or disposable. Everything else about it is exemplary, and the flaw
-  is an absence. hone's critic names the preservation question 3/3 and files it
-  under `contract-churn`. The stub names it 0/3 and rejects on unrelated
-  grounds. Measured 2026-08-27, isolated.
+- `schema-silent-on-data`: REJECT, and the required substring `disposable` is
+  the whole case. The stub rejects too, in every run, so the token
+  discriminates against nothing. The Plan changes `invoices.amount` from
+  `REAL` to `INTEGER` over 2.3 million rows and never says whether that data
+  survives. Everything else about it is exemplary, so the flaw is an absence.
+  The critic prompt mandates naming the question as "is existing data
+  preserved or disposable?". The critic says `disposable` 3/3 and files the
+  finding under `contract-churn`. The stub's pooled votes never say it. The
+  first substring tried was `preserv`, and the stub passed it. The scoring
+  pools every vote that carried the verdict, so one stray "preserve" across
+  three replies satisfies a substring. Pick a substring the prose mandates,
+  not one the topic suggests. Measured 2026-08-27, isolated.
 
 *`consolidate-critic`*, the verdict on what a change left behind:
 
@@ -307,9 +314,10 @@ it measures whether the prose makes the model look.
 expect APPROVE, so an always-APPROVE critic scored 2/2. The suite could not see
 a critic that had gone permissive. `schema-silent-on-data` closes that. It
 does not close the underlying problem, and the entry above says why. The stub
-rejects everything, so no REJECT case can ever discriminate on the token, and
-the substring carries the whole pin. Read a REJECT case here as pinning what
-the critic *says* when it rejects, never whether it rejects at all.
+rejected this Plan in every run too, so the token discriminates against
+nothing here, and the substring carries the whole pin. Read a REJECT case here
+as pinning what the critic *says* when it rejects, never whether it rejects at
+all.
 
 That is also why the 2026-08-18 cut took every REJECT case: the stub rejected
 them all. A sample of five cut cases, re-ablated isolated on 2026-08-27,
@@ -380,5 +388,9 @@ and error a call, which scores as no answer.
 
 Add a case whenever a critic misjudges a real change, or when the loop takes a
 wrong turn. Capture the brief that fooled it, and the answer it should have
-reached. Then ablate it before you keep it. A case that the stub answers
+reached. Then ablate it before you keep it, with `run.sh` itself and never a
+hand-rolled check. The scoring pools every vote that carried the verdict. So a
+required substring that is merely on-topic can pass on one lucky vote, and a
+per-vote check misses that. The `schema-silent-on-data` entry records one such
+miss. A case that the stub answers
 correctly is not a regression net, however real the misjudgment that prompted it.
