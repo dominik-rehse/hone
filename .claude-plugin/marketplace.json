@@ -7,7 +7,7 @@
         {
             "name": "hone",
             "source": "./",
-            "version": "0.44.0",
+            "version": "0.45.0",
             "description": "Test-driven, largely unattended development for Claude Code. You write a short plan for one change, and an automated loop builds it test-first in an isolated git worktree, runs every check, reviews the result, and merges it. Two characteristics define it. The honing: docs stay minimal, hone deletes anything the code, types, or tests already show, and a garden pass between changes keeps cutting what goes stale. The enforcement: hooks allow no production code without a failing test, block red checks, and hold irreversible or real-environment changes at land gates for a sign-off."
         }
     ]
