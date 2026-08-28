@@ -726,12 +726,17 @@ EOF
 }
 
 msg_wt_land_receipt() {
-    local sha="$1" branch="$2"
+    local sha="$1" branch="$2" consumed="${3:-}"
     cat <<EOF
 hone worktree: landed $branch as merge commit $sha.
 The post-merge suite ran in the primary tree and passed.
 land removed the worktree and deleted the branch.
 EOF
+    if [ -n "$consumed" ]; then cat <<EOF
+land deleted the spent record(s): $consumed. The text of every record that
+opened a gate is in the merge commit body.
+EOF
+    fi
 }
 
 msg_wt_land_lockfile() {
@@ -1005,7 +1010,7 @@ worktree|human|msg_wt_land_conflict|hone/<change>
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_adapter_red|<typecheck or lint>|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_tier_empty|- <tier>
-worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>
+worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>|.hone-grant/<change> .hone-proof/<change>
 worktree|human|msg_wt_land_lockfile|- <lockfile>
 worktree|human|msg_wt_land_setup_tree_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|plain|msg_wt_land_setup_tree_receipt|- <lockfile>

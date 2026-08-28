@@ -118,11 +118,15 @@ file:
   Its text lands in the merge commit body. Delete the file to revoke. Write it
   with `worktree.sh grant` (say who, when, and why), yourself or through the
   loop. By hand in your own editor works too, and the guards deny the loop
-  that route.
+  that route. A green land deletes the spent file. A grant is not pinned to
+  a commit, so a leftover one would authorize a later change that reuses the
+  slug.
 - `.hone-proof/<change>` is the sign-off that the real-environment check for
   one change ran. It must contain the commit hash it applies to (short or
   full). After new commits it no longer counts. Same two writers and the
-  same rule: `worktree.sh attest`, or your own editor.
+  same rule: `worktree.sh attest`, or your own editor. A sign-off that opened
+  the proof gate lands in the merge commit body like a grant, and a green
+  land deletes the spent file.
 
 Two environment variables tune the cross-session locks.
 `HONE_LAND_LOCK_TIMEOUT` sets the seconds a land or full-suite run waits for

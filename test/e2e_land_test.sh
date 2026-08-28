@@ -283,10 +283,14 @@ step "empty grant refused (exit 8)"
 bash "$WSH" grant db-drop "legacy_sessions is unused" >/dev/null || die "grant helper failed"
 grep -q "legacy_sessions is unused" "$REPO/.hone-grant/db-drop" || die "grant helper should write the reason"
 grep -q "t@t.t" "$REPO/.hone-grant/db-drop" || die "grant helper should stamp the git user"
-bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
+out=$(bash "$WSH" land db-drop 2>&1); rc=$?
 [ "$rc" -eq 0 ] || die "granted irreversible land should succeed (got $rc)"
 git log --format=%B -1 | grep -q "legacy_sessions is unused" || die "grant text should be recorded in the merge commit body"
-step "grant helper wrote a stamped grant; change landed, authorization in history"
+# The grant is spent. Unlike a sign-off it is not pinned to a commit, so a
+# leftover would open the gate for a later change that reuses the slug.
+[ -f "$REPO/.hone-grant/db-drop" ] && die "a green land should delete the spent grant"
+echo "$out" | grep -q ".hone-grant/db-drop" || die "the receipt should name the deleted grant"
+step "grant helper wrote a stamped grant; change landed, authorization in history, grant consumed"
 # (c2) Both a person and the agent may record a grant, so the stamp says which.
 # The git identity is the same either way, and an unmarked stamp would read as
 # the person's authorization for a grant the loop recorded.
@@ -296,6 +300,18 @@ CLAUDECODE=1 bash "$WSH" grant stamp-agent "the loop's own reason" >/dev/null ||
 grep -q "^agent, on behalf of .*t@t.t" "$REPO/.hone-grant/stamp-agent" || die "a grant the agent records should be stamped as the agent"
 rm -f "$REPO/.hone-grant/stamp-person" "$REPO/.hone-grant/stamp-agent"
 step "the grant stamp separates the agent from the person"
+# (c3) A nested slug's grant sits in a subdir. Consuming it removes the empty
+# parent dirs too, up to (not including) .hone-grant itself.
+WT_N=$(bash "$WSH" add db/nested-drop) || die "worktree add db/nested-drop"
+mkdir -p "$WT_N/db/migrations"
+echo "DROP TABLE nested_junk;" > "$WT_N/db/migrations/0004_nested.sql"
+(cd "$WT_N" && git add -A && git commit -qm "feat(db): drop nested_junk")
+bash "$WSH" grant db/nested-drop "nested_junk is unused" >/dev/null || die "grant helper failed for a nested slug"
+bash "$WSH" land db/nested-drop >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] || die "granted nested-slug land should succeed (got $rc)"
+[ -e "$REPO/.hone-grant/db" ] && die "consuming a nested grant should remove its empty parent dir"
+[ -d "$REPO/.hone-grant" ] || die "consuming a grant must not remove .hone-grant itself"
+step "a nested slug's grant consumed together with its empty parent dirs"
 # (d) The committed .hone-irreversible-paths extends the built-in signals: a
 # change touching a listed glob is gated exactly like destructive SQL. The
 # pre-0.19 name .hone-consequential-paths is still honoured.
@@ -443,8 +459,11 @@ bash "$WSH" attest ui-flow "journey ok" >/dev/null || die "attest helper failed"
 grep -q "$(git rev-parse hone/ui-flow)" "$REPO/.hone-proof/ui-flow" || die "attest helper should stamp the branch tip"
 bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a sign-off naming the branch tip should satisfy the proof gate (got $rc)"
-step "attest helper wrote a tip-stamped sign-off; change landed"
-rm -f "$REPO/.hone-proof/ui-flow"
+# The sign-off that opened the gate lands in the merge body like a grant, and
+# the spent file goes with the worktree and the branch.
+git log --format=%B -1 | grep -q "journey ok" || die "sign-off text should be recorded in the merge commit body"
+[ -f "$REPO/.hone-proof/ui-flow" ] && die "a green land should delete the spent sign-off"
+step "attest helper wrote a tip-stamped sign-off; change landed, sign-off in history and consumed"
 # The attest helper refuses a change with no branch: nothing to attest.
 bash "$WSH" attest no-such-change "nope" >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 2 ] || die "attest of a nonexistent branch should exit 2 (got $rc)"

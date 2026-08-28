@@ -30,7 +30,9 @@
 #       grant at .hone-grant/<change>. Without it land refuses BEFORE the merge
 #       and keeps the worktree as evidence. The grant's text goes into the
 #       merge commit body, so the authorization lives in durable history rather
-#       than a chat.
+#       than a chat. A green land then deletes the spent grant file: a grant
+#       is not pinned to a commit, so a leftover one would open the gate for
+#       a LATER change that reuses the slug.
 #       Proof gate: a change whose Plan declared real-environment proof (a
 #       `Proof: real-environment` trailer on a branch commit) may not land on
 #       the test suite alone. Satisfy it either with a green scripts/proof.sh
@@ -40,7 +42,9 @@
 #       would let it ship a green stub. The adapter gets HONE_CHANGE/
 #       HONE_BRANCH/HONE_WORKTREE/HONE_MAIN_ROOT in its environment. The
 #       sign-off names the commit it proved, so a sign-off cannot outlive the
-#       code it attested. Else land refuses BEFORE the merge. A committed
+#       code it attested. A sign-off that discharged the gate goes into the
+#       merge commit body like a grant, and a green land deletes the spent
+#       file. Else land refuses BEFORE the merge. A committed
 #       .hone-proof-always marker widens the gate to EVERY change, trailer or
 #       not. With the marker present and no scripts/proof.sh, land refuses (7)
 #       rather than proving nothing.
@@ -449,6 +453,28 @@ land_proof_signoff_names_tip() {
     done
 }
 
+# Delete the record at $dir/$change and the empty parent dirs a nested slug
+# leaves behind, up to (not including) $dir. Print the record's repo-relative
+# path when a file was deleted, for the land receipt.
+#
+# Only a GREEN land calls this. cmd_remove does not: remove is also the
+# abandon path, and an abandoned change keeps its records for the retry. A
+# spent grant is the dangerous leftover. It is not pinned to a commit, so it
+# would open the authority gate for a later change that reuses the slug. A
+# spent sign-off is pinned and merely accumulates.
+land_consume_record() {
+    local dir="$1" change="$2" f parent
+    f="$dir/$change"
+    [ -f "$f" ] || return 0
+    rm -f "$f"
+    parent=$(dirname "$f")
+    while [ "$parent" != "$dir" ] && [ "$parent" != "/" ]; do
+        rmdir "$parent" 2>/dev/null || break
+        parent=$(dirname "$parent")
+    done
+    printf '%s/%s' "$(basename "$dir")" "$change"
+}
+
 # Print one "- <tier>" line for every tier the suite reported as empty. The
 # adapter contract asks for a `hone tier: <name> ran=<count>` line per tier
 # (templates/run-tests/README.md). A tier that matches no test still exits 0,
@@ -515,7 +541,7 @@ cmd_land() {
     # touches the trunk. The grant is scoped (one change), revocable (delete
     # the file), auditable (its text lands in the merge body below), and
     # recoverable (the worktree stays until granted).
-    local grant_note="" reasons grant base grant_cmd
+    local grant_note="" signoff_note="" reasons grant base grant_cmd
     base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
     grant_cmd="bash $HONE_WSH grant $change \"who/why\""
     reasons=$(land_irreversible "$main_root" "$base" "$branch")
@@ -575,6 +601,9 @@ cmd_land() {
         attest_cmd="bash $HONE_WSH attest $change \"$(hone_msg_attest_what_full)\"   (stamps the tip commit)"
         if [ -f "$signoff" ] && [ -n "$(land_proof_signoff_names_tip "$signoff" "$tip")" ]; then
             discharged=yes  # human attested this exact commit
+            # The green land below deletes the spent sign-off, so its text
+            # must survive in the merge commit body, like a grant's.
+            signoff_note=$(cat "$signoff" 2>/dev/null)
         fi
         if [ -z "$discharged" ]; then
             # Execute the PRIMARY tree's copy of the adapter, the reviewed and
@@ -652,6 +681,8 @@ cmd_land() {
     # then in git history. The first line stays "Merge branch 'hone/<change>'" so
     # the nag's landed-Plan grep still matches.
     [ -n "$grant_note" ] && merge_args+=(-m "Authorized (irreversible change):"$'\n'"$grant_note")
+    # The sign-off that discharged the proof gate gets the same treatment.
+    [ -n "$signoff_note" ] && merge_args+=(-m "Proven (real-environment):"$'\n'"$signoff_note")
     if ! git -C "$main_root" "${merge_args[@]}" >/dev/null 2>&1; then
         # A conflict means the independence check missed an overlap. Restore the
         # shared tree so the next lander starts clean. The branch stays as
@@ -719,10 +750,22 @@ cmd_land() {
     merge_sha=$(git -C "$main_root" rev-parse --short HEAD)
     cmd_remove "$wt" || return $?
 
+    # Land hygiene 3: the change's records go with its worktree and branch.
+    # Every record that opened a gate has its text in the merge commit body
+    # above, so deleting the files loses no audit trail. A record that opened
+    # nothing (a stale sign-off beside a green adapter run) vouched for
+    # nothing that landed, so it goes the same way. See land_consume_record
+    # on why a leftover grant is unsafe.
+    local consumed="" rec
+    for rec in ".hone-grant" ".hone-proof"; do
+        rec=$(land_consume_record "$main_root/$rec" "$change")
+        [ -n "$rec" ] && consumed="$consumed${consumed:+ }$rec"
+    done
+
     # Say what happened. A silent exit 0 made the caller re-derive the outcome
     # from `git log`, so the receipt names the merge commit, the green suite,
     # and the cleanup. It goes to stdout, because it is the success path.
-    msg_wt_land_receipt "$merge_sha" "$branch"
+    msg_wt_land_receipt "$merge_sha" "$branch" "$consumed"
     if [ -n "$lockfiles" ]; then
         if [ -n "$setup_tree_ran" ]; then
             msg_wt_land_setup_tree_receipt "$lockfiles"
