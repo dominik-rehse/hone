@@ -226,10 +226,17 @@ The Plan is a tracked artifact. Commit it now (only once the critic returns
 `APPROVE`) to the current branch:
 
 ```bash
+bunx dprint fmt .plans/<slug>.md          # or the project's formatter — scoped to the file, never bare
 git add .plans/<slug>.md .plans/<slug>/   # the second path only if you wrote references
 git add docs/open-questions.md            # only if step 4 added an entry
 git commit -m "chore(plan): <slug>"
 ```
+
+Run the formatter only if the project formats Markdown, and always name the
+paths (add `'.plans/<slug>/*.md'` when you wrote references). This step runs
+in the primary tree. There the `bash-guard` escalates a bare write-mode
+formatter run to the human, because a bare run also formats `docs/`. A run
+scoped to `.plans/` paths passes silently.
 
 Two reasons it must be committed here, not left loose. First, `/hone:run` builds
 its worktree off the trunk's HEAD, so the Plan has to be on HEAD for the run to
