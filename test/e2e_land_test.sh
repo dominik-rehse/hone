@@ -490,6 +490,24 @@ bash "$WSH" attest attest-text "walked the checkout journey on staging: ok" >/de
     || die "attest should accept a real description"
 rm -f "$REPO/.hone-proof/attest-text"; git branch -D hone/attest-text >/dev/null 2>&1
 step "attest refuses an empty or placeholder description (exit 2)"
+# The grant text is validated the same way. Whitespace authorizes nothing, the
+# unedited "who/why" is the usage placeholder, and the half-edited "rehse/why"
+# is the observed failure shape: the who half filled in, the why half not.
+out=$(bash "$WSH" grant grant-text "   " 2>&1); rc=$?
+[ "$rc" -eq 2 ] || die "grant with a whitespace text should exit 2 (got $rc)"
+echo "$out" | grep -q "empty" || die "the empty-grant refusal should name the reason"
+[ -f "$REPO/.hone-grant/grant-text" ] && die "a refused grant must not write a file"
+for placeholder in "who/why" "Who/Why" '"who/why"' "rehse/why" "why"; do
+    out=$(bash "$WSH" grant grant-text "$placeholder" 2>&1); rc=$?
+    [ "$rc" -eq 2 ] || die "grant with the placeholder '$placeholder' should exit 2 (got $rc)"
+    echo "$out" | grep -q "placeholder" || die "the placeholder refusal should name the reason"
+    [ -f "$REPO/.hone-grant/grant-text" ] && die "a placeholder grant must not write a file"
+done
+bash "$WSH" grant grant-text "dominik: reviewed the diff, the drop is safe" >/dev/null \
+    || die "grant should accept a real authorization"
+grep -q "reviewed the diff" "$REPO/.hone-grant/grant-text" || die "grant helper should write the reason"
+rm -f "$REPO/.hone-grant/grant-text"
+step "grant refuses an empty or placeholder authorization (exit 2)"
 # (f) A green scripts/proof.sh also discharges it, and runs in the change's
 # worktree, told which change it is, so it can reach the code under test. The
 # adapter is tracked, so the worktree checkout carries it.

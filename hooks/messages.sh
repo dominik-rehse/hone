@@ -389,6 +389,11 @@ EOF
 
 # ------------------------------------------------------------- worktree
 
+# The placeholder authorization the usage lines carry. `grant` refuses it as
+# a grant text, exact or half-edited, so the literal lives here beside the
+# refusal's message and the two cannot drift apart.
+hone_msg_grant_why() { printf 'who/why'; }
+
 # The placeholder description the usage lines carry.
 hone_msg_attest_what() { printf 'what you ran'; }
 
@@ -413,11 +418,11 @@ hone_msg_attest_placeholders() {
 }
 
 msg_wt_usage() {
-    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|land <change>|landed <change>|remove <worktree-path>|status|grant <change> \"who/why\"|attest <change> \"$(hone_msg_attest_what)\"}"
+    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|land <change>|landed <change>|remove <worktree-path>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
 }
 
 msg_wt_grant_usage() {
-    printf '%s\n' 'usage: worktree.sh grant <change> "who/why"'
+    printf '%s\n' "usage: worktree.sh grant <change> \"$(hone_msg_grant_why)\""
 }
 
 msg_wt_attest_usage() {
@@ -788,6 +793,25 @@ Why: the sign-off stops counting after new commits.
 EOF
 }
 
+msg_wt_grant_empty() {
+    cat <<'EOF'
+hone worktree: the grant text is empty, so it authorizes nothing.
+Do: run grant again, and say who authorizes the change and why.
+Why: the grant text is the whole audit trail.
+EOF
+}
+
+msg_wt_grant_placeholder() {
+    local why="$1"
+    cat <<EOF
+hone worktree: the grant text is still the placeholder from the usage line.
+Do: run grant again, and say who authorizes the change and why.
+Why: a placeholder authorizes nothing a reader can check.
+The text you passed:
+$(hone_msg_block "$why")
+EOF
+}
+
 msg_wt_attest_empty() {
     cat <<'EOF'
 hone worktree: the sign-off text is empty, so it records nothing.
@@ -1015,6 +1039,8 @@ worktree|human|msg_wt_land_lockfile|- <lockfile>
 worktree|human|msg_wt_land_setup_tree_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|plain|msg_wt_land_setup_tree_receipt|- <lockfile>
 worktree|human|msg_wt_grant_recorded|<change>
+worktree|human|msg_wt_grant_empty
+worktree|human|msg_wt_grant_placeholder|who/why
 worktree|human|msg_wt_attest_recorded|<change>|<tip>
 worktree|human|msg_wt_attest_empty
 worktree|human|msg_wt_attest_placeholder|what you ran

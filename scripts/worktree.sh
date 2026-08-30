@@ -543,7 +543,7 @@ cmd_land() {
     # recoverable (the worktree stays until granted).
     local grant_note="" signoff_note="" reasons grant base grant_cmd
     base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
-    grant_cmd="bash $HONE_WSH grant $change \"who/why\""
+    grant_cmd="bash $HONE_WSH grant $change \"$(hone_msg_grant_why)\""
     reasons=$(land_irreversible "$main_root" "$base" "$branch")
     if [ -n "$reasons" ]; then
         grant="$main_root/.hone-grant/$change"
@@ -797,6 +797,25 @@ attest_is_placeholder() {
     done < <(hone_msg_attest_placeholders)
 }
 
+# Print non-empty if $1 still reads as the "who/why" placeholder from the
+# usage lines (hone_msg_grant_why), quoted or bare, in any case. A half-edited
+# form counts too: any whitespace-free text whose why half is still the bare
+# word "why". An audit found a grant reading "rehse/why" on a repo's largest
+# irreversible change. The who half was filled in, the why half was not, and
+# the file authorized nothing a reader could check.
+grant_is_placeholder() {
+    local why
+    why=$(printf '%s' "$1" | tr 'A-Z' 'a-z' \
+        | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
+              -e 's/^["'"'"']//' -e 's/["'"'"']$//' \
+              -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
+    [ "$why" = "$(hone_msg_grant_why)" ] && { echo yes; return 0; }
+    case "$why" in
+        *[[:space:]]*) ;;
+        why|*/why) echo yes; return 0 ;;
+    esac
+}
+
 # "name <email> | timestamp" for grant/attest stamps, with "agent " in front
 # when the agent ran the helper rather than a person.
 #
@@ -929,6 +948,16 @@ cmd_grant() {
     local why="$*"
     if [ -z "$change" ] || [ -z "$why" ]; then
         msg_wt_grant_usage >&2; return 2
+    fi
+    # A grant IS its text: land copies it into the merge commit body, and a
+    # later reader checks the authorization there. Whitespace records nothing,
+    # and the unedited placeholder records less than nothing, because it reads
+    # as an authorization while naming none. Same rule as attest.
+    if ! printf '%s' "$why" | grep '[^[:space:]]' >/dev/null; then
+        msg_wt_grant_empty >&2; return 2
+    fi
+    if [ -n "$(grant_is_placeholder "$why")" ]; then
+        msg_wt_grant_placeholder "$why" >&2; return 2
     fi
     git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
     local main_root; main_root=$(main_root_of)
