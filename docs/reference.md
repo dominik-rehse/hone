@@ -67,6 +67,10 @@ work. The loop calls it, and you can too:
   irreversible change (writes `.hone-grant/<change>`, stamped with the git
   user and the time). A person and the agent both run it, and the stamp says
   which. It is the only route to the file: both guards deny a raw write.
+  It refuses a text that is empty or only whitespace, and the `who/why`
+  placeholder from this page, exact or half-edited (`rehse/why`). Case and
+  surrounding quotes make no difference. The refusals exit 2 and write
+  nothing, because a placeholder authorizes nothing a reader can check.
 - `worktree.sh attest <change> "what you ran"` records the sign-off that
   the real-environment check ran (writes `.hone-proof/<change>`, stamped with
   the branch tip, the git user, and the time). Same two callers and the same
@@ -138,6 +142,13 @@ gate's pre-land full run waits (default 30).
 `.hone-off` disables all of them at once. A project with no
 `scripts/run-tests.sh` is never gated, and enforcement assumes code lives
 under `src/<area>/`.
+
+The hooks run inside the agent's session, and nowhere else. An edit you make
+in your own editor or terminal never meets them. That is the intended
+division: the perimeter binds the agent, not you. The cost is on the record.
+hone writes a grant and a sign-off only for a change that lands through the
+loop. A hand edit leaves neither, even on a path the policy files mark
+irreversible. When you want that record, route the edit through the loop.
 
 - *guard* (PreToolUse on Write/Edit) enforces three rules. Anywhere, no
   writes into `.hone-grant/` or `.hone-proof/` (the helpers write those).
