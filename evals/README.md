@@ -384,6 +384,24 @@ Every `case × vote` call is independent and fans out concurrently, capped at
 sampling variance. Raising `--jobs` is faster but can hit API concurrency limits
 and error a call, which scores as no answer.
 
+## The noise floor
+
+A claim that a prose cut "changed nothing" needs a number for how much the
+suite moves when nothing changed. The measurement ran on 2026-09-01, on claude
+2.1.252, with the critics on sonnet and loop and garden on opus. It made three
+identical full-suite passes at `--votes 3` on one commit: 17 cases each, 153
+votes in total. No plurality
+verdict flipped across the passes (0/51). One single vote dissented:
+`spike-note-may-age` went 2/3 (one CUTS vote) in the second pass and 3/3 in
+the other two.
+
+So on that date, a verdict flip after a prompt edit is signal, not sampling
+noise. Two limits. The model aliases float, so the floor moves when the
+provider re-points an alias. Re-measure it before an ablation campaign, and
+on every new model. And the one dissenting vote sits in
+`spike-note-may-age`, the case pinned against hone's own deletion bias.
+Read that case's tally first when a run degrades.
+
 ## Extending
 
 Add a case whenever a critic misjudges a real change, or when the loop takes a
