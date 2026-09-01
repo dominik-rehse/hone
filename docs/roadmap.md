@@ -63,6 +63,15 @@ Each slot's assignment is a measurable question, not taste:
   prose still carries (rule 2 above).
 - The lab measures each assignment end-to-end, cost per run against outcome.
 
+Cost and quality are not the only axes for the review slot. Independence is
+a third. The nested `/code-review` checks code the session's own model
+wrote, so author and reviewer share one set of blind spots. A reviewer from
+a different model family fails differently, and that decorrelation has
+value even when the second model is no better. hone does not act on this
+today: a second vendor CLI is a heavy dependency for a plugin this small.
+The lab (stage 2) can price the idea when it exists: inject known bug
+families and compare same-family against cross-family catch rates.
+
 A new model release triggers recalibration in both directions:
 
 - *Downward guard*: does the existing prose still hold? A new model can
