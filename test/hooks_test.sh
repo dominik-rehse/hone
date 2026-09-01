@@ -478,6 +478,17 @@ out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "docs/decisions/export.md declares Governs: src/ghost/gone.ts, which no longer exists" && ok "Decision with a dangling Governs path flagged" || bad "should flag a dangling Governs path"
 rm -f "$REPO/docs/decisions/auth.md" "$REPO/docs/decisions/export.md"
 
+# Relative markdown link: a resolving target is clean, and a dangling one is
+# flagged. URLs and #anchors are not files, so they never flag. The
+# docs/notes/auth.md fixture from above still exists and anchors the clean case.
+printf '# Auth tokens\nSee [the note](../notes/auth.md), [the spec](https://example.org/x), [above](#why).\n' > "$REPO/docs/decisions/auth.md"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "docs/decisions/auth.md links to" && bad "a resolving link should not be flagged" || ok "Decision with resolving/URL/anchor links not flagged"
+printf '# Export format\nSee [the old spike](../spikes/2024-01-01-gone.md).\n' > "$REPO/docs/decisions/export.md"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "docs/decisions/export.md links to ../spikes/2024-01-01-gone.md, which does not resolve" && ok "Decision with a dangling relative link flagged" || bad "should flag a dangling relative link"
+rm -f "$REPO/docs/decisions/auth.md" "$REPO/docs/decisions/export.md"
+
 # The nag never blocks: even with findings present, no block decision is emitted.
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>/dev/null)
 echo "$out" | grep -q '"decision":"block"' && bad "nag must never block" || ok "nag stays advisory (never blocks)"

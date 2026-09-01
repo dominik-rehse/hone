@@ -246,6 +246,15 @@ Why: this durable doc has drifted from its code.
 EOF
 }
 
+msg_nag_link_broken() {
+    local doc="$1" target="$2"
+    cat <<EOF
+$doc links to $target, which does not resolve.
+Do: repoint the link, or cut the line if the target is gone.
+Why: a broken link proves the doc drifted.
+EOF
+}
+
 msg_nag_no_deletions() {
     local ins="$1" target="$2"
     cat <<EOF
@@ -986,6 +995,7 @@ nag|human|msg_nag_note_oversized|docs/notes/<area>.md|<count>|<cap>
 nag|human|msg_nag_note_orphan|docs/notes/<area>.md|<area>
 nag|human|msg_nag_spike_undated|docs/spikes/<entry>
 nag|human|msg_nag_governs_broken|docs/decisions/<topic>.md|<path>
+nag|human|msg_nag_link_broken|docs/decisions/<topic>.md|<target>
 nag|human|msg_nag_no_deletions|<count>|<branch>
 nag|human|msg_nag_merged_branch|hone/<change>
 nag|human|msg_nag_memory_project|<file>.md|<memory-dir>

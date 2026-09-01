@@ -33,6 +33,13 @@
 #      drift stays the consolidate-critic's judgment call. This is the
 #      mechanical half of catching the one staleness the model warns can pass
 #      silently (unverified prose): a hook, not a once-run critic.
+#   9. Broken relative link: a markdown link in a Decision or Note whose
+#      target does not resolve from the doc's directory. Same reasoning as
+#      the Governs check: the target exists or it does not, so the check is
+#      exact. URLs and #anchors are not files, and the check skips them.
+#      Backticked prose paths stay unchecked: prose legitimately names
+#      example paths, and a stateless nag cannot be told a finding is
+#      intentional.
 #   4. Change that cuts nothing: on a clean hone/<change> branch (committed,
 #      about to land), the branch's whole diff against its merge base has zero
 #      deletions. "Every cycle removes something" is the model's principle 4.
@@ -168,6 +175,25 @@ if [ -d "docs/decisions" ] || [ -d "docs/notes" ]; then
                 */*) [ -e "$tok" ] || add_finding "$(msg_nag_governs_broken "$doc" "$tok")" ;;
             esac
         done
+    done < <(find docs/decisions docs/notes -type f -name '*.md' 2>/dev/null)
+fi
+
+# 9. Broken relative link. A markdown link target in a Decision or Note either
+# resolves from the doc's directory or it does not, so the check needs no
+# judgment. URLs and #anchors are not files. A title after the target
+# (`](x.md "Title")`) and a #fragment are stripped before the check.
+if [ -d "docs/decisions" ] || [ -d "docs/notes" ]; then
+    while IFS= read -r doc; do
+        [ -e "$doc" ] || continue
+        while IFS= read -r target; do
+            case "$target" in
+                ''|*://*|mailto:*|'#'*|/*) continue ;;
+            esac
+            target=${target%%#*}      # drop a fragment
+            target=${target%% *}      # drop a link title
+            [ -n "$target" ] || continue
+            [ -e "$(dirname "$doc")/$target" ] || add_finding "$(msg_nag_link_broken "$doc" "$target")"
+        done < <(grep -oE '\]\([^)]+\)' "$doc" 2>/dev/null | sed 's/^](//; s/)$//')
     done < <(find docs/decisions docs/notes -type f -name '*.md' 2>/dev/null)
 fi
 

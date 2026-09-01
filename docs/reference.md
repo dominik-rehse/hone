@@ -196,6 +196,7 @@ irreversible. When you want that record, route the edit through the loop.
   - a Plan that survived its landing
   - an oversized or orphan Note
   - a broken `Governs:` link
+  - a relative markdown link in a Decision or Note that does not resolve
   - a merged `hone/*` branch left behind
   - a change about to land that deletes nothing
   - a `type: project` entry in the harness's own memory store
