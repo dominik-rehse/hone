@@ -16,6 +16,10 @@
 #      (.plans/), tracked but authored and committed here in the primary tree,
 #      and local config are exempt.
 #
+#   1b. An edit to a test, lint, format, or type-check config asks, in any tree.
+#      The gate is only as strict as the config it reads. bash-guard asks on
+#      the same set for the shell route.
+#
 #   2. No production code without a failing test. The guard denies a NEW
 #      non-test file under src/ unless a test file for it already exists. Test
 #      files (the RED artifact) are always writable. The guard allows an edit
@@ -106,6 +110,17 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     if [ -n "$GIT_DIR" ] && [ "$GIT_DIR" = "$COMMON_DIR" ] && hone_is_durable "$REL"; then
         deny "$(msg_guard_primary_tree "$REL")"
     fi
+fi
+
+# Rule 1b: an edit to a check config asks, in ANY tree. The gate is only as
+# strict as the config its test, lint, format, and type-check runs read, so an edit
+# there is the cheapest route from red to green that never touches the code.
+# Some such edits are the Plan's own work, which is why this asks rather than
+# denies: the human decides. bash-guard.sh asks on the same set for the shell
+# route, and hone_is_check_config (common.sh) holds the one definition.
+if hone_is_check_config "$REL"; then
+    hone_pretool_decision ask "$(msg_guard_check_config "$REL")"
+    exit 0
 fi
 
 # Rule 2: no new production code in src/ without a failing test.

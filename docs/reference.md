@@ -155,12 +155,24 @@ irreversible. When you want that record, route the edit through the loop.
   Anywhere, no new file under `src/` unless a test for it exists (test files
   themselves stay writable). In the primary tree, no edits to the protected
   paths at all, including the two policy files. That work belongs in a
-  worktree, landed by a merge.
+  worktree, landed by a merge. In any tree, it asks before an edit to a
+  check config: the dedicated config file of a test runner (`bunfig.toml`,
+  `vitest.config.*`, `jest.config.*`, `pytest.ini`), a linter or formatter
+  (eslint, prettier, biome, dprint, ruff, shellcheck), or a type-checker
+  (`tsconfig*.json`, mypy, pyright). The gate's runs are only as strict as
+  their config, so an edit there is the cheapest route from red to green.
+  A manifest that also carries tool settings (`package.json`,
+  `pyproject.toml`) is not in the set. `HONE_CHECK_CONFIG_RE` in
+  `hooks/common.sh` is the full list.
 - *bash-guard* (PreToolUse on Bash) provides tamper resistance. It denies
-  commands that would disable the gate (`--no-verify`, `core.hooksPath`,
-  creating `.hone-off`) or hand-write a grant or proof sign-off past the
+  commands that would disable the gate (`--no-verify`, `core.hooksPath` in
+  any case, creating `.hone-off`) or hand-write a grant or proof sign-off past the
   `worktree.sh` helpers. It asks before commands that modify a protected artifact (an
-  adapter, a hook, settings, a policy file) or move HEAD in the primary tree.
+  adapter, a hook, settings, a policy file, a check config) or move HEAD in the primary tree.
+  It reads the command with its prose removed: the value of a git `-m` or
+  `--message` option, and the text after `worktree.sh grant` or `attest`.
+  So a commit message that names `--no-verify` or `bun add` is not the act,
+  while the same token outside the message still is.
   `git checkout -- <paths>` and `git checkout <ref> -- <paths>` restore files
   and move no HEAD, so both pass.
   It asks before a package manager, a formatter, or a migration tool runs in

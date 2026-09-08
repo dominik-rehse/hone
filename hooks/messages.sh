@@ -62,6 +62,15 @@ Why: the primary tree only receives merges. /hone:run creates the worktree. For 
 EOF
 }
 
+msg_guard_check_config() {
+    local rel="$1"
+    cat <<EOF
+hone guard: $rel is a config the gate's checks read.
+Do: confirm that the Plan calls for this edit before you allow it.
+Why: the test, lint, format, and type-check runs are only as strict as their config. An edit here can turn a red check green without touching the code.
+EOF
+}
+
 msg_guard_no_test() {
     local rel="$1" base="$2" feature="$3"
     cat <<EOF
@@ -101,7 +110,7 @@ msg_bashguard_protected() {
     cat <<'EOF'
 hone bash-guard: this command modifies a protected hone artifact.
 Do: confirm you intend this change before you allow it.
-Why: the test adapter, the hooks, the settings, and the policy files carry hone's enforcement.
+Why: the adapters, the hooks, the settings, the policy files, and the check configs carry hone's enforcement.
 EOF
 }
 
@@ -975,6 +984,7 @@ hone_msg_catalog() {
 guard|agent|msg_guard_no_file_path
 guard|agent|msg_guard_signoff|.hone-grant/<change>
 guard|agent|msg_guard_primary_tree|src/<area>/<file>
+guard|agent|msg_guard_check_config|biome.json
 guard|agent|msg_guard_no_test|src/<area>/<file>.<ext>|src/<area>/<file>|<area>/<file>
 bash-guard|agent|msg_bashguard_unparsed
 bash-guard|agent|msg_bashguard_sabotage

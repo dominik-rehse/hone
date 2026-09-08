@@ -123,6 +123,22 @@ hone_is_durable() {
     return 1
 }
 
+# The config files the gate's checks read. A test, lint, format, or type-check
+# run is only as strict as its config, so an edit to one is the cheapest way
+# from red to green without touching the code: exclude a test file, silence a
+# rule, add a path to an ignore list, drop `strict`. The two routes (guard.sh for the file tools,
+# bash-guard.sh for the shell) both escalate such an edit, in ANY tree, on this
+# one definition. It is an ERE over the basename, so a nested config in a
+# monorepo counts too. The list is the dedicated config files only. A manifest
+# that also carries tool settings (package.json, pyproject.toml, setup.cfg) is
+# not here, because most edits to one are ordinary dependency work.
+HONE_CHECK_CONFIG_RE='(bunfig\.toml|vitest\.(config|workspace)\.[a-z]+|jest\.config\.[a-z]+|pytest\.ini|\.coveragerc|stryker\.(config|conf)\.[a-z]+|\.eslintrc(\.[a-z]+)?|eslint\.config\.[a-z]+|\.eslintignore|\.prettierrc(\.[a-z]+)?|prettier\.config\.[a-z]+|\.prettierignore|biome\.jsonc?|\.?dprint\.jsonc?|\.?ruff\.toml|\.flake8|\.?mypy\.ini|pyrightconfig\.json|tsconfig(\.[a-z0-9-]+)?\.json|\.shellcheckrc|\.markdownlint(rc|\.[a-z]+)|\.stylelintrc(\.[a-z]+)?|stylelint\.config\.[a-z]+|\.golangci\.ya?ml|\.?rustfmt\.toml|clippy\.toml)'
+
+# True when path $1 (project-relative) is one of the check configs above.
+hone_is_check_config() {
+    printf '%s\n' "${1##*/}" | grep -Eq "^${HONE_CHECK_CONFIG_RE}\$"
+}
+
 # Print each canonical deny rule that appears in NEITHER settings file of
 # project $1. $2 is the canonical list (templates/settings/deny-rules.txt: one
 # rule per line, # comments). The match is semantic, not verbatim. A

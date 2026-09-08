@@ -42,14 +42,42 @@ MARKER_TOKENS='\.hone-off|\.hone-(grant|proof)/'
 INPUT=$(cat)
 CMD=$(hone_extract_field "$INPUT" command)
 
+# Every scan below is case-insensitive (grep -i). Git reads a config key in
+# any case, so `core.hookspath=` disables the hooks exactly as `core.hooksPath=`
+# does, and a case-sensitive scan let the lowercase spelling through.
+
 if [ -z "$CMD" ]; then
     # Parsing failed. Fail closed: if the raw payload carries any gate-sabotage
     # token, escalate. Otherwise nothing is actionable, so allow.
-    if echo "$INPUT" | grep -Eq "$HARD_TOKENS|$MARKER_TOKENS"; then
+    if echo "$INPUT" | grep -Eiq "$HARD_TOKENS|$MARKER_TOKENS"; then
         decision ask "$(msg_bashguard_unparsed)"
     fi
     exit 0
 fi
+
+# Strip the prose out of the command before any rule reads it. A commit
+# message and a land-gate sign-off text are prose by construction, and prose
+# names whatever it explains: a commit that documents the --no-verify deny
+# rule, a grant that says what `git reset --hard` cannot undo, a message
+# mentioning `bun add`. Every rule below used to read those as the act itself,
+# and each false deny or ask stopped an unattended run.
+#
+# The cut is narrow on purpose. It removes the VALUE of a git -m/--message
+# option (quoted, or one bare word) and the free text after `worktree.sh grant
+# <change>` or `attest <change>`. It never blanks a quoted string anywhere
+# else, because a quoted path is a real target (`tee "scripts/lint.sh"`), and
+# a rule that read past it would fail open. The residual hole is a command
+# substitution inside the message itself, which the helper text and a heredoc
+# body can carry. That is multi-step obfuscation, and this hook is a
+# deterrent, not a sandbox (see the header).
+#
+# `sed -z` reads the whole command as one record, so a heredoc message body
+# spanning several lines is one quoted value. A message whose quoting this
+# pattern cannot follow stays as it is, and the rules then read it as before.
+# The failure mode is a false ask, never a missed write.
+CMD=$(printf '%s' "$CMD" | sed -Ez \
+    -e "s/(^|[[:space:]])(-[A-Za-z]*m|--message)([[:space:]]*|=)(\"[^\"]*\"|'[^']*'|[^[:space:]\"'][^[:space:]]*)/\\1\\2\\3''/g" \
+    -e 's/(worktree\.sh[[:space:]]+(grant|attest)[[:space:]]+[^[:space:]|;&]+)[^|;&]*/\1/g')
 
 # 1. Unambiguous gate / marker sabotage → deny: a hard token, or a shell
 # construct that CREATES .hone-off.
@@ -60,7 +88,7 @@ fi
 # already catches every command that writes the marker, whichever program
 # produces the text. So the two creation verbs that write no redirect (touch,
 # install) are the whole list.
-if echo "$CMD" | grep -Eq \
+if echo "$CMD" | grep -Eiq \
         -e "$HARD_TOKENS" \
         -e '(^|[^A-Za-z_])(HUSKY|LEFTHOOK|GIT_CONFIG[A-Z_]*)=' \
         -e '(touch|install)[^|;&]*\.hone-off' \
@@ -90,7 +118,16 @@ fi
 # the human's call. Deleting the marker is the cheapest way past the land proof
 # gate, and deleting the list is the cheapest way past a review. So both
 # escalate like the rest.
+#
+# The check configs are in the set for the same reason (HONE_CHECK_CONFIG_RE in
+# common.sh, shared with guard.sh rule 1b). The gate's test, lint, format, and
+# type-check runs are only as strict as the config they read, so an edit there
+# turns a red check green without touching the code. The alternation matches
+# the basename with no left boundary, like the entries before it, so a nested
+# config in a monorepo counts, and a redirect or verb aimed at one asks in any
+# tree.
 PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common|messages)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths|\.hone-proof-always|\.hone-review-always'
+PROT="$PROT|${HONE_CHECK_CONFIG_RE}([^A-Za-z0-9_.-]|$)"
 # The two constructs need different shapes, so they get one branch each.
 #
 # A REDIRECT writes to the path that follows it, with nothing in between. So it

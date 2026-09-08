@@ -49,6 +49,16 @@ mechanical steps.
      the hook set once, at session start, so restart every session in the
      repo before this takes effect. The same restart picks up the workflow
      rule this version adds. Nothing to install and nothing to configure.
+   - *Check configs ask in any tree since 0.50*: the guard and the
+     bash-guard ask before an edit to a test-runner, linter, formatter, or
+     type-checker config (`biome.json`, `tsconfig.json`, `bunfig.toml`, and
+     the rest of the list in `reference.md`), in a worktree as well as in
+     the primary tree. A repo that listed such files in
+     `.hone-durable-paths` keeps the listing: it still adds the
+     primary-tree deny and the dirty-guard check, which the ask does not.
+     The bash-guard also stops reading a commit message or a sign-off text
+     as the act it names, so a message that documents `--no-verify` passes.
+     Nothing to install and nothing to configure.
 
 After that, run `worktree.sh status`. It shows what is present and what is
 missing. It also flags a policy file that is still uncommitted, and a

@@ -19,6 +19,8 @@ bad()  { fail=$((fail+1)); printf '  FAIL %s\n' "$1"; }
 guard_write() { echo "{\"tool_input\":{\"file_path\":\"$1\"}}" | (cd "$2" && bash "$GUARD"); }
 # True if the guard output denies.
 denied() { echo "$1" | grep -q '"permissionDecision":"deny"'; }
+# True if the guard output asks.
+asked() { echo "$1" | grep -q '"permissionDecision":"ask"'; }
 
 REPO=$(mktemp -d)
 trap 'rm -rf "$REPO"' EXIT
@@ -54,6 +56,34 @@ denied "$out" && bad "package.json should be allowed" || ok "non-durable root fi
 echo "== guard: inside a worktree (test-first) =="
 git worktree add -q -b hone/auth-login .worktrees/auth-login HEAD
 WT="$REPO/.worktrees/auth-login"
+
+echo "== guard: a check config asks, in any tree =="
+# The gate's lint, format, and type-check runs are only as strict as the
+# config they read, so an edit there is the cheapest route from red to green
+# that touches no code. Some such edits are the Plan's own work, so the guard
+# asks rather than denies, in the primary tree and in a worktree alike.
+for cfg in biome.json eslint.config.mjs .eslintrc.json .prettierrc .prettierignore \
+           ruff.toml .ruff.toml tsconfig.json tsconfig.build.json pyrightconfig.json \
+           .shellcheckrc packages/web/.eslintrc.json \
+           bunfig.toml vitest.config.ts jest.config.js pytest.ini .dprint.json; do
+    out=$(guard_write "$cfg" "$WT")
+    asked "$out" && ok "check config asks in a worktree: $cfg" || bad "a check config should ask in a worktree: $cfg"
+done
+out=$(guard_write "biome.json" "$REPO")
+asked "$out" && ok "check config asks in the primary tree" || bad "a check config should ask in the primary tree"
+echo "$out" | grep -q 'gate' && ok "the ask names the gate as the reason" || bad "the ask should name the gate"
+# A manifest that also carries tool settings stays the project's business, and
+# a lookalike is not a config.
+for other in package.json pyproject.toml setup.cfg src/biome.jsonx tsconfig.json.bak; do
+    out=$(guard_write "$other" "$WT")
+    asked "$out" && bad "not a check config, should not ask: $other" || ok "not a check config: $other"
+done
+# A project that lists a config in .hone-durable-paths gets the primary-tree
+# deny first, because rule 1 runs before rule 1b.
+printf 'biome.json\n' > "$REPO/.hone-durable-paths"
+out=$(guard_write "biome.json" "$REPO")
+denied "$out" && ok "a durable-listed config is denied in the primary tree, not asked" || bad "rule 1 should win over rule 1b in the primary tree"
+rm "$REPO/.hone-durable-paths"
 
 # 5. New src/ file with no test, inside a worktree → deny (rule 2 test-first).
 out=$(guard_write "src/auth/login.ts" "$WT")
@@ -123,7 +153,30 @@ bg() { echo "{\"tool_input\":{\"command\":\"$1\"}}" | (cd "$REPO" && bash "$BASH
 # the SHELL stands in. The hook process still runs in the primary tree, which is
 # what Claude Code does after Claude cds into a worktree.
 bgcwd() { echo "{\"cwd\":\"$2\",\"tool_input\":{\"command\":\"$1\"}}" | (cd "$REPO" && bash "$BASH_GUARD"); }
+bgwt_early() { echo "{\"tool_input\":{\"command\":\"$1\"}}" | (cd "$WT" && bash "$BASH_GUARD"); }
 echo "$(bg 'git commit --no-verify -m x')" | grep -q '"deny"' && ok "--no-verify denied" || bad "--no-verify should be denied"
+# Git reads a config key in any case, so the lowercase spelling disables the
+# hooks exactly as the camel-case one does. The scan is case-insensitive.
+echo "$(bg 'git -c core.hookspath=/dev/null commit -m x')" | grep -q '"deny"' && ok "lowercase core.hookspath denied" || bad "core.hookspath should be denied in any case"
+echo "$(bg 'git config core.HooksPath /tmp/h')" | grep -q '"deny"' && ok "camel-case core.HooksPath denied" || bad "core.HooksPath should be denied"
+# A commit message and a sign-off text are prose. The rules read the command
+# with that prose removed, so a message that documents a token is not the act.
+# The flag outside the message still denies, wherever it sits.
+echo "$(bg 'git commit -m x --no-verify')" | grep -q '"deny"' && ok "--no-verify after the message denied" || bad "a flag after -m should still deny"
+echo "$(bg 'git commit -m \"docs: explain why --no-verify is denied\"')" | grep -q 'permissionDecision' && bad "a commit message naming --no-verify is prose" || ok "--no-verify inside a commit message passes"
+echo "$(bg 'git commit --message=\"see core.hooksPath\"')" | grep -q 'permissionDecision' && bad "a --message= value is prose" || ok "core.hooksPath inside --message= passes"
+echo "$(bg 'git commit -am \"chore: bun add dprint, then sed -i on scripts/lint.sh\"')" | grep -q 'permissionDecision' && bad "a message naming a writer and an adapter is prose" || ok "a writer and an adapter inside a message pass"
+echo "$(bg 'git commit -m \"$(cat <<'"'"'EOF'"'"'\nfix: x\n\nthe guard denies core.hooksPath and git reset --hard\nEOF\n)\"')" | grep -q 'permissionDecision' && bad "a heredoc message body is prose" || ok "a heredoc message body passes"
+echo "$(bg 'bash scripts/worktree.sh grant db-drop drops the table, git reset --hard cannot undo it')" | grep -q 'permissionDecision' && bad "a grant reason is prose" || ok "a HEAD-move named in a grant reason passes"
+echo "$(bg 'git commit -m x && touch .hone-off')" | grep -q '"deny"' && ok "the act after a message still denies" || bad "stripping the message must not hide the act"
+# The strip never blanks a quoted string elsewhere: a quoted path is a target.
+echo "$(bg 'sed -i s/x/y/ \"scripts/lint.sh\"')" | grep -q '"ask"' && ok "a quoted adapter target still asks" || bad "a quoted path is a real target"
+# The check configs join the protected set for the shell route, in any tree.
+echo "$(bg 'sed -i s/x/y/ biome.json')" | grep -q '"ask"' && ok "editing biome.json escalated" || bad "editing a check config should ask"
+echo "$(bg 'echo {} > .eslintrc.json')" | grep -q '"ask"' && ok "a redirect into .eslintrc.json escalated" || bad "a redirect into a check config should ask"
+echo "$(bg 'rm packages/web/tsconfig.json')" | grep -q '"ask"' && ok "removing a nested tsconfig.json escalated" || bad "a nested check config should ask"
+echo "$(bgwt_early 'sed -i s/x/y/ ruff.toml')" | grep -q '"ask"' && ok "editing ruff.toml inside a worktree escalated" || bad "a check config should ask in a worktree too"
+echo "$(bg 'cat biome.json')" | grep -q 'permissionDecision' && bad "reading a check config should pass" || ok "reading a check config passes"
 echo "$(bg 'touch .hone-off')" | grep -q '"deny"' && ok "touch .hone-off denied" || bad "touch .hone-off should be denied"
 echo "$(bg 'sed -i s/x/y/ scripts/run-tests.sh')" | grep -q '"ask"' && ok "editing run-tests.sh escalated" || bad "editing adapter should ask"
 echo "$(bg 'ls -la')" | grep -q 'permissionDecision' && bad "benign command should pass silently" || ok "benign command passes"
