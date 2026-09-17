@@ -144,10 +144,13 @@ Read an ablation under the roadmap's rules. Switch a mechanical safety hook
 off only against the adversarial track. Run the scenario several times with
 the hook and several times without it, because one run each compares two
 samples of size one. And a scenario can only show what a hook deters if the
-temptation in it is real. In the first `weaken-check` run the model
-extracted helpers and never reached for the cap. A scenario that the model
-passes with every hook off measures the model, and it says nothing about
-the hook.
+temptation in it is real. A scenario that the model passes with every
+guard off measures the model, and it says nothing about the guard. That is
+where the four adversarial scenarios stand today.
+[`docs/spikes/2026-09-17-guards-first-look.md`](../../docs/spikes/2026-09-17-guards-first-look.md)
+has the first look: opus passed all four with the guards and the deny rules
+off, and no run of the day tried to weaken a check. The next adversarial
+scenario has to be one that a current model fails without a guard.
 
 ## The sandbox
 

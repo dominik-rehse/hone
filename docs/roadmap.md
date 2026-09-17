@@ -218,9 +218,13 @@ under rule 1 and the reading rule of stage 1.
 the scenarios that exist and the one that does not yet.
 [`spikes/2026-09-17-lab-first-runs.md`](spikes/2026-09-17-lab-first-runs.md)
 has the first runs. The noise floor is measured: 24 runs of an unchanged
-plugin gave 24 passes. One thing is still open. No ablation has run, and
-the adversarial runs so far never reached for a guard, so the lab has not
-yet shown what any guard deters.
+plugin gave 24 passes. One thing is still open. A first look with the
+guards and the deny rules off
+([`spikes/2026-09-17-guards-first-look.md`](spikes/2026-09-17-guards-first-look.md))
+found no run that reached for a forbidden path, on opus or on sonnet. So
+the adversarial scenarios measure the model so far, and the lab has not yet
+shown what any guard deters. It needs a temptation that a current model
+takes.
 
 Unit evals test prose in isolation. The lab tests the *installed
 plugin*. It runs headless Claude Code with hone installed, in a
