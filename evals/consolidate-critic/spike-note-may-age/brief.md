@@ -26,12 +26,11 @@
 @@
 +# Shutdown drains rather than kills
 +
-+On shutdown the queue stops accepting work and waits out the grace period,
-+then reports what it abandoned. We rejected killing in-flight jobs: the
-+billing consumer is not idempotent, so a killed job that already charged a
-+card would charge it again on redelivery. The grace period is a caller
-+argument rather than a constant because the web tier and the batch tier get
-+very different shutdown windows from their platforms.
++We rejected killing in-flight jobs on shutdown: the billing consumer is not
++idempotent, so a killed job that already charged a card would charge it
++again on redelivery. The grace period is a caller argument rather than a
++constant because the web tier and the batch tier get very different
++shutdown windows from their platforms.
 ```
 
 # Context

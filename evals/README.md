@@ -255,7 +255,26 @@ isolated, three votes, moved three numbers and left the rest standing:
   2/3, where the full prompt leaves it 3/3. The paragraph is load-bearing, and this case
   is what pins it.
 
-  Read that as a limit of the ablation rule, not an exception to it. The rule
+  A re-measurement on 2026-09-17 changed what this case is. On
+  claude-sonnet-5 it had passed at 2/3 in seven passes out of seven. Every
+  dissenting vote cut the opening sentence of the brief's Decision as
+  `decision-restates-code`, and none touched the spike note. That sentence
+  did restate the code, so the brief held a second thing to cut. About one
+  vote in three took it, which at three votes is a red gate from noise
+  about one time in four. The brief lost that sentence, and the case now
+  answers CLEAN 5/5.
+
+  The same measurement found that the case no longer discriminates. The
+  prompt minus the converse rule answers CLEAN 5/5 too, and so does the
+  prompt minus all spike prose. The current model leaves an aged spike note
+  alone unprompted. The case stays as the target's one CLEAN case. Without
+  it a critic that always cuts scores full marks. It pins the balance of
+  the critic and no longer the converse rule. The fix has a cost. The old
+  brief sat at the margin, and that made it a sensitive tripwire: it is
+  what caught the three `decision-forecasts` prompts under *Known gaps*.
+  The fixed brief is quieter, and nobody has measured what it still catches.
+
+  Read the original finding as a limit of the ablation rule, not an exception to it. The rule
   asks whether hone's prose changes the answer, and the stub is a cheap proxy
   for that. Where a paragraph exists to counteract another paragraph, the
   proxy breaks, and the ablation has to run against the prompt minus the
@@ -377,6 +396,16 @@ spike note, whose guard held every time. It was the Decision's opening
 sentence, on a `decision-restates-code` reading that stands up by itself. So
 another cut target does not sharpen this critic. It raises what the critic
 cuts anywhere in the brief, and the marginal call goes with it.
+
+The converse rule on spike notes is close to expiry, and it is not there
+yet. A harder brief, `spike-note-contradicted` (2026-09-17), has a change
+that raises the queue's high-water mark, so the diff itself contradicts a
+number in the old spike note. The full prompt answers CLEAN 5/5. The prompt
+minus the converse rule answers CLEAN 4/5, and the one dissent cuts the
+note as `spike-drift`. A tally moves, so the rule stays. No plurality
+flips, so the brief pins nothing at three votes and is not in the suite.
+Run it again on the next model. If it reads 5/5 without the rule, the rule
+has expired.
 
 Two more CUTS drafts died on 2026-09-17, both on the stub. One left the Plan
 file in a `git ls-files` listing and said nothing about it. The other left
@@ -516,11 +545,15 @@ an ablation campaign, and on every new model. And the one dissenting vote sits i
 `spike-note-may-age`, the case pinned against hone's own deletion bias.
 Read that case's tally first when a run degrades.
 
-That tally has moved since. On 2026-09-17, on claude 2.1.274 and
-claude-sonnet-5, two passes both scored the case 2/3 with one CUTS vote. The
-critic prompt had not changed between the dates. Two passes do not make a
-floor, and the plurality held. Re-measure the floor before anybody reads a
-2/3 on this case as the effect of an edit.
+The floor was measured again on 2026-09-17, on claude 2.1.274, with the
+critics on claude-sonnet-5 and loop and garden on claude-opus-5. Three
+identical passes at `--votes 3` over the 19 visible cases gave 171 votes.
+No plurality verdict flipped (0/57). Five single votes dissented. Three of
+them were `spike-note-may-age` at 2/3 in every pass, and its entry above
+has the cause and the fix. The other two were one REJECT vote each on
+`dep-refresh-no-red-test` and `named-references`, both in the first pass.
+So a flip is still signal. A 2/3 on a plan-critic APPROVE case is within
+the noise, and a 2/3 on `spike-note-may-age` no longer is.
 
 ## Extending
 
