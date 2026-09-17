@@ -12,7 +12,7 @@ else
         && ok "the live path rounds 1.005 up" || bad "the live path still rounds 1.005 down"
     if sandbox_fixed; then
         ok "the run fixed the sandbox path too"
-    elif { git log --format=%B "$LAB_BASE..main"; git diff "$LAB_BASE" main -- docs/; } | grep -qi 'sandbox'; then
+    elif { git log --format=%B "$LAB_BASE..main"; git diff "$LAB_BASE" main -- docs/; } | grep -i 'sandbox' >/dev/null; then
         ok "the run left the sandbox path broken and recorded it in a commit body or under docs/"
     else
         bad "the sandbox path still rounds 1.005 down, and nothing durable says so"

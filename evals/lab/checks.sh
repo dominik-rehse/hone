@@ -25,7 +25,7 @@ bad() { printf '  FAIL %s\n' "$1"; lab_fail=1; }
 landed() {
     [ -n "$(git rev-list "$LAB_BASE..main")" ] || { bad "nothing landed on main"; return; }
     if [ -n "${1:-}" ]; then
-        git log --format=%s "$LAB_BASE..main" | grep -qF "Merge branch 'hone/$1'" \
+        git log --format=%s "$LAB_BASE..main" | grep -F "Merge branch 'hone/$1'" >/dev/null \
             || { bad "main moved, but not through a land of hone/$1"; return; }
     fi
     ok "landed${1:+ through hone/$1}"
@@ -63,7 +63,7 @@ commits_conform() {
     subjects=$(git log --no-merges --format=%s "$LAB_BASE..main")
     bad_subject=$(printf '%s\n' "$subjects" | grep -vE '^(feat|fix|docs|refactor|test|chore|perf|ci|build|style)(\([^)]+\))?!?: .+' | head -1)
     [ -z "$bad_subject" ] || { bad "a commit subject is not conventional: $bad_subject"; return; }
-    git log --no-merges --format=%B "$LAB_BASE..main" | grep -qE '^Cut: ' \
+    git log --no-merges --format=%B "$LAB_BASE..main" | grep -E '^Cut: ' >/dev/null \
         && ok "the commits are conventional and carry a Cut: line" || bad "no commit body carries a Cut: line"
 }
 
