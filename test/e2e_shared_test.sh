@@ -118,7 +118,31 @@ echo "$out" | grep -q 'moved during each of 1 land attempts' || die "wrong messa
 [ "$(git -C "$B" rev-parse HEAD)" = "$pre" ] || die "primary tree moved after the rolled-back land"
 [ -d "$WTB" ] && remote_has_claim v && step "rolled back, worktree and claim kept" || die "evidence lost"
 git -C "$ORIGIN" log --format=%s main | grep -q "Merge branch 'hone/v'" && die "untested merge reached origin"
-rm -rf "$WTB"; git -C "$B" worktree prune; git -C "$B" branch -D hone/v -q; git -C "$B" push -q origin --delete refs/hone/claim/v
+out=$(cd "$B" && bash "$WSH" remove "$WTB" 2>&1) || die "B: remove v: $out"
+remote_has_claim v && die "remove left the claim on origin" || step "remove released the claim"
+git -C "$B" branch -D hone/v -q
+
+echo "== 5b. a refused push (protected branch) is exit 2, not a retry =="
+WTB=$(cd "$B" && bash "$WSH" add u) || die "B: add u"
+write_change "$WTB" u
+printf '#!/bin/bash\nwhile read o n r; do [ "$r" = refs/heads/main ] && { echo "main is protected" >&2; exit 1; }; done; exit 0\n' > "$ORIGIN/hooks/pre-receive"
+chmod +x "$ORIGIN/hooks/pre-receive"
+pre=$(git -C "$B" rev-parse HEAD)
+out=$(cd "$B" && bash "$WSH" land u 2>&1); rc=$?
+[ "$rc" -eq 2 ] || die "expected exit 2 on a refused push, got $rc: $out"
+echo "$out" | grep -q 'origin refused the push to main, and origin/main did not move' || die "wrong message: $out"
+echo "$out" | grep -q 'main is protected' || die "the host's reason is missing from the paste block: $out"
+echo "$out" | grep -q 'retries' && die "a refused push must not retry"
+[ "$(git -C "$B" rev-parse HEAD)" = "$pre" ] || die "primary tree moved after the refused land"
+[ -d "$WTB" ] && remote_has_claim u && step "refused push: exit 2, rolled back, evidence kept" || die "evidence lost"
+rm -f "$ORIGIN/hooks/pre-receive"
+(cd "$B" && bash "$WSH" remove "$WTB" >/dev/null 2>&1) && git -C "$B" branch -D hone/u -q
+echo "== 5c. release by hand =="
+(cd "$B" && bash "$WSH" add t >/dev/null) || die "B: add t"
+rm -rf "$B/.worktrees/t"; git -C "$B" worktree prune; git -C "$B" branch -D hone/t -q
+remote_has_claim t || die "setup: claim t missing"
+out=$(cd "$B" && bash "$WSH" release t) || die "release t: $out"
+remote_has_claim t && die "release left the claim" || step "release removed the claim"
 
 echo "== 6. a local Plan commit rebases onto the team's main at add =="
 mkdir -p "$B/.plans"; echo "# z" > "$B/.plans/z.md"

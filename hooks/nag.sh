@@ -46,6 +46,9 @@
 #      A purely additive change means consolidate pruned nothing. A hard rule
 #      here would incentivize token deletions, so the finding names the
 #      principle and leaves the judgment to consolidate.
+#  10. Stale claim: in the PRIMARY tree, a refs/hone/claim/<change> ref this
+#      clone holds (shared mode) with no .worktrees/<change>. The claim
+#      outlived its run and blocks the change name for the team.
 #   5. Landed branch left behind: in the PRIMARY tree, a hone/* branch fully
 #      merged into HEAD with no worktree attached. Land removes the worktree.
 #      The merged branch should go with it (git branch -d), or they accumulate
@@ -253,6 +256,17 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
             printf '%s\n' "$attached" | grep -qxF "$b" && continue   # a live worktree, active work
             add_finding "$(msg_nag_merged_branch "$b")"
         done < <(git branch --merged HEAD --format='%(refname:short)' 2>/dev/null | grep '^hone/')
+        # 10. Stale claim. Shared mode keeps refs/hone/claim/<change> in THIS
+        # clone for every change this machine claimed on the remote. One with
+        # no worktree outlived its run (a remove, a crash), and it blocks the
+        # change name for the whole team until released. Only this clone's
+        # own claims live under that prefix (status fetches the team's into
+        # refs/hone/remote-claim/), so the hook never touches the network.
+        while IFS= read -r c; do
+            [ -n "$c" ] || continue
+            [ -d "$COMMON_DIR/../.worktrees/$c" ] && continue
+            add_finding "$(msg_nag_stale_claim "$c")"
+        done < <(git for-each-ref --format='%(refname)' 'refs/hone/claim/' 2>/dev/null | sed 's|^refs/hone/claim/||')
     fi
 fi
 

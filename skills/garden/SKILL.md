@@ -42,7 +42,9 @@ Setup check: if `scripts/run-tests.sh` is missing, stop and tell the user to run
 
 The Stop-hook `nag` already names most of it on every turn. `garden` runs the same
 questions across the whole tree at once, and adds the ones a diff-scoped hook
-can't see. Collect, don't act yet:
+can't see. In shared mode (a committed `.hone-shared`) the tree you scan may be
+behind the team's, so first run
+`bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" sync`. Collect, don't act yet:
 
 - **Broken Governs link**: a Decision or Note whose `Governs:` path no longer
   exists. Which way it broke decides the unit of work. The code moved, so the

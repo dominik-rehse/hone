@@ -101,8 +101,16 @@ EOF
 msg_bashguard_signoff() {
     cat <<'EOF'
 hone bash-guard: this command would write straight into .hone-grant/ or .hone-proof/.
-Do: run worktree.sh grant or worktree.sh attest instead.
+Do: run worktree.sh grant, or ask the human to run worktree.sh attest.
 Why: the helper stamps the signer, binds a sign-off to the commit it proves, and refuses an empty text. A raw write gives a record nobody can trust.
+EOF
+}
+
+msg_bashguard_attest() {
+    cat <<'EOF'
+hone bash-guard: worktree.sh attest is the human's act, and the run never signs a proof off.
+Do: run the check where you can, then stop and hand the human its full output and the attest command.
+Why: a sign-off the run writes for itself is the record the proof gate exists to prevent. The human reads the output and signs.
 EOF
 }
 
@@ -273,6 +281,14 @@ Why: every cycle removes something.
 EOF
 }
 
+msg_nag_stale_claim() {
+    local change="$1"
+    cat <<EOF
+This clone still holds a claim on $change (refs/hone/claim/$change), and the change has no worktree here.
+Do: release it with 'bash "\${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" release $change'.
+Why: a leftover claim blocks the change for the team.
+EOF
+}
 msg_nag_merged_branch() {
     local branch="$1"
     cat <<EOF
@@ -436,7 +452,7 @@ hone_msg_attest_placeholders() {
 }
 
 msg_wt_usage() {
-    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|land <change>|landed <change>|sync|remove <worktree-path>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
+    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|land <change>|landed <change>|sync|release <change>|remove <worktree-path>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
 }
 
 msg_wt_grant_usage() {
@@ -963,9 +979,22 @@ Do: commit a .hone-shared file naming the remote (blank means origin) to turn sh
 Why: shared mode is project policy, chosen once per repository.
 EOF
 }
+msg_wt_release_receipt() {
+    local change="$1" remote="$2"
+    printf 'hone worktree: released the claim on %s from %s.\n' "$change" "$remote"
+}
 msg_wt_sync_receipt() {
     local remote="$1" primary="$2"
     printf 'hone worktree: %s matches %s/%s.\n' "$primary" "$remote" "$primary"
+}
+msg_wt_push_refused() {
+    local remote="$1" primary="$2" tail="${3:-}"
+    cat <<EOF
+hone worktree: $remote refused the push to $primary, and $remote/$primary did not move.
+Do: allow direct pushes to $primary on $remote, or turn shared mode off by removing .hone-shared.
+Why: shared mode pushes the tested merge straight to $primary.
+EOF
+    hone_msg_block "$tail"
 }
 msg_wt_land_push_rejected() {
     local remote="$1" primary="$2" attempts="$3"
@@ -1095,6 +1124,7 @@ guard|agent|msg_guard_no_test|src/<area>/<file>.<ext>|src/<area>/<file>|<area>/<
 bash-guard|agent|msg_bashguard_unparsed
 bash-guard|agent|msg_bashguard_sabotage
 bash-guard|agent|msg_bashguard_signoff
+bash-guard|agent|msg_bashguard_attest
 bash-guard|agent|msg_bashguard_protected
 bash-guard|agent|msg_bashguard_head_move
 bash-guard|agent|msg_bashguard_self_writer
@@ -1114,6 +1144,7 @@ nag|human|msg_nag_governs_broken|docs/decisions/<topic>.md|<path>
 nag|human|msg_nag_link_broken|docs/decisions/<topic>.md|<target>
 nag|human|msg_nag_no_deletions|<count>|<branch>
 nag|human|msg_nag_merged_branch|hone/<change>
+nag|human|msg_nag_stale_claim|<change>
 nag|human|msg_nag_memory_project|<file>.md|<memory-dir>
 session-start|human|msg_session_no_adapter
 session-start|human|msg_session_no_src
@@ -1169,7 +1200,9 @@ worktree|human|msg_wt_sync_diverged|origin|main|<git output>
 worktree|human|msg_wt_sync_dirty|main
 worktree|human|msg_wt_sync_no_remote|origin
 worktree|human|msg_wt_sync_not_shared
+worktree|plain|msg_wt_release_receipt|<change>|origin
 worktree|plain|msg_wt_sync_receipt|origin|main
+worktree|human|msg_wt_push_refused|origin|main|<git output>
 worktree|human|msg_wt_land_push_rejected|origin|main|3
 worktree|plain|msg_wt_land_pushed|origin|main
 worktree|plain|msg_wt_land_retry|origin|main|2

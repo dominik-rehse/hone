@@ -75,8 +75,11 @@
 #       while the suite ran, so land rolls the merge back, levels again, and
 #       redoes merge and suite, up to HONE_LAND_RETRIES times (default 3).
 #       Nothing untested ever reaches the remote. On success it releases the
-#       claim. Exhausted retries exit 5 with the merge rolled back.
-#       Exit: 0 landed · 2 usage/not-a-repo/detached · 5 lock timeout, or
+#       claim. Exhausted retries exit 5 with the merge rolled back. A push
+#       the host refused (a protected branch) is exit 2, rolled back, no
+#       retry: land tells the two apart by fetching again after a rejection.
+#       Exit: 0 landed · 2 usage/not-a-repo/detached/push refused · 5 lock
+#       timeout, or
 #       the remote moved on every attempt · 6 post-merge regression (rolled
 #       back) · 7 real-environment proof missing · 8 ungranted irreversible
 #       change · 9 merge conflict (aborted, tree restored).
@@ -148,8 +151,16 @@
 #   worktree.sh attest <change> "what you ran"
 #       Record the real-environment sign-off at .hone-proof/<change>, stamped
 #       with the branch tip it proves (so it stops counting after new commits),
-#       the git user, and the time. Same two callers as grant, and the same
-#       sole-route rule. Record only a check that actually ran.
+#       the git user, and the time. The human's act alone: the bash-guard
+#       denies the agent this helper, and the agent hands over the check's
+#       output instead. Same sole-route rule as grant. Record only a check
+#       that actually ran.
+#
+#   worktree.sh release <change>
+#       Shared mode only. Delete the change's claim from the remote by hand,
+#       for a claim whose worktree is already gone (an abandoned change, a
+#       crashed run). remove does the same with the worktree. Exit: 0
+#       released · 2 not shared, no such remote, or the delete failed.
 #
 #   worktree.sh remove <worktree-path>
 #       Provenance-guarded cleanup. Removes the worktree ONLY if hone created it
@@ -159,7 +170,8 @@
 #       the worktree's hone/* branch iff it is fully merged (`git branch -d`),
 #       and an unmerged branch is evidence and stays, with a note. It also
 #       removes now-empty parent dirs under .worktrees/ that a nested slug
-#       leaves behind. Exit: 0 removed · 2 usage/not-a-repo/failed/self ·
+#       leaves behind. In shared mode it also releases the change's claim on
+#       the remote. Exit: 0 removed · 2 usage/not-a-repo/failed/self ·
 #       3 left in place (not hone's to remove).
 #
 # Runs relative to the project root (git toplevel, else CLAUDE_PROJECT_DIR, else
@@ -820,8 +832,13 @@ cmd_land() {
     # Shared mode: publish the tested merge. A rejection means the remote
     # moved under the suite, so roll back and go around again.
     if [ -n "$remote" ]; then
-        if ! git -C "$main_root" push -q "$remote" "refs/heads/$primary:refs/heads/$primary" >/dev/null 2>&1; then
+        local push_rc=0
+        shared_push_once "$main_root" "$remote" "$primary" || push_rc=$?
+        if [ "$push_rc" -ne 0 ]; then
             git -C "$main_root" reset --hard "$pre" >/dev/null 2>&1
+            # A refused push (a protected branch, a lost remote) has no retry
+            # that helps. The message already said so.
+            [ "$push_rc" -eq 3 ] || return 2
             if [ "$attempt" -ge "$retries" ]; then
                 msg_wt_land_push_rejected "$remote" "$primary" "$retries" >&2
                 return 5
@@ -838,14 +855,11 @@ cmd_land() {
     # you are in").
     local merge_sha
     merge_sha=$(git -C "$main_root" rev-parse --short HEAD)
+    # In shared mode remove also releases the claim on the remote: the change
+    # is on the remote primary now. The merge is already pushed, so a failed
+    # release is a leftover to clean by hand (worktree.sh release), not a
+    # failed land.
     cmd_remove "$wt" || return $?
-    # Shared mode: the change is on the remote primary now, so release the
-    # claim. The merge is already pushed, so a failed delete is a leftover to
-    # clean by hand, not a failed land.
-    if [ -n "$remote" ]; then
-        shared_release "$main_root" "$remote" "$change" \
-            || msg_wt_land_claim_delete_failed "$change" "$remote" >&2
-    fi
 
     # Land hygiene 3: the change's records go with its worktree and branch.
     # Every record that opened a gate has its text in the merge commit body
@@ -939,14 +953,37 @@ shared_sync_primary() {
         return 2
     fi
 }
-# Push the primary branch. Git rejects the push when the remote moved since
-# the fetch, so a rejection means "sync again and retry", up to three times.
-# Exit 0 pushed (or nothing to push) · 2 sync failed · 5 rejected every time.
+# Push the primary branch once, and say why not. Git rejects the push when
+# the remote moved since the fetch, and a host rejects it when the branch is
+# protected. The two need different answers, so on a rejection this fetches
+# again: a moved remote means "sync and retry", an unmoved one means the
+# host refused, and no retry will help. Exit 0 pushed (or nothing to push)
+# · 3 the remote moved · 2 refused (message printed) or the fetch failed.
+shared_push_once() {
+    local main_root="$1" remote="$2" primary="$3" upstream before after out
+    upstream="refs/remotes/$remote/$primary"
+    before=$(git -C "$main_root" rev-parse -q --verify "$upstream" 2>/dev/null)
+    out=$(git -C "$main_root" push -q "$remote" "refs/heads/$primary:refs/heads/$primary" 2>&1) && return 0
+    if ! git -C "$main_root" fetch -q "$remote" "+refs/heads/$primary:$upstream" >/dev/null 2>&1; then
+        msg_wt_sync_fetch_failed "$remote" "$(printf '%s\n' "$out" | tail -n 5)" >&2
+        return 2
+    fi
+    after=$(git -C "$main_root" rev-parse -q --verify "$upstream" 2>/dev/null)
+    [ "$before" != "$after" ] && return 3
+    msg_wt_push_refused "$remote" "$primary" "$(printf '%s\n' "$out" | tail -n 5)" >&2
+    return 2
+}
+# Push the primary branch, syncing and retrying while the remote keeps
+# moving, up to three times. Exit 0 pushed (or nothing to push) · 2 sync
+# failed or refused · 5 the remote moved every time.
 shared_push_primary() {
-    local main_root="$1" remote="$2" primary="$3" attempt
+    local main_root="$1" remote="$2" primary="$3" attempt rc
     for attempt in 1 2 3; do
-        git -C "$main_root" push -q "$remote" "refs/heads/$primary:refs/heads/$primary" >/dev/null 2>&1 && return 0
+        # Level first: a clone that is merely behind must never read as
+        # "refused", and after a sync a rejection means moved or refused.
         shared_sync_primary "$main_root" "$remote" "$primary" || return 2
+        rc=0; shared_push_once "$main_root" "$remote" "$primary" || rc=$?
+        [ "$rc" -eq 3 ] || return "$rc"
     done
     msg_wt_land_push_rejected "$remote" "$primary" 3 >&2
     return 5
@@ -980,6 +1017,7 @@ shared_release() {
     local main_root="$1" remote="$2" change="$3" ref
     ref="refs/hone/claim/$change"
     git -C "$main_root" update-ref -d "$ref" >/dev/null 2>&1
+    git -C "$main_root" ls-remote --exit-code "$remote" "$ref" >/dev/null 2>&1 || return 0
     git -C "$main_root" push -q "$remote" --delete "$ref" >/dev/null 2>&1
 }
 
@@ -1102,6 +1140,22 @@ cmd_sync() {
     msg_wt_sync_receipt "$remote" "$primary"
 }
 
+# Release a claim by hand: an abandoned change whose worktree is already
+# gone, or a claim a crashed run left behind. Shared mode only.
+cmd_release() {
+    local change="${1:-}"
+    [ -n "$change" ] || { msg_wt_needs_change release >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
+    local main_root remote
+    main_root=$(main_root_of)
+    remote=$(shared_remote_checked "$main_root") || {
+        [ $? -eq 2 ] && return 2
+        msg_wt_sync_not_shared >&2; return 2; }
+    shared_release "$main_root" "$remote" "$change" || {
+        msg_wt_land_claim_delete_failed "$change" "$remote" >&2; return 2; }
+    msg_wt_release_receipt "$change" "$remote"
+}
+
 cmd_status() {
     git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
     local main_root primary
@@ -1183,12 +1237,14 @@ cmd_status() {
     # does not answer lists nothing, and status stays 0.
     if [ -n "$remote" ]; then
         local cref
-        git fetch -q --prune "$remote" '+refs/hone/claim/*:refs/hone/claim/*' >/dev/null 2>&1
+        # Into refs/hone/remote-claim/, never refs/hone/claim/: that prefix
+        # holds this clone's OWN claims, and the nag reads it as such.
+        git fetch -q --prune "$remote" '+refs/hone/claim/*:refs/hone/remote-claim/*' >/dev/null 2>&1
         while IFS= read -r cref; do
             [ -n "$cref" ] || continue
-            [ -d ".worktrees/${cref#refs/hone/claim/}" ] && continue
+            [ -d ".worktrees/${cref#refs/hone/remote-claim/}" ] && continue
             msg_status_remote_claim "$(git log -1 --format=%s "$cref" 2>/dev/null)" "$remote"
-        done < <(git for-each-ref --format='%(refname)' 'refs/hone/claim/' 2>/dev/null)
+        done < <(git for-each-ref --format='%(refname)' 'refs/hone/remote-claim/' 2>/dev/null)
     fi
 
     local f
@@ -1281,6 +1337,13 @@ cmd_remove() {
 
     git worktree remove "$wt" || { msg_wt_remove_failed "$wt" >&2; return 2; }
     git worktree prune
+    # Shared mode: the worktree was the change's local half, and the claim on
+    # the remote is the other half. Release it, so an abandoned change does
+    # not block its name for the team. A land calls remove before its own
+    # release, and releasing twice is harmless.
+    local remote
+    remote=$(shared_remote_checked "$main_root") || { [ $? -eq 2 ] && return 2; }
+    [ -n "$remote" ] && shared_release "$main_root" "$remote" "${wt#"$main_root"/.worktrees/}"
 
     # Land hygiene 1: a landed change's branch goes with its worktree. `-d`
     # (not -D), so an unmerged branch (abandoned or unlanded work) survives as
@@ -1319,6 +1382,7 @@ main() {
         remove)   cmd_remove "$@" ;;
         landed)   cmd_landed "$@" ;;
         sync)     cmd_sync "$@" ;;
+        release)  cmd_release "$@" ;;
         status)   cmd_status "$@" ;;
         grant)    cmd_grant "$@" ;;
         attest)   cmd_attest "$@" ;;

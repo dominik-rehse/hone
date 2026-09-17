@@ -73,11 +73,13 @@ lands. A sign-off written for an earlier commit stops counting, by design: it
 must not outlive the code it vouched for.
 
 The merge did not happen and the worktree is kept. Run the check the refusal
-names, record what you ran with `worktree.sh attest <change> "<what you ran and
-what it printed>"`, and land again. Where the declared check is outside your
-reach, **stop and escalate** instead, and leave the sign-off to the human. A
-sign-off naming a check nobody ran reads as evidence in history and carries
-none.
+names where you can reach it, then **stop and hand over**. Quote what you ran
+and what it printed, verbatim, with the `worktree.sh attest` command the
+refusal printed. The sign-off is the human's act. You never run `attest`, and
+the `bash-guard` denies it to you. The human reads the output, runs the check
+again if they want, and records it. Where the declared check is outside your
+reach, stop with what you tried. A report naming a check nobody ran is worse
+than no gate, because the human signs on the strength of it.
 
 Read the message to see which of the five refusals fired:
 
@@ -101,8 +103,9 @@ Read the message to see which of the five refusals fired:
 One case has no automatic route. Where the change itself rewrites the proof
 harness, land runs no adapter for it, because the copy land holds is the copy
 the change replaces. Run `bash scripts/proof.sh <change>` from the worktree
-yourself, read its output, and attest with what it printed. That run is a real
-check of the branch's own adapter, so the sign-off it produces is honest.
+yourself, read its output, and hand it to the human with the attest command.
+That run is a real check of the branch's own adapter, so the output you hand
+over is honest evidence. The signature stays the human's.
 
 Rewriting the harness means one of two diffs: any edit to `scripts/proof.sh`,
 or an edit to a probe under `scripts/proof-probes/` that already exists. A
@@ -116,11 +119,11 @@ what holds it, not a ban on writing it. land reads the diff, so the gate fires
 on any branch that rewrites those files. A branch that declares no trailer gets
 the same refusal as one that declares it.
 
-Write the sign-off with `worktree.sh attest` and nothing else. A file write or
-a shell redirect into `.hone-proof/` skips the signer stamp, the commit
-binding, and the placeholder check, and both guards deny it. Never paste a
-commit id into a file to satisfy the check: the check is the run, not the
-file.
+The human writes the sign-off with `worktree.sh attest` and nothing else. A
+file write or a shell redirect into `.hone-proof/` skips the signer stamp, the
+commit binding, and the placeholder check, and both guards deny it. Never
+paste a commit id into a file to satisfy the check: the check is the run, not
+the file.
 
 ## 8: the authority gate
 

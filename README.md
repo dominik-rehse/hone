@@ -190,10 +190,10 @@ The land gates back the third case. An irreversible change stops at the
 authority gate, because `git revert` does not undo a dropped column. The
 run then reads the diff and records a grant that names what is
 irreversible and why. A real-environment change stops at the proof gate
-until the check has actually run. The run signs off for a check it ran,
-and stops for one it cannot reach. `worktree.sh` stamps each record
-with its signer, the agent or you, and the grant's text lands in the
-merge commit.
+until the check has actually run. The run executes the check where it
+can and hands you the output, and you sign off. It never signs a proof
+off itself. `worktree.sh` stamps each record with its signer, and the
+text of a grant or a sign-off lands in the merge commit.
 
 The run never weakens a check to get through. On a stop, the worktree
 stays for inspection. `worktree.sh grant` and `worktree.sh attest` are

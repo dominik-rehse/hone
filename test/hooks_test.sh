@@ -186,7 +186,16 @@ echo "$(bg 'ls -la')" | grep -q 'permissionDecision' && bad "benign command shou
 echo "$(bg 'echo signed > .hone-proof/ui-flow')" | grep -q '"deny"' && ok "writing a proof sign-off denied" || bad "writing .hone-proof/ should be denied"
 echo "$(bg 'mkdir -p .hone-grant && touch .hone-grant/db-drop')" | grep -q '"deny"' && ok "creating a grant denied" || bad "creating .hone-grant/<change> should be denied"
 echo "$(bg 'bash scripts/worktree.sh grant db-drop reason')" | grep -q 'permissionDecision' && bad "the grant helper should pass" || ok "grant helper allowed"
-echo "$(bg 'bash scripts/worktree.sh attest db-drop ran-it')" | grep -q 'permissionDecision' && bad "the attest helper should pass" || ok "attest helper allowed"
+# The proof sign-off is the human's act: the attest helper is denied to the
+# agent whatever its text says, with the deny that tells it to hand the output
+# over. The grant helper stays the agent's to call. A mention of the word
+# inside a commit message stays prose.
+out=$(bg 'bash scripts/worktree.sh attest db-drop ran-it')
+echo "$out" | grep -q '"deny"' && ok "attest helper denied to the agent" || bad "the attest helper should be denied"
+echo "$out" | grep -q "the human's act" && ok "the attest deny names the human" || bad "the attest deny should say whose act it is"
+echo "$(bg 'bash \"$CLAUDE_PLUGIN_ROOT/scripts/worktree.sh\" attest db-drop ran-it')" | grep -q '"deny"' && ok "attest denied through a quoted plugin path" || bad "attest through a quoted path should be denied"
+echo "$(bg 'git commit -m attest later')" | grep -q 'permissionDecision' && bad "attest inside a commit message is prose" || ok "attest named in a commit message passes"
+echo "$(bg 'bash scripts/worktree.sh status')" | grep -q 'permissionDecision' && bad "status should pass" || ok "worktree.sh status passes"
 echo "$(bg 'cat .hone-grant/db-drop')" | grep -q 'permissionDecision' && bad "reading a grant should pass silently" || ok "reading a grant allowed"
 # Only CREATING the off marker is sabotage. A read-only existence check names
 # the marker too, and denying that one cost a real session its diagnosis.
@@ -216,7 +225,7 @@ echo "$(bg 'sed -i s/x/y/ hooks/messages.sh')" | grep -q '"ask"' && ok "editing 
 # A redirect binds to the path right after it. An angle bracket inside a quoted
 # message is prose, and the sign-off text is prose the helper asks for. Reading
 # the two alike escalated the one helper the agent is meant to call by itself.
-echo "$(bg 'bash scripts/worktree.sh attest ui-flow ran PROOF_ROOT=<worktree> bash scripts/proof.sh ui-flow, exit 0')" | grep -q 'permissionDecision' && bad "prose naming an adapter after an angle bracket should pass" || ok "an angle bracket in a sign-off message passes"
+echo "$(bg 'bash scripts/worktree.sh grant ui-flow ran PROOF_ROOT=<worktree> bash scripts/proof.sh ui-flow, exit 0')" | grep -q 'permissionDecision' && bad "prose naming an adapter after an angle bracket should pass" || ok "an angle bracket in a grant message passes"
 echo "$(bg 'git commit -m ran with PROOF_ROOT=<worktree> and then scripts/lint.sh')" | grep -q 'permissionDecision' && bad "a commit message is prose, not a write" || ok "an angle bracket in a commit message passes"
 # A real redirect into the same file still escalates, whatever precedes it.
 echo "$(bg 'echo x > scripts/lint.sh')" | grep -q '"ask"' && ok "a redirect into an adapter escalated" || bad "a redirect into scripts/lint.sh should ask"
@@ -622,6 +631,21 @@ git -C "$REPO" branch -d hone/landed-ghost >/dev/null 2>&1
 # it was NOT flagged in the run above.
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "hone/auth-login is fully merged" && bad "branch with live worktree should not be flagged" || ok "branch with live worktree not flagged"
+
+echo
+echo "== nag: a claim this clone holds with no worktree (shared mode) =="
+# A local refs/hone/claim/<change> is this clone's own claim on the remote.
+# With no .worktrees/<change> it outlived its run. The nag reads only local
+# refs, so the check needs no remote and never touches the network.
+git -C "$REPO" update-ref refs/hone/claim/ghost-claim "$(git -C "$REPO" commit-tree "$(git -C "$REPO" hash-object -t tree /dev/null)" -m 'hone claim: ghost-claim by t <t@t.t> on box at now')"
+git -C "$REPO" update-ref refs/hone/claim/auth-login "$(git -C "$REPO" commit-tree "$(git -C "$REPO" hash-object -t tree /dev/null)" -m 'hone claim: auth-login by t <t@t.t> on box at now')"
+git -C "$REPO" update-ref refs/hone/remote-claim/other-dev "$(git -C "$REPO" commit-tree "$(git -C "$REPO" hash-object -t tree /dev/null)" -m 'hone claim: other-dev by u <u@t.t> on box2 at now')"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "claim on ghost-claim" && ok "stale claim flagged" || bad "should flag a claim with no worktree"
+echo "$out" | grep -q "worktree.sh\\\" release ghost-claim\|release ghost-claim" && ok "the finding names the release command" || bad "the stale-claim finding should name worktree.sh release"
+echo "$out" | grep -q "claim on auth-login" && bad "a claim with a live worktree should not be flagged" || ok "claim with live worktree not flagged"
+echo "$out" | grep -q "other-dev" && bad "another developer's fetched claim is not this clone's leftover" || ok "the team's fetched claims are not flagged"
+git -C "$REPO" update-ref -d refs/hone/claim/ghost-claim; git -C "$REPO" update-ref -d refs/hone/claim/auth-login; git -C "$REPO" update-ref -d refs/hone/remote-claim/other-dev
 
 echo
 echo "== nag: a Plan reference is not a Plan =="

@@ -111,6 +111,16 @@ if echo "$CMD" | grep -Eq \
     decision deny "$(msg_bashguard_signoff)"
 fi
 
+# 1c. The proof sign-off is the human's act, so `worktree.sh attest` stays
+# denied to the agent whatever text follows it. The run runs the check where
+# it can and hands the human its output, and the human signs. `grant` stays
+# allowed: the authority gate asks for a reading of the diff, and the stamp
+# says who read it. The sed above already stripped attest's free text, so
+# this matches the invocation alone, never a mention inside a message.
+if echo "$CMD" | grep -Eq 'worktree\.sh"?[[:space:]]+attest([[:space:]]|$)'; then
+    decision deny "$(msg_bashguard_attest)"
+fi
+
 # 2. A mutating operation aimed at a protected artifact → ask. The committed
 # policy files are protected too. Editing .hone-durable-paths,
 # .hone-irreversible-paths, the .hone-proof-always marker, or the

@@ -67,7 +67,11 @@ work. The loop calls it, and you can too:
 - `worktree.sh sync` levels the primary tree with the remote primary branch
   in both directions: fetch, fast-forward or rebase local-only commits on
   top, then push them. Shared mode only. The plan skill runs it after
-  committing a Plan, and you run it to catch up.
+  committing a Plan, `run --all` and `garden` run it before reading the
+  queue, and you run it to catch up.
+- `worktree.sh release <change>` deletes a claim from the remote by hand,
+  for a change whose worktree is already gone. `remove` does it with the
+  worktree.
 - `worktree.sh remove <worktree-path>` removes a worktree hone created, and
   its branch if fully merged.
 - `worktree.sh landable` lists worktrees whose branch is ahead of the
@@ -82,8 +86,9 @@ work. The loop calls it, and you can too:
   nothing, because a placeholder authorizes nothing a reader can check.
 - `worktree.sh attest <change> "what you ran"` records the sign-off that
   the real-environment check ran (writes `.hone-proof/<change>`, stamped with
-  the branch tip, the git user, and the time). Same two callers and the same
-  sole-route rule.
+  the branch tip, the git user, and the time). You run it, and only you: the
+  `bash-guard` denies it to the loop, which runs the check where it can and
+  hands you the output. Same sole-route rule as grant.
   It refuses a description that is empty or only whitespace. It also refuses
   the unedited placeholder from this page: `what you ran`, or `what you ran
   and the outcome`. Case and surrounding quotes make no difference. Both
@@ -146,8 +151,9 @@ file:
   slug.
 - `.hone-proof/<change>` is the sign-off that the real-environment check for
   one change ran. It must contain the commit hash it applies to (short or
-  full). After new commits it no longer counts. Same two writers and the
-  same rule: `worktree.sh attest`, or your own editor. A sign-off that opened
+  full). After new commits it no longer counts. You write it, with
+  `worktree.sh attest` or your own editor, and the loop never does. A
+  sign-off that opened
   the proof gate lands in the merge commit body like a grant, and a green
   land deletes the spent file.
 
@@ -231,6 +237,7 @@ irreversible. When you want that record, route the edit through the loop.
   - a broken `Governs:` link
   - a relative markdown link in a Decision or Note that does not resolve
   - a merged `hone/*` branch left behind
+  - a claim this clone holds on the remote with no worktree (shared mode)
   - a change about to land that deletes nothing
   - a `type: project` entry in the harness's own memory store
 - *session-start* injects the workflow rule from the plugin. It warns when
@@ -292,8 +299,10 @@ the shape [`templates/proof/README.md`](../templates/proof/README.md)
 recommends. An edit to a probe that already exists still arms the gate: that
 probe guards a change that landed earlier.
 
-Both you and the loop record a grant or a sign-off, and both do it with
-`worktree.sh grant` and `worktree.sh attest`. Every other route stays denied:
+Both you and the loop record a grant, with `worktree.sh grant`. Only you
+record a sign-off, with `worktree.sh attest`. The `bash-guard` denies the loop
+that helper. The loop runs the check where it can, hands you the output, and
+stops. Every other route stays denied:
 the guard blocks the file-tool routes into `.hone-grant/` and `.hone-proof/`,
 and the bash-guard the shell routes (a deterrent, not a sandbox). The helper
 is what stamps the signer, binds a sign-off to the commit it proves, and
@@ -325,7 +334,16 @@ it, like the worktree. You release a claim whose owner walked away by hand:
 git push origin --delete refs/hone/claim/<change>
 ```
 
-`worktree.sh status` lists the claims other developers hold.
+`worktree.sh status` lists the claims other developers hold. `worktree.sh
+remove` releases the claim with the worktree, and `worktree.sh release
+<change>` releases one whose worktree is already gone. The nag reports a
+claim this clone still holds with no worktree.
+
+Shared mode pushes straight to the primary branch. A host that protects that
+branch refuses the push. land then exits 2 with the host's reason, rolls the
+merge back, and keeps the worktree. It does not retry, and it does not open a
+pull request. Either allow direct pushes for the developers who land, or
+leave shared mode off.
 
 The stamp separates the two. A record the loop writes opens with
 `agent, on behalf of`, keyed off `CLAUDECODE` in the environment, so a later
@@ -347,7 +365,7 @@ The gate's error message prints the exact helper command with its full path.
 | Exit | Meaning |
 |------|---------|
 | 0 | landed and green |
-| 2 | usage or repo-state error (missing branch, detached HEAD) |
+| 2 | usage or repo-state error (missing branch, detached HEAD), or in shared mode a push the host refused |
 | 5 | lock timeout: another land or full-suite run held the lock. In shared mode also: the remote moved on every attempt, merge rolled back |
 | 6 | suite, type-check, or lint red after the merge; rolled back, worktree kept, output in the land log |
 | 7 | proof gate: real-environment proof missing |
@@ -386,9 +404,11 @@ Other subcommands:
   timeout).
 - `landed` exits 1 while the change is pending (0 landed, 2 error).
 - `sync` exits 0 when the primary tree is level with the remote, and 5
-  when the remote moved on every push attempt. It exits 2 when the
-  repository is not shared, the remote is missing, the primary tree is
-  dirty, the fetch failed, or a rebase conflicted.
+  when the remote moved on every push attempt. It exits 2 on a setup or
+  state problem. Those are: not shared, no such remote, a dirty primary
+  tree, a failed fetch, a rebase conflict, and a push the host refused.
+- `release` exits 0 when the claim is gone (2 not shared, no such remote,
+  or the delete failed).
 
 ## Adapters
 

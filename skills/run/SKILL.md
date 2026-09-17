@@ -395,8 +395,10 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    - **9**: merge conflict. Aborted, tree restored. Fold in serially. Stop.
    - **6**: the merge regressed the trunk. Rolled back, worktree kept. Stop.
    - **7**: the proof gate wants real-environment proof. Run the check the
-     refusal names, then record what you ran with `worktree.sh attest` and land
-     again. Where you cannot run any real check, stop instead.
+     refusal names where you can reach it, then stop: hand the human its full
+     output and the `worktree.sh attest` command. The sign-off is the human's
+     act, and the `bash-guard` denies the run that helper. Where you cannot
+     run any real check, stop with what you tried.
    - **8**: the authority gate wants a scoped grant for an irreversible change.
      Read the diff it printed, then record the authorization with
      `worktree.sh grant` and land again.
@@ -425,6 +427,12 @@ visible, and the cross-check is yours. Partition the set into disjoint Plans (ru
 in parallel) and overlapping ones (run sequentially, foundation first). State the
 partition and its reason, then land one at a time. A change whose `add` exits 4 is
 claimed by another run: skip it and say so.
+
+In shared mode (a committed `.hone-shared`), the queue is the team's, and
+your clone may be behind it. Before reading `.plans/`, run
+`bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" sync`, so the set you
+partition is the set the team has. A claim held on the remote surfaces as
+the same exit 4.
 
 Under `--all`, every progress line keeps its `[<change>]` prefix, so interleaved
 steps stay readable. Also keep a status board: one line per Plan, reprinted
@@ -481,16 +489,17 @@ suite cannot supply, and you supply it and land again:
 - **Exit 7, the proof gate.** Run the check the refusal names. Where the change
   rewrites the proof harness, that is `bash scripts/proof.sh <change>` from the
   worktree. Elsewhere it is whatever the trailer declared, if you can reach it.
-  Then record **what you actually ran and what it printed** with
-  `worktree.sh attest <change> "<the check and its result>"`, and land again.
+  Then **stop**, and hand the human what you ran and what it printed, verbatim,
+  together with the `worktree.sh attest` command the refusal printed. The
+  sign-off is the human's act. You never run `attest`, and the `bash-guard`
+  denies it to you. Where the declared check is outside your reach (a browser
+  journey with no adapter, a canary you cannot watch), stop with what you
+  tried.
 
-One rule holds both: **record only what you did**. A sign-off naming a check
-nobody ran is worse than no gate, because it reads as evidence in git history
-and carries none. Where the declared check is outside your reach (a browser
-journey with no adapter, a canary you cannot watch), you have not proven it.
-**Stop and escalate** with what you tried, and leave the sign-off to the human.
-The stamp records that the agent signed, so a later audit can tell the two
-apart.
+One rule holds both: **report only what you did**. A grant names what you read
+in the diff. A proof hand-off quotes the output of a check that ran. A report
+naming a check nobody ran is worse than no gate, because the human signs on
+the strength of it.
 
 Write both records through the helpers only. A file write or a shell redirect
 into `.hone-grant/` or `.hone-proof/` skips the signer stamp, the commit
