@@ -218,6 +218,14 @@ isolated, three votes, moved three numbers and left the rest standing:
 - `dep-refresh-no-red-test`: APPROVE, stub REJECT 2/3. A toolchain refresh has no
   red test to write first. Without the rule that says so, the missing test reads
   as a placeholder.
+- `thin-proof-right-level`: APPROVE 3/3, stub REJECT 3/3. The Plan opens a
+  new area with one worked example as its proof. The stub lists five edge
+  cases the Plan leaves open (a tiny `max`, `archive.tar.gz`, the ellipsis
+  character) and rejects on them. The critic approves, because that is
+  detail the loop can decide. The prompt minus its *Calibration* paragraph
+  still approves, at 2/3, so that paragraph carries part of the answer and
+  the *Ambiguity* bullet carries the rest. Measured 2026-09-17,
+  claude-sonnet-5.
 - `schema-silent-on-data`: REJECT, and the required substring `disposable` is
   the whole case. The stub rejects too, in every run, so the token
   discriminates against nothing. The Plan changes `invoices.amount` from
@@ -465,6 +473,16 @@ in the suite, because a case that the shipped prompt fails gates nothing.
 The `plan` skill refuses such a slug at its first step, so the critic is
 the second check here, not the only one. A fix probably needs a category of
 its own in the output list, because the critic walks that list.
+
+A REJECT case on this critic discriminates by its category word at best.
+Two more drafts showed that on 2026-09-17. `baseline-never-stated` changes
+shipped behaviour and never says what it is today. `ui-claim-unit-proof`
+claims a browser flow and proves a unit function. The stub rejected both
+3/3, and so did the prompt minus the bullet each one aims at. The cases
+that discriminate here are the near misses, where a limiting clause stops a
+false reject: `named-references`, `dep-refresh-no-red-test`, and
+`thin-proof-right-level`. A fourth near miss, a new area with no baseline
+to state, split both the critic and the stub 2/3 and pins nothing.
 
 One more plan-critic draft died the same day. `refresh-handwritten-version`
 hand-writes a version string into `package.json`. The stub rejected it 2/3,
