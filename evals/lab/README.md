@@ -126,14 +126,27 @@ canonical deny rules in `.claude/settings.json`. The run has its own git
 identity, and it runs with `--setting-sources project,local`. That flag keeps the user's settings,
 plugins, and instructions out of the run.
 
-`$HOME` is isolated only when `ANTHROPIC_API_KEY` or
-`CLAUDE_CODE_OAUTH_TOKEN` is in the environment (`claude setup-token` makes
-the second). Without one, auth lives in the real `$HOME`. The lab never
-copies it, because a token refresh in a copy can log the real session out.
-The run then shares `$HOME`, and `result.json` says `"home": "shared"`. One
-leak stays in that mode. The nested `/code-review` is a new process, and the
-run skill starts it without `--setting-sources`. So it loads the user's
-settings, and with them the review level the user typed last.
+The run isolates `$HOME` whenever it can authenticate without the real one.
+Auth comes from the first of three sources:
+
+1. `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` in the environment.
+2. The access token of your own OAuth session. The harness reads that one
+   value from `~/.claude/.credentials.json` at the start of each scenario,
+   and it hands the value to the run as `CLAUDE_CODE_OAUTH_TOKEN`. It never
+   copies the file. The file also holds the refresh token, and a refresh in
+   a copy can log the real session out. It never writes the token anywhere.
+   The token lives for hours. When it has under 15 minutes left, the harness
+   makes one cheap call in the real `$HOME`, so that the CLI renews it. A
+   token that stays stale makes the scenario indeterminate.
+3. Neither exists. The run then shares the real `$HOME`, and `result.json`
+   says `"home": "shared"`. One leak stays in that mode. The nested
+   `/code-review` is a new process, and the run skill starts it without
+   `--setting-sources`. So it loads your settings.
+
+The token sits in the environment of an agent that has every permission, and
+the transcript of that agent stays on disk. An agent that prints its
+environment puts the token into `transcript.jsonl`. The token expires within
+hours, and `out/` is gitignored. Delete a sandbox that you do not need.
 
 The run has every permission (`bypassPermissions`). The deny rules and hone's
 hooks still apply. The lab is not a security sandbox: the agent can reach

@@ -48,14 +48,19 @@
 # Exit: 0 every scenario passed, 1 a scenario failed, 3 none failed and one
 # was indeterminate, 2 usage.
 #
-# The sandbox has two isolation levels, and result.json records which one a run
-# had. With ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in the environment,
-# HOME points into the sandbox, so nothing of the user's reaches the run. With
-# neither, auth lives in the real HOME, and a copy of it is no option: a token
-# refresh in the copy can log the real session out. The run then keeps HOME and
-# passes --setting-sources project,local, which keeps the user's settings,
-# plugins, and instructions out. One leak stays in that mode: the nested
-# /code-review is a new process without that flag, so it loads user settings.
+# The sandbox isolates HOME whenever it can authenticate without the real one,
+# and result.json records which level a run had. Auth comes from the first of:
+#   1. ANTHROPIC_API_KEY or CLAUDE_CODE_OAUTH_TOKEN in the environment.
+#   2. The access token of the user's own OAuth session. The harness reads that
+#      one value from ~/.claude/.credentials.json at the start of each scenario
+#      and hands it to the run as CLAUDE_CODE_OAUTH_TOKEN. It never copies the
+#      file: the file also holds the refresh token, and a refresh in a copy can
+#      log the real session out. It never writes the token anywhere. The token
+#      lives for hours, and a run that outlives it ends as indeterminate.
+#   3. Neither exists. The run then shares the real HOME and relies on
+#      --setting-sources project,local to keep the user's settings, plugins,
+#      and instructions out. One leak stays in that mode: the nested
+#      /code-review is a new process without that flag, so it loads them.
 set -uo pipefail
 
 LAB=$(cd "$(dirname "$0")" && pwd)
@@ -125,8 +130,27 @@ if [ "$DRY" -eq 1 ]; then
     exit 0
 fi
 
-HOME_MODE=shared
-[ -n "${ANTHROPIC_API_KEY:-}${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && HOME_MODE=isolated
+CREDENTIALS="${LAB_CREDENTIALS:-$HOME/.claude/.credentials.json}"
+AUTH="home"; HOME_MODE="shared"
+if [ -n "${ANTHROPIC_API_KEY:-}${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
+    AUTH="env"; HOME_MODE="isolated"
+elif jq -e '.claudeAiOauth.accessToken' "$CREDENTIALS" >/dev/null 2>&1; then
+    AUTH="session"; HOME_MODE="isolated"
+fi
+
+# The access token of the user's OAuth session, when it has 15 minutes left.
+# The CLI renews a token that is about to expire, so one cheap call in the real
+# HOME is the refresh. Prints nothing when the token stays stale.
+session_token() {
+    # shellcheck disable=SC2016  # $now is a jq variable
+    local look='.claudeAiOauth | select((.expiresAt // 0) / 1000 > $now + 900) | .accessToken // empty' token
+    token=$(jq -r --argjson now "$(date +%s)" "$look" "$CREDENTIALS" 2>/dev/null)
+    if [ -z "$token" ]; then
+        "$REAL_CLAUDE" -p "Reply with exactly: OK" --model claude-haiku-4-5-20251001 --safe-mode >/dev/null 2>&1
+        token=$(jq -r --argjson now "$(date +%s)" "$look" "$CREDENTIALS" 2>/dev/null)
+    fi
+    printf '%s' "$token"
+}
 
 RUN_DIR="${REGRADE:-$OUT_ROOT/$(date +%Y%m%d-%H%M%S)}"
 mkdir -p "$RUN_DIR"
@@ -241,12 +265,13 @@ session_idle() {
 # between a task's end and the turn it triggers.
 # Returns 0 when the session ended by itself or went idle, 124 on the timeout.
 drive_session() {
-    local sb="$1" prompt="$2" fd pid idle=0 deadline rc=0
+    local sb="$1" prompt="$2" token="${3:-}" fd pid idle=0 deadline rc=0
     rm -f "$sb/stdin"; mkfifo "$sb/stdin"
     exec {fd}<>"$sb/stdin"
     (
         cd "$sb/repo" || exit 1
         [ "$HOME_MODE" = isolated ] && export HOME="$sb/home"
+        [ -n "$token" ] && export CLAUDE_CODE_OAUTH_TOKEN="$token"
         unset HERDR_ENV
         PATH="$sb/bin:$PATH" exec "$REAL_CLAUDE" -p --input-format stream-json \
             --plugin-dir "$sb/plugin" --setting-sources project,local \
@@ -273,7 +298,7 @@ drive_session() {
 # so a later --regrade can grade the sandbox without the run's variables.
 run_scenario() {
     local name="$1" scenario="$SCENARIOS/$1" sb="$RUN_DIR/$1"
-    local seeded=true start rc=0
+    local seeded=true auth_ok=true token="" start rc=0
     mkdir -p "$sb"
     : > "$sb/nested.jsonl"
     copy_plugin "$sb/plugin"
@@ -287,13 +312,19 @@ run_scenario() {
         git -C "$sb/repo" rev-parse HEAD > "$sb/base"
         write_shim "$sb/bin" "$sb/nested.jsonl"
         mkdir -p "$sb/home"
-        drive_session "$sb" "$(cat "$scenario/prompt")"
-        rc=$?
+        if [ "$AUTH" = session ]; then
+            token=$(session_token)
+            [ -n "$token" ] || auth_ok=false
+        fi
+        if [ "$auth_ok" = true ]; then
+            drive_session "$sb" "$(cat "$scenario/prompt")" "$token"
+            rc=$?
+        fi
     fi
     jq -n --arg model "$MODEL" --arg without "$WITHOUT" --arg home "$HOME_MODE" \
-        --argjson seeded "$seeded" --argjson timed_out "$([ "$rc" -eq 124 ] && echo true || echo false)" \
+        --argjson seeded "$seeded" --argjson auth_ok "$auth_ok" --argjson timed_out "$([ "$rc" -eq 124 ] && echo true || echo false)" \
         --argjson seconds "$(( $(date +%s) - start ))" \
-        '{model: $model, without: $without, home: $home, seeded: $seeded,
+        '{model: $model, without: $without, home: $home, seeded: $seeded, auth_ok: $auth_ok,
           timed_out: $timed_out, seconds: $seconds}' > "$sb/run.json"
     grade_scenario "$name"
 }
@@ -306,6 +337,8 @@ grade_scenario() {
 
     if [ "$(jq -r .seeded "$sb/run.json")" != "true" ]; then
         verdict=indeterminate; reason="the fixture did not seed (see seed.log)"
+    elif [ "$(jq -r '.auth_ok == false' "$sb/run.json")" = "true" ]; then
+        verdict=indeterminate; reason="the session token expires within 15 minutes, and a refresh call did not renew it"
     else
         result=$(jq -c 'select(.type == "result")' "$sb/transcript.jsonl" 2>/dev/null | tail -1)
         cost=$(jq -r '.total_cost_usd // 0' <<<"${result:-{\}}" 2>/dev/null || echo 0)
@@ -349,11 +382,15 @@ grade_scenario() {
         esac
     fi
 
-    nested_cost=$(jq -s 'map(.cost_usd) | add // 0' "$sb/nested.jsonl" 2>/dev/null || echo 0)
+    # jq -s on a missing file prints a value AND fails, so `|| echo 0` would
+    # print two. Look at the file first.
+    local turns=0
+    [ -s "$sb/transcript.jsonl" ] && turns=$(jq -s '[.[] | select(.type == "result") | .num_turns // 0] | add // 0' "$sb/transcript.jsonl" 2>/dev/null)
+    [ -s "$sb/nested.jsonl" ] && nested_cost=$(jq -s 'map(.cost_usd) | add // 0' "$sb/nested.jsonl" 2>/dev/null)
     jq --arg scenario "$name" --arg track "$(tr -d '[:space:]' < "$scenario/track")" \
         --arg verdict "$verdict" --arg reason "$reason" \
         --argjson cost "${cost:-0}" --argjson nested "${nested_cost:-0}" --argjson judge "${judge_cost:-0}" \
-        --argjson turns "$(jq -s '[.[] | select(.type == "result") | .num_turns // 0] | add // 0' "$sb/transcript.jsonl" 2>/dev/null || echo 0)" \
+        --argjson turns "${turns:-0}" \
         '{scenario: $scenario, track: $track, verdict: $verdict, reason: $reason, model: .model,
           without: .without, home: .home, cost_usd: $cost, nested_cost_usd: $nested,
           judge_cost_usd: $judge, seconds: .seconds, turns: $turns}' "$sb/run.json" > "$sb/result.json"
@@ -362,7 +399,7 @@ grade_scenario() {
 if [ -n "$REGRADE" ]; then
     echo "$(date -Iseconds) | REGRADE of $RUN_DIR | judge=$JUDGE_MODEL"
 else
-    echo "$(date -Iseconds) | model=$MODEL | judge=$JUDGE_MODEL | home=$HOME_MODE${WITHOUT:+ | WITHOUT: $WITHOUT} | claude $("$REAL_CLAUDE" --version 2>/dev/null | head -1)"
+    echo "$(date -Iseconds) | model=$MODEL | judge=$JUDGE_MODEL | home=$HOME_MODE auth=$AUTH${WITHOUT:+ | WITHOUT: $WITHOUT} | claude $("$REAL_CLAUDE" --version 2>/dev/null | head -1)"
     echo "running ${#NAMES[@]} scenario(s), up to $JOBS at a time, into $RUN_DIR"
 fi
 running=0
@@ -376,8 +413,13 @@ wait
 fails=0; indet=0; results=()
 for n in "${NAMES[@]}"; do
     r="$RUN_DIR/$n/result.json"
+    # A scenario with no readable result must never count as a pass.
+    if ! v=$(jq -er .verdict "$r" 2>/dev/null); then
+        indet=$((indet+1))
+        printf '  %-13s %-28s %s\n' indeterminate "$n" "the harness wrote no result.json"
+        continue
+    fi
     results+=("$r")
-    v=$(jq -r .verdict "$r")
     case "$v" in fail) fails=$((fails+1)) ;; indeterminate) indet=$((indet+1)) ;; esac
     printf '  %-13s %-28s $%6.2f  %4dm  %s\n' "$v" "$n" \
         "$(jq -r '.cost_usd + .nested_cost_usd + .judge_cost_usd' "$r")" \
@@ -385,7 +427,7 @@ for n in "${NAMES[@]}"; do
 done
 echo "-------------------------------------"
 printf 'cost: $%.2f | %s failed, %s indeterminate, of %s\n' \
-    "$(jq -s 'map(.cost_usd + .nested_cost_usd + .judge_cost_usd) | add' "${results[@]}")" \
+    "$([ "${#results[@]}" -gt 0 ] && jq -s 'map(.cost_usd + .nested_cost_usd + .judge_cost_usd) | add' "${results[@]}" || echo 0)" \
     "$fails" "$indet" "${#NAMES[@]}"
 [ "$fails" -gt 0 ] && exit 1
 [ "$indet" -gt 0 ] && exit 3

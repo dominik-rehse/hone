@@ -31,6 +31,7 @@ case " $* " in *" --safe-mode "*)
 esac
 printf '%s\n' "$*" > "$FAKE_DIR/agent-args"
 printf '%s\n' "$HOME" > "$FAKE_DIR/agent-home"
+printf '%s\n' "${CLAUDE_CODE_OAUTH_TOKEN:-}" > "$FAKE_DIR/agent-token"
 case "$FAKE_MODE" in
     dead) exit 1 ;;
     land) mkdir -p src && echo "exports.x = 1" > src/x.js && git rm -q .plans/toy.md \
@@ -60,7 +61,8 @@ echo "Is the change fine?" > "$W/scenarios/toy-judged/judge.md"
 lab() {
     env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN ${TOKEN:+ANTHROPIC_API_KEY="$TOKEN"} \
         PATH="$W/bin:$PATH" FAKE_DIR="$W" FAKE_MODE="${MODE:-land}" FAKE_JUDGE="${JUDGE:-PASS}" \
-        LAB_SCENARIOS="$W/scenarios" LAB_OUT="$W/out" LAB_POLL=1 bash "$LAB" "$@" 2>&1
+        LAB_SCENARIOS="$W/scenarios" LAB_OUT="$W/out" LAB_POLL=1 \
+        LAB_CREDENTIALS="${CRED:-$W/no-credentials.json}" bash "$LAB" "$@" 2>&1
 }
 result() { jq -r "$2" "$W"/out/*/"$1"/result.json; }
 fresh() { rm -rf "$W/out"; }
@@ -119,6 +121,19 @@ fresh; MODE=land lab toy >/dev/null
 fresh; TOKEN=fake MODE=land lab toy >/dev/null
 [ "$(result toy .home)" = "isolated" ] && ok "with a token the home is isolated" || bad "home should be isolated with a token"
 case "$(cat "$W/agent-home")" in "$W"/out/*/toy/home) ok "the agent runs with HOME inside the sandbox" ;; *) bad "HOME should point into the sandbox (got $(cat "$W/agent-home"))" ;; esac
+
+echo "== the session token: OAuth auth with an isolated home =="
+jq -n --argjson exp "$(( ($(date +%s) + 7200) * 1000 ))" \
+    '{claudeAiOauth: {accessToken: "tok-from-file", refreshToken: "never-copy-me", expiresAt: $exp}}' > "$W/cred.json"
+fresh; CRED="$W/cred.json" MODE=land lab toy >/dev/null
+[ "$(result toy .home)" = "isolated" ] && ok "a credentials file with a live token isolates the home" || bad "home should be isolated with a session token"
+[ "$(cat "$W/agent-token")" = "tok-from-file" ] && ok "the agent gets the access token through the environment" || bad "the agent should get the access token (got '$(cat "$W/agent-token")')"
+grep -rqE 'tok-from-file|never-copy-me' "$W/out" && bad "a token reached the output directory" || ok "no token is written under the output directory"
+jq -n --argjson exp "$(( ($(date +%s) + 60) * 1000 ))" \
+    '{claudeAiOauth: {accessToken: "tok-stale", refreshToken: "never-copy-me", expiresAt: $exp}}' > "$W/cred.json"
+fresh; CRED="$W/cred.json" MODE=land lab toy >/dev/null; rc=$?
+[ "$rc" -eq 3 ] && [ "$(result toy .verdict)" = "indeterminate" ] && ok "a token that is about to expire makes the run indeterminate" || bad "a stale token should give indeterminate (exit $rc)"
+
 lab toy --model opus >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an alias for --model exits 2" || bad "a model alias should exit 2 (got $rc)"
 lab no-such-scenario >/dev/null; rc=$?
