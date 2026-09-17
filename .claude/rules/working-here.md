@@ -27,11 +27,13 @@ needs a visual: a chart, a diagram, an interactive tool. A findings report,
 an audit, a review, or a plan is terminal output, however long. If a page
 might help, offer it in one line.
 
-## The plugin runs in this repo
+## When the plugin runs in this repo
 
-This repository enables hone on itself, so its hooks read every shell
-command and every commit message here. The bash-guard denies a command
-that names a sabotage token, whatever its intent. The tokens are the flag
+The repo's settings do not enable hone, because work here goes straight to
+`main` and the guard would deny every edit under `docs/` and `scripts/`. A
+session that loads hone anyway (`claude --plugin-dir .`) gets its hooks, and
+they read every shell command and every commit message. The bash-guard
+denies a command that names a sabotage token, whatever its intent. The tokens are the flag
 that skips git hooks, the config key that redirects them, and a write to
 the off marker. To test such a command, write it to a script in the
 scratchpad and run the script. Keep
