@@ -44,6 +44,16 @@ Before the release commit, the changed layer must pass its suite:
   nothing, so it does not go in.
 - a change to hooks or scripts: `bash test/run.sh` green.
 
+## Moving a model pin
+
+The critics' frontmatter and the review command in `skills/run/SKILL.md`
+each carry a full model ID. `test/prose_test.sh` fails on an alias there. A
+move to another ID is a behavior change, so it is a minor bump. Before the
+release commit, run all four eval targets on the new IDs at `--votes 3`,
+then with `--holdout`. Then re-measure the noise floor and date it in
+`evals/README.md`. A new tally below 3/3 on any case means the new model
+does not hold the slot yet.
+
 ## The docs sweep
 
 hone states each behavior in more than one place, on purpose. The reference

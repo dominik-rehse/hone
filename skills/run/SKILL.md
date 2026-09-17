@@ -328,7 +328,7 @@ the output file, because the fan-out outlasts the ~2m foreground timeout:
 claude -p "/code-review $(cat <brief-file>)" \
   --add-dir <worktree> \
   --allowedTools "Task Agent Read Grep Glob Bash(git *)" \
-  --model opus --effort high \
+  --model claude-opus-5 --effort high \
   --output-format json > <out-file> 2>&1
 ```
 

@@ -76,6 +76,12 @@ printf '%s\n' "$out" | grep -q "model=claude-fake-1" && ok "the header carries t
 FAKE_NO_USAGE=1 run plan-critic --model fake --cases "$CASE" >/dev/null; rc=$?
 [ "$rc" -eq 3 ] && ok "an alias that does not resolve exits 3" || bad "an unresolved alias should exit 3 (got $rc)"
 
+SHIPS=$(awk '/^---[[:space:]]*$/{n++; next} n==1 && /^model:/{print $2}' "$PLUGIN_ROOT/agents/plan-critic.md")
+printf '%s\n' "$out" | grep -q "plan-critic ships on $SHIPS" && ok "a run on another model than the critic ships on says so" || bad "a model mismatch should print a note"
+out=$(run plan-critic --cases "$CASE")
+printf '%s\n' "$out" | grep -q "model=$SHIPS" && ok "the default model is the one the critics ship on" || bad "the default model should be $SHIPS"
+printf '%s\n' "$out" | grep -q "ships on" && bad "a run on the shipped model should print no note" || ok "a run on the shipped model prints no note"
+
 echo "== --prompt-file: a candidate prompt =="
 printf -- '---\nname: candidate\n---\nCANDIDATE-MARKER body\n' > "$W/candidate.md"
 rm -f "$W"/sys/*

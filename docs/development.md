@@ -41,8 +41,9 @@ critic prompts and the run skill's loop instructions to cases with
 known-good answers. [`evals/README.md`](../evals/README.md) is the manual:
 targets and cases, the balance between reject and near-miss pass cases,
 plurality voting, and the held-out set discipline. Two rules matter most.
-Match the model to what runs in production: the critic frontmatter pins
-`sonnet`, and the loop target runs with `--model opus`. And never read or
+Match the model to what runs in production. The critic frontmatter pins a
+full model ID, and the harness defaults to it. The loop and garden targets
+run with `--model opus`. And never read or
 tune against a `*-holdout` case while editing prose.
 
 There is no CI. Both suites run locally, and the releasing rule is what

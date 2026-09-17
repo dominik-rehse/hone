@@ -50,10 +50,10 @@ Three rules hold for every deletion, whichever tool proposed it:
 
 hone has more model slots than it looks like:
 
-- the critics (frontmatter `model:`)
+- the critics (frontmatter `model:`, a full model ID)
 - the loop and the garden skill (whatever model drives the session)
-- the nested `/code-review` call (currently hard-coded `--model opus` in
-  the run skill)
+- the nested `/code-review` call (a full model ID, hard-coded in the run
+  skill)
 - the stage-3 lab's judge
 
 Each slot's assignment is a measurable question, not taste:
@@ -99,12 +99,14 @@ A new model release triggers recalibration in both directions:
   mid-tier may take a slot the old top-tier held.
 
 Cadence: run the cheap unit suite on every model event, and the expensive
-lab on family releases. This discipline also requires one product change.
-The agent frontmatter pins the critics to the floating `sonnet` alias, so
-the provider re-pointing that alias silently recalibrates production with
-no commit here. Pin full model IDs in the agent frontmatter and the review
-command. Treat an alias move as a deliberate, suite-gated migration (a
-normal versioned change).
+lab on family releases. This discipline needed one product change, and
+0.53.0 made it. The agent frontmatter used to name the floating `sonnet`
+alias, so the provider re-pointing that alias recalibrated production with
+no commit here. The agent frontmatter and the review command now carry full
+model IDs, and `test/prose_test.sh` fails on an alias in either slot. A
+move to another model is a deliberate, suite-gated migration, and
+[`releasing.md`](../.claude/rules/releasing.md) *Moving a model pin* has the
+steps.
 
 ## Where things live
 

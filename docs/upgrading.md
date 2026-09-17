@@ -64,6 +64,11 @@ mechanical steps.
      changes without the marker. Turn it on with no worktree in flight and
      the primary branch pushed. Then no branch was cut from a commit that a
      later rebase moves. The remote must accept pushes to `refs/hone/*`.
+   - *Model IDs are pinned since 0.53*: the critics and the nested
+     `/code-review` name a full model ID where they named the `sonnet`
+     and `opus` aliases. Nothing to do on the Anthropic API. On a provider
+     that names its models differently, read the pin paragraph under
+     *Commands* in `reference.md`.
 
 After that, run `worktree.sh status`. It shows what is present and what is
 missing. It also flags a policy file that is still uncommitted, and a

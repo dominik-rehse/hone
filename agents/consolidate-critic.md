@@ -2,7 +2,7 @@
 name: consolidate-critic
 description: "Consolidation critic for a finished hone change. Runs once, in constructed context, over the diff and what the change left behind in docs, types, and tests. Prompted to argue for deletion: a Decision restating code, a Note drifting into a spec, a redundant test, an abstraction not earning its keep. Read-only."
 tools: Read, Grep, Glob
-model: sonnet
+model: claude-sonnet-5
 color: orange
 ---
 

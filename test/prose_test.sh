@@ -1,5 +1,5 @@
 #!/bin/bash
-# Check the shipped prose against the files and commands it names. Three checks,
+# Check the shipped prose against the files and commands it names. Four checks,
 # all exact, all derived from the repo itself (no hand-kept list):
 #
 #   1. Path integrity. Prose names a file the plugin ships: a
@@ -21,6 +21,10 @@
 #      that ships without its reference entry fails here. The semantic half
 #      (a sentence elsewhere that now states the old behavior) stays a
 #      reading job, and .claude/rules/releasing.md names the files to read.
+#   4. Model pins. A critic's frontmatter and the nested review command each
+#      name the model that fills the slot. An alias there floats: the
+#      provider re-points it, and production changes with no commit here.
+#      So each slot must carry a full model ID.
 #
 # Run: bash test/prose_test.sh
 set -uo pipefail
@@ -111,6 +115,20 @@ for hook in hooks/*.sh; do
     grep -qF -- "$name" "$REF" || { bad "$REF never names the $name hook"; gaps=$((gaps+1)); }
 done
 [ "$gaps" -eq 0 ] && ok "every subcommand, marker, tunable, and hook has a reference entry"
+
+echo "== prose: every model slot carries a full model ID =="
+for agent in agents/*.md; do
+    model=$(awk '/^---[[:space:]]*$/{n++; next} n==1 && /^model:/{print $2}' "$agent")
+    case "$model" in
+        claude-*) ok "$agent pins $model" ;;
+        *) bad "$agent has model '$model', which is not a full model ID" ;;
+    esac
+done
+review_model=$(grep -A6 -F 'claude -p "/code-review' skills/run/SKILL.md | grep -oE -- '--model [A-Za-z0-9.-]+' | head -1 | cut -d' ' -f2)
+case "$review_model" in
+    claude-*) ok "the review command pins $review_model" ;;
+    *) bad "the review command in skills/run/SKILL.md has model '$review_model', which is not a full model ID" ;;
+esac
 
 echo
 echo "prose_test: $pass passed, $fail failed"

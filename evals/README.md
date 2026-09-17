@@ -117,7 +117,7 @@ below carries each case with the stub's answer that justified keeping it.
 ## Run
 
 ```bash
-bash evals/run.sh                       # every case, one vote, model=sonnet
+bash evals/run.sh                       # every case, one vote, the critics' model
 bash evals/run.sh plan-critic           # one target
 bash evals/run.sh loop --model opus     # the run skill's instructions
 bash evals/run.sh garden --model opus   # the garden skill's classification
@@ -129,8 +129,10 @@ bash evals/run.sh garden --ablate       # the discrimination check, not a suite 
 ```
 
 Match the model to what actually runs in production, or the result means nothing.
-The critics carry `model: sonnet` in their frontmatter. The `loop` and `garden`
-targets use whatever model drives the session (`--model opus`).
+The critics carry a full model ID in their frontmatter, and a run without
+`--model` reads it from there. A critic run on any other model prints a note,
+because it answers an assignment question and gates no release. The `loop` and
+`garden` targets use whatever model drives the session (`--model opus`).
 
 `--model` takes an alias or a full model ID. An alias floats: the provider can
 re-point it, and two runs on `sonnet` a month apart may measure two models. So

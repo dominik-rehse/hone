@@ -32,7 +32,8 @@
 #                     [--model NAME] [--votes N] [--jobs N] [--holdout]
 #                     [--dry-run] [--ablate] [--cases A,B] [--prompt-file FILE]
 #                     [--json FILE] [--cache]
-#   --model NAME  an alias or a full model ID. The run resolves an alias once,
+#   --model NAME  an alias or a full model ID. The default is the ID the critics
+#               ship on (their frontmatter). The run resolves an alias once,
 #               pins every call to the full ID, and prints that ID, because an
 #               alias floats and a saved log must name what it measured.
 #   --votes N   plurality vote over N runs per case (default 1); use 3 pre-release.
@@ -74,7 +75,7 @@ abs_path() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$CALLER_PWD
 
 ALL_TARGETS=(plan-critic consolidate-critic loop garden)
 
-WHICH="all"; MODEL="sonnet"; DRY=0; VOTES=1; JOBS=8; HOLDOUT=0; ABLATE=0
+WHICH="all"; MODEL=""; DRY=0; VOTES=1; JOBS=8; HOLDOUT=0; ABLATE=0
 CASES=""; PROMPT_FILE=""; JSON_OUT=""; CACHE=0
 CACHE_DIR="${HONE_EVAL_CACHE:-$ROOT/evals/.cache}"
 while [ $# -gt 0 ]; do
@@ -94,6 +95,12 @@ while [ $# -gt 0 ]; do
     esac
     shift
 done
+
+# The model a critic ships on: the `model:` line of its frontmatter.
+ships_on() { awk '/^---[[:space:]]*$/{n++; next} n==1 && /^model:/{print $2}' "agents/$1.md"; }
+
+# Without --model the run measures what production runs: the critics' own pin.
+[ -n "$MODEL" ] || MODEL=$(ships_on plan-critic)
 
 if [ -n "$PROMPT_FILE" ]; then
     [ "$WHICH" = "all" ] && { echo "--prompt-file needs one target: a candidate prompt replaces one target's prose" >&2; exit 2; }
@@ -353,6 +360,13 @@ for target in "${TARGETS[@]}"; do
             if [ "$running" -ge "$JOBS" ]; then wait -n; running=$((running-1)); fi
         done
     done
+done
+# A critic measured on another model than it ships on is a fair experiment (can
+# a cheaper model hold the slot?), and it is never a release gate. Say which.
+for target in "${TARGETS[@]}"; do
+    case "$target" in *-critic) ;; *) continue ;; esac
+    [ "$(ships_on "$target")" = "$MODEL_ID" ] \
+        || echo "NOTE: $target ships on $(ships_on "$target"), and this run measures $MODEL_ID. It does not gate a release."
 done
 echo "running $total_calls model call(s) on $MODEL_ID, up to $JOBS at a time..."
 wait

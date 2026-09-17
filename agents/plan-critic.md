@@ -2,7 +2,7 @@
 name: plan-critic
 description: Gatekeeper for a hone Plan. Runs once at the end of /hone:plan, in constructed context, before the Plan is handed to /hone:run. Prompted to find fault; it hunts placeholders, contradictions, ambiguity, wrong scope, prose doing an artifact's job, and collision with an open change, and returns structured findings. Read-only.
 tools: Read, Grep, Glob
-model: sonnet
+model: claude-sonnet-5
 color: cyan
 ---
 
