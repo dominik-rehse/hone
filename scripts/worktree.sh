@@ -84,6 +84,13 @@
 #       back) · 7 real-environment proof missing · 8 ungranted irreversible
 #       change · 9 merge conflict (aborted, tree restored).
 #
+#   worktree.sh review-scope <change>
+#       Print how deep the change's review must go: `full`, or `docs-only`
+#       when the diff against the merge base touches nothing outside docs/
+#       and .plans/. A committed .hone-review-always lists path globs that
+#       force `full` even inside docs/. Anything it cannot classify is
+#       `full`. Exit: 0 printed · 2 usage/not-a-repo/no such branch.
+#
 #   worktree.sh verify
 #       Run the full suite (scripts/run-tests.sh --all) in the current tree,
 #       serialized under the SAME lock as land. e2e tiers are load-sensitive:

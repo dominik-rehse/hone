@@ -13,6 +13,14 @@
 #      prose mention fails here. Convention: backtick a bare `worktree.sh`
 #      mention when the next word is prose, so it does not read as a
 #      subcommand.
+#   3. Surface coverage, the reverse direction. Everything the code exposes
+#      must appear in docs/reference.md, the control surface: every
+#      worktree.sh subcommand (in the script's own header too), every
+#      .hone-* marker or record the hooks and the script read, every
+#      HONE_* variable read with a default, and every hook file. A feature
+#      that ships without its reference entry fails here. The semantic half
+#      (a sentence elsewhere that now states the old behavior) stays a
+#      reading job, and .claude/rules/releasing.md names the files to read.
 #
 # Run: bash test/prose_test.sh
 set -uo pipefail
@@ -75,6 +83,34 @@ else
     done < <(grep -ohE 'worktree\.sh +[a-z][a-z-]*' $PROSE 2>/dev/null | sort -u)
     [ "$unknown" -eq 0 ] && ok "every mentioned subcommand is dispatched ($(printf '%s\n' "$subs" | wc -l) valid)"
 fi
+
+echo "== prose: the reference covers the control surface =="
+REF=docs/reference.md
+HEADER=$(sed -n '1,/^HONE_WSH=/p' scripts/worktree.sh)
+gaps=0
+while IFS= read -r sub; do
+    [ -n "$sub" ] || continue
+    grep -qE "worktree\.sh $sub([^a-z-]|$)" "$REF" || { bad "$REF never names 'worktree.sh $sub'"; gaps=$((gaps+1)); }
+    printf '%s\n' "$HEADER" | grep -qE "^#   worktree\.sh $sub([^a-z-]|$)" \
+        || { bad "the scripts/worktree.sh header has no entry for '$sub'"; gaps=$((gaps+1)); }
+done <<<"$subs"
+# Markers and records: whatever the hooks and the worktree script read. The
+# setup script is left out, because it names markers hone RETIRED (it strips
+# their gitignore lines), and those belong in upgrading.md, not here.
+while IFS= read -r marker; do
+    [ -n "$marker" ] || continue
+    grep -qF -- "$marker" "$REF" || { bad "$REF never names $marker"; gaps=$((gaps+1)); }
+done < <(grep -ohE '\.hone-[a-z-]+' hooks/*.sh scripts/worktree.sh 2>/dev/null | sort -u)
+while IFS= read -r var; do
+    [ -n "$var" ] || continue
+    grep -qF -- "$var" "$REF" || { bad "$REF never names $var"; gaps=$((gaps+1)); }
+done < <(grep -ohE '\$\{HONE_[A-Z_]+:-' hooks/*.sh scripts/*.sh 2>/dev/null | sed 's/[${:-]//g' | sort -u)
+for hook in hooks/*.sh; do
+    name=$(basename "$hook" .sh)
+    case "$name" in common|messages) continue ;; esac
+    grep -qF -- "$name" "$REF" || { bad "$REF never names the $name hook"; gaps=$((gaps+1)); }
+done
+[ "$gaps" -eq 0 ] && ok "every subcommand, marker, tunable, and hook has a reference entry"
 
 echo
 echo "prose_test: $pass passed, $fail failed"

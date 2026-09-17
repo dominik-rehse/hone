@@ -42,3 +42,34 @@ Before the release commit, the changed layer must pass its suite:
   expected answer. A case that discriminates against neither baseline pins
   nothing, so it does not go in.
 - a change to hooks or scripts: `bash test/run.sh` green.
+
+## The docs sweep
+
+hone states each behavior in more than one place, on purpose: the reference
+for the operator, the model doc for the why, the skills for the model, the
+README for the first read. A behavior change therefore goes stale somewhere
+else unless you look. `test/prose_test.sh` catches the mechanical half: a
+subcommand, marker, tunable, or hook with no reference entry. The other half
+is a sentence that now describes the old behavior, and no script reads
+meaning. So before the release commit, do this by hand:
+
+1. Write down the nouns and verbs the change touched. Examples: `attest`,
+   `sign-off`, `push`, `primary tree`, `claim`, `exit 5`.
+2. Grep the whole repo for each, not only the files you edited:
+   `grep -rn -i '<term>' README.md docs rules skills agents templates hooks
+   scripts evals/README.md`.
+3. Read every hit as a claim about behavior, and ask whether it is still
+   true. Fix or delete what is not. A code comment counts, and so does a
+   message template.
+
+The files that restate behavior most often, and so go stale most often:
+`README.md`, `docs/model.md`, `docs/reference.md`, `docs/upgrading.md`,
+`rules/workflow.md`, every `skills/*/SKILL.md` and `skills/run/references/*.md`,
+`templates/*/README.md`, `templates/settings/deny-rules.txt`, the header
+comment of `scripts/worktree.sh`, the header comments of `hooks/*.sh`, and
+the case ledger in `evals/README.md`. An eval case's `expected` answer is a
+claim too: a rule change can flip it.
+
+One more check that has bitten: a new message template's `Do:` line must
+not hand the agent a route around a gate or a policy file. Read each new
+template as the agent would.
