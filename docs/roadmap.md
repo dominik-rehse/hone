@@ -65,13 +65,24 @@ Each slot's assignment is a measurable question, not taste:
   prose still carries (rule 2 above).
 - The lab measures each assignment end-to-end, cost per run against outcome.
 
-The floors today are what the release gate measures
-([`releasing.md`](../.claude/rules/releasing.md)). The critics gate on
-sonnet, so sonnet is their floor. The `loop` and `garden` targets gate on
-opus, and the nested review needs opus too. No run has measured the loop
-or the garden prose on a cheaper model. So opus is the floor for both, and
-rule 2 means opus there, until one of those targets passes on a cheaper
-model.
+A measurement on 2026-09-17 set the floors. Each target ran one tier below
+its release gate ([`releasing.md`](../.claude/rules/releasing.md)), at three
+votes, with the held-out cases:
+
+- *The critics* gate on claude-sonnet-5, and that stays their floor. On
+  claude-haiku-4-5 the `plan-critic` approved `outcome-table-in-prose` 3/3,
+  and two `consolidate-critic` cases passed at 2/3 only.
+- *The loop* gates on claude-opus-5, and that stays its floor. On
+  claude-sonnet-5 it answered HANDROLL 2/3 on `review-fanout-temptation`,
+  and it split `consolidate-forecast-unprompted` 2/3.
+- *The garden skill* gates on claude-opus-5, and claude-sonnet-5 passed all
+  five of its cases 3/3. So sonnet is the garden floor, and rule 2 means
+  that a garden deletion must hold there. The suite is thin, so this says
+  that the pinned classification holds on sonnet, and nothing about the
+  rest of the skill.
+
+The nested review has no eval target, so nothing measures its floor. The
+lab can, with a review model switch that it does not have yet.
 
 Cost and quality are not the only axes for the review slot. Independence
 is a possible third. The nested `/code-review` checks code the session's
