@@ -147,7 +147,7 @@ Three additions since 0.23.x changed what the suite is:
 The cut left every target thin. *Known gaps* in the manual lists what
 stays unpinned.
 
-## Stage 1: coverage growth (next)
+## Stage 1: coverage growth (first pass done, 2026-09-17)
 
 Rule 1 makes coverage the limit of every cut, and the suite is thin after
 the no-op cut. An ablation on a thin suite reports that most sections
@@ -164,9 +164,17 @@ The stage is done when these hold:
 - each of the four targets has a held-out case
 - each section that a stage-2 ablation will test has a case aimed at it
 
+The first two hold since 2026-09-17, and the ledger in the manual has the
+measurements. Four cases joined: a CUTS case and a held-out case for the
+`consolidate-critic`, and a REJECT case and a held-out case for the
+`plan-critic`. Five drafts died in the ablation, and *Known gaps* records
+why. One of them found a miss in the shipped `plan-critic`, which *Known
+gaps* also records.
+
 The third condition repeats per campaign. It is also the rule for reading
 an ablation: an unchanged suite is evidence only for a section that a case
-aims at.
+aims at. Most sections of every prompt still have no case aimed at them, so
+the next campaign starts with cases, not with cuts.
 
 ## Stage 2: machine-drivable harness (done, 2026-09-17)
 

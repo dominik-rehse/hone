@@ -230,6 +230,19 @@ isolated, three votes, moved three numbers and left the rest standing:
   pools every vote that carried the verdict, so one stray "preserve" across
   three replies satisfies a substring. Pick a substring the prose mandates,
   not one the topic suggests. Measured 2026-08-27, isolated.
+- `outcome-table-in-prose`: REJECT with the substring `missing-artifact`,
+  3/3. The Plan opens a new area and states fifteen exact invoice-number
+  strings in its *What*, each worded as an outcome the accountant sees. The
+  stub rejects too, 3/3, and never names the category. The token
+  discriminates against the second baseline: the prompt minus the whole
+  *Prose doing an artifact's job* bullet approves 2/3. The prompt minus only
+  the sentence on case-by-case enumerations still rejects 2/3, so the case
+  pins the bullet and not that sentence. A first draft with seven strings
+  split the full critic 2/3, and its approving vote called seven examples
+  "acceptable spec-by-example". Measured 2026-09-17, claude-sonnet-5.
+- `schema-split-column-holdout`: REJECT with `disposable`, held out. It
+  paraphrases `schema-silent-on-data` with different content, and it measured
+  the same way: critic 3/3 with the substring, stub REJECT 3/3 without it.
 
 *`consolidate-critic`*, the verdict on what a change left behind:
 
@@ -247,6 +260,20 @@ isolated, three votes, moved three numbers and left the rest standing:
   for that. Where a paragraph exists to counteract another paragraph, the
   proxy breaks, and the ablation has to run against the prompt minus the
   paragraph instead.
+- `spike-conclusion-only`: CUTS with the substring `spike-drift`, 3/3, and
+  `spike-drift` is the only category the critic names. The change adds a
+  spike note that holds a finding and a live forward pointer, and no method
+  and no dead ends. The brief never points at it. The second baseline is the
+  prompt minus the two sentences on a note whose whole content is the
+  conclusion, and it answers CLEAN 3/3. The stub answers CUTS 3/3 for code
+  reasons of its own (a search regression, an index lock), and it calls the
+  spike handling correct. Measured 2026-09-17, claude-sonnet-5.
+- `spike-verdict-only-holdout`: CUTS with `spike-drift`, held out. It
+  paraphrases the case above, and it measured the same way: critic 3/3,
+  second baseline CLEAN 3/3, stub CUTS 2/3 without the substring. Its first
+  draft carried a Decision sentence that restated a regex, and the baseline
+  cut that sentence 3/3. A brief for a CUTS case must leave the critic
+  exactly one thing to cut.
 
 *`loop`*, the next action `run` takes:
 
@@ -322,7 +349,8 @@ against the model's default, which is why the case carries the second baseline.
 The cut left two gaps, and the `garden` target opened a third. All three are
 deliberate, and the suite barely covers any of them.
 
-*`consolidate-critic` has one case, and most of the target stays ungated.* All
+*`consolidate-critic` has two visible cases, and most of the target stays
+ungated.* Both pin the spike paragraph. All
 13 original cases were no-ops. A model with no hone prose reached the
 same verdict on every one. `spike-note-may-age` (2026-08-19) is the first
 replacement, and it pins one paragraph rather than the critic as a whole.
@@ -350,6 +378,13 @@ sentence, on a `decision-restates-code` reading that stands up by itself. So
 another cut target does not sharpen this critic. It raises what the critic
 cuts anywhere in the brief, and the marginal call goes with it.
 
+Two more CUTS drafts died on 2026-09-17, both on the stub. One left the Plan
+file in a `git ls-files` listing and said nothing about it. The other left
+an open question in `docs/open-questions.md` that the change's new Decision
+answers. The stub found and cut each one 3/3. A leftover is what any
+reviewer looks for, so a leftover case pins nothing, however deep the brief
+buries it.
+
 A first `loop` case for the same rule died the same day, and what killed it is
 the most useful thing measured here. It asked point-blank what to do with a
 drafted Decision paragraph that forecasts. Every baseline then answers DISCARD.
@@ -374,9 +409,10 @@ expect APPROVE, so an always-APPROVE critic scored 2/2. The suite could not see
 a critic that had gone permissive. `schema-silent-on-data` closes that. It
 does not close the underlying problem, and the entry above says why. The stub
 rejected this Plan in every run too, so the token discriminates against
-nothing here, and the substring carries the whole pin. Read a REJECT case here
+nothing here, and the substring carries the whole pin. Read that REJECT case
 as pinning what the critic *says* when it rejects, never whether it rejects at
-all.
+all. `outcome-table-in-prose` (2026-09-17) is the first REJECT case whose
+token discriminates, and it does so against the second baseline only.
 
 That is also why the 2026-08-18 cut took every REJECT case: the stub rejected
 them all. A sample of five cut cases, re-ablated isolated on 2026-08-27,
@@ -388,6 +424,23 @@ stub rejects 3/3 without ever writing the word "proof". That word is common
 enough that one run is not evidence, so the case stays cut. The sample is what
 closes the question the contaminated harness opened. Recovering the other 39 is
 not worth the calls.
+
+*The critic misses a slug collision between Plans that share no file.*
+Measured 2026-09-17 on claude-sonnet-5. The draft case
+`nested-slug-open-plan` had an exemplary Plan `export/csv-quoting`, an open
+Plan `export`, and no file in common. The shipped prompt approved it 2/3.
+Each approving vote checked the two file sets under `collision`, found them
+disjoint, and never compared the slugs. A candidate prompt with the slug
+rule as a bullet of its own rejected 2/3, which is no fix. The case is not
+in the suite, because a case that the shipped prompt fails gates nothing.
+The `plan` skill refuses such a slug at its first step, so the critic is
+the second check here, not the only one. A fix probably needs a category of
+its own in the output list, because the critic walks that list.
+
+One more plan-critic draft died the same day. `refresh-handwritten-version`
+hand-writes a version string into `package.json`. The stub rejected it 2/3,
+so it is a no-op. A held-out paraphrase of `dep-refresh-no-red-test` died
+too: the stub and the prompt minus the refresh bullet both approved it.
 
 *The prompt layer stays unpinned, in `garden` as everywhere else.* garden refuses
 to cut a `CLAUDE.md` paragraph in a repo with no eval suite. That is one of its
@@ -462,6 +515,12 @@ compare it with the ID of the last measurement. Re-measure the floor before
 an ablation campaign, and on every new model. And the one dissenting vote sits in
 `spike-note-may-age`, the case pinned against hone's own deletion bias.
 Read that case's tally first when a run degrades.
+
+That tally has moved since. On 2026-09-17, on claude 2.1.274 and
+claude-sonnet-5, two passes both scored the case 2/3 with one CUTS vote. The
+critic prompt had not changed between the dates. Two passes do not make a
+floor, and the plurality held. Re-measure the floor before anybody reads a
+2/3 on this case as the effect of an edit.
 
 ## Extending
 
