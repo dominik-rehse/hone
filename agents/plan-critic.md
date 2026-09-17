@@ -81,11 +81,14 @@ what they must resolve before the loop runs unattended against it.
 - **Collision with an open change.** Consider the other open Plans/worktrees in
   the brief. Would this change fight one of them on the same `src/` files, type,
   Decision, or Note? If so it is not independent. Say which change and which
-  shared file or contract they collide on. Also reject a **slug collision**.
-  The Plan's slug is nested under another open Plan's slug (`a/b` while Plan
-  `a` is open), or names a directory that holds other open Plans. References
-  live in `.plans/<slug>/`, so such a Plan is indistinguishable from a
-  reference file and disappears from the pending-Plan scans.
+  shared file or contract they collide on.
+- **Slug collision.** Compare the Plan's slug with the slug of every open
+  Plan. Do it even when the two changes share no file, because this check is
+  about names and not about code. Reject when the slug is nested under an
+  open Plan's slug (`a/b` while Plan `a` is open), or when it names a
+  directory that holds other open Plans. References live in `.plans/<slug>/`,
+  so such a Plan is indistinguishable from a reference file and disappears
+  from the pending-Plan scans.
 - **Contract churn.** Does the Plan touch a **persistent contract**: a DB
   schema or migration, a public API, a wire or file format? If so, is the
   value-space it admits complete, or will a foreseeable follow-up rewrite the
@@ -108,8 +111,8 @@ what they must resolve before the loop runs unattended against it.
 
 Return structured findings, most-severe first. For each, give a category
 (`placeholder` | `contradiction` | `ambiguity` | `missing-baseline` | `scope` |
-`missing-artifact` | `collision` | `contract-churn`). Give the specific
-location in the Plan, why it blocks an unattended run, and the concrete
+`missing-artifact` | `collision` | `slug-collision` | `contract-churn`). Give
+the specific location in the Plan, why it blocks an unattended run, and the concrete
 question or split the human must resolve. End with a one-line verdict:
 `APPROVE` or `REJECT`.
 

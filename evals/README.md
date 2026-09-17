@@ -226,6 +226,22 @@ isolated, three votes, moved three numbers and left the rest standing:
   still approves, at 2/3, so that paragraph carries part of the answer and
   the *Ambiguity* bullet carries the rest. Measured 2026-09-17,
   claude-sonnet-5.
+- `nested-slug-open-plan`: REJECT with the substring `slug-collision`, 5/5.
+  An exemplary Plan `export/csv-quoting`, an open Plan `export`, and no file
+  in common. The stub approves 3/3. The second baseline is the prompt as it
+  shipped until 0.53.1, and it approved 2/3: each approving vote compared
+  the two file sets under `collision`, found them disjoint, and never
+  compared the slugs. The critic walks its output categories, so the fix
+  gave the slug check a bullet and a category of its own. A bullet alone
+  moved the case to 2/3 only. Measured 2026-09-17, claude-sonnet-5.
+
+  The fix was checked for a side effect. Under the new prompt
+  `schema-silent-on-data` gave one APPROVE vote in two separate runs, where
+  the prompt before it had given none all day. Twenty votes on each prompt
+  then came out 20/20 for both. Over the day that is 39 of 41 against 54 of
+  54. A ninth category may cost the others a few percent of a vote, and
+  that is far from a plurality flip. Watch that case's tally on the next
+  edit that adds a category.
 - `schema-silent-on-data`: REJECT, and the required substring `disposable` is
   the whole case. The stub rejects too, in every run, so the token
   discriminates against nothing. The Plan changes `invoices.amount` from
@@ -461,18 +477,6 @@ stub rejects 3/3 without ever writing the word "proof". That word is common
 enough that one run is not evidence, so the case stays cut. The sample is what
 closes the question the contaminated harness opened. Recovering the other 39 is
 not worth the calls.
-
-*The critic misses a slug collision between Plans that share no file.*
-Measured 2026-09-17 on claude-sonnet-5. The draft case
-`nested-slug-open-plan` had an exemplary Plan `export/csv-quoting`, an open
-Plan `export`, and no file in common. The shipped prompt approved it 2/3.
-Each approving vote checked the two file sets under `collision`, found them
-disjoint, and never compared the slugs. A candidate prompt with the slug
-rule as a bullet of its own rejected 2/3, which is no fix. The case is not
-in the suite, because a case that the shipped prompt fails gates nothing.
-The `plan` skill refuses such a slug at its first step, so the critic is
-the second check here, not the only one. A fix probably needs a category of
-its own in the output list, because the critic walks that list.
 
 A REJECT case on this critic discriminates by its category word at best.
 Two more drafts showed that on 2026-09-17. `baseline-never-stated` changes

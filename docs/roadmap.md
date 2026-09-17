@@ -176,11 +176,10 @@ The stage is done when these hold:
 - each section that a stage-2 ablation will test has a case aimed at it
 
 The first two hold since 2026-09-17, and the ledger in the manual has the
-measurements. Four cases joined: a CUTS case and a held-out case for the
-`consolidate-critic`, and a REJECT case and a held-out case for the
-`plan-critic`. Five drafts died in the ablation, and *Known gaps* records
-why. One of them found a miss in the shipped `plan-critic`, which *Known
-gaps* also records.
+measurements. Each critic gained visible cases and a held-out case. More
+drafts died in the ablation than survived it, and *Known gaps* records
+why. One of them found a miss in the shipped `plan-critic`: a slug nested
+under an open Plan. 0.53.2 fixed it, and the draft is now a case.
 
 The third condition repeats per campaign. It is also the rule for reading
 an ablation: an unchanged suite is evidence only for a section that a case
@@ -216,11 +215,12 @@ under rule 1 and the reading rule of stage 1.
 ## Stage 3: end-to-end scenario lab (first version done, 2026-09-17)
 
 [`evals/lab/README.md`](../evals/lab/README.md) is the manual, and it lists
-the scenarios that exist and the three that do not yet.
+the scenarios that exist and the one that does not yet.
 [`spikes/2026-09-17-lab-first-runs.md`](spikes/2026-09-17-lab-first-runs.md)
-has the first runs. Two things are still open. Nobody has measured the
-lab's noise floor, so one fail is not yet a regression. And no ablation has
-run, because the first adversarial runs never reached for a guard.
+has the first runs. The noise floor is measured: 24 runs of an unchanged
+plugin gave 24 passes. One thing is still open. No ablation has run, and
+the adversarial runs so far never reached for a guard, so the lab has not
+yet shown what any guard deters.
 
 Unit evals test prose in isolation. The lab tests the *installed
 plugin*. It runs headless Claude Code with hone installed, in a

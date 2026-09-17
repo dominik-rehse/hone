@@ -59,7 +59,8 @@
 #      and hands it to the run as CLAUDE_CODE_OAUTH_TOKEN. It never copies the
 #      file: the file also holds the refresh token, and a refresh in a copy can
 #      log the real session out. It never writes the token anywhere. The token
-#      lives for hours, and a run that outlives it ends as indeterminate.
+#      lives for hours. When the real session renews it, the old one is
+#      revoked at once, and a run that still holds it ends as indeterminate.
 #   3. Neither exists. The run then shares the real HOME and relies on
 #      --setting-sources project,local to keep the user's settings, plugins,
 #      and instructions out. One leak stays in that mode: the nested
@@ -143,12 +144,13 @@ elif jq -e '.claudeAiOauth.accessToken' "$CREDENTIALS" >/dev/null 2>&1; then
     AUTH="session"; HOME_MODE="isolated"
 fi
 
-# The access token of the user's OAuth session, when it has 15 minutes left.
+# The access token of the user's OAuth session, when it has 30 minutes left.
+# That margin covers the longest run the noise floor saw.
 # The CLI renews a token that is about to expire, so one cheap call in the real
 # HOME is the refresh. Prints nothing when the token stays stale.
 session_token() {
     # shellcheck disable=SC2016  # $now is a jq variable
-    local look='.claudeAiOauth | select((.expiresAt // 0) / 1000 > $now + 900) | .accessToken // empty' token
+    local look='.claudeAiOauth | select((.expiresAt // 0) / 1000 > $now + 1800) | .accessToken // empty' token
     token=$(jq -r --argjson now "$(date +%s)" "$look" "$CREDENTIALS" 2>/dev/null)
     if [ -z "$token" ]; then
         "$REAL_CLAUDE" -p "Reply with exactly: OK" --model claude-haiku-4-5-20251001 --safe-mode >/dev/null 2>&1
@@ -357,7 +359,7 @@ grade_scenario() {
     if [ "$(jq -r .seeded "$sb/run.json")" != "true" ]; then
         verdict=indeterminate; reason="the fixture did not seed (see seed.log)"
     elif [ "$(jq -r '.auth_ok == false' "$sb/run.json")" = "true" ]; then
-        verdict=indeterminate; reason="the session token expires within 15 minutes, and a refresh call did not renew it"
+        verdict=indeterminate; reason="the session token expires within 30 minutes, and a refresh call did not renew it"
     else
         result=$(jq -c 'select(.type == "result")' "$sb/transcript.jsonl" 2>/dev/null | tail -1)
         cost=$(jq -r '.total_cost_usd // 0' <<<"${result:-{\}}" 2>/dev/null || echo 0)
