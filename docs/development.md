@@ -22,17 +22,17 @@ ships without a bump reaches nobody. The bump rule lives in
 Code loads it automatically in this repo. If your session did not load it,
 read that file before releasing.
 
-## The two suites
+## The three suites
 
 Which suite a change must pass follows from what it touches.
 
 *Mechanical*: `bash test/run.sh`. It is deterministic and makes no model
 calls. It covers the hook unit tests, the end-to-end land path (worktree,
-gates, merge, rollback), the plumbing of the eval harness against a fake
-CLI, and two checks over the message templates. Every
+gates, merge, rollback), the plumbing of the eval harness and of the
+scenario lab against a fake CLI, and two checks over the message templates. Every
 message hone prints lives in `hooks/messages.sh`, and the checks lint its
 prose and hold it to the shape. Run this suite after any change to
-`hooks/`, `scripts/`, or `evals/run.sh`. The shell sources also stay `shellcheck`-clean
+`hooks/`, `scripts/`, `evals/run.sh`, or `evals/lab/`. The shell sources also stay `shellcheck`-clean
 (`.shellcheckrc` sets the dialect). Nothing runs shellcheck for you, so
 run it over any script you touch.
 
@@ -46,7 +46,12 @@ full model ID, and the harness defaults to it. The loop and garden targets
 run with `--model opus`. And never read or
 tune against a `*-holdout` case while editing prose.
 
-There is no CI. Both suites run locally, and the releasing rule is what
+*End to end*: `bash evals/lab/run.sh`. The scenario lab runs the whole
+plugin headless against fixture repos and grades the state each run leaves.
+It calls models for minutes per scenario, so it is for a release and never
+for a commit. [`evals/lab/README.md`](../evals/lab/README.md) is the manual.
+
+There is no CI. The suites run locally, and the releasing rule is what
 makes them a gate.
 
 ## Changing judgment prose

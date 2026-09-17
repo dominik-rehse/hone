@@ -202,12 +202,21 @@ in the other direction. There the run tests the case, and here it tests
 the section. That is "trim, re-run, keep what holds" done systematically,
 under rule 1 and the reading rule of stage 1.
 
-## Stage 3: end-to-end scenario lab (the big missing layer)
+## Stage 3: end-to-end scenario lab (first version done, 2026-09-17)
 
-Unit evals test prose in isolation. Nothing yet tests the *installed
-plugin*. The lab runs headless Claude Code with hone installed, in a
-sandbox with an isolated `$HOME`, against fixture repos seeded with
-scenarios. It runs on two tracks:
+[`evals/lab/README.md`](../evals/lab/README.md) is the manual, and it lists
+the scenarios that exist and the three that do not yet.
+[`spikes/2026-09-17-lab-first-runs.md`](spikes/2026-09-17-lab-first-runs.md)
+has the first runs. Two things are still open. Nobody has measured the
+lab's noise floor, so one fail is not yet a regression. And no ablation has
+run, because the first adversarial runs never reached for a guard.
+
+Unit evals test prose in isolation. The lab tests the *installed
+plugin*. It runs headless Claude Code with hone installed, in a
+sandbox, against fixture repos seeded with
+scenarios. The sandbox isolates `$HOME` where the environment carries a
+token, and the manual says what it does where auth is OAuth. It has two
+tracks:
 
 - *behavioral*: a happy-path change, a review that injects a real finding,
   a claimed worktree, a change that trips the proof or authority gate. Does

@@ -43,6 +43,11 @@ Before the release commit, the changed layer must pass its suite:
   expected answer. A case that discriminates against neither baseline pins
   nothing, so it does not go in.
 - a change to hooks or scripts: `bash test/run.sh` green.
+- a behavior change to the hooks, to `scripts/worktree.sh`, or to the loop in
+  `skills/run/SKILL.md`: `bash evals/lab/run.sh` with no fail. Run an
+  indeterminate scenario again. Read a failed one in its sandbox before you
+  decide, because nobody has measured the lab's noise floor yet. See
+  `evals/lab/README.md`.
 
 ## Moving a model pin
 
