@@ -991,8 +991,8 @@ msg_wt_push_refused() {
     local remote="$1" primary="$2" tail="${3:-}"
     cat <<EOF
 hone worktree: $remote refused the push to $primary, and $remote/$primary did not move.
-Do: allow direct pushes to $primary on $remote, or turn shared mode off by removing .hone-shared.
-Why: shared mode pushes the tested merge straight to $primary.
+Do: stop, and ask the human to allow direct pushes to $primary on $remote.
+Why: shared mode lands on $primary, and the marker is policy.
 EOF
     hone_msg_block "$tail"
 }

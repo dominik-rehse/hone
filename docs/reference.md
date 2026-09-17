@@ -131,6 +131,8 @@ file:
   working as before. The remote must accept pushes to `refs/hone/*`, which
   GitHub, GitLab, and Gitea do. `worktree.sh status` reports the marker,
   warns until you commit it, and lists the claims other developers hold.
+  The guard and the bash-guard protect the marker like the other policy
+  files, so turning shared mode off stays your call.
 
 *Per-developer*, gitignored and never checked in:
 

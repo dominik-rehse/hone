@@ -127,7 +127,9 @@ fi
 # .hone-review-always list shrinks or widens the enforcement perimeter, which is
 # the human's call. Deleting the marker is the cheapest way past the land proof
 # gate, and deleting the list is the cheapest way past a review. So both
-# escalate like the rest.
+# escalate like the rest. .hone-shared is in the set too: deleting it is the
+# cheapest way past a push the host refused, and it decides where the team
+# lands.
 #
 # The check configs are in the set for the same reason (HONE_CHECK_CONFIG_RE in
 # common.sh, shared with guard.sh rule 1b). The gate's test, lint, format, and
@@ -136,7 +138,7 @@ fi
 # the basename with no left boundary, like the entries before it, so a nested
 # config in a monorepo counts, and a redirect or verb aimed at one asks in any
 # tree.
-PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common|messages)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths|\.hone-proof-always|\.hone-review-always'
+PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common|messages)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths|\.hone-proof-always|\.hone-review-always|\.hone-shared'
 PROT="$PROT|${HONE_CHECK_CONFIG_RE}([^A-Za-z0-9_.-]|$)"
 # The two constructs need different shapes, so they get one branch each.
 #

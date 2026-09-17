@@ -218,6 +218,9 @@ echo "$(bg 'rm .hone-proof-always')" | grep -q '"ask"' && ok "removing .hone-pro
 echo "$(bg 'echo x > .hone-proof-always')" | grep -q '"ask"' && ok "rewriting .hone-proof-always escalated" || bad "rewriting the proof-always marker should ask"
 # .hone-review-always is the same class: deleting it is the cheapest way to make
 # a docs-only change skip its review.
+# .hone-shared decides where the team lands, and deleting it is the cheapest
+# way past a push the host refused.
+echo "$(bg 'rm .hone-shared')" | grep -q '"ask"' && ok "removing .hone-shared escalated" || bad "removing the shared marker should ask"
 echo "$(bg 'rm .hone-review-always')" | grep -q '"ask"' && ok "removing .hone-review-always escalated" || bad "removing the review-always list should ask"
 # messages.sh carries hone's own prose, and it belongs to the same plugin-side
 # class as the other hooks the pattern already lists.
@@ -608,6 +611,8 @@ denied "$out" && ok "proof-always marker denied in primary tree" || bad ".hone-p
 # so an agent that empties it reviews itself less.
 out=$(guard_write ".hone-review-always" "$REPO")
 denied "$out" && ok "review-always list denied in primary tree" || bad ".hone-review-always should be guard-protected"
+out=$(guard_write ".hone-shared" "$REPO")
+denied "$out" && ok "shared marker denied in primary tree" || bad ".hone-shared should be guard-protected"
 
 echo
 echo "== nag: zero-deletion change (advisory, pre-land) =="

@@ -338,9 +338,10 @@ or ops-level declares `Proof: real-environment — <the check>`. (The
 `plan-critic` rejects a plan whose named proof is categorically unable to
 settle its claim.) `land` refuses such a change until a reviewed
 real-environment check passes, or until whoever ran the check signs it
-off. The loop signs off for a check it ran itself, and stops for one it
-cannot reach. A sign-off naming a check nobody ran is evidence of
-nothing. The landing commit copies that whole line, because consolidate
+off. The loop runs the check where it can reach it and hands you the
+output, and you sign off. It never signs a proof off itself, because a
+sign-off the run writes for its own change is the record the gate exists
+to prevent. A sign-off naming a check nobody ran is evidence of nothing. The landing commit copies that whole line, because consolidate
 deletes the Plan and the trailer is all that reaches land. The sign-off
 names the commit it covers, so it expires when new commits arrive.
 Mechanics are in [`reference.md`](reference.md).
@@ -440,6 +441,24 @@ landed one at a time. Three rules:
   the check missed an overlap. The run then folds the colliding changes
   into one serial change. After all merges, one global consolidate pass
   looks for cross-change duplication no single worktree could see.
+
+## Several developers
+
+By default the primary tree is one developer's, and land merges into it
+and stops. A team commits a `.hone-shared` marker, and the primary branch
+then belongs to the team on a remote. Nothing else changes, and that is
+the point. There is no tracker, no daemon, and no pull request, because
+git already carries the two facts a team needs. The first is who owns a
+change. A claim is a ref on the remote, and git creates a ref exactly
+once, so of two runs racing on one change exactly one wins. The second is
+whether a merge is safe: git rejects a push that is not a straight
+extension of the remote branch. So land merges on top of the remote's
+latest, runs the suite, and pushes. When another developer landed in the
+meantime the push fails, and land redoes merge and suite on top of their
+change. Merges from several machines serialize on the suite, and no
+commit reaches the remote unless the suite passed on exactly that tree.
+The partition rule above stays per machine: across machines the merge
+alone verifies independence, and a collision is the same exit 9.
 
 ## Continuous maintenance
 
