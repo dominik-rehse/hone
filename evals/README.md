@@ -403,9 +403,9 @@ that raises the queue's high-water mark, so the diff itself contradicts a
 number in the old spike note. The full prompt answers CLEAN 5/5. The prompt
 minus the converse rule answers CLEAN 4/5, and the one dissent cuts the
 note as `spike-drift`. A tally moves, so the rule stays. No plurality
-flips, so the brief pins nothing at three votes and is not in the suite.
-Run it again on the next model. If it reads 5/5 without the rule, the rule
-has expired.
+flips, so the brief pins nothing at three votes. It lives on as a watch
+case (see *Watch cases*). If it reads 5/5 without the rule on the next
+model, the rule has expired.
 
 Two more CUTS drafts died on 2026-09-17, both on the stub. One left the Plan
 file in a `git ls-files` listing and said nothing about it. The other left
@@ -492,6 +492,21 @@ trimmed it against, while the behavior can still be gone in any paraphrase. So:
 never read a holdout brief or edit prose with one in view. Run `--holdout` once,
 as the last check before a release. A holdout failure after a green main suite is
 the overfitting signal. Fix the prose, never the holdout case.
+
+## Watch cases
+
+A case dir named `*-watch` is in no suite run, with or without `--holdout`.
+It runs only when `--cases` names it. A watch case is a brief on which a
+paragraph still moves a tally and flips no plurality, so it cannot gate
+anything today. It exists for the expiry check of a new model: run it at
+five votes against the full prompt and against the prompt minus the
+paragraph, and compare the tallies.
+
+```bash
+bash evals/run.sh consolidate-critic --votes 5 --cases spike-note-contradicted-watch
+bash evals/run.sh consolidate-critic --votes 5 --cases spike-note-contradicted-watch \
+    --prompt-file /tmp/critic-minus-converse-rule.md
+```
 
 ## How a case is scored
 

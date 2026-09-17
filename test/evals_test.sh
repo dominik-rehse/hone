@@ -56,7 +56,7 @@ case_calls() { find "$W/sys" -type f | wc -l; }
 # One real visible case supplies the brief and the expected token.
 CASE=""
 for d in "$PLUGIN_ROOT"/evals/plan-critic/*/; do
-    case "$d" in *-holdout/) continue ;; esac
+    case "$d" in *-holdout/|*-watch/) continue ;; esac
     CASE=$(basename "$d"); break
 done
 WANT=$(head -1 "$PLUGIN_ROOT/evals/plan-critic/$CASE/expected" | tr -d '[:space:]')
@@ -70,6 +70,21 @@ printf '%s\n' "$out" | grep -q "running 1 model call" && ok "one named case make
 printf '%s\n' "$out" | grep -qE "ok +$CASE " && ok "the named case scores" || bad "the named case should pass on the fake reply"
 run plan-critic --model fake --cases no-such-case >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an unknown case name exits 2" || bad "an unknown case should exit 2 (got $rc)"
+
+echo "== a -watch case runs only when --cases names it =="
+WATCH=""
+for d in "$PLUGIN_ROOT"/evals/*/*-watch/; do [ -f "$d/brief.md" ] && { WATCH=$(basename "$d"); WTARGET=$(basename "$(dirname "$d")"); break; }; done
+if [ -n "$WATCH" ]; then
+    # Capture first: under pipefail a `grep -q` that exits early fails the pipe.
+    wout=$(run "$WTARGET" --model fake --dry-run)
+    grep -q "$WATCH" <<<"$wout" && bad "a plain run should skip $WATCH" || ok "a plain run skips the watch case"
+    wout=$(run "$WTARGET" --model fake --holdout --dry-run)
+    grep -q "$WATCH" <<<"$wout" && bad "--holdout should not pull in $WATCH" || ok "--holdout does not pull it in"
+    wout=$(run "$WTARGET" --model fake --cases "$WATCH" --dry-run)
+    grep -q "$WATCH" <<<"$wout" && ok "--cases runs it" || bad "--cases $WATCH should run the watch case"
+else
+    bad "no -watch case exists to test the rule with"
+fi
 
 echo "== the model pin =="
 printf '%s\n' "$out" | grep -q "model=claude-fake-1" && ok "the header carries the resolved model ID" || bad "the header should name claude-fake-1"

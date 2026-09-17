@@ -51,6 +51,7 @@
 #
 # Three flags let a tool drive the harness, not only a human:
 #   --cases A,B   run only the named cases. A held-out case still needs --holdout.
+#               A watch case (*-watch) runs only when this flag names it.
 #   --prompt-file FILE  evaluate FILE in place of the target's checked-in prose.
 #               It needs one target. A section ablation is this flag plus a
 #               copy of the prompt with one section deleted.
@@ -112,8 +113,13 @@ fi
 # prompt edits can be checked against briefs nobody tuned against; skipping them
 # by default is what keeps them held out. --cases narrows the run further, and
 # it never overrides that rule.
+#
+# A watch case (dirs named *-watch) pins nothing today, so it is in no suite
+# run. It exists for the expiry check: a brief on which a paragraph still moves
+# a tally, to run again by name on the next model.
 skip_case() {
     case "$1" in *-holdout) [ "$HOLDOUT" -eq 1 ] || return 0 ;; esac
+    case "$1" in *-watch) case ",$CASES," in *",$1,"*) ;; *) return 0 ;; esac ;; esac
     [ -z "$CASES" ] && return 1
     case ",$CASES," in *",$1,"*) return 1 ;; esac
     return 0
