@@ -44,8 +44,10 @@ work. The loop calls it, and you can too:
   deny rules.
 - `worktree.sh add <change>` creates `.worktrees/<change>` on branch
   `hone/<change>`. Creating it is what claims the change, so a second `add`
-  of the same name fails. When the project ships `scripts/setup-tree.sh`,
-  `add` then runs it inside the new worktree (see *Adapters*).
+  of the same name fails. In shared mode (see *Configuration files*) the
+  claim lives on the remote, so a second `add` from any clone fails. When
+  the project ships `scripts/setup-tree.sh`, `add` then runs it inside the
+  new worktree (see *Adapters*).
 - `worktree.sh verify` runs the full test suite, serialized against other
   sessions. The only sanctioned way to run `--all` by hand.
 - `worktree.sh review-scope <change>` prints how deep the change's review must
@@ -53,12 +55,19 @@ work. The loop calls it, and you can too:
   `.plans/`. The loop skips `/code-review` only on `docs-only`, where a code
   reviewer has no code to read. Anything it cannot classify is `full`.
 - `worktree.sh land <change>` merges the branch into the primary tree,
-  re-runs the suite there, and cleans up. Runs the land gates first.
+  re-runs the suite there, and cleans up. Runs the land gates first. In
+  shared mode it merges on top of the remote's latest and pushes the tested
+  result (see *Shared mode* under *Land gates*).
 - `worktree.sh landed <change>` answers "has this change fully landed?" from
   repo artifacts, printing `landed` (exit 0) or `pending` (exit 1). Landed
   means the merge commit is on the primary branch and the branch, worktree,
   and Plan are gone. An orchestrator polls this instead of trusting a
-  subagent's report.
+  subagent's report. In shared mode it reads the remote primary branch, so
+  the answer holds from any clone.
+- `worktree.sh sync` levels the primary tree with the remote primary branch
+  in both directions: fetch, fast-forward or rebase local-only commits on
+  top, then push them. Shared mode only. The plan skill runs it after
+  committing a Plan, and you run it to catch up.
 - `worktree.sh remove <worktree-path>` removes a worktree hone created, and
   its branch if fully merged.
 - `worktree.sh landable` lists worktrees whose branch is ahead of the
@@ -108,6 +117,16 @@ file:
   policy files, so removing it stays your call. `worktree.sh status` reports
   the marker and warns until you commit it.
 
+- `.hone-shared` turns on *shared mode*: the primary branch belongs to a
+  team, on a remote. Its first non-comment line names the remote, and a
+  blank file means `origin`. With the marker committed, `add` claims a
+  change on the remote, and `land` merges on top of the remote's latest and
+  pushes the tested result. `landed` and `sync` read the remote. Without
+  it, hone never pushes, so a solo repository with a backup remote keeps
+  working as before. The remote must accept pushes to `refs/hone/*`, which
+  GitHub, GitLab, and Gitea do. `worktree.sh status` reports the marker,
+  warns until you commit it, and lists the claims other developers hold.
+
 *Per-developer*, gitignored and never checked in:
 
 - `.hone-off` turns off every hook, for a quick manual edit outside the
@@ -132,10 +151,12 @@ file:
   the proof gate lands in the merge commit body like a grant, and a green
   land deletes the spent file.
 
-Two environment variables tune the cross-session locks.
+Three environment variables tune the cross-session mechanics.
 `HONE_LAND_LOCK_TIMEOUT` sets the seconds a land or full-suite run waits for
 the lock (default 600). `HONE_SUITE_LOCK_TIMEOUT` sets the seconds the
-gate's pre-land full run waits (default 30).
+gate's pre-land full run waits (default 30). `HONE_LAND_RETRIES` sets how
+many times a shared-mode land redoes merge and suite after the remote
+rejected its push (default 3).
 
 ## Hooks
 
@@ -278,6 +299,34 @@ and the bash-guard the shell routes (a deterrent, not a sandbox). The helper
 is what stamps the signer, binds a sign-off to the commit it proves, and
 refuses an empty or placeholder text.
 
+### Shared mode
+
+With `.hone-shared` committed, land is the team's merge queue, and git is
+the lock. Under its own land lock, land first levels the primary tree with
+the remote: it fetches, then fast-forwards, or rebases local-only commits on
+top. A rebase that conflicts aborts and refuses. Then it merges the branch,
+runs the suite, and pushes the primary branch. Git rejects the push when
+another developer landed while the suite ran, because the merge is no
+longer a straight extension of the remote. land then rolls the merge back,
+levels again, and redoes merge and suite. It gives up after
+`HONE_LAND_RETRIES` attempts with exit 5, the merge rolled back and the
+worktree kept. So a commit never reaches the remote unless the suite passed
+on exactly that tree, and merges from several machines serialize on the
+suite's duration.
+
+The claim is a ref on the remote, `refs/hone/claim/<change>`, pointing at a
+detached commit that names who claimed, on which host, and when. The commit
+sits on no branch, so it never enters history. `add` pushes it with a lease
+that says the ref must not exist yet, so of two developers racing on one
+change exactly one wins. A green land deletes it. A land that stops keeps
+it, like the worktree. You release a claim whose owner walked away by hand:
+
+```
+git push origin --delete refs/hone/claim/<change>
+```
+
+`worktree.sh status` lists the claims other developers hold.
+
 The stamp separates the two. A record the loop writes opens with
 `agent, on behalf of`, keyed off `CLAUDECODE` in the environment, so a later
 audit can tell an agent grant from yours. It is a label for a reader, not a
@@ -299,7 +348,7 @@ The gate's error message prints the exact helper command with its full path.
 |------|---------|
 | 0 | landed and green |
 | 2 | usage or repo-state error (missing branch, detached HEAD) |
-| 5 | lock timeout: another land or full-suite run held the lock |
+| 5 | lock timeout: another land or full-suite run held the lock. In shared mode also: the remote moved on every attempt, merge rolled back |
 | 6 | suite, type-check, or lint red after the merge; rolled back, worktree kept, output in the land log |
 | 7 | proof gate: real-environment proof missing |
 | 8 | authority gate: irreversible change without a grant |
@@ -327,13 +376,19 @@ draws no warning.
 Other subcommands:
 
 - `add` exits 4 when another run has already claimed the change (0 created,
-  2 error). A failed `setup-tree.sh` run is exit 2 with the worktree kept:
-  the claim stands, and the message carries the adapter's output tail.
+  2 error). In shared mode that run may be on another machine, and a refused
+  claim leaves nothing local behind. A failed `setup-tree.sh` run is exit 2
+  with the worktree kept: the claim stands, and the message carries the
+  adapter's output tail.
 - `remove` exits 3 when the path is not one hone created (0 removed,
   2 error).
 - `verify` passes through the adapter's exit (2 setup error, 5 lock
   timeout).
 - `landed` exits 1 while the change is pending (0 landed, 2 error).
+- `sync` exits 0 when the primary tree is level with the remote, and 5
+  when the remote moved on every push attempt. It exits 2 when the
+  repository is not shared, the remote is missing, the primary tree is
+  dirty, the fetch failed, or a rebase conflicted.
 
 ## Adapters
 
@@ -380,6 +435,7 @@ repo/                            # the primary tree: a merge target, never a wor
 ├── .hone-durable-paths          # committed policy (optional)
 ├── .hone-irreversible-paths     # committed policy (optional)
 ├── .hone-proof-always           # committed policy (optional): prove every change
+├── .hone-shared                 # committed policy (optional): the team's remote
 └── .claude/settings.json        # enables the plugin; deny rules for the adapters
 ```
 

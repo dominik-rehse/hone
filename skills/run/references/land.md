@@ -36,11 +36,17 @@ Aborted, tree restored. Under `--all` this means the independence check missed a
 overlap: fold this change in serially and flag it for a Decision-level look. Do
 not force the merge.
 
-## 5: lock timeout
+## 5: lock timeout, or the remote kept moving
 
 Another session held the land lock (a land or a full-suite run) past the
 timeout. Nothing happened to the trunk. Wait for that run to finish, then
 re-run land. Never work around the lock.
+
+In shared mode (a committed `.hone-shared`) the same exit has a second cause,
+and the message names it. Another developer landed on the remote during each
+of land's attempts. The remote rejected every push, and land rolled the merge
+back each time. Nothing untested reached the remote. Wait a moment, then
+re-run land. Never push the primary branch by hand.
 
 ## 2: usage or repo-state error
 

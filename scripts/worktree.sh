@@ -13,7 +13,13 @@
 #       adapter, add then runs it inside the new worktree, so the tree is
 #       runnable (dependencies installed) before the first verify. A failed
 #       adapter keeps the worktree as evidence and exits 2.
-#       Exit: 0 created · 4 already claimed · 2 usage/not-a-repo/failed.
+#       Shared mode (see .hone-shared below): add first levels the primary
+#       tree with the remote and pushes any local-only commit (a fresh Plan),
+#       then claims the change on the remote at refs/hone/claim/<change>. A
+#       claim another developer holds refuses with 4 and leaves nothing
+#       local behind.
+#       Exit: 0 created · 4 already claimed · 2 usage/not-a-repo/failed ·
+#       5 remote contention (shared mode).
 #
 #   worktree.sh land <change>
 #       Land hone/<change> into the primary tree, serialized against every other
@@ -63,10 +69,17 @@
 #       post-merge suite, and the removed worktree and branch. When the merge
 #       changed a lockfile, the receipt also names it, and asks for a reinstall
 #       in the primary tree when no setup-tree adapter ran.
-#       Exit: 0 landed · 2 usage/not-a-repo/detached · 5 lock timeout ·
-#       6 post-merge regression (rolled back) · 7 real-environment proof
-#       missing · 8 ungranted irreversible change · 9 merge conflict
-#       (aborted, tree restored).
+#       Shared mode: land levels the primary tree with the remote first, so
+#       the merge goes on top of the team's latest. After the green suite it
+#       pushes the primary branch. Git rejects that push when the remote moved
+#       while the suite ran, so land rolls the merge back, levels again, and
+#       redoes merge and suite, up to HONE_LAND_RETRIES times (default 3).
+#       Nothing untested ever reaches the remote. On success it releases the
+#       claim. Exhausted retries exit 5 with the merge rolled back.
+#       Exit: 0 landed · 2 usage/not-a-repo/detached · 5 lock timeout, or
+#       the remote moved on every attempt · 6 post-merge regression (rolled
+#       back) · 7 real-environment proof missing · 8 ungranted irreversible
+#       change · 9 merge conflict (aborted, tree restored).
 #
 #   worktree.sh verify
 #       Run the full suite (scripts/run-tests.sh --all) in the current tree,
@@ -95,12 +108,33 @@
 #       `--all` under herdr) polls before it starts a dependent Plan or closes
 #       a SUB tab.
 #       It reads the repository, never a subagent's claim that it finished.
+#       Shared mode: the questions go to the remote primary branch after a
+#       fetch, and a claim still on the remote reads as pending. So "landed"
+#       means landed for the team, from any developer's clone.
 #       Exit: 0 landed · 1 pending · 2 usage/not-a-repo.
+#
+#   worktree.sh sync
+#       Shared mode only. Level the primary tree with the remote primary
+#       branch both ways: fetch, then fast-forward or rebase local-only
+#       commits on top, then push them. The plan skill runs it after
+#       committing a Plan, so the Plan reaches the team's queue. A human runs
+#       it to catch up. Under the land lock. Exit: 0 level · 2 not shared,
+#       no such remote, dirty tree, fetch failed, or rebase conflict
+#       (aborted) · 5 the remote moved on every push attempt.
+#
+#   Shared mode. A committed .hone-shared marker turns it on. Its first
+#   non-comment line names the remote, and a blank file means origin. The
+#   primary branch then belongs to the team on that remote: add claims
+#   there, land pushes there, and landed and sync read from there. Without
+#   the marker none of this runs, so a solo repository with a backup remote
+#   never starts pushing on an upgrade. The remote must accept pushes to
+#   refs/hone/*, which GitHub, GitLab, and Gitea do.
 #
 #   worktree.sh status
 #       One-screen state of the control surface: hooks on/off, adapters
 #       present, policy files (and whether they are committed), pending Plans,
-#       worktrees in flight, grants and proof sign-offs. It also says whether
+#       worktrees in flight, other developers' claims on the remote (shared
+#       mode), grants and proof sign-offs. It also says whether
 #       the settings.json deny rules are present. Read-only, and always exit 0
 #       in a git repo.
 #
@@ -180,6 +214,22 @@ cmd_add() {
         return 4
     fi
 
+    # Shared mode: cut the worktree from the team's primary branch, not a
+    # stale local one, and publish any local-only Plan commit while at it.
+    # Under the land lock, because sync moves the primary HEAD.
+    local remote="" primary
+    remote=$(shared_remote_checked "$main_root") || { [ $? -eq 2 ] && return 2; }
+    if [ -n "$remote" ]; then
+        command -v flock >/dev/null 2>&1 || { msg_wt_no_flock add >&2; return 2; }
+        primary=$(git -C "$main_root" symbolic-ref -q --short HEAD) || {
+            msg_wt_land_detached >&2; return 2; }
+        exec 9>"$(git -C "$main_root" rev-parse --git-common-dir)/hone-land.lock" || return 2
+        flock -w "${HONE_LAND_LOCK_TIMEOUT:-600}" 9 || {
+            msg_wt_lock_timeout "${HONE_LAND_LOCK_TIMEOUT:-600}" >&2; return 5; }
+        shared_push_primary "$main_root" "$remote" "$primary" || return $?
+        exec 9>&-
+    fi
+
     mkdir -p "$main_root/.worktrees"
     if ! git -C "$main_root" worktree add -q -b "$branch" "$path" HEAD; then
         # The pre-checks passed but the add still failed: either a concurrent run
@@ -191,6 +241,18 @@ cmd_add() {
         fi
         msg_wt_add_failed >&2
         return 2
+    fi
+    # Shared mode: the claim lives on the remote (see shared_claim). A refused
+    # claim tears the local worktree down again, so nothing here says "mine".
+    if [ -n "$remote" ]; then
+        local rc=0
+        shared_claim "$main_root" "$remote" "$change" || rc=$?
+        if [ "$rc" -ne 0 ]; then
+            git -C "$main_root" worktree remove --force "$path" >/dev/null 2>&1
+            git -C "$main_root" branch -D "$branch" >/dev/null 2>&1
+            [ "$rc" -eq 4 ] && msg_wt_add_remote_claimed "$change" "$remote" >&2
+            return "$rc"
+        fi
     fi
     # A fresh worktree shares no installed dependencies with the primary tree,
     # so its first verify can red for an environment reason that reads like a
@@ -670,10 +732,10 @@ cmd_land() {
         fi
     fi
 
-    local pre; pre=$(git -C "$main_root" rev-parse HEAD)
     # Read the landed lockfiles BEFORE the merge and cleanup below: the
     # setup-tree run keys on them, and the cleanup deletes the branch the
-    # diff needs.
+    # diff needs. The merge base stays put across the shared-mode retries
+    # below: the branch tip never moves, so neither do the gates above.
     local lockfiles
     lockfiles=$(land_lockfiles "$main_root" "$base" "$branch")
     local -a merge_args=(merge --no-ff "$branch" -m "Merge branch '$branch'")
@@ -683,6 +745,21 @@ cmd_land() {
     [ -n "$grant_note" ] && merge_args+=(-m "Authorized (irreversible change):"$'\n'"$grant_note")
     # The sign-off that discharged the proof gate gets the same treatment.
     [ -n "$signoff_note" ] && merge_args+=(-m "Proven (real-environment):"$'\n'"$signoff_note")
+    # Shared mode: the primary branch belongs to the team, so the merge goes
+    # on top of the team's latest and the result is pushed. Git rejects the
+    # push when the remote moved while the suite ran, and a rejected push
+    # means the combination on the remote was never tested. So land rolls the
+    # merge back, syncs, and runs the whole merge-and-verify again, up to
+    # HONE_LAND_RETRIES times. Nothing untested ever reaches the remote.
+    local remote="" primary="" attempt=1 retries="${HONE_LAND_RETRIES:-3}"
+    remote=$(shared_remote_checked "$main_root") || { [ $? -eq 2 ] && return 2; }
+    [ -n "$remote" ] && primary=$(git -C "$main_root" symbolic-ref -q --short HEAD)
+    local pre land_log setup_tree_ran adapter zero_tiers
+    while :; do
+    if [ -n "$remote" ]; then
+        shared_sync_primary "$main_root" "$remote" "$primary" || return 2
+    fi
+    pre=$(git -C "$main_root" rev-parse HEAD)
     if ! git -C "$main_root" "${merge_args[@]}" >/dev/null 2>&1; then
         # A conflict means the independence check missed an overlap. Restore the
         # shared tree so the next lander starts clean. The branch stays as
@@ -695,7 +772,6 @@ cmd_land() {
     # Keep the post-merge run's output. On red it is the only record of what
     # broke, and land rolls the merge back before anyone can re-run it. One
     # file per primary tree, and each land overwrites it.
-    local land_log
     land_log="$(cd "$common_dir" 2>/dev/null && pwd || printf '%s' "$common_dir")/hone-land.log"
     : >"$land_log"
     # The merge moved a lockfile, so the primary tree's installed dependencies
@@ -705,7 +781,7 @@ cmd_land() {
     # setup-tree adapter closes the gap: run the MERGED copy here, before the
     # suite, so the suite judges the change rather than the stale install. A
     # red adapter rolls the merge back exactly like a red suite.
-    local setup_tree_ran=""
+    setup_tree_ran=""
     if [ -n "$lockfiles" ] && [ -f "$main_root/scripts/setup-tree.sh" ]; then
         if ! ( cd "$main_root" && bash scripts/setup-tree.sh ) >>"$land_log" 2>&1; then
             git -C "$main_root" reset --hard "$pre" >/dev/null 2>&1
@@ -727,7 +803,6 @@ cmd_land() {
     # lint-green alone and lint-red merged. So land re-runs the same optional
     # adapters the gate runs, into the same log. A red adapter rolls the
     # merge back exactly like a red suite.
-    local adapter
     for adapter in typecheck lint; do
         [ -f "$main_root/scripts/$adapter.sh" ] || continue
         if ! ( cd "$main_root" && bash "scripts/$adapter.sh" ) >>"$land_log" 2>&1; then
@@ -740,15 +815,37 @@ cmd_land() {
     # matching (a moved directory, a renamed suffix) exits 0 on zero tests. The
     # land log is the one place that shows it. Advisory: the merge stands,
     # and the human decides.
-    local zero_tiers
     zero_tiers=$(land_zero_tiers "$land_log")
     [ -n "$zero_tiers" ] && msg_wt_land_tier_empty "$zero_tiers" >&2
+    # Shared mode: publish the tested merge. A rejection means the remote
+    # moved under the suite, so roll back and go around again.
+    if [ -n "$remote" ]; then
+        if ! git -C "$main_root" push -q "$remote" "refs/heads/$primary:refs/heads/$primary" >/dev/null 2>&1; then
+            git -C "$main_root" reset --hard "$pre" >/dev/null 2>&1
+            if [ "$attempt" -ge "$retries" ]; then
+                msg_wt_land_push_rejected "$remote" "$primary" "$retries" >&2
+                return 5
+            fi
+            attempt=$((attempt+1))
+            msg_wt_land_retry "$remote" "$primary" "$attempt" >&2
+            continue
+        fi
+    fi
+    break
+    done
     # Green: the suite confirms the merge. Retire the worktree and its branch
     # (cmd_remove runs from the primary tree, so it never refuses "the tree
     # you are in").
     local merge_sha
     merge_sha=$(git -C "$main_root" rev-parse --short HEAD)
     cmd_remove "$wt" || return $?
+    # Shared mode: the change is on the remote primary now, so release the
+    # claim. The merge is already pushed, so a failed delete is a leftover to
+    # clean by hand, not a failed land.
+    if [ -n "$remote" ]; then
+        shared_release "$main_root" "$remote" "$change" \
+            || msg_wt_land_claim_delete_failed "$change" "$remote" >&2
+    fi
 
     # Land hygiene 3: the change's records go with its worktree and branch.
     # Every record that opened a gate has its text in the merge commit body
@@ -766,6 +863,7 @@ cmd_land() {
     # from `git log`, so the receipt names the merge commit, the green suite,
     # and the cleanup. It goes to stdout, because it is the success path.
     msg_wt_land_receipt "$merge_sha" "$branch" "$consumed"
+    [ -n "$remote" ] && msg_wt_land_pushed "$remote" "$primary"
     if [ -n "$lockfiles" ]; then
         if [ -n "$setup_tree_ran" ]; then
             msg_wt_land_setup_tree_receipt "$lockfiles"
@@ -780,6 +878,109 @@ cmd_land() {
 # subcommand that must not depend on cwd uses.
 main_root_of() {
     git -C "$(git rev-parse --git-common-dir 2>/dev/null)/.." rev-parse --show-toplevel 2>/dev/null
+}
+
+# ---- shared mode -------------------------------------------------------
+# A committed .hone-shared marker in the primary tree turns shared mode on.
+# Its first non-comment line names the remote, and a blank file means
+# origin. In shared mode the primary branch belongs to the team, on that
+# remote: add claims a change by pushing a claim ref, land pushes the
+# merge, and landed/sync read the remote. Without the marker nothing here
+# runs, so a solo repo with a backup remote never starts pushing on an
+# upgrade.
+shared_remote() {
+    local f="$1/.hone-shared" remote
+    [ -f "$f" ] || return 0
+    remote=$(grep -vE '^[[:space:]]*(#|$)' "$f" 2>/dev/null | head -n 1 | tr -d '[:space:]')
+    printf '%s\n' "${remote:-origin}"
+}
+remote_exists() {
+    git -C "$1" remote get-url "$2" >/dev/null 2>&1
+}
+# Resolve the shared remote for a command that needs one, or say why not.
+# Prints the remote name. Exit 0 with a name · 1 not shared (silent) · 2 the
+# marker names a remote this repo lacks (message printed).
+shared_remote_checked() {
+    local main_root="$1" remote
+    remote=$(shared_remote "$main_root")
+    [ -n "$remote" ] || return 1
+    if ! remote_exists "$main_root" "$remote"; then
+        msg_wt_sync_no_remote "$remote" >&2; return 2
+    fi
+    printf '%s\n' "$remote"
+}
+# Bring the primary tree level with <remote>/<primary>. Fetch into the
+# remote-tracking ref by explicit refspec (FETCH_HEAD is per-worktree and
+# shared by every concurrent fetch, so it is not a stable handle). Then:
+# equal or local-ahead needs nothing (a later push carries the local
+# commits), remote-ahead fast-forwards, and diverged rebases the local-only
+# commits on top. Those are Plan commits, usually, and --rebase-merges keeps
+# an earlier merge commit intact instead of flattening it. The tree must be
+# clean for either move. Exit 0 level · 2 fetch failed, dirty, or a rebase
+# conflict (aborted, message printed).
+shared_sync_primary() {
+    local main_root="$1" remote="$2" primary="$3" out upstream
+    upstream="refs/remotes/$remote/$primary"
+    if ! out=$(git -C "$main_root" fetch -q "$remote" "+refs/heads/$primary:$upstream" 2>&1); then
+        msg_wt_sync_fetch_failed "$remote" "$(printf '%s\n' "$out" | tail -n 5)" >&2
+        return 2
+    fi
+    git -C "$main_root" merge-base --is-ancestor "$upstream" HEAD 2>/dev/null && return 0
+    if [ -n "$(git -C "$main_root" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+        msg_wt_sync_dirty "$primary" >&2
+        return 2
+    fi
+    if git -C "$main_root" merge-base --is-ancestor HEAD "$upstream" 2>/dev/null; then
+        git -C "$main_root" merge -q --ff-only "$upstream" >/dev/null 2>&1 && return 0
+    fi
+    if ! out=$(git -C "$main_root" rebase -q --rebase-merges "$upstream" 2>&1); then
+        git -C "$main_root" rebase --abort >/dev/null 2>&1
+        msg_wt_sync_diverged "$remote" "$primary" "$(printf '%s\n' "$out" | tail -n 10)" >&2
+        return 2
+    fi
+}
+# Push the primary branch. Git rejects the push when the remote moved since
+# the fetch, so a rejection means "sync again and retry", up to three times.
+# Exit 0 pushed (or nothing to push) · 2 sync failed · 5 rejected every time.
+shared_push_primary() {
+    local main_root="$1" remote="$2" primary="$3" attempt
+    for attempt in 1 2 3; do
+        git -C "$main_root" push -q "$remote" "refs/heads/$primary:refs/heads/$primary" >/dev/null 2>&1 && return 0
+        shared_sync_primary "$main_root" "$remote" "$primary" || return 2
+    done
+    msg_wt_land_push_rejected "$remote" "$primary" 3 >&2
+    return 5
+}
+# The claim. A branch ref alone cannot be one: two developers on the same
+# primary HEAD cut identical branch refs, and git answers the second push
+# with "up to date" before it checks any lease. So the claim is its own ref,
+# refs/hone/claim/<change>, pointing at a detached root commit whose message
+# says who claimed, where, and when. That commit is unique per claimant, so
+# the second push is a non-fast-forward, and the empty lease says the ref
+# must not exist yet. Exactly one developer wins. The commit is on no
+# branch, so it never reaches history. Exit 0 claimed · 4 someone else
+# holds it · 2 push failed (message printed).
+shared_claim() {
+    local main_root="$1" remote="$2" change="$3" ref sha out
+    ref="refs/hone/claim/$change"
+    sha=$(git -C "$main_root" commit-tree "$(git -C "$main_root" hash-object -t tree /dev/null)" \
+            -m "hone claim: $change by $(git config user.name 2>/dev/null || echo unknown) <$(git config user.email 2>/dev/null || echo unknown)> on $(hostname 2>/dev/null || echo unknown) at $(date -Iseconds)") \
+        || { msg_wt_add_push_failed "$ref" "$remote" "" >&2; return 2; }
+    if out=$(git -C "$main_root" push -q "$remote" --force-with-lease="$ref:" "$sha:$ref" 2>&1); then
+        git -C "$main_root" update-ref "$ref" "$sha"
+        return 0
+    fi
+    if git -C "$main_root" ls-remote --exit-code "$remote" "$ref" >/dev/null 2>&1; then
+        return 4
+    fi
+    msg_wt_add_push_failed "$ref" "$remote" "$(printf '%s\n' "$out" | tail -n 5)" >&2
+    return 2
+}
+shared_release() {
+    local main_root="$1" remote="$2" change="$3" ref
+    ref="refs/hone/claim/$change"
+    git -C "$main_root" update-ref -d "$ref" >/dev/null 2>&1
+    git -C "$main_root" push -q "$remote" --delete "$ref" >/dev/null 2>&1
 }
 
 # Print non-empty if $1 is one of the placeholder descriptions hone itself
@@ -846,21 +1047,59 @@ cmd_landed() {
     local main_root branch
     main_root=$(main_root_of)
     branch="hone/$change"
+    # Shared mode: "landed" means landed for the TEAM, so the questions go to
+    # the remote primary branch, not the local one. A fetch that fails, or a
+    # remote branch that still exists, both read as pending: the orchestrator
+    # keeps polling, and a wrong "landed" would start a dependent Plan early.
+    local ref=HEAD remote="" primary
+    remote=$(shared_remote_checked "$main_root") || { [ $? -eq 2 ] && return 2; }
+    if [ -n "$remote" ]; then
+        primary=$(git -C "$main_root" symbolic-ref -q --short HEAD) || {
+            msg_wt_land_detached >&2; return 2; }
+        ref="refs/remotes/$remote/$primary"
+        git -C "$main_root" fetch -q "$remote" "+refs/heads/$primary:$ref" >/dev/null 2>&1 \
+            || { printf 'pending\n'; return 1; }
+        if git -C "$main_root" ls-remote --exit-code "$remote" "refs/hone/claim/$change" >/dev/null 2>&1; then
+            printf 'pending\n'; return 1
+        fi
+    fi
     # -n 1 and a capture, never `| grep -q .`. The grep quit on the first hash,
     # git took SIGPIPE writing the next one, and pipefail turned that 141 into
     # "no merge found". A rolled-back and re-landed change carries several
     # matching merge subjects, so exactly the landed changes read as pending,
     # and a ready --all chain stalled on its one completion signal.
     local merge
-    merge=$(git -C "$main_root" log -F --grep="Merge branch '$branch'" --format=%H -n 1 HEAD 2>/dev/null)
+    merge=$(git -C "$main_root" log -F --grep="Merge branch '$branch'" --format=%H -n 1 "$ref" 2>/dev/null)
     if git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch" \
         || [ -e "$main_root/.worktrees/$change" ] \
-        || git -C "$main_root" cat-file -e "HEAD:.plans/$change.md" 2>/dev/null \
+        || git -C "$main_root" cat-file -e "$ref:.plans/$change.md" 2>/dev/null \
         || [ -z "$merge" ]; then
         printf 'pending\n'
         return 1
     fi
     printf 'landed\n'
+}
+
+# Level the primary tree with the team's primary branch, both ways: fetch and
+# fast-forward or rebase, then push local-only commits (a fresh Plan). The
+# plan skill runs it after committing a Plan, so the Plan reaches the team's
+# queue, and a human runs it to catch up. Under the land lock, like every
+# move of the primary HEAD.
+cmd_sync() {
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
+    command -v flock >/dev/null 2>&1 || { msg_wt_no_flock sync >&2; return 2; }
+    local main_root remote primary
+    main_root=$(main_root_of)
+    remote=$(shared_remote_checked "$main_root") || {
+        [ $? -eq 2 ] && return 2
+        msg_wt_sync_not_shared >&2; return 2; }
+    primary=$(git -C "$main_root" symbolic-ref -q --short HEAD) || {
+        msg_wt_land_detached >&2; return 2; }
+    exec 9>"$(git -C "$main_root" rev-parse --git-common-dir)/hone-land.lock" || return 2
+    flock -w "${HONE_LAND_LOCK_TIMEOUT:-600}" 9 || {
+        msg_wt_lock_timeout "${HONE_LAND_LOCK_TIMEOUT:-600}" >&2; return 5; }
+    shared_push_primary "$main_root" "$remote" "$primary" || return $?
+    msg_wt_sync_receipt "$remote" "$primary"
 }
 
 cmd_status() {
@@ -908,6 +1147,20 @@ cmd_status() {
         fi
     fi
 
+    # Shared mode is project policy like the markers above, so an uncommitted
+    # marker gets the same warning.
+    local remote=""
+    if [ -f ".hone-shared" ]; then
+        remote=$(shared_remote "$main_root")
+        if ! remote_exists "$main_root" "$remote"; then
+            msg_status_shared_no_remote "$remote"; remote=""
+        elif git ls-files --error-unmatch .hone-shared >/dev/null 2>&1; then
+            msg_status_shared "$remote"
+        else
+            msg_status_shared_uncommitted "$remote"
+        fi
+    fi
+
     local plan change pending=0
     while IFS= read -r plan; do
         [ -f "$(dirname "$plan").md" ] && continue   # a Plan's reference, not a Plan
@@ -925,6 +1178,18 @@ cmd_status() {
         any=1
     done < <(parse_worktrees "$(git worktree list --porcelain 2>/dev/null)" "$main_root")
     [ "$any" -eq 0 ] && msg_status_worktrees_none
+    # Other developers' claims: refs/hone/claim/* on the remote with no
+    # worktree here, each with its record (who, where, when). A remote that
+    # does not answer lists nothing, and status stays 0.
+    if [ -n "$remote" ]; then
+        local cref
+        git fetch -q --prune "$remote" '+refs/hone/claim/*:refs/hone/claim/*' >/dev/null 2>&1
+        while IFS= read -r cref; do
+            [ -n "$cref" ] || continue
+            [ -d ".worktrees/${cref#refs/hone/claim/}" ] && continue
+            msg_status_remote_claim "$(git log -1 --format=%s "$cref" 2>/dev/null)" "$remote"
+        done < <(git for-each-ref --format='%(refname)' 'refs/hone/claim/' 2>/dev/null)
+    fi
 
     local f
     while IFS= read -r f; do
@@ -1053,6 +1318,7 @@ main() {
         land)     cmd_land "$@" ;;
         remove)   cmd_remove "$@" ;;
         landed)   cmd_landed "$@" ;;
+        sync)     cmd_sync "$@" ;;
         status)   cmd_status "$@" ;;
         grant)    cmd_grant "$@" ;;
         attest)   cmd_attest "$@" ;;

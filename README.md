@@ -199,6 +199,20 @@ The run never weakens a check to get through. On a stop, the worktree
 stays for inspection. `worktree.sh grant` and `worktree.sh attest` are
 the way to let the run proceed.
 
+## Teams
+
+By default hone is single-player: land merges into your local primary
+branch and never pushes. A team turns on *shared mode* by committing a
+`.hone-shared` marker whose first line names the remote (blank means
+`origin`). Then the primary branch belongs to the team on that remote. A
+run claims its change on the remote, so two developers never build the
+same Plan. Land merges on top of the remote's latest, runs the suite, and
+pushes. When someone else landed in the meantime, git rejects the push,
+and land redoes merge and suite on top of their change. Nothing untested
+ever reaches the remote, and nobody opens a pull request. Every developer
+runs hone on their own machine, and `worktree.sh status` shows the claims
+the others hold. Details in the [reference](docs/reference.md).
+
 Check the state of everything with `worktree.sh status`: hooks, adapters,
 pending plans, worktrees, sign-offs (see the
 [reference](docs/reference.md)).

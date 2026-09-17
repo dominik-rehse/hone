@@ -400,7 +400,8 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    - **8**: the authority gate wants a scoped grant for an irreversible change.
      Read the diff it printed, then record the authorization with
      `worktree.sh grant` and land again.
-   - **5**: another session held the land lock past the timeout. Wait, retry.
+   - **5**: another session held the land lock past the timeout, or, in
+     shared mode, the remote moved on every attempt. Wait, retry.
    - **2**: usage or repo-state error (missing branch, detached HEAD): read
      the stderr message.
 

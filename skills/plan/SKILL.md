@@ -250,6 +250,17 @@ holds for a step-4 open question: the run cuts its worktree from HEAD, so an
 uncommitted entry is invisible to the run. Commit nothing but the Plan, its
 references, and that entry. The loop owns every other artifact.
 
+When the primary tree holds a committed `.hone-shared` marker, the primary
+branch belongs to a team on a remote. Then push the Plan commit right away:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" sync
+```
+
+It levels the primary tree with the remote and pushes the commit. The Plan
+then enters the team's queue, and any developer's run can claim it. Without
+the marker there is nothing to push, and the command says so.
+
 ### 8. Confirm: the hand-off
 
 Close with an explicit hand-off. The slug you derived may differ from the name

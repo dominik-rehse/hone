@@ -59,6 +59,11 @@ mechanical steps.
      The bash-guard also stops reading a commit message or a sign-off text
      as the act it names, so a message that documents `--no-verify` passes.
      Nothing to install and nothing to configure.
+   - *Shared mode since 0.51*: a team commits a `.hone-shared` marker, and
+     land then pushes the tested merge to the remote it names. Nothing
+     changes without the marker. Turn it on with no worktree in flight and
+     the primary branch pushed. Then no branch was cut from a commit that a
+     later rebase moves. The remote must accept pushes to `refs/hone/*`.
 
 After that, run `worktree.sh status`. It shows what is present and what is
 missing. It also flags a policy file that is still uncommitted, and a

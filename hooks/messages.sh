@@ -436,7 +436,7 @@ hone_msg_attest_placeholders() {
 }
 
 msg_wt_usage() {
-    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|land <change>|landed <change>|remove <worktree-path>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
+    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|land <change>|landed <change>|sync|remove <worktree-path>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
 }
 
 msg_wt_grant_usage() {
@@ -902,6 +902,96 @@ Why: an unmerged branch is evidence of unlanded work.
 EOF
 }
 
+# Shared mode (.hone-shared): add claims on the remote, land pushes, landed
+# and sync read the remote.
+
+msg_wt_add_remote_claimed() {
+    local change="$1" remote="$2"
+    cat <<EOF
+hone worktree: $remote already holds a claim on $change (refs/hone/claim/$change).
+Do: pick another change, or ask its owner to land or release it.
+Why: another developer's run owns it.
+EOF
+}
+msg_wt_add_push_failed() {
+    local ref="$1" remote="$2" tail="${3:-}"
+    cat <<EOF
+hone worktree: pushing $ref to $remote failed, so add removed the worktree again.
+Do: check the network and the remote, then run add again.
+Why: in shared mode the pushed ref is the claim.
+EOF
+    hone_msg_block "$tail"
+}
+msg_wt_sync_fetch_failed() {
+    local remote="$1" tail="${2:-}"
+    cat <<EOF
+hone worktree: fetching from $remote failed.
+Do: check the network and the remote, then retry.
+Why: shared mode reads the team's primary branch first.
+EOF
+    hone_msg_block "$tail"
+}
+msg_wt_sync_diverged() {
+    local remote="$1" primary="$2" tail="${3:-}"
+    cat <<EOF
+hone worktree: the primary tree and $remote/$primary diverged, and the rebase did not apply cleanly.
+Do: resolve it by hand in the primary tree with git rebase $remote/$primary, then retry.
+Why: local commits and team commits touched the same lines.
+EOF
+    hone_msg_block "$tail"
+}
+msg_wt_sync_dirty() {
+    local primary="$1"
+    cat <<EOF
+hone worktree: the primary tree has uncommitted changes, so sync cannot move $primary.
+Do: commit or stash them in the primary tree, then retry.
+Why: the primary tree is a merge target, never a workspace.
+EOF
+}
+msg_wt_sync_no_remote() {
+    local remote="$1"
+    cat <<EOF
+hone worktree: .hone-shared names remote $remote, and this repository has no such remote.
+Do: add the remote, or fix the name inside .hone-shared.
+Why: shared mode needs a remote to sync with.
+EOF
+}
+msg_wt_sync_not_shared() {
+    cat <<'EOF'
+hone worktree: this repository has no .hone-shared marker, so there is nothing to sync.
+Do: commit a .hone-shared file naming the remote (blank means origin) to turn shared mode on.
+Why: shared mode is project policy, chosen once per repository.
+EOF
+}
+msg_wt_sync_receipt() {
+    local remote="$1" primary="$2"
+    printf 'hone worktree: %s matches %s/%s.\n' "$primary" "$remote" "$primary"
+}
+msg_wt_land_push_rejected() {
+    local remote="$1" primary="$2" attempts="$3"
+    cat <<EOF
+hone worktree: $remote/$primary moved during each of $attempts land attempts, so land rolled the merge back.
+Do: wait a moment, then run land again.
+Why: another developer landed each time this suite ran.
+EOF
+}
+msg_wt_land_pushed() {
+    local remote="$1" primary="$2"
+    printf 'land pushed %s to %s.\n' "$primary" "$remote"
+}
+msg_wt_land_retry() {
+    local remote="$1" primary="$2" attempt="$3"
+    printf 'hone worktree: %s/%s moved, so land rolls back and retries (attempt %s).\n' "$remote" "$primary" "$attempt"
+}
+msg_wt_land_claim_delete_failed() {
+    local change="$1" remote="$2"
+    cat <<EOF
+hone worktree: the change landed, and releasing its claim on $remote failed.
+Do: run git push $remote --delete refs/hone/claim/$change by hand.
+Why: a leftover claim still blocks the change name.
+EOF
+}
+
 msg_status_header() {
     printf 'hone status (%s, primary on %s)\n' "$1" "$2"
 }
@@ -936,6 +1026,22 @@ msg_status_proof_always() {
 
 msg_status_proof_always_uncommitted() {
     printf -- '- proof: .hone-proof-always present, NOT committed, and policy files are project config\n'
+}
+msg_status_shared() {
+    local remote="$1"
+    printf -- '- shared: .hone-shared present (committed), land pushes to %s and add claims there\n' "$remote"
+}
+msg_status_shared_uncommitted() {
+    local remote="$1"
+    printf -- '- shared: .hone-shared present, NOT committed, so only this developer syncs with %s\n' "$remote"
+}
+msg_status_shared_no_remote() {
+    local remote="$1"
+    printf -- '- shared: .hone-shared names remote %s, and no such remote exists\n' "$remote"
+}
+msg_status_remote_claim() {
+    local record="$1" remote="$2"
+    printf -- '- claimed on %s: %s\n' "$remote" "${record#hone claim: }"
 }
 
 msg_status_plan_pending() {
@@ -1056,6 +1162,18 @@ worktree|human|msg_wt_land_adapter_red|<typecheck or lint>|hone/<change>|<git-co
 worktree|human|msg_wt_land_tier_empty|- <tier>
 worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>|.hone-grant/<change> .hone-proof/<change>
 worktree|human|msg_wt_land_lockfile|- <lockfile>
+worktree|human|msg_wt_add_remote_claimed|<change>|origin
+worktree|human|msg_wt_add_push_failed|refs/hone/claim/<change>|origin|<git output>
+worktree|human|msg_wt_sync_fetch_failed|origin|<git output>
+worktree|human|msg_wt_sync_diverged|origin|main|<git output>
+worktree|human|msg_wt_sync_dirty|main
+worktree|human|msg_wt_sync_no_remote|origin
+worktree|human|msg_wt_sync_not_shared
+worktree|plain|msg_wt_sync_receipt|origin|main
+worktree|human|msg_wt_land_push_rejected|origin|main|3
+worktree|plain|msg_wt_land_pushed|origin|main
+worktree|plain|msg_wt_land_retry|origin|main|2
+worktree|human|msg_wt_land_claim_delete_failed|<change>|origin
 worktree|human|msg_wt_land_setup_tree_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|plain|msg_wt_land_setup_tree_receipt|- <lockfile>
 worktree|human|msg_wt_grant_recorded|<change>
@@ -1079,6 +1197,10 @@ status|plain|msg_status_policy_uncommitted|<policy-file>|<count>
 status|plain|msg_status_policy_legacy
 status|plain|msg_status_proof_always
 status|plain|msg_status_proof_always_uncommitted
+status|plain|msg_status_shared|origin
+status|plain|msg_status_shared_uncommitted|origin
+status|plain|msg_status_shared_no_remote|origin
+status|plain|msg_status_remote_claim|hone claim: <change> by <who> on <host> at <time>|origin
 status|plain|msg_status_plan_pending|.plans/<change>.md
 status|plain|msg_status_plans_none
 status|plain|msg_status_worktree|<path>|<branch>
