@@ -166,20 +166,23 @@ The third condition repeats per campaign. It is also the rule for reading
 an ablation: an unchanged suite is evidence only for a section that a case
 aims at.
 
-## Stage 2: machine-drivable harness (small)
+## Stage 2: machine-drivable harness (done, 2026-09-17)
 
-Three flags on `evals/run.sh` let a tool, not only a human, drive it:
+[`evals/README.md`](../evals/README.md) *Driving the harness from a tool* is
+the manual for this stage. Three flags on `evals/run.sh` let a tool, not only
+a human, drive it:
 
 - `--prompt-file` evaluates a candidate prompt instead of the checked-in
   file.
 - `--cases` runs a subset, because optimizers evaluate on minibatches.
 - `--json` writes one record per case × vote, *including the full reply*:
-  the trace a reflective optimizer learns from. Today the runner discards
-  that reply.
+  the trace a reflective optimizer learns from. The terminal output
+  discards that reply.
 
 Two more pieces belong to this stage: a response cache keyed on (model,
 system prompt, brief), and a pinned full model ID per run. The pin matters
-because the floating `sonnet` alias makes runs incomparable across days.
+because the floating `sonnet` alias makes runs incomparable across days. The
+cache is opt-in (`--cache`), because a release gate must measure afresh.
 
 The flags do not depend on stage 1. Their first use does. That use is
 *section ablation* of the class-1 prose, before any optimizer. Delete one

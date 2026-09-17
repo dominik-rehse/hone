@@ -28,10 +28,11 @@ Which suite a change must pass follows from what it touches.
 
 *Mechanical*: `bash test/run.sh`. It is deterministic and makes no model
 calls. It covers the hook unit tests, the end-to-end land path (worktree,
-gates, merge, rollback), and two checks over the message templates. Every
+gates, merge, rollback), the plumbing of the eval harness against a fake
+CLI, and two checks over the message templates. Every
 message hone prints lives in `hooks/messages.sh`, and the checks lint its
 prose and hold it to the shape. Run this suite after any change to
-`hooks/` or `scripts/`. The shell sources also stay `shellcheck`-clean
+`hooks/`, `scripts/`, or `evals/run.sh`. The shell sources also stay `shellcheck`-clean
 (`.shellcheckrc` sets the dialect). Nothing runs shellcheck for you, so
 run it over any script you touch.
 

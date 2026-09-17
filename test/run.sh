@@ -1,6 +1,7 @@
 #!/bin/bash
 # Run hone's mechanical test suite: the hook unit tests, the end-to-end land
-# path (solo and shared mode), the shipped test adapters, the prose integrity checks, and the two
+# path (solo and shared mode), the shipped test adapters, the eval harness
+# plumbing, the prose integrity checks, and the two
 # checks on the message templates (prose and shape). These
 # are deterministic (no model calls). The critic/rule evals are separate and
 # live under evals/ (they call a model). Run: bash test/run.sh
@@ -18,6 +19,9 @@ bash "$DIR/e2e_shared_test.sh" || rc=1
 echo
 echo "### adapters_test.sh"
 bash "$DIR/adapters_test.sh" || rc=1
+echo
+echo "### evals_test.sh"
+bash "$DIR/evals_test.sh" || rc=1
 echo
 echo "### prose_test.sh"
 bash "$DIR/prose_test.sh" || rc=1

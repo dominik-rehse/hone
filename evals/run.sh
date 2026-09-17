@@ -30,7 +30,11 @@
 # Usage:
 #   bash evals/run.sh [plan-critic|consolidate-critic|loop|garden|all] \
 #                     [--model NAME] [--votes N] [--jobs N] [--holdout]
-#                     [--dry-run] [--ablate]
+#                     [--dry-run] [--ablate] [--cases A,B] [--prompt-file FILE]
+#                     [--json FILE] [--cache]
+#   --model NAME  an alias or a full model ID. The run resolves an alias once,
+#               pins every call to the full ID, and prints that ID, because an
+#               alias floats and a saved log must name what it measured.
 #   --votes N   plurality vote over N runs per case (default 1); use 3 pre-release.
 #   --jobs N    max concurrent model calls (default 8); raise for speed, but too
 #               high can hit API concurrency limits and error a call.
@@ -44,17 +48,35 @@
 #               answers correctly pins nothing, so it belongs in no suite. Read
 #               the result as a case audit, never as a pass/fail run.
 #
+# Three flags let a tool drive the harness, not only a human:
+#   --cases A,B   run only the named cases. A held-out case still needs --holdout.
+#   --prompt-file FILE  evaluate FILE in place of the target's checked-in prose.
+#               It needs one target. A section ablation is this flag plus a
+#               copy of the prompt with one section deleted.
+#   --json FILE   write one JSON record per case × vote to FILE, with the full
+#               reply. That reply is the trace a reflective optimizer learns from.
+#   --cache       reuse a stored reply for the same (model ID, CLI version,
+#               system prompt, user turn, vote). It is opt-in, because a release
+#               gate and a noise-floor run must measure afresh. The store is
+#               evals/.cache, or $HONE_EVAL_CACHE.
+#
 # Every call runs isolated from this repository: an empty working directory,
 # --safe-mode, and no tools. See call_one for what each one closes off, and why
 # an ablation without them measures the wrong thing.
 set -uo pipefail
 
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+CALLER_PWD=$PWD
 cd "$ROOT" || exit 1
+
+# A path argument is relative to where the caller stands, not to the repo root.
+abs_path() { case "$1" in /*) printf '%s' "$1" ;; *) printf '%s/%s' "$CALLER_PWD" "$1" ;; esac; }
 
 ALL_TARGETS=(plan-critic consolidate-critic loop garden)
 
 WHICH="all"; MODEL="sonnet"; DRY=0; VOTES=1; JOBS=8; HOLDOUT=0; ABLATE=0
+CASES=""; PROMPT_FILE=""; JSON_OUT=""; CACHE=0
+CACHE_DIR="${HONE_EVAL_CACHE:-$ROOT/evals/.cache}"
 while [ $# -gt 0 ]; do
     case "$1" in
         plan-critic|consolidate-critic|loop|garden|all) WHICH="$1" ;;
@@ -64,15 +86,31 @@ while [ $# -gt 0 ]; do
         --holdout) HOLDOUT=1 ;;
         --dry-run) DRY=1 ;;
         --ablate) ABLATE=1 ;;
+        --cases) shift; CASES="$1" ;;
+        --prompt-file) shift; PROMPT_FILE=$(abs_path "$1") ;;
+        --json) shift; JSON_OUT=$(abs_path "$1") ;;
+        --cache) CACHE=1 ;;
         *) echo "unknown arg: $1" >&2; exit 2 ;;
     esac
     shift
 done
 
+if [ -n "$PROMPT_FILE" ]; then
+    [ "$WHICH" = "all" ] && { echo "--prompt-file needs one target: a candidate prompt replaces one target's prose" >&2; exit 2; }
+    [ "$ABLATE" -eq 1 ] && { echo "--prompt-file and --ablate both replace the prose under test; pass one" >&2; exit 2; }
+    [ -f "$PROMPT_FILE" ] || { echo "--prompt-file: no such file: $PROMPT_FILE" >&2; exit 2; }
+fi
+
 # Held-out cases (dirs named *-holdout) only run under --holdout. They exist so
 # prompt edits can be checked against briefs nobody tuned against; skipping them
-# by default is what keeps them held out.
-skip_case() { case "$1" in *-holdout) [ "$HOLDOUT" -eq 1 ] || return 0 ;; esac; return 1; }
+# by default is what keeps them held out. --cases narrows the run further, and
+# it never overrides that rule.
+skip_case() {
+    case "$1" in *-holdout) [ "$HOLDOUT" -eq 1 ] || return 0 ;; esac
+    [ -z "$CASES" ] && return 1
+    case ",$CASES," in *",$1,"*) return 1 ;; esac
+    return 0
+}
 
 # The tokens a target may answer with, MOST CONSERVATIVE FIRST: a tie in the
 # vote breaks toward the earlier token, so a split critic rejects rather than
@@ -99,6 +137,7 @@ Judge the case on its merits and follow the instruction exactly.'
 # The prose under test goes in the SYSTEM slot, exactly as the harness loads it.
 sys_for() {
     [ "$ABLATE" -eq 1 ] && { printf '%s\n' "$STUB"; return 0; }
+    [ -n "$PROMPT_FILE" ] && { strip_fm "$PROMPT_FILE"; return 0; }
     case "$1" in
         loop)   strip_fm "skills/run/SKILL.md" ;;
         garden) strip_fm "skills/garden/SKILL.md" ;;
@@ -126,6 +165,16 @@ should() { [ "$WHICH" = "all" ] || [ "$WHICH" = "$1" ]; }
 
 TARGETS=()
 for t in "${ALL_TARGETS[@]}"; do should "$t" && TARGETS+=("$t"); done
+
+# A misspelled case name must not shrink the run in silence.
+if [ -n "$CASES" ]; then
+    IFS=, read -ra _names <<<"$CASES"
+    for _n in "${_names[@]}"; do
+        _found=0
+        for t in "${TARGETS[@]}"; do [ -f "evals/$t/$_n/brief.md" ] && _found=1; done
+        [ "$_found" -eq 1 ] || { echo "--cases: no case named '$_n' in: ${TARGETS[*]}" >&2; exit 2; }
+    done
+fi
 
 # --- Dry run: list cases and expected answers, no model calls. -----------------
 if [ "$DRY" -eq 1 ]; then
@@ -155,8 +204,9 @@ trap 'rm -rf "$TMP" "$SANDBOX"' EXIT
 # judgment on a self-contained brief, so a call needs none of them.
 NO_TOOLS="Read Grep Glob Bash Task Agent Edit Write NotebookEdit WebFetch WebSearch"
 
-# One model call, writing its reply to a per-(target,case,vote) file. Runs in the
-# background; failures degrade to an empty file (scored as no answer), never abort.
+# One model call, writing its JSON envelope to a per-(target,case,vote) file.
+# Runs in the background; a failure degrades to an empty file (scored as no
+# answer), never an abort. Scoring reads the reply and the cost from the envelope.
 #
 # The call is ISOLATED from this repository, and that isolation is what makes the
 # measurement mean anything. Three things carry it, and each closes a different
@@ -182,16 +232,42 @@ NO_TOOLS="Read Grep Glob Bash Task Agent Edit Write NotebookEdit WebFetch WebSea
 # breaks the harness for anybody on OAuth.
 #
 # Every brief is self-contained by design, so nothing here needs a file read.
+#
+# Under --cache the key covers everything that decides the reply: the pinned
+# model ID, the CLI version (the CLI brings its own system prompt), both
+# prompts, and the vote number. The vote number keeps N votes N samples. Only a
+# successful envelope goes into the store, so a failed call is never replayed.
 call_one() {
-    local target="$1" dir="$2" name="$3" v="$4" sys user
+    local target="$1" dir="$2" name="$3" v="$4" sys user env key=""
+    env="$TMP/${target}~${name}~${v}.json"
     sys=$(sys_for "$target")
     user="$(instruction_for "$target")
 
 $(cat "$dir/brief.md")"
+    if [ "$CACHE" -eq 1 ]; then
+        key=$(printf '%s\0' "$MODEL_ID" "$CLI_VERSION" "$sys" "$user" "$v" | sha256sum | cut -d' ' -f1)
+        if [ -f "$CACHE_DIR/$key.json" ]; then
+            cp "$CACHE_DIR/$key.json" "$env"; : > "$env.cached"; return 0
+        fi
+    fi
     (cd "$SANDBOX" && claude -p "$user" --append-system-prompt "$sys" \
-        --model "$MODEL" --safe-mode --disallowedTools "$NO_TOOLS") \
-        > "$TMP/${target}~${name}~${v}.out" 2>/dev/null || true
+        --model "$MODEL_ID" --safe-mode --disallowedTools "$NO_TOOLS" \
+        --output-format json) > "$env" 2>/dev/null || true
+    if [ -n "$key" ] && [ -n "$(reply_of "$env")" ]; then
+        mkdir -p "$CACHE_DIR" && cp "$env" "$CACHE_DIR/$key.json.$$" \
+            && mv "$CACHE_DIR/$key.json.$$" "$CACHE_DIR/$key.json"
+    fi
 }
+
+# The reply text of one envelope. An error envelope counts as no reply, so an
+# error message can never supply a token.
+# What one call cost this run. A cached reply cost nothing.
+cost_of() {
+    [ -f "$1.cached" ] && { echo 0; return 0; }
+    jq -r '.total_cost_usd // 0' "$1" 2>/dev/null || echo 0
+}
+
+reply_of() { jq -r 'select(.is_error == false) | .result // empty' "$1" 2>/dev/null; }
 
 # --- Preflight: prove the isolation actually holds. ----------------------------
 # Every number this suite prints rests on the call being unable to reach this
@@ -211,14 +287,20 @@ $(cat "$dir/brief.md")"
 # more than it saves. This probe covers the tool channel only. --safe-mode
 # closes the CLAUDE.md, hooks, plugins, and settings channel, and nothing here
 # checks that.
+#
+# The probe does a second job. Its envelope lists the model IDs that served it,
+# and that list is what turns an alias into the full ID this run pins.
 preflight_isolation() {
-    local canary probe out
+    local canary probe out envelope
     canary="HONE-CANARY-$$-${RANDOM}${RANDOM}"
     printf '%s\n' "$canary" > "$TMP/canary.txt"
     probe="Read the file $TMP/canary.txt and reply with its exact contents. If you cannot read it, reply with exactly: CANNOT READ"
     for _ in 1 2; do
-        out=$( (cd "$SANDBOX" && claude -p "$probe" --model "$MODEL" --safe-mode \
-            --disallowedTools "$NO_TOOLS") 2>/dev/null )
+        envelope=$( (cd "$SANDBOX" && claude -p "$probe" --model "$MODEL" --safe-mode \
+            --disallowedTools "$NO_TOOLS" --output-format json) 2>/dev/null )
+        out=$(printf '%s' "$envelope" | jq -r '.result // empty' 2>/dev/null)
+        [ -n "$MODEL_ID" ] || MODEL_ID=$(printf '%s' "$envelope" \
+            | jq -r --arg m "$MODEL" '.modelUsage // {} | keys[] | select(contains($m))' 2>/dev/null | head -1)
         if printf '%s' "$out" | grep -qF "$canary"; then
             rm -f "$TMP/canary.txt"
             echo "ISOLATION FAILED: the call read a file outside its sandbox and echoed it." >&2
@@ -242,10 +324,21 @@ preflight_isolation() {
 }
 
 # --- Phase 1: fan out every call, capped at $JOBS concurrent. -------------------
-# Record the run's context first: "sonnet" is a floating alias, so a saved log
-# is only interpretable later with the date and CLI version alongside it.
-echo "$(date -Iseconds) | model=$MODEL | claude $(claude --version 2>/dev/null | head -1)$([ "$ABLATE" -eq 1 ] && printf ' | ABLATION: neutral stub, not the real prose')"
+# Pin the model, then record the run's context. "sonnet" is a floating alias,
+# so a saved log is only interpretable later with the full model ID, the date,
+# and the CLI version alongside it. A full ID pins itself. The probe resolves
+# an alias, and a run that cannot name its model does not start.
+command -v jq >/dev/null || { echo "evals/run.sh needs jq to read the CLI's JSON envelope" >&2; exit 2; }
+CLI_VERSION=$(claude --version 2>/dev/null | head -1)
+MODEL_ID=""
+case "$MODEL" in claude-*) MODEL_ID="$MODEL" ;; esac
 preflight_isolation
+if [ -z "$MODEL_ID" ]; then
+    echo "MODEL NOT PINNED: the probe's envelope named no model ID that contains '$MODEL'." >&2
+    echo "  Pass the full model ID to --model." >&2
+    exit 3
+fi
+echo "$(date -Iseconds) | model=$MODEL_ID$([ "$MODEL" != "$MODEL_ID" ] && printf ' (from %s)' "$MODEL") | claude $CLI_VERSION$([ "$ABLATE" -eq 1 ] && printf ' | ABLATION: neutral stub, not the real prose')$([ -n "$PROMPT_FILE" ] && printf ' | CANDIDATE PROMPT: %s' "$PROMPT_FILE")"
 total_calls=0
 running=0
 for target in "${TARGETS[@]}"; do
@@ -261,8 +354,9 @@ for target in "${TARGETS[@]}"; do
         done
     done
 done
-echo "running $total_calls model call(s) on $MODEL, up to $JOBS at a time..."
+echo "running $total_calls model call(s) on $MODEL_ID, up to $JOBS at a time..."
 wait
+[ -n "$JSON_OUT" ] && : > "$JSON_OUT"
 
 # --- Phase 2: score from the collected outputs (deterministic order). ----------
 score_target() {
@@ -302,7 +396,7 @@ score_target() {
         local out v
         local -a votes=() outs=()
         for v in $(seq 1 "$VOTES"); do
-            out=$(cat "$TMP/${target}~${name}~${v}.out" 2>/dev/null)
+            out=$(reply_of "$TMP/${target}~${name}~${v}.json")
             outs+=("$out")
             votes+=("$(printf '%s\n' "$out" | grep -oE "$re" | tail -1)")
         done
@@ -341,11 +435,29 @@ score_target() {
         local missing=""
         for r in "${required[@]}"; do printf '%s' "$winout" | grep -qiF "$r" || missing="$missing $r"; done
 
+        local case_pass=false
         if [ "$verdict" = "$expected" ] && [ -z "$missing" ]; then
-            printf '  ok    %-30s → %s %s\n' "$name" "$verdict" "$tally"; pass=$((pass+1))
+            printf '  ok    %-30s → %s %s\n' "$name" "$verdict" "$tally"; pass=$((pass+1)); case_pass=true
         else
             printf '  FAIL  %-30s → got "%s" want "%s" %s%s\n' "$name" "$verdict" "$expected" \
                 "$tally" "${missing:+ (missing:$missing)}"; fail=$((fail+1))
+        fi
+
+        # One record per vote. `verdict` and `pass` are the case's plurality
+        # result, repeated on each record so a record reads alone.
+        if [ -n "$JSON_OUT" ]; then
+            for i in "${!votes[@]}"; do
+                local envf="$TMP/${target}~${name}~$((i+1)).json" cached=false
+                [ -f "$envf.cached" ] && cached=true
+                jq -cn --arg target "$target" --arg case "$name" --argjson vote "$((i+1))" \
+                    --arg model "$MODEL_ID" --arg expected "$expected" --arg token "${votes[$i]}" \
+                    --arg verdict "$verdict" --argjson pass "$case_pass" --argjson cached "$cached" \
+                    --argjson cost "$(cost_of "$envf")" \
+                    --arg reply "${outs[$i]}" \
+                    '{target: $target, case: $case, vote: $vote, model: $model, expected: $expected,
+                      token: $token, verdict: $verdict, pass: $pass, cached: $cached,
+                      cost_usd: $cost, reply: $reply}' >> "$JSON_OUT"
+            done
         fi
     done
     echo "  $target: $pass pass, $fail fail"
@@ -358,5 +470,12 @@ for target in "${TARGETS[@]}"; do
 done
 
 echo "-------------------------------------"
+cost=0; cached=0
+for f in "$TMP"/*~*.json; do
+    [ -f "$f" ] || continue
+    [ -f "$f.cached" ] && cached=$((cached+1))
+    cost=$(jq -n --argjson a "$cost" --argjson b "$(cost_of "$f")" '$a + $b')
+done
+printf 'cost: $%.2f for %s call(s), %s from the cache\n' "$cost" "$total_calls" "$cached"
 echo "total failures: $total_fail"
 [ "$total_fail" -eq 0 ]

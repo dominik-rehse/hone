@@ -93,13 +93,16 @@ carries the stub to the right answer.
 The fix is the baseline the spike case already uses. Run the case against hone's
 prose **minus the paragraph the case pins**, rather than against no prose at all.
 The cheapest way to build that baseline is the prose as it stood before the
-change under test, which `git show` prints:
+change under test, which `git show` prints. `--prompt-file` runs it without a
+change to the working tree:
 
 ```bash
-git show <commit-before>:skills/garden/SKILL.md > skills/garden/SKILL.md
-bash evals/run.sh garden --votes 3 --model opus
-git checkout skills/garden/SKILL.md
+git show <commit-before>:skills/garden/SKILL.md > /tmp/garden-before.md
+bash evals/run.sh garden --votes 3 --model opus --prompt-file /tmp/garden-before.md
 ```
+
+For a paragraph with no such commit, copy the prompt, delete the paragraph
+from the copy, and pass the copy.
 
 A case earns its place by discriminating against **either** baseline, and the
 list below records which one. A case that survives neither pins nothing, whatever
@@ -128,6 +131,56 @@ bash evals/run.sh garden --ablate       # the discrimination check, not a suite 
 Match the model to what actually runs in production, or the result means nothing.
 The critics carry `model: sonnet` in their frontmatter. The `loop` and `garden`
 targets use whatever model drives the session (`--model opus`).
+
+`--model` takes an alias or a full model ID. An alias floats: the provider can
+re-point it, and two runs on `sonnet` a month apart may measure two models. So
+the run resolves an alias once, from the envelope of its isolation probe, and
+pins every call to the full ID. The header line prints that ID. A run that
+cannot resolve its alias stops with exit 3.
+
+The last line before the failure count is the cost of the run in dollars, as
+the CLI reports it per call.
+
+## Driving the harness from a tool
+
+Four flags let a script or an optimizer drive `run.sh`. `test/evals_test.sh`
+proves their plumbing against a fake CLI, with no model calls.
+
+```bash
+bash evals/run.sh loop --model opus --cases land-proof-gate,review-command-refused
+bash evals/run.sh plan-critic --prompt-file /tmp/candidate.md
+bash evals/run.sh plan-critic --votes 3 --json /tmp/run.jsonl
+bash evals/run.sh plan-critic --votes 3 --cache
+```
+
+- `--cases A,B` runs only the named cases. An unknown name stops the run. A
+  held-out case still needs `--holdout`.
+- `--prompt-file FILE` puts FILE in the system slot in place of the target's
+  checked-in prose, with any frontmatter stripped. It needs one target.
+- `--json FILE` writes one JSON line per case × vote. Each record has
+  `target`, `case`, `vote`, `model`, `expected`, `token`, `verdict`, `pass`,
+  `cached`, `cost_usd`, and `reply`. `token` is that vote's answer. `verdict`
+  and `pass` are the plurality result of the case, repeated on each record.
+  `reply` is the full text, which the terminal output discards.
+- `--cache` reuses a stored reply when the model ID, the CLI version, the
+  system prompt, the user turn, and the vote number all match. The vote number
+  is in the key so that three votes stay three samples. The store is
+  `evals/.cache`, or `$HONE_EVAL_CACHE`. A cached call costs `0`. The cache is
+  opt-in, because a release gate and a noise-floor run must measure afresh.
+
+### Section ablation
+
+The first use of these flags is to test a section of a prompt, not a case.
+Copy the prompt, delete one section from the copy, and run the target on the
+copy at `--votes 3`, on the floor model of the target. It is the run of the
+second baseline, read in the other direction. There the run tests the case,
+and here it tests the section.
+
+Read the result under one rule. An unchanged suite is evidence only for a
+section that a case aims at. If no case aims at the section, the run reports
+nothing about it, and the section stays. Cut a section only when a case aims
+at it, the suite stays green without it, and no tally moves. The cut then
+enters the repo as an ordinary prompt edit, through the release gate.
 
 ## Targets and cases
 
@@ -364,8 +417,9 @@ is a substring the reply must mention. The check ignores case.
 
 The runner puts the prose under test in the system slot: the agent body for a
 critic, and `skills/run/SKILL.md` for the loop. The brief goes in the user turn,
-and the runner calls `claude -p` headless. It takes the last token in the reply
-as that run's answer. Every target's instruction demands an exact final line
+and the runner calls `claude -p` headless with `--output-format json`. It reads
+the reply from that envelope, and an error envelope counts as no answer. It
+takes the last token in the reply as that run's answer. Every target's instruction demands an exact final line
 (`ACTION:`/`VERDICT:`), so the token is the stated answer. It is not one the
 model happened to name last while reasoning.
 
@@ -401,8 +455,9 @@ the other two.
 
 So on that date, a verdict flip after a prompt edit is signal, not sampling
 noise. Two limits. The model aliases float, so the floor moves when the
-provider re-points an alias. Re-measure it before an ablation campaign, and
-on every new model. And the one dissenting vote sits in
+provider re-points an alias. The run header shows the full model ID, so
+compare it with the ID of the last measurement. Re-measure the floor before
+an ablation campaign, and on every new model. And the one dissenting vote sits in
 `spike-note-may-age`, the case pinned against hone's own deletion bias.
 Read that case's tally first when a run degrades.
 
