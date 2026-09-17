@@ -36,8 +36,10 @@ disk, because it is the evidence for the verdict:
 A verdict has three values. `pass` and `fail` are results about hone.
 `indeterminate` is a failure of the infrastructure. Examples are a fixture
 that did not seed, a session with no result event or with an error envelope,
-and a timeout. A spent budget, a broken `check.sh`, and a judge with no
-answer count too. The third value exists so that a
+and a timeout. A spent budget, a nested call that is not logged in, and a
+judge with no answer count too. So does a `check.sh` that cannot be trusted:
+one with a syntax error, with a command bash cannot find, or with no check
+in it. The third value exists so that a
 broken sandbox never reads as a result about hone. Run an indeterminate
 scenario again. Read a failed one.
 
@@ -111,7 +113,9 @@ an isolated `$HOME`, and three scenarios at a time. Three identical passes
 over the eight scenarios gave 24 runs. All 24 passed, and none was
 indeterminate. A pass takes about 30 minutes and costs about 19 dollars at
 API prices. `weaken-check` is the longest run at 18 minutes, and
-`claimed-worktree` is the shortest at one.
+`claimed-worktree` is the shortest at one. Each of those times is about 30
+seconds too long: until a later fix the session never got its EOF, and the
+harness waited out a kill timer at the end of every run.
 
 So a fail on an unchanged plugin is rare enough to read as signal. Read it
 in the sandbox before you believe it. Twice that day a fail came from a
@@ -169,11 +173,12 @@ Auth comes from the first of three sources:
    and it hands the value to the run as `CLAUDE_CODE_OAUTH_TOKEN`. It never
    copies the file. The file also holds the refresh token, and a refresh in
    a copy can log the real session out. It never writes the token anywhere.
-   The token lives for hours. When it has under 30 minutes left, the harness
-   makes one cheap call in the real `$HOME`, so that the CLI renews it. A
-   token that stays stale makes the scenario indeterminate. So does a
-   renewal in the middle of a run: the old token is revoked at once, and
-   the run ends with a 401. Run that scenario again.
+   The token lives for hours. A scenario starts only with a token that has
+   30 minutes left, and a staler one makes it indeterminate. A renewal
+   revokes the old token at once, and a run that holds it ends with a 401.
+   So the harness renews at one moment only: before the fan-out, with one
+   cheap call in the real `$HOME`, when the token is stale then. Your own
+   session can still renew in the middle of a run. Run that scenario again.
 3. Neither exists. The run then shares the real `$HOME`, and `result.json`
    says `"home": "shared"`. One leak stays in that mode. The nested
    `/code-review` is a new process, and the run skill starts it without
@@ -215,6 +220,11 @@ A scenario is a directory under `scenarios/` with `track`, `seed.sh`,
 
 - Define the end state, not the path. `parallel-paths` first demanded a land,
   and the run stopped for a better reason than the scenario foresaw.
+  `authority-gate` first searched the transcript for `worktree.sh grant`.
+  That text is also in hone's rule and in land's refusal, so the check could
+  not fail, and one agent had the script path in a variable, so a stricter
+  match failed a correct run. The check now reads the helper's stamp in the
+  merge commit. `agent_ran` exists for the cases with no end state to read.
 - Make the Plan exemplary apart from the one thing under test. The first
   `weaken-check` Plan left the free-shipping threshold open, and the run
   stopped on that and never met the temptation.

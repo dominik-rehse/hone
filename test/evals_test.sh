@@ -36,7 +36,8 @@ case "$model" in claude-*) id="$model" ;; *) id="claude-$model-1" ;; esac
 [ -n "${FAKE_NO_USAGE:-}" ] && id="claude-other-1"
 case "$prompt" in
     *"CANNOT READ"*) reply="CANNOT READ" ;;
-    *) reply="$FAKE_REPLY"
+    *) [ -n "${FAKE_EMPTY:-}" ] && exit 1   # a failed call: no envelope at all
+       reply="$FAKE_REPLY"
        n=$(find "$FAKE_DIR/sys" -type f | wc -l)
        printf '%s' "$sys" > "$FAKE_DIR/sys/$n.$$" ;;
 esac
@@ -116,6 +117,26 @@ rec=$(head -1 "$W/out.jsonl")
 [ "$(jq -r '[.target,.case,.expected,.token,.model]|join(" ")' <<<"$rec")" = "plan-critic $CASE $WANT $WANT claude-fake-1" ] \
     && ok "the record names target, case, expected, token, and model" || bad "record fields are wrong (got $rec)"
 [ "$(jq -r '[.pass,.cached,.cost_usd]|join(" ")' <<<"$rec")" = "true false 0.25" ] && ok "the record carries pass, cached, and cost" || bad "pass/cached/cost are wrong (got $rec)"
+
+echo "== a failed call keeps its record and does not break the cost line =="
+out=$(FAKE_EMPTY=1 run plan-critic --model fake --cases "$CASE" --json "$W/empty.jsonl")
+[ "$(jq -r '[.token,.cost_usd]|join(" ")' "$W/empty.jsonl" 2>/dev/null)" = " 0" ] && ok "a vote with no envelope still gets a record, at cost 0" || bad "the failed vote has no record (file: $(cat "$W/empty.jsonl" 2>/dev/null))"
+grep -q '^cost: \$0\.00 for 1 call' <<<"$out" && ! grep -q 'jq: ' <<<"$out" && ok "the cost line survives a failed call" || bad "the cost line broke: $(grep -E '^cost|jq:' <<<"$out" | head -2)"
+
+echo "== a run that would call nothing is a usage error =="
+HOLD=""
+for d in "$PLUGIN_ROOT"/evals/plan-critic/*-holdout/; do [ -f "$d/brief.md" ] && HOLD=$(basename "$d"); done
+run plan-critic --model fake --cases "$HOLD" >/dev/null; rc=$?
+[ "$rc" -eq 2 ] && ok "a held-out name without --holdout exits 2" || bad "--cases $HOLD without --holdout should exit 2 (got $rc)"
+run plan-critic --model fake --cases "$HOLD" --holdout >/dev/null; rc=$?
+[ "$rc" -ne 2 ] && ok "with --holdout the same name runs" || bad "--cases $HOLD --holdout should run"
+
+echo "== a loop run on a defaulted model says so =="
+LCASE=$(basename "$(ls -d "$PLUGIN_ROOT"/evals/loop/*/ | grep -v -- '-holdout/' | head -1)")
+out=$(run loop --cases "$LCASE")
+grep -q 'NOTE: no --model' <<<"$out" && ok "a loop run without --model prints a note" || bad "loop without --model should print a note"
+out=$(run loop --model fake --cases "$LCASE")
+grep -q 'NOTE: no --model' <<<"$out" && bad "an explicit --model needs no note" || ok "an explicit --model prints no such note"
 
 echo "== --cache: a repeated call costs nothing =="
 rm -f "$W"/sys/*

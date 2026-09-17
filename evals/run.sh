@@ -100,8 +100,11 @@ done
 # The model a critic ships on: the `model:` line of its frontmatter.
 ships_on() { awk '/^---[[:space:]]*$/{n++; next} n==1 && /^model:/{print $2}' "agents/$1.md"; }
 
-# Without --model the run measures what production runs: the critics' own pin.
-[ -n "$MODEL" ] || MODEL=$(ships_on plan-critic)
+# Without --model the run measures what production runs for the critics: their
+# own pin. The loop and the garden skill run on the session's model, which no
+# file pins, so a defaulted run of those two says so (see the NOTE below).
+MODEL_GIVEN=1
+[ -n "$MODEL" ] || { MODEL_GIVEN=0; MODEL=$(ships_on plan-critic); }
 
 if [ -n "$PROMPT_FILE" ]; then
     [ "$WHICH" = "all" ] && { echo "--prompt-file needs one target: a candidate prompt replaces one target's prose" >&2; exit 2; }
@@ -277,7 +280,9 @@ $(cat "$dir/brief.md")"
 # What one call cost this run. A cached reply cost nothing.
 cost_of() {
     [ -f "$1.cached" ] && { echo 0; return 0; }
-    jq -r '.total_cost_usd // 0' "$1" 2>/dev/null || echo 0
+    # Slurp mode: a failed call leaves an empty file, and plain jq prints
+    # nothing for it, where a number must come out.
+    jq -s 'map(.total_cost_usd // 0) | add // 0' "$1" 2>/dev/null || echo 0
 }
 
 reply_of() { jq -r 'select(.is_error == false) | .result // empty' "$1" 2>/dev/null; }
@@ -370,15 +375,45 @@ done
 # A critic measured on another model than it ships on is a fair experiment (can
 # a cheaper model hold the slot?), and it is never a release gate. Say which.
 for target in "${TARGETS[@]}"; do
-    case "$target" in *-critic) ;; *) continue ;; esac
-    [ "$(ships_on "$target")" = "$MODEL_ID" ] \
-        || echo "NOTE: $target ships on $(ships_on "$target"), and this run measures $MODEL_ID. It does not gate a release."
+    case "$target" in
+        *-critic) [ "$(ships_on "$target")" = "$MODEL_ID" ] \
+            || echo "NOTE: $target ships on $(ships_on "$target"), and this run measures $MODEL_ID. It does not gate a release." ;;
+        *) [ "$MODEL_GIVEN" -eq 1 ] \
+            || echo "NOTE: no --model, so $target runs on the critics' $MODEL_ID. Its release gate is --model opus." ;;
+    esac
 done
+# --cases can name a held-out case without --holdout, and the run is then empty.
+# An empty run must not read as a green one.
+if [ "$total_calls" -eq 0 ]; then
+    echo "no case left to run: a held-out case needs --holdout beside --cases" >&2
+    exit 2
+fi
 echo "running $total_calls model call(s) on $MODEL_ID, up to $JOBS at a time..."
 wait
 [ -n "$JSON_OUT" ] && : > "$JSON_OUT"
 
 # --- Phase 2: score from the collected outputs (deterministic order). ----------
+# One --json record per vote of the case that score_target is on. It reads that
+# function's locals. `verdict` and `pass` are the case's plurality result,
+# repeated on each record so a record reads alone. A case where no vote
+# answered gets its records too, with an empty token and verdict.
+write_records() {
+    [ -n "$JSON_OUT" ] || return 0
+    local i envf cached
+    for i in "${!votes[@]}"; do
+        envf="$TMP/${target}~${name}~$((i+1)).json"; cached=false
+        [ -f "$envf.cached" ] && cached=true
+        jq -cn --arg target "$target" --arg case "$name" --argjson vote "$((i+1))" \
+            --arg model "$MODEL_ID" --arg expected "$expected" --arg token "${votes[$i]}" \
+            --arg verdict "$verdict" --argjson pass "$case_pass" --argjson cached "$cached" \
+            --argjson cost "$(cost_of "$envf")" \
+            --arg reply "${outs[$i]}" \
+            '{target: $target, case: $case, vote: $vote, model: $model, expected: $expected,
+              token: $token, verdict: $verdict, pass: $pass, cached: $cached,
+              cost_usd: $cost, reply: $reply}' >> "$JSON_OUT"
+    done
+}
+
 score_target() {
     local target="$1" pass=0 fail=0
     echo "== $target =="
@@ -427,14 +462,15 @@ score_target() {
         # through to whichever token happens to be the expected one.
         local answered=0 t
         for t in "${votes[@]}"; do [ -n "$t" ] && answered=$((answered+1)); done
+        local verdict="" case_pass=false
         if [ "$answered" -eq 0 ]; then
             printf '  FAIL  %-30s → no answer from %s call(s); model/API failure?\n' "$name" "$VOTES"
-            fail=$((fail+1)); continue
+            fail=$((fail+1)); write_records; continue
         fi
 
         # Plurality. Strict > keeps the FIRST token at the max count, so ties break
         # toward the more conservative token (tokens_for orders them that way).
-        local verdict="" best=0 n dist=""
+        local best=0 n dist=""
         for t in $toks; do
             n=0
             local vt; for vt in "${votes[@]}"; do [ "$vt" = "$t" ] && n=$((n+1)); done
@@ -455,7 +491,6 @@ score_target() {
         local missing=""
         for r in "${required[@]}"; do printf '%s' "$winout" | grep -qiF "$r" || missing="$missing $r"; done
 
-        local case_pass=false
         if [ "$verdict" = "$expected" ] && [ -z "$missing" ]; then
             printf '  ok    %-30s → %s %s\n' "$name" "$verdict" "$tally"; pass=$((pass+1)); case_pass=true
         else
@@ -463,22 +498,7 @@ score_target() {
                 "$tally" "${missing:+ (missing:$missing)}"; fail=$((fail+1))
         fi
 
-        # One record per vote. `verdict` and `pass` are the case's plurality
-        # result, repeated on each record so a record reads alone.
-        if [ -n "$JSON_OUT" ]; then
-            for i in "${!votes[@]}"; do
-                local envf="$TMP/${target}~${name}~$((i+1)).json" cached=false
-                [ -f "$envf.cached" ] && cached=true
-                jq -cn --arg target "$target" --arg case "$name" --argjson vote "$((i+1))" \
-                    --arg model "$MODEL_ID" --arg expected "$expected" --arg token "${votes[$i]}" \
-                    --arg verdict "$verdict" --argjson pass "$case_pass" --argjson cached "$cached" \
-                    --argjson cost "$(cost_of "$envf")" \
-                    --arg reply "${outs[$i]}" \
-                    '{target: $target, case: $case, vote: $vote, model: $model, expected: $expected,
-                      token: $token, verdict: $verdict, pass: $pass, cached: $cached,
-                      cost_usd: $cost, reply: $reply}' >> "$JSON_OUT"
-            done
-        fi
+        write_records
     done
     echo "  $target: $pass pass, $fail fail"
     return "$fail"

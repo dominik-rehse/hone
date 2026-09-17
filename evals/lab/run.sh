@@ -145,18 +145,21 @@ elif jq -e '.claudeAiOauth.accessToken' "$CREDENTIALS" >/dev/null 2>&1; then
 fi
 
 # The access token of the user's OAuth session, when it has 30 minutes left.
-# That margin covers the longest run the noise floor saw.
-# The CLI renews a token that is about to expire, so one cheap call in the real
-# HOME is the refresh. Prints nothing when the token stays stale.
+# That margin covers the longest run the noise floor saw. Prints nothing for a
+# stale token.
 session_token() {
     # shellcheck disable=SC2016  # $now is a jq variable
-    local look='.claudeAiOauth | select((.expiresAt // 0) / 1000 > $now + 1800) | .accessToken // empty' token
-    token=$(jq -r --argjson now "$(date +%s)" "$look" "$CREDENTIALS" 2>/dev/null)
-    if [ -z "$token" ]; then
-        "$REAL_CLAUDE" -p "Reply with exactly: OK" --model claude-haiku-4-5-20251001 --safe-mode >/dev/null 2>&1
-        token=$(jq -r --argjson now "$(date +%s)" "$look" "$CREDENTIALS" 2>/dev/null)
-    fi
-    printf '%s' "$token"
+    jq -r --argjson now "$(date +%s)" \
+        '.claudeAiOauth | select((.expiresAt // 0) / 1000 > $now + 1800) | .accessToken // empty' \
+        "$CREDENTIALS" 2>/dev/null
+}
+
+# The CLI renews a token that is about to expire, so one cheap call in the real
+# HOME is the refresh. A renewal revokes the old token at once. So this runs
+# once, before the fan-out, and never while a scenario holds a token.
+refresh_session_token() {
+    [ -n "$(session_token)" ] && return 0
+    "$REAL_CLAUDE" -p "Reply with exactly: OK" --model claude-haiku-4-5-20251001 --safe-mode >/dev/null 2>&1
 }
 
 RUN_DIR="${REGRADE:-$OUT_ROOT/$(date +%Y%m%d-%H%M%S)}"
@@ -228,9 +231,11 @@ if [ -z "\${CLAUDE_CODE_OAUTH_TOKEN:-}\${ANTHROPIC_API_KEY:-}" ]; then
 fi
 out=\$(mktemp)
 "$REAL_CLAUDE" "\$@" | tee "\$out"; rc=\${PIPESTATUS[0]}
-jq -cn --arg args "\$*" --slurpfile e "\$out" \\
-    '{args: \$args, is_error: (\$e[0] | if type == "object" and has("is_error") then .is_error else null end), cost_usd: (\$e[0].total_cost_usd // 0), not_logged_in: ((\$e[0].result? // "") | tostring | test("Not logged in"))}' \\
-    >> "$2" 2>/dev/null || jq -cn --arg args "\$*" '{args: \$args, is_error: null, cost_usd: 0}' >> "$2"
+# The login error comes as an envelope or as plain text, so look at the raw output.
+nl=false; grep -F 'Not logged in' "\$out" >/dev/null 2>&1 && nl=true
+jq -cn --arg args "\$*" --argjson nl "\$nl" --slurpfile e "\$out" \\
+    '{args: \$args, is_error: (\$e[0] | if type == "object" and has("is_error") then .is_error else null end), cost_usd: (\$e[0].total_cost_usd // 0), not_logged_in: \$nl}' \\
+    >> "$2" 2>/dev/null || jq -cn --arg args "\$*" --argjson nl "\$nl" '{args: \$args, is_error: null, cost_usd: 0, not_logged_in: \$nl}' >> "$2"
 rm -f "\$out"
 exit "\$rc"
 EOF
@@ -287,8 +292,10 @@ session_idle() {
 # Returns 0 when the session ended by itself or went idle, 124 on the timeout.
 drive_session() {
     local sb="$1" prompt="$2" token="${3:-}" fd pid idle=0 deadline rc=0
+    # The session reads the fifo, and the harness holds its only write end. A
+    # read-write open here would hand the session a write end of its own, and
+    # then closing ours could never give it EOF.
     rm -f "$sb/stdin"; mkfifo "$sb/stdin"
-    exec {fd}<>"$sb/stdin"
     (
         cd "$sb/repo" || exit 1
         [ "$HOME_MODE" = isolated ] && export HOME="$sb/home"
@@ -298,8 +305,9 @@ drive_session() {
             --plugin-dir "$sb/plugin" --setting-sources project,local \
             --model "$MODEL" --permission-mode bypassPermissions \
             --max-budget-usd "$BUDGET" --output-format stream-json --verbose
-    ) <&"$fd" > "$sb/transcript.jsonl" 2> "$sb/stderr.log" &
+    ) < "$sb/stdin" > "$sb/transcript.jsonl" 2> "$sb/stderr.log" &
     pid=$!
+    exec {fd}>"$sb/stdin"
     jq -cn --arg t "$prompt" '{type: "user", message: {role: "user", content: $t}}' >&"$fd"
     deadline=$(( $(date +%s) + TIMEOUT_MIN * 60 ))
     while kill -0 "$pid" 2>/dev/null; do
@@ -359,7 +367,7 @@ grade_scenario() {
     if [ "$(jq -r .seeded "$sb/run.json")" != "true" ]; then
         verdict=indeterminate; reason="the fixture did not seed (see seed.log)"
     elif [ "$(jq -r '.auth_ok == false' "$sb/run.json")" = "true" ]; then
-        verdict=indeterminate; reason="the session token expires within 30 minutes, and a refresh call did not renew it"
+        verdict=indeterminate; reason="the session token had under 30 minutes left when the scenario started"
     else
         result=$(jq -c 'select(.type == "result")' "$sb/transcript.jsonl" 2>/dev/null | tail -1)
         cost=$(jq -r '.total_cost_usd // 0' <<<"${result:-{\}}" 2>/dev/null || echo 0)
@@ -373,6 +381,9 @@ grade_scenario() {
         fi
     fi
 
+    if [ -z "$verdict" ] && ! bash -n "$scenario/check.sh" 2> "$sb/checks.log"; then
+        verdict=indeterminate; reason="check.sh has a syntax error (see checks.log)"
+    fi
     if [ -z "$verdict" ]; then
         (
             cd "$sb/repo" || exit 2
@@ -382,8 +393,16 @@ grade_scenario() {
             LAB_BASE=$(cat "$sb/base")
             # shellcheck source=evals/lab/checks.sh
             . "$LAB/checks.sh"
+            # bash runs this handler for a command it cannot find, in a subshell
+            # of its own, so a file carries the news. A misspelled helper must
+            # not read as a check that passed.
+            # shellcheck disable=SC2329  # bash itself calls it
+            command_not_found_handle() { echo "  BROKEN unknown command: $1"; : > "$sb/check-broken"; return 127; }
+            rm -f "$sb/check-broken"
             # shellcheck disable=SC1091
             . "$scenario/check.sh"
+            [ -e "$sb/check-broken" ] && exit 2
+            [ "$lab_checks" -eq 0 ] && { echo "  BROKEN check.sh made no check"; exit 2; }
             exit "$lab_fail"
         ) > "$sb/checks.log" 2>&1
         case $? in
@@ -429,6 +448,7 @@ else
     echo "$(date -Iseconds) | model=$MODEL | judge=$JUDGE_MODEL | home=$HOME_MODE auth=$AUTH${WITHOUT:+ | WITHOUT: $WITHOUT} | claude $("$REAL_CLAUDE" --version 2>/dev/null | head -1)"
     echo "running ${#NAMES[@]} scenario(s), up to $JOBS at a time, into $RUN_DIR"
 fi
+[ -z "$REGRADE" ] && [ "$AUTH" = session ] && refresh_session_token
 running=0
 for n in "${NAMES[@]}"; do
     if [ -n "$REGRADE" ]; then grade_scenario "$n" & else run_scenario "$n" & fi

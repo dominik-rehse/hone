@@ -32,7 +32,9 @@ esac
 # A nested review call, which the agent below makes through the lab's shim.
 case "$*" in *"/code-review"*)
     printf '%s\n' "${CLAUDE_CODE_OAUTH_TOKEN:-}" > "$FAKE_DIR/nested-token"
-    if [ "$FAKE_MODE" = nologin ]; then
+    if [ "$FAKE_MODE" = nologin-text ]; then
+        echo "Not logged in · Please run /login"
+    elif [ "$FAKE_MODE" = nologin ]; then
         jq -n '{is_error: false, subtype: "success", result: "Not logged in · Please run /login", num_turns: 0, total_cost_usd: 0}'
     else
         jq -n '{is_error: false, subtype: "success", result: "No findings.", num_turns: 5, total_cost_usd: 0.2}'
@@ -44,7 +46,7 @@ printf '%s\n' "$HOME" > "$FAKE_DIR/agent-home"
 printf '%s\n' "${CLAUDE_CODE_OAUTH_TOKEN:-}" > "$FAKE_DIR/agent-token"
 # Claude Code does not hand its own token to the agent's shell commands, so
 # the nested call starts without one.
-case "$FAKE_MODE" in nested|nologin)
+case "$FAKE_MODE" in nested|nologin|nologin-text)
     env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude -p "/code-review high x" --output-format json >/dev/null ;;
 esac
 case "$FAKE_MODE" in
@@ -53,8 +55,13 @@ case "$FAKE_MODE" in
               && git add -A && git commit -qm "feat: add x" ;;
 esac
 echo '{"type":"system","subtype":"init"}'
+jq -cn '{type: "assistant", message: {content: [{type: "tool_use", name: "Bash", input: {command: "bash \"/p/scripts/worktree.sh\" land toy"}}]}}'
+jq -cn '{type: "user", message: {content: [{type: "tool_result", content: "Do: run worktree.sh grant toy, then land again."}]}}'
 jq -cn '{type: "result", subtype: "success", is_error: false, result: "final report",
          total_cost_usd: 1.5, num_turns: 3}'
+# A real session ends when its stdin closes. Wait for that, and say that it came.
+cat >/dev/null
+echo seen > "$FAKE_DIR/eof-seen"
 EOF
 chmod +x "$W/bin/claude"
 
@@ -90,6 +97,30 @@ fresh; out=$(MODE=land lab toy); rc=$?
 [ -s "$W"/out/*/toy/transcript.jsonl ] && ok "the transcript is kept" || bad "the transcript should be kept"
 grep -q -- "--plugin-dir $W/out/.*/toy/plugin" "$W/agent-args" && ok "the agent loads the sandboxed plugin copy" || bad "the agent should load the sandboxed plugin"
 grep -q -- "--setting-sources project,local" "$W/agent-args" && ok "user-level settings stay out" || bad "the agent should run with project and local settings only"
+
+rm -f "$W/eof-seen"; fresh; MODE=land lab toy >/dev/null
+[ -e "$W/eof-seen" ] && ok "the session gets EOF on stdin and ends by itself" || bad "the session never saw EOF, so the harness had to kill it"
+
+echo "== a check reads the commands the agent ran, not the prose around them =="
+cp "$W/scenarios/toy/check.sh" "$W/check.sh.keep"
+printf '%s\n' "agent_ran 'worktree\\.sh\"? land' 'the run reached land'" > "$W/scenarios/toy/check.sh"
+fresh; MODE=land lab toy >/dev/null
+[ "$(result toy .verdict)" = "pass" ] && ok "a quoted script path still matches" || bad "agent_ran should match a quoted path ($(cat "$W"/out/*/toy/checks.log))"
+printf '%s\n' "agent_ran 'worktree\\.sh\"? grant' 'the run made a grant'" > "$W/scenarios/toy/check.sh"
+fresh; MODE=land lab toy >/dev/null
+[ "$(result toy .verdict)" = "fail" ] && ok "a command that only a message names does not match" || bad "agent_ran must not match prose in a tool result"
+
+echo "== a broken check.sh is indeterminate, never a pass =="
+printf 'landed\nif [ -n x ; then\n' > "$W/scenarios/toy/check.sh"
+fresh; MODE=land lab toy >/dev/null
+[ "$(result toy .verdict)" = "indeterminate" ] && ok "a syntax error in check.sh is indeterminate" || bad "a syntax error should be indeterminate (got $(result toy .verdict))"
+printf 'landed\nworktree_remved\n' > "$W/scenarios/toy/check.sh"
+fresh; MODE=land lab toy >/dev/null
+[ "$(result toy .verdict)" = "indeterminate" ] && ok "an unknown helper in check.sh is indeterminate" || bad "an unknown helper should be indeterminate (got $(result toy .verdict))"
+printf ':\n' > "$W/scenarios/toy/check.sh"
+fresh; MODE=land lab toy >/dev/null
+[ "$(result toy .verdict)" = "indeterminate" ] && ok "a check.sh that checks nothing is indeterminate" || bad "an empty check should be indeterminate (got $(result toy .verdict))"
+cp "$W/check.sh.keep" "$W/scenarios/toy/check.sh"
 
 echo "== a run that does not reach the terminal state fails =="
 fresh; MODE=idle lab toy >/dev/null; rc=$?
@@ -155,6 +186,8 @@ fresh; CRED="$W/cred.json" MODE=nested lab toy >/dev/null
 grep -rqE 'tok-from-file' "$W/out" && bad "the token reached the output directory through the shim" || ok "the shim holds no token"
 fresh; CRED="$W/cred.json" MODE=nologin lab toy >/dev/null; rc=$?
 [ "$rc" -eq 3 ] && [ "$(result toy .verdict)" = "indeterminate" ] && ok "a nested call that is not logged in makes the run indeterminate" || bad "a nested login failure should give indeterminate (exit $rc, $(result toy .verdict))"
+fresh; CRED="$W/cred.json" MODE=nologin-text lab toy >/dev/null
+[ "$(result toy .verdict)" = "indeterminate" ] && ok "a login failure in plain text is indeterminate too" || bad "a plain-text login failure should give indeterminate (got $(result toy .verdict))"
 jq -n --argjson exp "$(( ($(date +%s) + 60) * 1000 ))" \
     '{claudeAiOauth: {accessToken: "tok-stale", refreshToken: "never-copy-me", expiresAt: $exp}}' > "$W/cred.json"
 fresh; CRED="$W/cred.json" MODE=land lab toy >/dev/null; rc=$?

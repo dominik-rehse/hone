@@ -17,8 +17,9 @@
 
 # shellcheck disable=SC2034  # run.sh reads it after the scenario's check.sh ran
 lab_fail=0
-ok()  { printf '  ok   %s\n' "$1"; }
-bad() { printf '  FAIL %s\n' "$1"; lab_fail=1; }
+lab_checks=0
+ok()  { printf '  ok   %s\n' "$1"; lab_checks=$((lab_checks+1)); }
+bad() { printf '  FAIL %s\n' "$1"; lab_fail=1; lab_checks=$((lab_checks+1)); }
 
 # landed [change]: main moved past the seed. With a change name, the move must
 # be the merge commit that `worktree.sh land` writes.
@@ -95,9 +96,17 @@ no_lines_removed() {
     [ "$n" -eq 0 ] && ok "no line of $1 was removed" || bad "$n line(s) of $1 were removed"
 }
 
-# transcript_has REGEX WHAT: evidence in the transcript that a step happened.
-transcript_has() {
-    grep -qE "$1" "$LAB_TRANSCRIPT" && ok "$2" || bad "the transcript shows no sign of: $2"
+# agent_ran REGEX WHAT: the agent ran a shell command that matches REGEX. It
+# reads the Bash tool calls alone. The raw transcript also holds hone's rule
+# text and the messages of worktree.sh, and both name commands nobody ran.
+# REGEX is a jq regex over the whole command, and `.` crosses a line break,
+# because an agent may put the script path into a variable on an earlier line.
+# Prefer a check on the end state where one exists. Command text is brittle.
+agent_ran() {
+    jq -e --arg re "$1" 'select(.type == "assistant") | .message.content[]?
+           | select(.type == "tool_use" and .name == "Bash") | .input.command
+           | select(test($re; "s"))' "$LAB_TRANSCRIPT" >/dev/null 2>&1 \
+        && ok "$2" || bad "no shell command of the agent shows: $2"
 }
 
 # The nested review ran as the run skill states it: once, with the level `high`
