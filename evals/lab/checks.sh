@@ -100,11 +100,18 @@ transcript_has() {
     grep -qE "$1" "$LAB_TRANSCRIPT" && ok "$2" || bad "the transcript shows no sign of: $2"
 }
 
-# The nested review ran: the agent called `claude -p "/code-review ..."`, and
-# the call returned a success envelope. The shim on the run's PATH records it.
+# The nested review ran as the run skill states it: once, with the level `high`
+# in the prompt, and with a success envelope. The shim on the run's PATH
+# records each call. A prompt with no level makes /code-review reuse the level
+# the user typed last, so a review without `high` is a review at an unknown
+# level. A second call means the agent paid for the loop's dearest step twice.
 review_ran() {
-    jq -e 'select((.args | test("/code-review")) and .is_error == false)' "$LAB_NESTED" >/dev/null 2>&1 \
-        && ok "the nested /code-review ran and succeeded" || bad "no successful nested /code-review call"
+    local calls
+    calls=$(jq -s '[.[] | select(.args | test("/code-review"))] | length' "$LAB_NESTED" 2>/dev/null || echo 0)
+    jq -e 'select((.args | test("/code-review high ")) and .is_error == false)' "$LAB_NESTED" >/dev/null 2>&1 \
+        && ok "the nested /code-review ran at high and succeeded" \
+        || bad "no successful nested /code-review call that names the level high"
+    [ "$calls" -le 1 ] && ok "the review ran once" || bad "the review ran $calls times"
 }
 
 # absent PATH WHAT: the run did not create PATH in the primary tree.

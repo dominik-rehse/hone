@@ -325,12 +325,16 @@ file. Run it in your Bash tool's background mode (not a shell `&`) and poll
 the output file, because the fan-out outlasts the ~2m foreground timeout:
 
 ```
-claude -p "/code-review $(cat <brief-file>)" \
+claude -p "/code-review high $(cat <brief-file>)" \
   --add-dir <worktree> \
   --allowedTools "Task Agent Read Grep Glob Bash(git *)" \
   --model claude-opus-5 --effort high \
   --output-format json > <out-file> 2>&1
 ```
+
+The `high` that opens the prompt is the review level, and it stays. With no
+level in the prompt, `/code-review` reuses whichever level the user typed last,
+and `--effort` does not change that.
 
 That JSON envelope is this step's **proof that the review ran**. Before you
 trust any finding, confirm `<out-file>` parses as JSON with `is_error: false`,

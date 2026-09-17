@@ -39,7 +39,9 @@ Two steps run on a model that hone pins by its full ID, not by an alias. The
 critics run on the `model:` of their frontmatter in `agents/`, and the nested
 `/code-review` runs on the `--model` of the command in the run skill. An
 alias moves when the provider re-points it. A full ID moves only with a hone
-release, after the eval suite passed on the new model. The session itself
+release, after the eval suite passed on the new model. The review command
+also names its level, `high`, in the prompt. Without a level there,
+`/code-review` reuses the level you typed last. The session itself
 runs on whatever model you chose. Claude Code reads the frontmatter before
 `CLAUDE_CODE_SUBAGENT_MODEL`, so that variable moves a critic only together
 with `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`. You need that on a provider that

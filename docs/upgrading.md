@@ -69,6 +69,11 @@ mechanical steps.
      and `opus` aliases. Nothing to do on the Anthropic API. On a provider
      that names its models differently, read the pin paragraph under
      *Commands* in `reference.md`.
+   - *The review names its level since 0.53.1*: the loop's nested
+     `/code-review` now runs at `high`. Before, it ran at whichever level
+     you typed last in any session, because the prompt named none. A review
+     costs more than before if that level was lower. Nothing to install
+     and nothing to configure.
 
 After that, run `worktree.sh status`. It shows what is present and what is
 missing. It also flags a policy file that is still uncommitted, and a
