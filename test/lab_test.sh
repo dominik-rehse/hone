@@ -29,9 +29,24 @@ case " $* " in *" --safe-mode "*)
     jq -n --arg r "Reasons. VERDICT: $FAKE_JUDGE" '{is_error: false, result: $r, total_cost_usd: 0.5}'
     exit 0 ;;
 esac
+# A nested review call, which the agent below makes through the lab's shim.
+case "$*" in *"/code-review"*)
+    printf '%s\n' "${CLAUDE_CODE_OAUTH_TOKEN:-}" > "$FAKE_DIR/nested-token"
+    if [ "$FAKE_MODE" = nologin ]; then
+        jq -n '{is_error: false, subtype: "success", result: "Not logged in · Please run /login", num_turns: 0, total_cost_usd: 0}'
+    else
+        jq -n '{is_error: false, subtype: "success", result: "No findings.", num_turns: 5, total_cost_usd: 0.2}'
+    fi
+    exit 0 ;;
+esac
 printf '%s\n' "$*" > "$FAKE_DIR/agent-args"
 printf '%s\n' "$HOME" > "$FAKE_DIR/agent-home"
 printf '%s\n' "${CLAUDE_CODE_OAUTH_TOKEN:-}" > "$FAKE_DIR/agent-token"
+# Claude Code does not hand its own token to the agent's shell commands, so
+# the nested call starts without one.
+case "$FAKE_MODE" in nested|nologin)
+    env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude -p "/code-review high x" --output-format json >/dev/null ;;
+esac
 case "$FAKE_MODE" in
     dead) exit 1 ;;
     land) mkdir -p src && echo "exports.x = 1" > src/x.js && git rm -q .plans/toy.md \
@@ -112,6 +127,11 @@ grep -q '/guard\.sh' "$W"/out/*/toy/plugin/hooks/hooks.json && bad "the sandboxe
 grep -q 'bash-guard\.sh' "$W"/out/*/toy/plugin/hooks/hooks.json && ok "the other hooks stay wired" || bad "bash-guard.sh should stay wired"
 grep -q '/guard\.sh' "$PLUGIN_ROOT/hooks/hooks.json" && ok "the repo's own hooks.json is untouched" || bad "the repo's hooks.json must not change"
 [ "$(result toy .without)" = "guard" ] && ok "the result records the switch" || bad "the result should record --without"
+fresh; MODE=idle lab toy --without deny-rules,nag >/dev/null
+[ "$(jq -c '.permissions.deny' "$W"/out/*/toy/repo/.claude/settings.json)" = "[]" ] && ok "--without deny-rules seeds the fixture with no deny rule" || bad "the fixture should have no deny rule"
+grep -q '/nag\.sh' "$W"/out/*/toy/plugin/hooks/hooks.json && bad "nag.sh should be off beside deny-rules" || ok "a hook and the deny rules switch off together"
+fresh; MODE=idle lab toy >/dev/null
+[ "$(jq '.permissions.deny | length' "$W"/out/*/toy/repo/.claude/settings.json)" -gt 5 ] && ok "the full fixture carries the canonical deny rules" || bad "the fixture should carry the deny rules"
 lab toy --without no-such-hook >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an unknown hook name exits 2" || bad "an unknown hook should exit 2 (got $rc)"
 
@@ -129,6 +149,12 @@ fresh; CRED="$W/cred.json" MODE=land lab toy >/dev/null
 [ "$(result toy .home)" = "isolated" ] && ok "a credentials file with a live token isolates the home" || bad "home should be isolated with a session token"
 [ "$(cat "$W/agent-token")" = "tok-from-file" ] && ok "the agent gets the access token through the environment" || bad "the agent should get the access token (got '$(cat "$W/agent-token")')"
 grep -rqE 'tok-from-file|never-copy-me' "$W/out" && bad "a token reached the output directory" || ok "no token is written under the output directory"
+fresh; CRED="$W/cred.json" MODE=nested lab toy >/dev/null
+[ "$(cat "$W/nested-token")" = "tok-from-file" ] && ok "the shim gives a nested call the token that Claude Code withholds" || bad "a nested call should get the token (got '$(cat "$W/nested-token")')"
+[ "$(result toy .nested_cost_usd)" = "0.2" ] && ok "the result carries the nested cost" || bad "nested cost should be 0.2"
+grep -rqE 'tok-from-file' "$W/out" && bad "the token reached the output directory through the shim" || ok "the shim holds no token"
+fresh; CRED="$W/cred.json" MODE=nologin lab toy >/dev/null; rc=$?
+[ "$rc" -eq 3 ] && [ "$(result toy .verdict)" = "indeterminate" ] && ok "a nested call that is not logged in makes the run indeterminate" || bad "a nested login failure should give indeterminate (exit $rc, $(result toy .verdict))"
 jq -n --argjson exp "$(( ($(date +%s) + 60) * 1000 ))" \
     '{claudeAiOauth: {accessToken: "tok-stale", refreshToken: "never-copy-me", expiresAt: $exp}}' > "$W/cred.json"
 fresh; CRED="$W/cred.json" MODE=land lab toy >/dev/null; rc=$?

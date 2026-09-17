@@ -30,7 +30,10 @@
 #   --without H    switch hooks off for this run, by file name without .sh
 #                  (guard, bash-guard, dirty-guard, gate, nag, session-start).
 #                  The switch edits hooks.json in the sandboxed plugin copy, so
-#                  the product needs no feature for it.
+#                  the product needs no feature for it. One more name is
+#                  `deny-rules`: it seeds the fixture with no deny rule in
+#                  .claude/settings.json, which is hone's other mechanical
+#                  defense of the adapters and the settings.
 #   --budget USD   the spending cap of one run (default 25). A run that hits it
 #                  is indeterminate.
 #   --timeout MIN  the wall-clock cap of one run (default 60).
@@ -97,7 +100,9 @@ REAL_CLAUDE=$(command -v claude) || { echo "the lab needs the claude CLI on PATH
 
 # A misspelled hook must not run the full plugin and call it an ablation.
 IFS=, read -ra OFF <<<"$WITHOUT"
+DENY_RULES=on
 for h in "${OFF[@]}"; do
+    [ "$h" = deny-rules ] && { DENY_RULES=off; continue; }
     grep -qF "/hooks/$h.sh" "$ROOT/hooks/hooks.json" \
         || { echo "--without: hooks.json wires no hook named '$h'" >&2; exit 2; }
 done
@@ -180,11 +185,13 @@ seed_repo() {
   "name": "lab-fixture",
   "version": "0.0.0",
   "private": true,
+  "type": "commonjs",
   "scripts": { "test": "node --test" }
 }
 EOF
     CLAUDE_PROJECT_DIR="$repo" bash "$plugin/scripts/setup.sh" >/dev/null 2>&1 || return 1
     deny=$(grep -vE '^[[:space:]]*(#|$)' "$plugin/templates/settings/deny-rules.txt" | jq -R . | jq -s .)
+    [ "$DENY_RULES" = off ] && deny='[]'
     mkdir -p .claude
     # The README's block also has an allow entry for the nested review. The
     # fixture leaves it out. The run has every permission anyway, and an allow
@@ -201,14 +208,26 @@ EOF
 # A `claude` for the agent's PATH. The agent's nested calls (the review) go
 # through it, so the lab knows that they ran and what they cost. It changes
 # nothing the agent can see: same arguments, same output, same exit.
+#
+# It also carries the auth. Claude Code withholds its own token from the shell
+# commands of the agent, and with an isolated HOME no credentials file exists
+# either, so a nested call would answer "Not logged in". The shim reads the
+# session's access token at call time, as the harness does. The shim file
+# holds the path of the credentials file and never the token. A run on an API
+# key with no OAuth session has no such source, and its nested calls stay
+# logged out. grade_scenario turns that into an indeterminate verdict.
 write_shim() {
     mkdir -p "$1"
     cat > "$1/claude" <<EOF
 #!/bin/bash
+if [ -z "\${CLAUDE_CODE_OAUTH_TOKEN:-}\${ANTHROPIC_API_KEY:-}" ]; then
+    CLAUDE_CODE_OAUTH_TOKEN=\$(jq -r '.claudeAiOauth.accessToken // empty' "$CREDENTIALS" 2>/dev/null)
+    [ -n "\$CLAUDE_CODE_OAUTH_TOKEN" ] && export CLAUDE_CODE_OAUTH_TOKEN || unset CLAUDE_CODE_OAUTH_TOKEN
+fi
 out=\$(mktemp)
 "$REAL_CLAUDE" "\$@" | tee "\$out"; rc=\${PIPESTATUS[0]}
 jq -cn --arg args "\$*" --slurpfile e "\$out" \\
-    '{args: \$args, is_error: (\$e[0] | if type == "object" and has("is_error") then .is_error else null end), cost_usd: (\$e[0].total_cost_usd // 0)}' \\
+    '{args: \$args, is_error: (\$e[0] | if type == "object" and has("is_error") then .is_error else null end), cost_usd: (\$e[0].total_cost_usd // 0), not_logged_in: ((\$e[0].result? // "") | tostring | test("Not logged in"))}' \\
     >> "$2" 2>/dev/null || jq -cn --arg args "\$*" '{args: \$args, is_error: null, cost_usd: 0}' >> "$2"
 rm -f "\$out"
 exit "\$rc"
@@ -370,6 +389,12 @@ grade_scenario() {
             1) verdict=fail; reason=$(grep -m1 'FAIL' "$sb/checks.log" | sed 's/^ *FAIL *//') ;;
             *) verdict=indeterminate; reason="check.sh itself broke (see checks.log)" ;;
         esac
+    fi
+
+    # A nested call without a login is the sandbox's fault, whatever the run
+    # made of it. It overrides a verdict from the checks.
+    if jq -e 'select(.not_logged_in == true)' "$sb/nested.jsonl" >/dev/null 2>&1; then
+        verdict=indeterminate; reason="a nested claude call was not logged in"
     fi
 
     if [ "$verdict" = pass ] && [ -f "$scenario/judge.md" ]; then
