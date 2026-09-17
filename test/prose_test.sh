@@ -1,6 +1,6 @@
 #!/bin/bash
-# Check the shipped prose against the files and commands it names. Two checks,
-# both exact, both derived from the repo itself (no hand-kept list):
+# Check the shipped prose against the files and commands it names. Three checks,
+# all exact, all derived from the repo itself (no hand-kept list):
 #
 #   1. Path integrity. Prose names a file the plugin ships: a
 #      ${CLAUDE_PLUGIN_ROOT}/<path> token, or a skill-relative

@@ -90,7 +90,7 @@ The agent frontmatter pins the critics to the floating `sonnet` alias, so
 the provider re-pointing that alias silently recalibrates production with
 no commit here. Pin full model IDs in the agent frontmatter and the review
 command. Treat an alias move as a deliberate, suite-gated migration (a
-normal versioned change) rather than a silent change.
+normal versioned change).
 
 ## Where things live
 
@@ -111,19 +111,20 @@ pools, and caches stay with it.
 
 *Deliberately not reused:* the Quorum eval lab
 (`prime-radiant-inc/superpowers-evals`) and DSPy. The Quorum lab has no
-license, so its code is off-limits. Its scenarios test another workflow.
-Its multi-CLI/multi-OS generality is complexity hone does not need. Its
-publicly documented *design*, though, is the stage-2 blueprint. DSPy wants
-to own execution as a Python pipeline, and that would fork the agent files
-hone actually ships. GEPA's adapter model wraps our own harness instead.
+license, so its code is off-limits. Its scenarios test another workflow,
+and its multi-CLI/multi-OS generality is complexity hone does not need.
+Its publicly documented *design*, though, is the stage-2 blueprint. DSPy
+wants to own execution as a Python pipeline, and that would fork the agent
+files hone actually ships. GEPA's adapter model wraps our own harness
+instead.
 
 ## Stage 0: unit evals for the judgment prose (done, 0.23.x)
 
 `evals/` pins the critic prompts and the run skill's loop instructions to
 46 cases with known-good answers. The suite is balanced, so an over-strict
-critic fails visibly. Paraphrase variants work against overfitting. A
-held-out set (`--holdout`) works against tuning to the suite. Voting is by
-plurality, with per-case tallies. The releasing rule makes the suite a
+critic fails visibly. Paraphrase variants work against overfitting, and a
+held-out set (`--holdout`) works against tuning to the suite. Voting is
+by plurality, with per-case tallies. The releasing rule makes the suite a
 release gate. [`evals/README.md`](../evals/README.md) is the manual.
 
 ## Stage 1: machine-drivable harness (next, small)

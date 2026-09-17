@@ -25,9 +25,9 @@ This command helps its caller write that brief. It writes **only** `.plans/<chan
 ### 1. Name the change
 
 Derive a short, domain-named slug from `$ARGUMENTS` (`auth/refresh-token`,
-`export/csv-escaping`), mirroring `src/`. Never a positional name (`change-3`).
-The Plan lands at `.plans/<slug>.md`. If that file already exists, ask whether to
-resume or overwrite it.
+`export/csv-escaping`) that mirrors `src/`. Never a positional name
+(`change-3`). The Plan lands at `.plans/<slug>.md`. If that file already
+exists, ask whether to resume or overwrite it.
 
 One naming rule guards the layout's one ambiguity. A Plan's references live in
 `.plans/<slug>/`. So the nag and `worktree.sh status` read a markdown file whose

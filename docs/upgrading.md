@@ -9,11 +9,11 @@ mechanical steps.
 2. *Re-run setup.* Run `/hone:setup` in the repo, with you present. It runs
    the setup script, then executes each installed adapter and fixes what
    fails. That check matters most on an upgrade. The script alone never
-   executes what it installs. So an adapter that has gone stale only fails
+   executes what it installs, so an adapter that has gone stale only fails
    later, mid-run, with nobody there to repair it.
 
    `bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"` is the non-interactive
-   fallback. It is safe to repeat. It leaves your adapter, docs, and
+   fallback. It is safe to repeat, and it leaves your adapter, docs, and
    `.plans/` alone. It keeps the per-developer files gitignored
    (`.hone-off`, `.hone-grant/`, `.hone-proof/`). And it strips
    `.gitignore` entries for things hone no longer uses, `spikes/` from

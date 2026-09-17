@@ -353,7 +353,7 @@ runner tries it against hundreds of random inputs. The writer therefore
 cannot pick inputs that happen to pass. Use them for modules with a
 universal invariant: parsers, serializers, pure transforms, especially on
 critical paths. Skip them where no universal rule exists: UI,
-orchestration, glue. They complement example tests. They do not replace
+orchestration, glue. They complement example tests without replacing
 them.
 
 ### Mutation tests (verify-time)

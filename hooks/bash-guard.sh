@@ -310,7 +310,8 @@ fi
 # still asks. That includes a bare `dprint fmt` (it formats docs/), any durable
 # path, any flag beyond the write-mode flags themselves (a `--config` swap can
 # repoint the tool), a glob in a directory part, and every token this walk does
-# not recognise. Fail closed keeps the ask; the exemption has to be earned.
+# not recognise. Fail closed keeps the ask, and only a scoped run earns the
+# exemption.
 #
 # The ask prints msg_bashguard_formatter, not rule 4's message. Scoping the run
 # is the remedy here, and a package manager has no such remedy. The shared

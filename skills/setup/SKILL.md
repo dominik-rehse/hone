@@ -56,7 +56,7 @@ React to what fails instead of reporting it. Distinguish three causes:
 - *Project misconfiguration*: the project side is missing or broken. It has no
   `test` script in `package.json`, or a config pinned to an unsupported
   language standard, or integration tests mixed into the unit tier. Fix the
-  project, telling the human what you changed and why.
+  project, and tell the human what you changed and why.
 - *Missing toolchain*: the runner or interpreter is not installed. Tell the
   human exactly what to install. Do not install toolchains yourself.
 
@@ -77,8 +77,8 @@ and verify each the same way (execute it, exit 0 = clean):
   fresh worktree, and land runs it in the primary tree when the merged diff
   touched a lockfile. Verify it by executing it once here.
 
-Skip these where the language has no such tool. The gate simply does not run
-them. `scripts/proof.sh` stays with the human: mention the templates under
+Skip these where the language has no such tool. The gate does not run them.
+`scripts/proof.sh` stays with the human: mention the templates under
 `${CLAUDE_PLUGIN_ROOT}/templates/proof/` for changes that will need
 real-environment proof, but do not author it unprompted.
 

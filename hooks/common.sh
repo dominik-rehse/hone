@@ -14,8 +14,8 @@
 # The function drops every remaining C0 control character. JSON forbids a raw
 # control character inside a string, so one tab in a gate's output tail used
 # to produce invalid JSON. The harness then discards the whole decision, and a
-# blocking gate fails OPEN. A runner's progress output carries tabs and carriage returns
-# routinely, so this is the common case, not an exotic one.
+# blocking gate fails OPEN. A runner's progress output carries tabs and
+# carriage returns routinely, so this is the common case.
 hone_json_escape() {
     local s="$1"
     s=${s//\\/\\\\}

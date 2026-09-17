@@ -123,8 +123,7 @@ here, because a test is new behaviour.
 ones that look obvious. Everything else here rests on the suite proving the cut
 safe, and *no suite proves a prompt cut safe*. Delete a paragraph of `CLAUDE.md`
 and every test still passes, because what changed is how an agent behaves next
-time. Nothing in the repo measures that. Cutting on green here would be cutting
-on no evidence at all.
+time. Nothing in the repo measures that, so green here is no evidence at all.
 
 So a prompt cut needs its own proof, and there is only one honest kind. It is a
 suite of cases with known-good answers (as hone pins its own critics and loop
@@ -261,8 +260,7 @@ Record them, and stop.
 
 That rule is what keeps a pass finite. A pass that mints new work from the work
 it spawned never reaches its own end, because the backlog refills faster than it
-drains. The caller then watches a maintenance pass become an open-ended project,
-which is the failure this budget exists to prevent.
+drains. The caller then watches a maintenance pass become an open-ended project.
 
 ## Where it runs
 

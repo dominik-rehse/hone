@@ -130,9 +130,9 @@ merge target and the `guard` will block durable edits made in it.
 **Address every file you edit as `$WT/<path>`.** That `cd` moves the shell only.
 The file tools still resolve a bare `scripts/foo.sh` against the primary tree.
 A relative path therefore edits the wrong file. The settings deny rules refuse
-it there, and that refusal reads like a ban on the work itself. It is not one.
-The loop may author a change to `scripts/proof.sh` in the worktree. `land` then
-gates that change for the human (step 6, exit 7).
+it there, and that refusal reads like a ban on the work itself, which it is
+not. The loop may author a change to `scripts/proof.sh` in the worktree. `land`
+then gates that change for the human (step 6, exit 7).
 
 Creating the worktree is what **claims the change**, and the creation is atomic.
 Exit **4** means the change is already claimed: another `run` (in another
@@ -265,13 +265,13 @@ build.
   Decision plus a deleted probe, with nothing kept. Never write one to record
   what the change does, which is what the code and the tests already carry.
 - redundant tests the change revealed → **prune** them (deduplication is a real
-  output of this step, not an afterthought).
+  output of this step).
 - **delete `.plans/<change>.md` with `git rm`, here in the worktree.** The Plan
   is tracked and committed on the trunk, so the worktree checked it out. Remove
   it as part of this change (`git rm .plans/<change>.md` from `$WT`). The
   landing merge carries the deletion back to the primary tree. git history keeps
-  the Plan. The working tree does not. The Plan has done its job. (Already gone,
-  because you git-rm'd it earlier? Fine, do not re-add it.)
+  the Plan, and the working tree does not. The Plan has done its job. (Already
+  gone, because you git-rm'd it earlier? Fine, do not re-add it.)
 - **`git rm` whatever is left under `.plans/<change>/`.** Build already moved the
   references the tests read into the tree beside those tests. Anything still
   sitting here only communicated intent (a mockup, a sample payload nothing
@@ -468,8 +468,8 @@ picks the model for those sessions. `parallel.md` makes the check, and
 On 1 or 2, leave the worktree in place as evidence and escalate with the specific
 blocker. Print a last progress line with the failing step marked `✗`, then end
 with the final report block from *Reporting*. Never disable, weaken, or route
-around a check to proceed. Stopping and reporting is a correct outcome. A forced
-pass is not.
+around a check to proceed. Stopping and reporting is a correct outcome, and a
+forced pass is not.
 
 A constraint the Plan states is a check. Where the Plan orders this change after
 another one, an unlanded predecessor is stop-point 1, not a fork for the human
