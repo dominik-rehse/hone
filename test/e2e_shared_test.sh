@@ -63,6 +63,15 @@ EOF
     printf 'exports.%s = (a, b) => a + b;\n' "$2" > "$1/src/mathx/$2.js"
     (cd "$1" && git add -A && git commit -qm "feat(mathx): $2()") || die "commit $2"
 }
+# Capture the log, then grep the string. A `git log | grep -q` under pipefail
+# reads as failed whenever grep quits before git finishes writing (SIGPIPE),
+# which is the flake cmd_landed's comment describes.
+log_has() {   # <repo> <ref-or-limit...> <pattern>
+    local repo="$1"; shift
+    local pattern="${*: -1}"; set -- "${@:1:$#-1}"
+    local out; out=$(git -C "$repo" log --format=%s "$@" 2>/dev/null)
+    printf '%s\n' "$out" | grep -qF -- "$pattern"
+}
 remote_has_claim() { git -C "$ORIGIN" show-ref --verify --quiet "refs/hone/claim/$1"; }
 origin_main() { git -C "$ORIGIN" rev-parse refs/heads/main; }
 
@@ -88,7 +97,7 @@ before=$(origin_main)
 out=$(cd "$A" && bash "$WSH" land x 2>&1) || die "A: land x: $out"
 echo "$out" | grep -q 'land pushed main to origin' || die "A: receipt lacks the push line: $out"
 [ "$(origin_main)" != "$before" ] || die "origin/main did not move"
-git -C "$ORIGIN" log --format=%s -n 1 main | grep -q "Merge branch 'hone/x'" || die "merge commit not on origin/main"
+log_has "$ORIGIN" -n 1 main "Merge branch 'hone/x'" || die "merge commit not on origin/main"
 remote_has_claim x && die "claim on x still on origin after land" || step "landed on origin, claim released"
 out=$(cd "$B" && bash "$WSH" landed x); rc=$?
 [ "$rc" -eq 0 ] && [ "$out" = landed ] && step "B: landed x reads the remote" || die "B: landed x -> $rc $out"
@@ -102,8 +111,8 @@ write_change "$WTB" y
 RACE="$TMP/race"; mkdir -p "$RACE"; ln -s "$C" "$RACE/clone"
 out=$(cd "$B" && HONE_TEST_RACE="$RACE" bash "$WSH" land y 2>&1) || die "B: land y: $out"
 echo "$out" | grep -q 'origin/main moved, so land rolls back and retries (attempt 2)' || die "no retry line: $out"
-git -C "$ORIGIN" log --format=%s main | grep -q 'race: another developer landed' || die "C's commit missing on origin"
-git -C "$ORIGIN" log --format=%s -n 1 main | grep -q "Merge branch 'hone/y'" || die "y's merge not on top of origin/main"
+log_has "$ORIGIN" main 'race: another developer landed' || die "C's commit missing on origin"
+log_has "$ORIGIN" -n 1 main "Merge branch 'hone/y'" || die "y's merge not on top of origin/main"
 [ "$(git -C "$B" rev-parse HEAD)" = "$(origin_main)" ] || die "B's main != origin/main after the retry"
 git -C "$B" merge-base --is-ancestor "$(git -C "$C" rev-parse HEAD)" HEAD || die "the merge was not rebuilt on C's commit"
 [ -d "$WTB" ] && die "worktree still present after land" || step "retried once, landed on top of C's commit"
@@ -117,7 +126,7 @@ out=$(cd "$B" && HONE_TEST_RACE="$RACE" HONE_LAND_RETRIES=1 bash "$WSH" land v 2
 echo "$out" | grep -q 'moved during each of 1 land attempts' || die "wrong message: $out"
 [ "$(git -C "$B" rev-parse HEAD)" = "$pre" ] || die "primary tree moved after the rolled-back land"
 [ -d "$WTB" ] && remote_has_claim v && step "rolled back, worktree and claim kept" || die "evidence lost"
-git -C "$ORIGIN" log --format=%s main | grep -q "Merge branch 'hone/v'" && die "untested merge reached origin"
+log_has "$ORIGIN" main "Merge branch 'hone/v'" && die "untested merge reached origin"
 out=$(cd "$B" && bash "$WSH" remove "$WTB" 2>&1) || die "B: remove v: $out"
 remote_has_claim v && die "remove left the claim on origin" || step "remove released the claim"
 git -C "$B" branch -D hone/v -q
@@ -153,7 +162,7 @@ write_change "$WTA" w
 WTB=$(cd "$B" && bash "$WSH" add z) || die "B: add z after divergence"
 git -C "$ORIGIN" cat-file -e main:.plans/z.md 2>/dev/null || die "Plan z not on origin/main after add"
 git -C "$B" merge-base --is-ancestor "$(origin_main)" HEAD || die "B's main not level with origin"
-git -C "$B" log --format=%s -n 3 main | grep -q "Merge branch 'hone/w'" || die "A's merge missing from B's main"
+log_has "$B" -n 3 main "Merge branch 'hone/w'" || die "A's merge missing from B's main"
 step "Plan commit rebased and pushed, worktree cut from the team's main"
 write_change "$WTB" z
 (cd "$WTB" && git rm -q .plans/z.md && git commit -qm "chore: consolidate z") || die "consolidate z"
