@@ -435,6 +435,12 @@ for is an escalation, not a grant. Both guards still deny every route
 into `.hone-grant/` except the helper, which is what stamps the record.
 Mechanics are in [`reference.md`](reference.md).
 
+The guards assume an agent that makes a mistake, skips a step, or takes a
+route around a gate that its command names. They read the command and the
+path. They do not inspect what a command runs. So hone does not defend
+against an agent that builds a new route. One example is a stand-in on
+`PATH` for a tool that a commit hook needs.
+
 ## Types and abstractions
 
 Anything expressible as a type belongs in a type: an interface, a
