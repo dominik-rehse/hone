@@ -369,11 +369,12 @@ It owes the whole lab and three runs of each goal scenario.
   The brief and the output now sit in a directory from `mktemp -d`. Every
   result carries the measure `reviews`, and the pass of 2026-09-18 read 1 in
   every scenario that reached the review.
-- The first candidate that the record review suggests is the removal of
-  the `consolidate-critic`. No case shows that its cut bullets change a
-  verdict, and no run shows that they change a codebase. With the baseline
-  above it costs about 60 dollars to judge: both seeded scenarios, the
-  `loop` target, and one lab pass.
+- The record review suggested the removal of the `consolidate-critic` as a
+  candidate. No case shows that its cut bullets change a verdict, and no
+  run shows that they change a codebase. The maintainer decided on
+  2026-09-18 not to pursue it, so the critic stays. The test would cost
+  about 60 dollars: both seeded scenarios, the `loop` target, and one lab
+  pass.
 - The ten-vote rule above differs from the maintainer's rule that a cut
   needs an unmoved tally.
 - The garden release gate runs on opus, and the measured floor is sonnet.
