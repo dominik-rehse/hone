@@ -181,8 +181,13 @@ and here it tests the section.
 Read the result under one rule. An unchanged suite is evidence only for a
 section that a case aims at. If no case aims at the section, the run reports
 nothing about it, and the section stays. Cut a section only when a case aims
-at it, the suite stays green without it, and no tally moves. The cut then
-enters the repo as an ordinary prompt edit, through the release gate.
+at it and `bash evals/candidate.sh decide` accepts the cut. It reads the
+`--json` files of both prompts. A flipped plurality rejects. A tally that
+moved by one vote of three is inside the noise floor below, so the script
+asks for that case at ten votes on both prompts. At ten votes a fall of two
+or more rejects. [`docs/roadmap.md`](../docs/roadmap.md) has the reasons.
+The cut then enters the repo as an ordinary prompt edit, through the
+release gate.
 
 The first campaign ran on 2026-09-17 over both critics, on claude-sonnet-5.
 [`docs/spikes/2026-09-17-first-section-ablation.md`](../docs/spikes/2026-09-17-first-section-ablation.md)

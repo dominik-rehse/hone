@@ -29,10 +29,12 @@ Which suite a change must pass follows from what it touches.
 *Mechanical*: `bash test/run.sh`. It is deterministic and makes no model
 calls. It covers the hook unit tests, the end-to-end land path (worktree,
 gates, merge, rollback), the plumbing of the eval harness and of the
-scenario lab against a fake CLI, and two checks over the message templates. Every
+scenario lab against a fake CLI, the candidate procedure against
+hand-written results, and two checks over the message templates. Every
 message hone prints lives in `hooks/messages.sh`, and the checks lint its
 prose and hold it to the shape. Run this suite after any change to
-`hooks/`, `scripts/`, `evals/run.sh`, or `evals/lab/`. The shell sources also stay `shellcheck`-clean
+`hooks/`, `scripts/`, `evals/run.sh`, `evals/candidate.sh`, or `evals/lab/`.
+The shell sources also stay `shellcheck`-clean
 (`.shellcheckrc` sets the dialect). Nothing runs shellcheck for you, so
 run it over any script you touch.
 
@@ -53,6 +55,11 @@ for a commit. [`evals/lab/README.md`](../evals/lab/README.md) is the manual.
 
 There is no CI. The suites run locally, and the releasing rule is what
 makes them a gate.
+
+A change that is meant to make hone better, smaller, or cheaper is a
+*candidate*. `bash evals/candidate.sh plan` names the suites that it owes
+and their cost, and `decide` reads the results of both arms and answers
+accept, reject, or undecided. [`roadmap.md`](roadmap.md) has the method.
 
 ## Changing judgment prose
 
