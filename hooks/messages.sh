@@ -489,21 +489,41 @@ Why: the change name selects the branch.
 EOF
 }
 
-msg_wt_add_path_claimed() {
-    local path="$1"
+# A claimed change refuses with what the claim holds, so that the report can
+# hand the person one action and not a list of guesses.
+msg_wt_add_claimed_live() {
+    local path="$1" landed_cmd="$2"
     cat <<EOF
-hone worktree: $path already exists, and that worktree claims this change.
-Do: resume that worktree by hand, or pick another change.
-Why: another run owns it, or it is leftover evidence.
+hone worktree: $path claims this change, and a file there changed in the last 30 minutes, so another run is probably at work.
+Do: wait for that run to end, then ask '$landed_cmd' whether the change landed.
+Why: the worktree is the claim, and one run owns it.
+EOF
+}
+
+msg_wt_add_claimed_work() {
+    local path="$1" ahead="$2" dirty="$3"
+    cat <<EOF
+hone worktree: $path claims this change. It holds $ahead commit(s) and $dirty uncommitted file(s), and nothing there changed in the last 30 minutes, so its run is gone.
+Do: a person reads the work in $path and finishes it by hand. Nobody removes it unread.
+Why: unlanded work is evidence, and only a person judges it.
+EOF
+}
+
+msg_wt_add_claimed_empty() {
+    local path="$1" remove_cmd="$2"
+    cat <<EOF
+hone worktree: $path claims this change. It holds no commit and no uncommitted file, and nothing there changed in the last 30 minutes, so its run is gone and left nothing.
+Do: a person removes it with '$remove_cmd', then runs the change again.
+Why: the worktree is the claim, and one run owns it.
 EOF
 }
 
 msg_wt_add_branch_claimed() {
-    local branch="$1"
+    local branch="$1" ahead="$2" primary="$3"
     cat <<EOF
-hone worktree: branch $branch already exists, and that branch claims this change.
-Do: resume that branch by hand, or pick another change.
-Why: another run owns it, or it is leftover evidence.
+hone worktree: branch $branch claims this change. It has no worktree, so no run is at work, and it holds $ahead commit(s).
+Do: a person reads them with 'git log $primary..$branch', then finishes the work by hand or deletes the branch and runs the change again.
+Why: unlanded work is evidence, and only a person judges it.
 EOF
 }
 
@@ -1195,8 +1215,10 @@ worktree|plain|msg_wt_grant_usage
 worktree|plain|msg_wt_attest_usage
 worktree|human|msg_wt_not_a_repo
 worktree|human|msg_wt_needs_change|<subcommand>
-worktree|human|msg_wt_add_path_claimed|<main-root>/.worktrees/<change>
-worktree|human|msg_wt_add_branch_claimed|hone/<change>
+worktree|human|msg_wt_add_claimed_live|<main-root>/.worktrees/<change>|bash <plugin-root>/scripts/worktree.sh landed <change>
+worktree|human|msg_wt_add_claimed_work|<main-root>/.worktrees/<change>|<count>|<count>
+worktree|human|msg_wt_add_claimed_empty|<main-root>/.worktrees/<change>|bash <plugin-root>/scripts/worktree.sh remove <main-root>/.worktrees/<change>
+worktree|human|msg_wt_add_branch_claimed|hone/<change>|<count>|<primary>
 worktree|human|msg_wt_add_race|hone/<change>
 worktree|human|msg_wt_add_failed
 worktree|human|msg_wt_add_setup_tree_failed|<main-root>/.worktrees/<change>|<output-tail>

@@ -565,6 +565,26 @@ WSH="$PLUGIN_ROOT/scripts/worktree.sh"
 # The worktree is the claim: a second add of the same change is "already claimed"
 # (exit 4), distinct from a usage/real error (2), so a run knows to skip it.
 (cd "$REPO" && bash "$WSH" add feature-x >/dev/null 2>&1); [ $? -eq 4 ] && ok "second add of a claimed change exits 4" || bad "re-add of a claimed change should exit 4"
+# The refusal says what the claim holds, so a stopped run can hand the person
+# one action. A file that changed in the last 30 minutes means a run at work.
+out=$(cd "$REPO" && bash "$WSH" add feature-x 2>&1)
+echo "$out" | grep -q "another run is probably at work" && echo "$out" | grep -q "worktree.sh landed feature-x" \
+    && ok "a fresh claim reads as a run at work, and the action is to wait" || bad "a fresh claim should read as live: $out"
+age_claim() { find "$REPO/.worktrees/feature-x" -name .git -prune -o -type f -exec touch -d '2 hours ago' {} +; }
+age_claim
+out=$(cd "$REPO" && bash "$WSH" add feature-x 2>&1); rc=$?
+[ "$rc" -eq 4 ] && echo "$out" | grep -q "left nothing" && echo "$out" | grep -q "worktree.sh remove $REPO/.worktrees/feature-x" \
+    && ok "an old claim with no work names the remove command" || bad "an old empty claim should name remove (got $rc: $out)"
+echo leftover > "$REPO/.worktrees/feature-x/half-done.txt"; age_claim
+out=$(cd "$REPO" && bash "$WSH" add feature-x 2>&1)
+echo "$out" | grep -q "holds 0 commit(s) and 1 uncommitted file(s)" && echo "$out" | grep -q "Nobody removes it unread" \
+    && ok "an old claim with work counts it and keeps it for a person" || bad "an old claim with work should say so: $out"
+rm "$REPO/.worktrees/feature-x/half-done.txt"
+git -C "$REPO" branch hone/ghost-claim HEAD
+out=$(cd "$REPO" && bash "$WSH" add ghost-claim 2>&1); rc=$?
+[ "$rc" -eq 4 ] && echo "$out" | grep -q "has no worktree, so no run is at work, and it holds 0 commit(s)" \
+    && ok "a branch with no worktree reads as a dead claim" || bad "a bare branch claim should say so (got $rc: $out)"
+git -C "$REPO" branch -q -D hone/ghost-claim
 (cd "$REPO/.worktrees/feature-x" && echo y > src_x && git add -A && git commit -qm x)
 out=$(cd "$REPO" && bash "$WSH" landable) && echo "$out" | grep -q "feature-x" && ok "landable lists the ahead worktree" || bad "landable should list feature-x"
 (cd "$REPO" && bash "$WSH" remove "$REPO/.worktrees/feature-x") && [ ! -d "$REPO/.worktrees/feature-x" ] && ok "worktree remove cleaned up" || bad "worktree remove failed"

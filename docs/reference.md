@@ -426,7 +426,11 @@ draws no warning.
 Other subcommands:
 
 - `add` exits 4 when another run has already claimed the change (0 created,
-  2 error). In shared mode that run may be on another machine, and a refused
+  2 error). The refusal says what the claim holds, and it names one action.
+  A file in the worktree that changed in the last 30 minutes means a run at
+  work, and the action is to wait. An older worktree with commits or
+  uncommitted files is work for a person to read. An older worktree with
+  neither is safe to remove, and the refusal prints the `remove` command. In shared mode that run may be on another machine, and a refused
   claim leaves nothing local behind. A failed `setup-tree.sh` run is exit 2
   with the worktree kept: the claim stands, and the message carries the
   adapter's output tail.

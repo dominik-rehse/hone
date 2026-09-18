@@ -18,6 +18,10 @@
 #       then claims the change on the remote at refs/hone/claim/<change>. A
 #       claim another developer holds refuses with 4 and leaves nothing
 #       local behind.
+#       A refusal with 4 says what the local claim holds: a file that changed
+#       in the last 30 minutes (a run at work), commits or uncommitted files
+#       with no such change (work that a dead run left), or nothing at all
+#       (safe to remove). Each case names one action for the person.
 #       Exit: 0 created · 4 already claimed · 2 usage/not-a-repo/failed ·
 #       5 remote contention (shared mode).
 #
@@ -245,9 +249,29 @@ cmd_add() {
     # The worktree/branch is the change's claim. "Already exists" is exit 4
     # (claimed), distinct from a real failure (2), so a `run` can tell "another
     # run owns this, skip it" from "something broke".
-    [ -e "$path" ] && { msg_wt_add_path_claimed "$path" >&2; return 4; }
+    # The refusal says what the claim holds. A run that stops on a claim
+    # reports to a person, and "another run owns it, or it is leftover" leaves
+    # that person to find out which. A file that changed in the last 30
+    # minutes is the sign of a run at work. Without one, the commits and the
+    # uncommitted files say whether the dead run left work behind.
+    local ahead dirty
+    ahead=$(git -C "$main_root" rev-list --count "HEAD..$branch" 2>/dev/null || echo 0)
+    if [ -e "$path" ]; then
+        if [ -n "$(find "$path" \( -name .git -o -name node_modules -o -name .venv \) -prune \
+                        -o -type f -mmin -30 -print 2>/dev/null | head -1)" ]; then
+            msg_wt_add_claimed_live "$path" "bash $HONE_WSH landed $change" >&2
+            return 4
+        fi
+        dirty=$(git -C "$path" status --porcelain 2>/dev/null | grep -c . || true)
+        if [ "${ahead:-0}" -eq 0 ] && [ "${dirty:-0}" -eq 0 ]; then
+            msg_wt_add_claimed_empty "$path" "bash $HONE_WSH remove $path" >&2
+        else
+            msg_wt_add_claimed_work "$path" "${ahead:-0}" "${dirty:-0}" >&2
+        fi
+        return 4
+    fi
     if git show-ref --verify --quiet "refs/heads/$branch"; then
-        msg_wt_add_branch_claimed "$branch" >&2
+        msg_wt_add_branch_claimed "$branch" "${ahead:-0}" "$(git -C "$main_root" rev-parse --abbrev-ref HEAD 2>/dev/null)" >&2
         return 4
     fi
 

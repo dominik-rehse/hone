@@ -27,8 +27,9 @@ exists to reuse. Each is a step failure even when it produces findings.
 The envelope proves the native reviewer ran, the same way the diff proves build
 and the gate output proves verify. Before trusting any finding, confirm it is real:
 `<out-file>` parses as JSON with `is_error: false`, `subtype: success`, and a
-`session_id`. If it is missing, truncated, an error envelope, or absent because
-findings came from some other route, the native review did not happen. That is a
+`session_id`. If it is missing after the background task ended, truncated, an
+error envelope, or absent because findings came from some other route, the
+native review did not happen. That is a
 step failure to fix by running the nested call, not a pass to review around. Only
 once the envelope confirms do you read the review from its `.result`.
 
@@ -37,8 +38,12 @@ once the envelope confirms do you read the review from its `.result`.
 The multi-agent fan-out takes several minutes, longer than the foreground Bash
 timeout, which kills it at ~2 minutes regardless of any inner `timeout`. Run it in
 the Bash tool's background mode (not a shell `&`, which the harness won't keep
-alive). Redirect the JSON to an output file, and poll that file until the run
-finishes.
+alive). Redirect the JSON to `<out-file>.part` and rename it to `<out-file>`
+when the call ends, as the command in the skill does. Both files sit in a
+private directory from `mktemp -d`, so no other session writes there and no
+earlier run left a file there. Then `<out-file>` exists only for this run's
+finished review. An empty file there would read as a dead review,
+and a run that starts a second review pays for the loop's dearest step twice.
 
 ## Don't land on the decoy
 

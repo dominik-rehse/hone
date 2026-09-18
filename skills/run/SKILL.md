@@ -138,7 +138,8 @@ Creating the worktree is what **claims the change**, and the creation is atomic.
 Exit **4** means the change is already claimed: another `run` (in another
 session) owns it, or a crashed run left it behind. Do **not** adopt that
 worktree. A single named change **stops** and reports it (the human resumes
-leftover work by hand). Under `--all` it is **skipped** (below). Only exit 0
+leftover work by hand). The refusal says what the claim holds and names one
+next action. Put both into the report as they are. Under `--all` it is **skipped** (below). Only exit 0
 means you own this change and may proceed.
 
 ### 2. Build: red → green, serial
@@ -323,8 +324,11 @@ of the Plan's stated stance from the stance itself.
 The command is **user-invocation-only** (`disable-model-invocation`), so the Skill
 tool, a SlashCommand tool, and subagents all refuse it. That refusal is
 **expected**, and the nested call below is the one and only next move. A slash
-command in a print-mode (`-p`) prompt is a *user* invocation. Write the brief to a
-file. Run it in your Bash tool's background mode (not a shell `&`) and poll
+command in a print-mode (`-p`) prompt is a *user* invocation. Make a private
+directory with `mktemp -d`, and keep the brief file and the output file in it.
+A fixed name under `/tmp` collides with the review of another session, and a
+file that an earlier run left there reads as this run's result. Run the call
+in your Bash tool's background mode (not a shell `&`) and poll
 the output file, because the fan-out outlasts the ~2m foreground timeout:
 
 ```
@@ -332,8 +336,12 @@ claude -p "/code-review high $(cat <brief-file>)" \
   --add-dir <worktree> \
   --allowedTools "Task Agent Read Grep Glob Bash(git *)" \
   --model claude-opus-5 --effort high \
-  --output-format json > <out-file> 2>&1
+  --output-format json > <out-file>.part 2>&1; mv <out-file>.part <out-file>
 ```
+
+`<out-file>` appears only when the review has ended. While it is missing and
+the background task still runs, the review is at work: wait, and never start
+a second one.
 
 The `high` that opens the prompt is the review level, and it stays. With no
 level in the prompt, `/code-review` reuses whichever level the user typed last,
@@ -341,9 +349,9 @@ and `--effort` does not change that.
 
 That JSON envelope is this step's **proof that the review ran**. Before you
 trust any finding, confirm `<out-file>` parses as JSON with `is_error: false`,
-`subtype: success`, and a `session_id`. Anything else (missing, truncated, an
-error envelope, or findings you produced some other way) means the native
-review did not happen.
+`subtype: success`, and a `session_id`. Anything else (missing after the task
+ended, truncated, an error envelope, or findings you produced some other way)
+means the native review did not happen.
 Fix that by running the nested call. Never review around it. Never hand-roll a
 substitute (no `Workflow`, no fan-out of `Agent`/`Task` finders). A substitute
 abandons the very review this step exists to reuse, and it fails the step even
