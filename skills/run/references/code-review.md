@@ -33,6 +33,16 @@ native review did not happen. That is a
 step failure to fix by running the nested call, not a pass to review around. Only
 once the envelope confirms do you read the review from its `.result`.
 
+Those three fields are the whole check. The rest of the envelope is not a
+verdict on the review. `permission_denials` lists what the allowlist refused,
+and it refuses on purpose. The reviewer reaches past `git` and the read tools,
+so almost every envelope carries a denial. Your brief already holds the diff
+and the Plan, so a denied probe costs the reviewer nothing it needed.
+`num_turns` and `subagent_stats.spawned` read `0` on reviews that came back
+complete, so neither is a signal. Why they read `0` is not known here. Take any
+of it as a fault and you pay for a second review. Widen `--allowedTools` to
+stop it and you move a boundary that then stays moved.
+
 ## Why background-and-poll
 
 The multi-agent fan-out takes several minutes, longer than the foreground Bash
@@ -48,8 +58,8 @@ and a run that starts a second review pays for the loop's dearest step twice.
 ## Don't land on the decoy
 
 The `--allowedTools` allowlist (`Task Agent Read Grep Glob Bash(git *)`) lets the
-finders fan out without granting full `bypassPermissions`. A trivial diff reviews
-cleanly even in the default mode, but the heavy fan-out wants its tools. Do not
+finders fan out without granting full `bypassPermissions`. Copy it as written
+and leave it there. Do not
 locate, read, or execute a command file on disk, and do not add a marketplace
 `code-review` plugin to the path. That plugin is GitHub-PR-shaped (it wants a PR
 number and `gh pr comment`) and does not fit a worktree. A literal `/code-review`

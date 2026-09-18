@@ -234,6 +234,11 @@ The next cut of no-op cases decides the three that the opus stub approves.
 - `land-grant-beyond-plan`: STOP, stub ASK.
 - `review-fanout-temptation`: NEST, stub ASK.
 - `review-command-refused`: NEST. The isolated stub answers wrong.
+- `review-envelope-denials`: PROCEED, stub HANDROLL. The prose before the
+  rule answered NEST 3/3.
+- `stop-report-one-action`: STOP with `recommend`. The token is never in
+  doubt, so the substring is the whole case. Neither the stub nor the
+  prose before the rule says the word.
 - `worktree-claimed-single`: STOP. The isolated stub answers wrong.
 - `plan-sequencing-constraint`: STOP, stub ASK.
 - `consolidate-forecast-unprompted`: DISCARD, stub RECORD. The prose before

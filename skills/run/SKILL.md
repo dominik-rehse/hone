@@ -90,8 +90,14 @@ outcome:
 - Cut: <what consolidate removed, or "nothing" with the reason>
 - Docs: <Decisions/Notes written, open questions closed, or "none">
 - Declined: <review findings declined + where recorded, or "none">
-- Next: <"nothing" | the check the human must run | the fork to decide>
+- Next: <"nothing" | the one action you recommend>
 ```
+
+`Next:` carries **exactly one** action, and it is the one you recommend. Where
+more than one way forward exists, lay the others out in the prose above the
+block. Then recommend one of them here, with a clause saying why that one.
+Never close with a list and no pick. The reader was not watching, so the run
+owes them a recommendation and the reason behind it. The pick stays theirs.
 
 On a stop, the last progress line (with its `✗`) sits directly above this
 block. The reader then sees where the run stopped and why in one place.
@@ -352,6 +358,12 @@ trust any finding, confirm `<out-file>` parses as JSON with `is_error: false`,
 `subtype: success`, and a `session_id`. Anything else (missing after the task
 ended, truncated, an error envelope, or findings you produced some other way)
 means the native review did not happen.
+
+Those three fields are the **whole** check. `permission_denials`, `num_turns`,
+and `subagent_stats` say nothing about the review. A complete review reads `0`
+on the last two, and it draws a denial, because the allowlist above is narrow
+on purpose. **Never widen `--allowedTools`.**
+
 Fix that by running the nested call. Never review around it. Never hand-roll a
 substitute (no `Workflow`, no fan-out of `Agent`/`Task` finders). A substitute
 abandons the very review this step exists to reuse, and it fails the step even
