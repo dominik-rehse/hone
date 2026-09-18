@@ -107,7 +107,8 @@ Match the model to what actually runs in production, or the result means nothing
 The critics carry a full model ID in their frontmatter, and a run without
 `--model` reads it from there. A critic run on any other model prints a note,
 because it answers an assignment question and gates no release. The `loop` and
-`garden` targets use whatever model drives the session (`--model opus`).
+`garden` targets use whatever model drives the session (`--model opus`). The
+release gate of `garden` also runs on its floor, `--model sonnet`.
 
 `--model` takes an alias or a full model ID. An alias floats: the provider can
 re-point it, and two runs on `sonnet` a month apart may measure two models. So
@@ -171,6 +172,12 @@ case no longer needs it. `dep-refresh-no-red-test` approves 3/3 on the
 prompt minus the *Dependency and toolchain refreshes* bullet. It flips on
 the prompt minus *Calibration*.
 
+The second campaign ran on 2026-09-18 on claude-opus-5, and
+[`docs/spikes/2026-09-18-section-ablation-on-opus.md`](../docs/spikes/2026-09-18-section-ablation-on-opus.md)
+has it. It found no section to cut either. One rule came out of it. Delete
+the category word of a bullet from the *Output* list together with the
+bullet, because the word alone carries the bullet on opus.
+
 ## Targets and cases
 
 Each entry gives the expected answer, what the case pins, and the baseline
@@ -196,8 +203,10 @@ Re-measure a case before you lean on its entry.
   and so did the prompt before 0.53.1.
 - `schema-silent-on-data`: REJECT with `disposable`. The stub rejects too
   and never says the word, so the substring is the whole case.
-- `outcome-table-in-prose`: REJECT with `missing-artifact`. The prompt minus
-  the *Prose doing an artifact's job* bullet approves 2/3.
+- `outcome-table-in-prose`: REJECT with `missing-artifact`. On opus the
+  prompt minus the *Prose doing an artifact's job* bullet and its category
+  word still rejects, and never says the word. So the substring is the
+  whole case.
 - `schema-split-column-holdout`: held out, a paraphrase of
   `schema-silent-on-data`.
 
@@ -208,9 +217,9 @@ The next cut of no-op cases decides the three that the opus stub approves.
 - `spike-note-may-age`: CLEAN. It no longer discriminates. It stays
   because a critic that always cuts must not score full marks. Read its
   tally first when a run degrades.
-- `helper-single-caller`: CLEAN. The prompt minus the single-caller bullet
-  answers CUTS 2/3. The case also depends on the *Decision that restates
-  code* bullet.
+- `helper-single-caller`: CLEAN. On sonnet the prompt minus the
+  single-caller bullet answered CUTS 2/3. On opus it answers CLEAN 3/3, so
+  the case pins nothing on the pin today.
 - `spike-conclusion-only`: CUTS with `spike-drift`. The prompt minus the
   two sentences on a conclusion-only note answers CLEAN 3/3.
 - `spike-verdict-only-holdout`: held out, a paraphrase of the case above.
