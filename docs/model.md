@@ -20,6 +20,34 @@ feature ends up scattered across many documents. Nothing forces any of it
 to stay in step with the code, so it goes stale. The result is a second
 copy of the system's behavior with no checker attached.
 
+## Goals
+
+hone exists for the codebase that it leaves behind. Every part of hone
+serves one of eight outcomes, and a change to hone is judged by them.
+
+The codebase:
+
+- *Transparent.* The truth about the system is in one place, and a checker
+  catches it when it goes stale.
+- *Well structured.* Types carry what types can carry. Each area is small
+  enough to hold in context. No logic exists twice.
+- *Correct.* A landed change does what its Plan says, and no defect lands
+  in silence.
+
+Each change:
+
+- *Safe.* The loop takes no shortcut around a gate, and it never reports a
+  partial run as done.
+- *Reversible.* A landed change is one merge, and one command reverts it.
+- *Predictable.* The same Plan gives the same kind of result twice.
+
+The price, which hone lowers only when the six outcomes above hold:
+
+- *Human attention.* The person writes the Plan and reads the report.
+- *Dollars and minutes* per landed change.
+
+[`development.md`](development.md) says what measures each outcome.
+
 ## Principles
 
 Together, the two characteristics give discipline without a corpus: the
@@ -292,7 +320,7 @@ skips `/code-review` only on the second word. A change confined to `docs/` and
 of *what* a judgment check reads. `worktree.sh governed` lists the Notes and
 Decisions about the code that a change touched, and the loop hands them to the
 `consolidate-critic`. A change can make a sentence false in a document that it
-never opened, and a critic reads only what somebody puts in front of it. The
+never opened. A critic reads only what somebody puts in front of it. The
 scoping is mechanical because "is this change small enough to skip its review?"
 is exactly the judgment an unattended loop must not make about itself. Size is
 not a signal there, and neither is "tests only". A five-line change to a
@@ -458,7 +486,7 @@ then belongs to the team on a remote. Nothing else changes, and that is
 the point. There is no tracker, no daemon, and no pull request, because
 git already carries the two facts a team needs. The first is who owns a
 change. A claim is a ref on the remote, and git creates a ref exactly
-once, so of two runs racing on one change exactly one wins. The second is
+once. So of two runs racing on one change exactly one wins. The second is
 whether a merge is safe: git rejects a push that is not a straight
 extension of the remote branch. So land merges on top of the remote's
 latest, runs the suite, and pushes. When another developer landed in the

@@ -62,7 +62,7 @@ current `check.sh` and `judge.md` to a kept sandbox, with no agent call.
 ### Measures, goals, and the ending
 
 A verdict says whether one run ended in a right state. An outcome of
-[`docs/roadmap.md`](../../docs/roadmap.md) is a rate over several runs, so
+[*Goals*](../../docs/model.md#goals) is a rate over several runs, so
 three more things go into `result.json`. None of them changes a verdict.
 
 - A *measure* is a call `measure NAME VALUE` in a `check.sh`. It records

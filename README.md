@@ -10,6 +10,10 @@ You write a short plan for one change. An automated loop then builds the
 change test-first in an isolated git worktree, runs every check, distills
 the documentation, reviews the result, and merges it.
 
+The goal is the codebase that this leaves behind: transparent, well
+structured, and correct. Each change on the way is safe, reversible, and
+predictable. [*Goals*](docs/model.md#goals) states all eight outcomes.
+
 hone has two main characteristics: the honing and the enforcement.
 
 ## Honing
