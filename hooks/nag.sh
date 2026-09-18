@@ -92,8 +92,10 @@ cd "$PROJECT_ROOT" || exit 0
 # spec and needs a cut or a split.
 NOTE_MAX_LINES=40
 
-# Area size cap: lines of every tracked file under one src/<area>/, tests
-# included, because an agent that works in an area reads its tests too.
+# Area size cap: lines of every tracked text file under one src/<area>/, tests
+# included, because an agent that works in an area reads its tests too. A
+# binary file has no lines to read, so it does not count. A large text fixture
+# does. Raise HONE_AREA_MAX_LINES for a project that keeps such fixtures.
 AREA_MAX_LINES="${HONE_AREA_MAX_LINES:-3000}"
 
 findings=""
@@ -250,7 +252,8 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
                     # 11. Oversized area, for the areas this change touched.
                     while IFS= read -r area; do
                         [ -n "$area" ] && [ -d "src/$area" ] || continue
-                        lines=$(git ls-files -z -- "src/$area" 2>/dev/null | xargs -0 -r cat 2>/dev/null | wc -l | tr -d '[:space:]')
+                        lines=$(git ls-files -z -- ":(literal)src/$area" 2>/dev/null | xargs -0 -r grep -I -c '' 2>/dev/null \
+                            | awk -F: '{ n += $NF } END { print n + 0 }')
                         if [ "${lines:-0}" -gt "$AREA_MAX_LINES" ]; then
                             add_finding "$(msg_nag_area_oversized "src/$area/" "$lines" "$AREA_MAX_LINES")"
                         fi

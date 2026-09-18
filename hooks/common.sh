@@ -170,14 +170,20 @@ hone_missing_deny_rules() {
 # The path-shaped tokens of a document's `Governs:` line, one per line. The
 # line is optional, and only a token with a "/" counts as a path. The parse
 # strips backticks, commas, and a trailing period, so
-# `Governs: `src/auth/token.ts`, ...` parses.
+# `Governs: `src/auth/token.ts`, ...` parses. A token may be a glob. It expands
+# against ROOT ($2, default the current directory), which is the tree that the
+# document belongs to. A glob that matches nothing stays as written.
 hone_governs_paths() {
-    local gov tok
+    local gov
     gov=$(grep -im1 '^[[:space:]]*governs:' "$1" 2>/dev/null | sed 's/.*[Gg]overns:[[:space:]]*//')
     gov=${gov//\`/}
     gov=${gov//,/ }
-    for tok in $gov; do
-        tok=${tok%.}
-        case "$tok" in */*) printf '%s\n' "$tok" ;; esac
-    done
+    (
+        cd "${2:-.}" 2>/dev/null || exit 0
+        # shellcheck disable=SC2086  # the split and the glob are wanted here
+        for tok in $gov; do
+            tok=${tok%.}
+            case "$tok" in */*) printf '%s\n' "$tok" ;; esac
+        done
+    )
 }

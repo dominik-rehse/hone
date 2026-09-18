@@ -107,6 +107,15 @@ step "a change with no Cut: line is refused before the merge (exit 2)"
 bash "$WSH" land no-cut-line >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 2 ] || die "an empty Cut: line should still exit 2 (got $rc)"
 step "an empty Cut: line does not open the gate"
+# The refusal must not hand the agent a line to paste. A placeholder and a
+# bare "nothing" record nothing, so neither opens the gate.
+echo "$out" | grep -q "Cut: <" && die "the refusal must not print a line that would pass the gate"
+for body in "Cut: <what the change removed>" "Cut: nothing" "Cut: Nothing."; do
+    (cd "$WT_C" && git commit -q --amend -m "chore(mathx): a change that names no cut" -m "$body") || die "amend"
+    bash "$WSH" land no-cut-line >/dev/null 2>&1; rc=$?
+    [ "$rc" -eq 2 ] || die "the body line '$body' should not open the gate (got $rc)"
+done
+step "a pasted placeholder and a bare 'nothing' do not open the gate"
 (cd "$WT_C" && git commit -q --amend -m "chore(mathx): a change that names no cut" -m "Cut: nothing, the change adds one comment file") || die "amend"
 bash "$WSH" land no-cut-line >/dev/null 2>&1 || die "a change with a Cut: line should land"
 step "the amended change lands"
@@ -827,6 +836,8 @@ mkdir -p docs/decisions docs/notes src/ship src/calm
 printf '# Rates\n\nGoverns: `src/ship/rates.js`\n\nWhy flat rates.\n' > docs/decisions/rates.md
 printf '# Areas\n\nGoverns: `src/ship/`, `src/calm/`.\n\nWhy two areas.\n' > docs/decisions/areas.md
 printf '# Other\n\nGoverns: `src/calm/x.js`\n\nWhy.\n' > docs/decisions/other.md
+printf '# Globbed\n\nGoverns: `src/ship/*.js`\n\nWhy.\n' > docs/decisions/globbed.md
+mkdir -p docs/notes/deep && printf '# ship, nested\n' > docs/notes/deep/ship.md
 printf '# ship\n\nMap and invariant.\n' > docs/notes/ship.md
 printf '# calm\n\nMap and invariant.\n' > docs/notes/calm.md
 printf '// rates\n' > src/ship/rates.js; printf '// x\n' > src/calm/x.js
@@ -836,9 +847,15 @@ printf '// rates, changed\n' > "$WT_GV/src/ship/rates.js"
 out=$(bash "$WSH" governed ship-rates 2>&1); rc=$?
 [ "$rc" -eq 0 ] || die "governed should succeed on a live change (got $rc: $out)"
 [ "$out" = "docs/decisions/areas.md
+docs/decisions/globbed.md
 docs/decisions/rates.md
 docs/notes/ship.md" ] || die "governed should print the file's Decision, the directory's Decision, and the area's Note, before any commit (got: $out)"
 step "an uncommitted change finds its documents by file, by directory, and by Note name"
+# A glob on a Governs: line expands in the change's tree, wherever the caller
+# stands. A nested file under docs/notes/ is no Note, so its name maps nothing.
+out2=$(cd "$WT_GV/src" && bash "$WSH" governed ship-rates 2>&1)
+[ "$out2" = "$out" ] || die "governed should answer the same from any directory (got: $out2)"
+step "a Governs: glob matches from any directory, and a nested docs/notes file maps no area"
 printf '// new\n' > "$WT_GV/src/calm/new.js"
 out=$(bash "$WSH" governed ship-rates 2>&1)
 echo "$out" | grep -qx "docs/notes/calm.md" || die "an untracked file should count as touched (got: $out)"
@@ -846,7 +863,7 @@ echo "$out" | grep -qx "docs/decisions/other.md" && die "a Decision about anothe
 step "an untracked file counts, and a Decision about an untouched file stays out"
 rm "$WT_GV/src/calm/new.js"
 (cd "$WT_GV" && git add -A && git commit -qm "feat(ship): change the rates" -m "Cut: nothing, a test change") || die "commit ship-rates"
-[ "$(bash "$WSH" governed ship-rates | wc -l)" -eq 3 ] || die "a committed change should give the same answer"
+[ "$(bash "$WSH" governed ship-rates | wc -l)" -eq 4 ] || die "a committed change should give the same answer"
 bash "$WSH" land ship-rates >/dev/null 2>&1 || die "land ship-rates"
 out=$(bash "$WSH" governed no-such-change 2>&1); rc=$?
 [ "$rc" -eq 2 ] || die "governed on a missing branch should exit 2 (got $rc)"

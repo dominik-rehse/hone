@@ -101,7 +101,9 @@
 #       line is a changed file or a directory above one. A Note also counts
 #       by its name: docs/notes/<area>.md is about src/<area>/. The answer
 #       reads the change's worktree, committed or not, so consolidate can ask
-#       before the commit. The loop hands these documents to the
+#       before the commit. With no worktree it reads the branch's diff and the
+#       primary tree's documents, so it misses a Governs: line that only the
+#       branch carries. The loop hands these documents to the
 #       consolidate-critic. A change can make a sentence false in a document
 #       that it never opened, and nobody reads a document that nothing puts
 #       in front of them. Exit: 0 printed, or nothing to print · 2
@@ -455,10 +457,11 @@ cmd_governed() {
         hit=""
         while IFS= read -r path; do
             [ -n "$path" ] && governed_touched "$path" && { hit=yes; break; }
-        done < <(hone_governs_paths "$tree/$doc")
-        case "$doc" in
-            docs/notes/*.md) [ -n "$hit" ] || { governed_touched "src/$(basename "$doc" .md)" && hit=yes; } ;;
-        esac
+        done < <(hone_governs_paths "$tree/$doc" "$tree")
+        # A Note is flat, docs/notes/<area>.md, as the nag reads it.
+        if [ -z "$hit" ] && [ "$(dirname "$doc")" = docs/notes ]; then
+            governed_touched "src/$(basename "$doc" .md)" && hit=yes
+        fi
         [ -z "$hit" ] || printf '%s\n' "$doc"
     done < <(cd "$tree" && find docs/decisions docs/notes -type f -name '*.md' 2>/dev/null | sort)
     return 0
@@ -687,9 +690,12 @@ cmd_land() {
     # sign-off names the tip.
     local base
     base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
+    # A line that copies the placeholder of the refusal, or that says
+    # "nothing" and gives no reason, records nothing, so it does not count.
     if [ -n "$(git -C "$main_root" rev-list "$base..$branch" 2>/dev/null)" ] \
        && ! git -C "$main_root" log --format=%B "$base..$branch" \
-            | grep -E '^(Cut|Repair): +[^[:space:]]' >/dev/null; then
+            | grep -E '^(Cut|Repair): +[^[:space:]<]' \
+            | grep -viE '^Cut: +nothing[[:space:][:punct:]]*$' >/dev/null; then
         msg_wt_land_no_cut_line "$branch" "$wt" >&2
         return 2
     fi

@@ -69,8 +69,10 @@ work. The loop calls it, and you can too:
 - `worktree.sh governed <change>` prints the Decisions and Notes about the
   code that the change touched, one path per line. A document counts when
   a path on its `Governs:` line is a changed file or a directory above one.
-  A Note also counts by its name, because `docs/notes/<area>.md` is about
-  `src/<area>/`. The loop hands these documents to the `consolidate-critic`,
+  A path may be a glob, and it expands in the change's tree. A Note also
+  counts by its name, because `docs/notes/<area>.md` is about
+  `src/<area>/`. With no worktree left, the command reads the primary
+  tree's documents. The loop hands these documents to the `consolidate-critic`,
   whether the change opened them or not.
 - `worktree.sh land <change>` merges the branch into the primary tree,
   re-runs the suite there, and cleans up. Runs the land gates first. In
@@ -260,7 +262,7 @@ irreversible. When you want that record, route the edit through the loop.
   - a claim this clone holds on the remote with no worktree (shared mode)
   - a change about to land that deletes nothing
   - a `src/<area>/` that a change about to land touched, with more lines
-    in its tracked files than `HONE_AREA_MAX_LINES` (default 3000)
+    in its tracked text files than `HONE_AREA_MAX_LINES` (default 3000)
   - a `type: project` entry in the harness's own memory store
 - *session-start* injects the workflow rule from the plugin. It warns when
   the test adapter or the `src/` layout is missing. It also warns, naming
@@ -278,7 +280,8 @@ the primary tree, and the worktree stays for inspection.
 Before those two, land checks the shape of the change. Some commit on the
 branch must carry a body line `Cut: <what the change removed>`, or
 `Cut: nothing` with the reason. A garden repair carries `Repair: <what>`
-instead. A branch with no such line is exit 2, and the fix is to amend the
+instead. A line that is a placeholder in angle brackets, or a bare
+`Cut: nothing` with no reason, records nothing and does not count. A branch with no such line is exit 2, and the fix is to amend the
 commit in the worktree. This check comes first because an amended commit
 moves the tip, and a proof sign-off names the tip.
 

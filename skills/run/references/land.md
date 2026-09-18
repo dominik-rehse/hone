@@ -53,7 +53,8 @@ re-run land. Never push the primary branch by hand.
 The branch does not exist, the primary tree is on a detached HEAD, no
 commit on the branch carries a `Cut:` line, or the invocation was
 malformed. Nothing was merged. Read the stderr line. Fix the
-state (from the primary tree) rather than retrying blindly.
+state rather than retrying blindly: from the primary tree, or in the
+worktree when the line asks for an amended commit.
 
 ## 7: the proof gate
 

@@ -411,8 +411,8 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
      `worktree.sh grant` and land again.
    - **5**: another session held the land lock past the timeout, or, in
      shared mode, the remote moved on every attempt. Wait, retry.
-   - **2**: usage or repo-state error (missing branch, detached HEAD): read
-     the stderr message.
+   - **2**: usage or repo-state error (missing branch, detached HEAD, no
+     `Cut:` line on the branch): read the stderr message.
 
    Any non-zero exit: read `references/land.md` before acting on it. It carries
    what each code means and what resolves it. Three rules hold whatever the

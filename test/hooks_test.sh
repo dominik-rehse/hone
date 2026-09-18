@@ -633,6 +633,10 @@ out=$(cd "$WT" && echo '{}' | HONE_AREA_MAX_LINES=30 bash "$NAG" 2>&1)
 echo "$out" | grep -q "src/big/ holds 40 lines, over the 30-line cap" && ok "an area over the cap that the change touched is flagged" || bad "should flag src/big/ over HONE_AREA_MAX_LINES"
 out=$(cd "$WT" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "holds 40 lines" && bad "an area under the default cap should not be flagged" || ok "an area under the default cap passes"
+# A binary file has no lines to read, so it adds nothing to the count.
+(cd "$WT" && head -c 4000 /dev/urandom > src/big/blob.bin && git add -A && git commit -qm "chore: a binary asset")
+out=$(cd "$WT" && echo '{}' | HONE_AREA_MAX_LINES=30 bash "$NAG" 2>&1)
+echo "$out" | grep -q "src/big/ holds 40 lines" && ok "a binary file does not count toward the cap" || bad "a binary file should not change the line count: $out"
 # An old large area that this change never touched stays quiet.
 (cd "$REPO" && mkdir -p src/old && seq 1 40 > src/old/table.js && git add -A && git commit -qm "chore: an old large area")
 WT_AQ="$REPO/.worktrees/area-quiet"

@@ -617,7 +617,7 @@ msg_wt_land_no_cut_line() {
     local branch="$1" wt="$2"
     cat <<EOF
 hone worktree: no commit on $branch carries a 'Cut:' line.
-Do: amend the commit in $wt. Add a body line 'Cut: <what the change removed>', or 'Cut: nothing' with the reason. A garden repair says 'Repair: <what>' instead. Then land again.
+Do: amend the commit in $wt. Add a body line that starts with 'Cut: ' and names what the change removed. If it removed nothing, the line says 'nothing' and why. A garden repair starts its line with 'Repair: '. Then land again.
 Why: every change removes something, and this line records it.
 EOF
 }
