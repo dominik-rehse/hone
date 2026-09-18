@@ -1,12 +1,17 @@
 # Roadmap: evaluating and optimizing hone itself
 
-hone exists for the codebase it leaves behind. [`model.md`](model.md) says
-what that codebase looks like. No production code without a failing test
-first. Documentation that lives only where a checker catches staleness,
-and never a sentence that repeats what the code, the types, or the tests
-already carry. Every change deletes something. A loop that stops and
-reports rather than forces past a failed check. That is the goal, and cost
-is the price hone pays for it.
+hone exists for the codebase it leaves behind: software that is
+transparent, well structured, and easy to maintain, for a coding agent as
+much as for a person. An agent is a primary writer and reader of that
+codebase, so the qualities are the ones an agent can use. The truth about
+the system is in one place and checked, so that an agent reads it and never
+a stale copy of it. The structure is small enough to hold in context. And
+nothing in it repeats something the code, the types, or the tests already
+carry. [`model.md`](model.md) says how hone works toward that. No
+production code without a failing test first. Documentation that lives
+only where a checker catches staleness. Every change deletes something. A
+loop that stops and reports rather than forces past a failed check. Cost is
+the price hone pays for it, not the goal.
 
 This roadmap is about making hone itself better at that goal. The deletion
 bias applies to hone too. Every hook, critic, gate, and paragraph of prompt
@@ -17,10 +22,12 @@ and what changes when a new model ships?
 
 ## The outcomes, and what measures each
 
-A change to hone is good when the codebases that hone produces get better
-or stay as good, and hone gets smaller or cheaper. So the outcomes come
-first, and cost is the tie-breaker among changes that hold them. Each
-outcome below names what measures it today, and where nothing does.
+A change to hone is good when the codebases that hone produces get closer
+to that end or stay as close, and hone gets smaller or cheaper. The end
+itself is not measurable in one number. What is measurable is the outcomes
+below, which are what hone does to a codebase on the way there. So the
+outcomes come first, and cost is the tie-breaker among changes that hold
+them. Each outcome names what measures it today, and where nothing does.
 
 - *Correct.* The landed change does what the Plan says, and no defect lands
   in silence. The lab's end-state checks measure the first part per
