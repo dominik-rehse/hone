@@ -47,7 +47,7 @@ printf '%s\n' "${CLAUDE_CODE_OAUTH_TOKEN:-}" > "$FAKE_DIR/agent-token"
 # Claude Code does not hand its own token to the agent's shell commands, so
 # the nested call starts without one.
 case "$FAKE_MODE" in nested|nologin|nologin-text)
-    env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude -p "/code-review high x" --output-format json >/dev/null ;;
+    env -u CLAUDE_CODE_OAUTH_TOKEN -u ANTHROPIC_API_KEY claude -p "/code-review high x" --model claude-fake-review --output-format json >/dev/null ;;
 esac
 case "$FAKE_MODE" in
     dead) exit 1 ;;
@@ -83,7 +83,7 @@ echo "Is the change fine?" > "$W/scenarios/toy-judged/judge.md"
 lab() {
     env -u ANTHROPIC_API_KEY -u CLAUDE_CODE_OAUTH_TOKEN ${TOKEN:+ANTHROPIC_API_KEY="$TOKEN"} \
         PATH="$W/bin:$PATH" FAKE_DIR="$W" FAKE_MODE="${MODE:-land}" FAKE_JUDGE="${JUDGE:-PASS}" \
-        LAB_SCENARIOS="$W/scenarios" LAB_OUT="$W/out" LAB_POLL=1 \
+        LAB_SCENARIOS="$W/scenarios" LAB_OUT="${LAB_OUT_OVERRIDE:-$W/out}" LAB_POLL=1 \
         LAB_CREDENTIALS="${CRED:-$W/no-credentials.json}" bash "$LAB" "$@" 2>&1
 }
 result() { jq -r "$2" "$W"/out/*/"$1"/result.json; }
@@ -192,6 +192,32 @@ jq -n --argjson exp "$(( ($(date +%s) + 60) * 1000 ))" \
     '{claudeAiOauth: {accessToken: "tok-stale", refreshToken: "never-copy-me", expiresAt: $exp}}' > "$W/cred.json"
 fresh; CRED="$W/cred.json" MODE=land lab toy >/dev/null; rc=$?
 [ "$rc" -eq 3 ] && [ "$(result toy .verdict)" = "indeterminate" ] && ok "a token that is about to expire makes the run indeterminate" || bad "a stale token should give indeterminate (exit $rc)"
+
+echo "== --review-model moves the pin of the review command, in the sandbox only =="
+fresh; MODE=nested lab toy --review-model claude-other-9 >/dev/null
+grep -A6 -F 'claude -p "/code-review' "$W"/out/*/toy/plugin/skills/run/SKILL.md | grep -q -- '--model claude-other-9 ' \
+    && ok "the sandboxed review command names the new model" || bad "the sandboxed run skill should pin claude-other-9"
+grep -q 'claude-other-9' "$PLUGIN_ROOT/skills/run/SKILL.md" && bad "the repo's run skill must not change" || ok "the repo's run skill is untouched"
+[ "$(result toy .review_model)" = "claude-fake-review" ] && ok "the result records the model that the nested call named" || bad "review_model should be claude-fake-review (got $(result toy .review_model))"
+grep -q 'No findings' "$W"/out/*/toy/nested-out/*.out && ok "the output of the nested call is kept" || bad "nested-out/ should hold the review's output"
+cp "$W/scenarios/toy/check.sh" "$W/check.sh.keep"
+printf '%s\n' "unchanged scripts/run-tests.sh" "review_named 'no findings' 'nothing at all'" > "$W/scenarios/toy/check.sh"
+lab --regrade "$(echo "$W"/out/*/)" >/dev/null
+grep -q 'note the review named nothing at all: yes' "$W"/out/*/toy/checks.log && ok "a check can read what the review said" || bad "review_named should note yes"
+grep -q 'note the brief to the review named nothing at all: no' "$W"/out/*/toy/checks.log && ok "a check can read what the run told the review" || bad "review_named should note that the brief was silent"
+[ "$(result toy .verdict)" = "pass" ] && ok "a note decides nothing" || bad "a note must not change the verdict"
+printf '%s\n' "review_named 'x' 'y'" > "$W/scenarios/toy/check.sh"
+lab --regrade "$(echo "$W"/out/*/)" >/dev/null
+[ "$(result toy .verdict)" = "indeterminate" ] && ok "a check.sh with notes alone made no check" || bad "notes alone should give indeterminate (got $(result toy .verdict))"
+cp "$W/check.sh.keep" "$W/scenarios/toy/check.sh"
+lab toy --review-model opus >/dev/null; rc=$?
+[ "$rc" -eq 2 ] && ok "an alias for --review-model exits 2" || bad "a review-model alias should exit 2 (got $rc)"
+
+echo "== the output directory must not sit below an instruction file =="
+mkdir -p "$W/project/.claude/rules" "$W/project/deep/out"
+out=$(LAB_OUT_OVERRIDE="$W/project/deep/out" lab toy); rc=$?
+[ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q '.claude/rules' && ok "an output directory below .claude/rules exits 2 and names it" || bad "a contaminated output directory should exit 2 (got $rc: $out)"
+[ -z "$(ls -d "$W/project/deep/out/"*/toy 2>/dev/null)" ] && ok "no scenario ran there" || bad "no scenario should run below an instruction file"
 
 lab toy --model opus >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an alias for --model exits 2" || bad "a model alias should exit 2 (got $rc)"

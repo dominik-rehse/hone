@@ -22,11 +22,17 @@
 #
 # Usage:
 #   bash evals/lab/run.sh [SCENARIO...] [--track behavioral|adversarial]
-#                         [--model ID] [--judge-model ID] [--without HOOK[,HOOK]]
+#                         [--model ID] [--judge-model ID] [--review-model ID]
+#                         [--without HOOK[,HOOK]]
 #                         [--budget USD] [--timeout MIN] [--jobs N] [--dry-run]
-#   bash evals/lab/run.sh --regrade evals/lab/out/<time> [SCENARIO...]
+#   bash evals/lab/run.sh --regrade /var/tmp/hone-lab/<time> [SCENARIO...]
 #   --model ID     the full model ID that drives the run (default claude-opus-5,
 #                  the floor of the loop). An alias floats, so the lab refuses one.
+#   --review-model ID  the model of the nested /code-review, in place of the ID
+#                  that the run skill pins. The switch edits the review command
+#                  in the sandboxed copy of skills/run/SKILL.md, as --without
+#                  edits hooks.json. result.json records the model that the
+#                  nested calls named, with the switch or without it.
 #   --without H    switch hooks off for this run, by file name without .sh
 #                  (guard, bash-guard, dirty-guard, gate, nag, session-start).
 #                  The switch edits hooks.json in the sandboxed plugin copy, so
@@ -43,10 +49,17 @@
 #                  check.sh or a judge.md. A run costs dollars, and a check
 #                  that was wrong should not cost them twice.
 #
-# Output goes to evals/lab/out/<time>/<scenario>/, which git ignores: the
-# sandbox (plugin/, repo/, home/), transcript.jsonl, nested.jsonl, checks.log,
-# judge.json, and result.json. The sandbox stays on disk, because it is the
-# evidence for the verdict.
+# Output goes to /var/tmp/hone-lab/<time>/<scenario>/, or under $LAB_OUT: the
+# sandbox (plugin/, repo/, home/), transcript.jsonl, nested.jsonl, nested-out/,
+# checks.log, judge.json, and result.json. The sandbox stays on disk, because
+# it is the evidence for the verdict.
+#
+# The output must not sit inside this repository. Claude Code loads CLAUDE.md
+# and .claude/rules/ from every directory above the fixture, and
+# --setting-sources does not stop that. Until 2026-09-17 the output was
+# evals/lab/out/, and every run had hone's own development rules in context.
+# Those rules say what the bash-guard denies. So the harness refuses an output
+# directory with an instruction file anywhere above it.
 #
 # Exit: 0 every scenario passed, 1 a scenario failed, 3 none failed and one
 # was indeterminate, 2 usage.
@@ -70,15 +83,16 @@ set -uo pipefail
 LAB=$(cd "$(dirname "$0")" && pwd)
 ROOT=$(cd "$LAB/../.." && pwd)
 SCENARIOS="${LAB_SCENARIOS:-$LAB/scenarios}"
-OUT_ROOT="${LAB_OUT:-$LAB/out}"
+OUT_ROOT="${LAB_OUT:-/var/tmp/hone-lab}"
 
-MODEL="claude-opus-5"; JUDGE_MODEL="claude-sonnet-5"; TRACK=""; WITHOUT=""
+MODEL="claude-opus-5"; JUDGE_MODEL="claude-sonnet-5"; REVIEW_MODEL=""; TRACK=""; WITHOUT=""
 BUDGET=25; TIMEOUT_MIN=60; JOBS=2; DRY=0; REGRADE=""
 NAMES=()
 while [ $# -gt 0 ]; do
     case "$1" in
         --model) shift; MODEL="$1" ;;
         --judge-model) shift; JUDGE_MODEL="$1" ;;
+        --review-model) shift; REVIEW_MODEL="$1" ;;
         --track) shift; TRACK="$1" ;;
         --without) shift; WITHOUT="$1" ;;
         --budget) shift; BUDGET="$1" ;;
@@ -92,7 +106,7 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-for m in "$MODEL" "$JUDGE_MODEL"; do
+for m in "$MODEL" "$JUDGE_MODEL" ${REVIEW_MODEL:+"$REVIEW_MODEL"}; do
     case "$m" in claude-*) ;; *) echo "'$m' is an alias, and an alias floats. Pass a full model ID." >&2; exit 2 ;; esac
 done
 case "$TRACK" in ""|behavioral|adversarial) ;; *) echo "--track takes behavioral or adversarial" >&2; exit 2 ;; esac
@@ -107,6 +121,14 @@ for h in "${OFF[@]}"; do
     grep -qF "/hooks/$h.sh" "$ROOT/hooks/hooks.json" \
         || { echo "--without: hooks.json wires no hook named '$h'" >&2; exit 2; }
 done
+
+# The review command pins one model, and --review-model replaces that pin. A
+# command with no pin, or with two, must not run as if the switch had worked.
+REVIEW_PIN_RE='--model claude-[A-Za-z0-9.-]+'
+if [ -n "$REVIEW_MODEL" ]; then
+    pins=$(grep -A6 -F 'claude -p "/code-review' "$ROOT/skills/run/SKILL.md" | grep -cE -- "$REVIEW_PIN_RE")
+    [ "$pins" -eq 1 ] || { echo "--review-model: the review command in skills/run/SKILL.md pins $pins models, not 1" >&2; exit 2; }
+fi
 
 if [ -n "$REGRADE" ]; then
     [ -d "$REGRADE" ] || { echo "--regrade: no such run directory: $REGRADE" >&2; exit 2; }
@@ -162,6 +184,22 @@ refresh_session_token() {
     "$REAL_CLAUDE" -p "Reply with exactly: OK" --model claude-haiku-4-5-20251001 --safe-mode >/dev/null 2>&1
 }
 
+# A new run must not start below an instruction file (see the header).
+if [ -z "$REGRADE" ]; then
+    # Transcripts can hold a session token, so a directory that this run creates is private.
+    [ -d "$OUT_ROOT" ] || { mkdir -p "$OUT_ROOT" && chmod 700 "$OUT_ROOT"; } || { echo "cannot create $OUT_ROOT" >&2; exit 2; }
+    d=$(cd "$OUT_ROOT" && pwd -P)
+    while :; do
+        for f in CLAUDE.md CLAUDE.local.md .claude/CLAUDE.md .claude/rules; do
+            [ -e "$d/$f" ] || continue
+            echo "the output directory $OUT_ROOT sits below $d/$f, and every run would load it. Set LAB_OUT to a directory outside any project." >&2
+            exit 2
+        done
+        [ "$d" = / ] && break
+        d=$(dirname "$d")
+    done
+fi
+
 RUN_DIR="${REGRADE:-$OUT_ROOT/$(date +%Y%m%d-%H%M%S)}"
 mkdir -p "$RUN_DIR"
 
@@ -177,6 +215,8 @@ copy_plugin() {
             | .hooks |= with_entries(select(.value | length > 0))' \
             "$1/hooks/hooks.json" > "$1/hooks/hooks.json.tmp" && mv "$1/hooks/hooks.json.tmp" "$1/hooks/hooks.json"
     done
+    [ -z "$REVIEW_MODEL" ] || sed -i -E "/claude -p \"\/code-review/,/--output-format/ s/$REVIEW_PIN_RE/--model $REVIEW_MODEL/" \
+        "$1/skills/run/SKILL.md"
 }
 
 # The fixture: a small Node project that went through hone's own setup, with
@@ -214,6 +254,9 @@ EOF
 # through it, so the lab knows that they ran and what they cost. It changes
 # nothing the agent can see: same arguments, same output, same exit.
 #
+# It keeps the output of each call under nested-out/, so that a check can read
+# what the review itself found, and not only what the run made of it.
+#
 # It also carries the auth. Claude Code withholds its own token from the shell
 # commands of the agent, and with an isolated HOME no credentials file exists
 # either, so a nested call would answer "Not logged in". The shim reads the
@@ -236,7 +279,7 @@ nl=false; grep -F 'Not logged in' "\$out" >/dev/null 2>&1 && nl=true
 jq -cn --arg args "\$*" --argjson nl "\$nl" --slurpfile e "\$out" \\
     '{args: \$args, is_error: (\$e[0] | if type == "object" and has("is_error") then .is_error else null end), cost_usd: (\$e[0].total_cost_usd // 0), not_logged_in: \$nl}' \\
     >> "$2" 2>/dev/null || jq -cn --arg args "\$*" --argjson nl "\$nl" '{args: \$args, is_error: null, cost_usd: 0, not_logged_in: \$nl}' >> "$2"
-rm -f "\$out"
+mkdir -p "$3" && mv "\$out" "$3/\$(date +%s%N).out" || rm -f "\$out"
 exit "\$rc"
 EOF
     chmod +x "$1/claude"
@@ -339,7 +382,7 @@ run_scenario() {
     start=$(date +%s)
     if [ "$seeded" = true ]; then
         git -C "$sb/repo" rev-parse HEAD > "$sb/base"
-        write_shim "$sb/bin" "$sb/nested.jsonl"
+        write_shim "$sb/bin" "$sb/nested.jsonl" "$sb/nested-out"
         mkdir -p "$sb/home"
         if [ "$AUTH" = session ]; then
             token=$(session_token)
@@ -388,7 +431,7 @@ grade_scenario() {
         (
             cd "$sb/repo" || exit 2
             export LAB_BASE LAB_TRANSCRIPT="$sb/transcript.jsonl" LAB_NESTED="$sb/nested.jsonl" \
-                LAB_REPORT="$sb/report.txt" LAB_WITHOUT
+                LAB_NESTED_OUT="$sb/nested-out" LAB_REPORT="$sb/report.txt" LAB_WITHOUT
             LAB_WITHOUT=$(jq -r .without "$sb/run.json")
             LAB_BASE=$(cat "$sb/base")
             # shellcheck source=evals/lab/checks.sh
@@ -430,22 +473,24 @@ grade_scenario() {
 
     # jq -s on a missing file prints a value AND fails, so `|| echo 0` would
     # print two. Look at the file first.
-    local turns=0
+    local turns=0 review_model=""
+    [ -s "$sb/nested.jsonl" ] && review_model=$(jq -rs '[.[] | select(.args | test("/code-review")) | .args
+        | capture("--model (?<m>[^ ]+)").m] | unique | join(",")' "$sb/nested.jsonl" 2>/dev/null)
     [ -s "$sb/transcript.jsonl" ] && turns=$(jq -s '[.[] | select(.type == "result") | .num_turns // 0] | add // 0' "$sb/transcript.jsonl" 2>/dev/null)
     [ -s "$sb/nested.jsonl" ] && nested_cost=$(jq -s 'map(.cost_usd) | add // 0' "$sb/nested.jsonl" 2>/dev/null)
     jq --arg scenario "$name" --arg track "$(tr -d '[:space:]' < "$scenario/track")" \
         --arg verdict "$verdict" --arg reason "$reason" \
         --argjson cost "${cost:-0}" --argjson nested "${nested_cost:-0}" --argjson judge "${judge_cost:-0}" \
-        --argjson turns "${turns:-0}" \
+        --argjson turns "${turns:-0}" --arg review_model "$review_model" \
         '{scenario: $scenario, track: $track, verdict: $verdict, reason: $reason, model: .model,
-          without: .without, home: .home, cost_usd: $cost, nested_cost_usd: $nested,
+          review_model: $review_model, without: .without, home: .home, cost_usd: $cost, nested_cost_usd: $nested,
           judge_cost_usd: $judge, seconds: .seconds, turns: $turns}' "$sb/run.json" > "$sb/result.json"
 }
 
 if [ -n "$REGRADE" ]; then
     echo "$(date -Iseconds) | REGRADE of $RUN_DIR | judge=$JUDGE_MODEL"
 else
-    echo "$(date -Iseconds) | model=$MODEL | judge=$JUDGE_MODEL | home=$HOME_MODE auth=$AUTH${WITHOUT:+ | WITHOUT: $WITHOUT} | claude $("$REAL_CLAUDE" --version 2>/dev/null | head -1)"
+    echo "$(date -Iseconds) | model=$MODEL${REVIEW_MODEL:+ | review=$REVIEW_MODEL} | judge=$JUDGE_MODEL | home=$HOME_MODE auth=$AUTH${WITHOUT:+ | WITHOUT: $WITHOUT} | claude $("$REAL_CLAUDE" --version 2>/dev/null | head -1)"
     echo "running ${#NAMES[@]} scenario(s), up to $JOBS at a time, into $RUN_DIR"
 fi
 [ -z "$REGRADE" ] && [ "$AUTH" = session ] && refresh_session_token

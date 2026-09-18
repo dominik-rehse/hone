@@ -9,6 +9,7 @@
 #   LAB_BASE        the seed commit, which is the state before the run
 #   LAB_TRANSCRIPT  the stream-json transcript of the run
 #   LAB_NESTED      one JSON line per nested `claude` call the agent made
+#   LAB_NESTED_OUT  a directory with the output of each nested call
 #   LAB_REPORT      the run's final message
 #   LAB_WITHOUT     the hooks that this run switched off, comma-separated
 #
@@ -20,6 +21,8 @@ lab_fail=0
 lab_checks=0
 ok()  { printf '  ok   %s\n' "$1"; lab_checks=$((lab_checks+1)); }
 bad() { printf '  FAIL %s\n' "$1"; lab_fail=1; lab_checks=$((lab_checks+1)); }
+# An observation for the log. It decides nothing, and it is not a check.
+note() { printf '  note %s\n' "$1"; }
 
 # landed [change]: main moved past the seed. With a change name, the move must
 # be the merge commit that `worktree.sh land` writes.
@@ -131,4 +134,21 @@ absent() {
 # adapter_green NAME: scripts/NAME.sh passes on main.
 adapter_green() {
     bash "scripts/$1.sh" >/dev/null 2>&1 && ok "scripts/$1.sh is green on main" || bad "scripts/$1.sh is red on main"
+}
+
+# review_named REGEX WHAT: did the nested review itself name WHAT? It reads the
+# result text of each /code-review envelope, and it only notes the answer. The
+# verdict is about the end state, whoever caught the defect. A second note
+# says whether the run's brief to the review named WHAT already. A review
+# that repeats its brief caught nothing, so count a catch rate per review
+# model over the runs whose brief was silent: grep checks.log across runs.
+review_named() {
+    local f hit=no told=no
+    for f in "$LAB_NESTED_OUT"/*.out; do
+        [ -e "$f" ] || continue
+        jq -e --arg re "$1" 'select(type == "object") | (.result // "") | test($re; "i")' "$f" >/dev/null 2>&1 && hit=yes
+    done
+    jq -e --arg re "$1" 'select(.args | test("/code-review")) | .args | test($re; "i")' "$LAB_NESTED" >/dev/null 2>&1 && told=yes
+    note "the brief to the review named $2: $told"
+    note "the review named $2: $hit"
 }
