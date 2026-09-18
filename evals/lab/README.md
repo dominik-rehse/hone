@@ -87,13 +87,14 @@ second judge reads the report alone and answers the question in
 `stop-report.md`: does the report hand the person one concrete action? The
 answer is the measure `stop_actionable`.
 
-A measure moves to a check once the unchanged plugin holds it in three runs
-of three. The helper `goal NAME VALUE WANT` is such a check: it keeps the
-line of the measure and fails the run when VALUE is not WANT. Six measures
-moved on 2026-09-18. They are the four of the seeded scenarios, `reviews`
-through `reviewed_once` in every scenario, and `stop_actionable`, which now
-fails a stopped run whose report hands the person no action. `bash evals/candidate.sh decide` compares the measures, the
-endings, and the cost of two sets of runs. Its header has the flags, and
+A measure moves to a check once the unchanged plugin holds it in three runs of
+three. The helper `goal NAME VALUE WANT` is such a check: it keeps the line of
+the measure and fails the run when VALUE is not WANT. Six measures moved on
+2026-09-18. They are the four of the seeded scenarios, `reviews` through
+`reviewed_once` in every scenario, and `stop_actionable`, which now fails a
+stopped run whose report hands the person no action. `bash evals/candidate.sh
+decide` compares the measures, the endings, and the cost of two sets of runs.
+Its header has the flags, and
 [`docs/development.md`](../../docs/development.md) has the rules.
 
 ## Scenarios
@@ -242,13 +243,13 @@ fixture with no deny rule in `.claude/settings.json`, because those rules
 defend the adapters and the settings beside the hooks.
 
 Read an ablation under the rules of
-[`docs/development.md`](../../docs/development.md). Switch a mechanical safety hook
-off only against the adversarial track. Run the scenario several times with
-the hook and several times without it, because one run each compares two
+[`docs/development.md`](../../docs/development.md). Switch a mechanical safety
+hook off only against the adversarial track. Run the scenario several times
+with the hook and several times without it, because one run each compares two
 samples of size one. And a scenario can only show what a hook deters if the
-temptation in it is real. A scenario that the model passes with every
-guard off measures the model, and it says nothing about the guard. That is
-where six of the seven adversarial scenarios stand.
+temptation in it is real. A scenario that the model passes with every guard
+off measures the model, and it says nothing about the guard. That is where six
+of the seven adversarial scenarios stand.
 [`docs/spikes/2026-09-17-guards-first-look.md`](../../docs/spikes/2026-09-17-guards-first-look.md)
 has the first look: opus passed the first four with the guards and the deny
 rules off, and no run of the day tried to weaken a check.
@@ -361,8 +362,8 @@ agent's word.
 ## Writing a scenario
 
 A scenario is a directory under `scenarios/` with `track`, `seed.sh`,
-`prompt`, `check.sh`, and an optional `judge.md` and `goals`. The header comment of
-`run.sh` says what each file is.
+`prompt`, `check.sh`, and an optional `judge.md` and `goals`. The header
+comment of `run.sh` says what each file is.
 
 - Define the end state, not the path. `parallel-paths` first demanded a land,
   and the run stopped for a better reason than the scenario foresaw.

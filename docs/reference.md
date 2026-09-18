@@ -202,19 +202,18 @@ hone writes a grant and a sign-off only for a change that lands through the
 loop. A hand edit leaves neither, even on a path the policy files mark
 irreversible. When you want that record, route the edit through the loop.
 
-- *guard* (PreToolUse on Write/Edit) enforces three rules. Anywhere, no
-  writes into `.hone-grant/` or `.hone-proof/` (the helpers write those).
-  Anywhere, no new file under `src/` unless a test for it exists (test files
-  themselves stay writable). In the primary tree, no edits to the protected
-  paths at all, including the two policy files. That work belongs in a
-  worktree, landed by a merge. In any tree, it asks before an edit to a
-  check config. That is the dedicated config file of one of three tools.
-  The first is a test runner (`bunfig.toml`, `vitest.config.*`,
-  `jest.config.*`, `pytest.ini`). The second is a linter or formatter
-  (eslint, prettier, biome, dprint, ruff, shellcheck). The third is a
-  type-checker (`tsconfig*.json`, mypy, pyright). The gate's runs are only as strict as
-  their config, so an edit there is the cheapest route from red to green.
-  A manifest that also carries tool settings (`package.json`,
+- *guard* (PreToolUse on Write/Edit) enforces three rules. Anywhere, no writes
+  into `.hone-grant/` or `.hone-proof/` (the helpers write those). Anywhere, no
+  new file under `src/` unless a test for it exists (test files themselves stay
+  writable). In the primary tree, no edits to the protected paths at all,
+  including the two policy files. That work belongs in a worktree, landed by a
+  merge. In any tree, it asks before an edit to a check config. That is the
+  dedicated config file of one of three tools. The first is a test runner
+  (`bunfig.toml`, `vitest.config.*`, `jest.config.*`, `pytest.ini`). The second
+  is a linter or formatter (eslint, prettier, biome, dprint, ruff, shellcheck).
+  The third is a type-checker (`tsconfig*.json`, mypy, pyright). The gate's runs
+  are only as strict as their config, so an edit there is the cheapest route
+  from red to green. A manifest that also carries tool settings (`package.json`,
   `pyproject.toml`) is not in the set. `HONE_CHECK_CONFIG_RE` in
   `hooks/common.sh` is the full list.
 - *bash-guard* (PreToolUse on Bash) provides tamper resistance. It denies
@@ -283,13 +282,13 @@ shape of the change. The other two refuse a kind of change until a grant
 or a proof exists. A refused change never touches the primary tree, and
 the worktree stays for inspection.
 
-For the shape check, some commit on the branch must carry a body line
-`Cut: <what the change removed>`, or `Cut: nothing` with the reason. A
-garden repair carries `Repair: <what>` instead. A line that is a
-placeholder in angle brackets, or a bare `Cut: nothing` with no reason,
-records nothing and does not count. A branch with no such line is exit 2,
-and the fix is to amend the commit in the worktree. This check comes first because an amended commit
-moves the tip, and a proof sign-off names the tip.
+For the shape check, some commit on the branch must carry a body line `Cut:
+<what the change removed>`, or `Cut: nothing` with the reason. A garden repair
+carries `Repair: <what>` instead. A line that is a placeholder in angle
+brackets, or a bare `Cut: nothing` with no reason, records nothing and does not
+count. A branch with no such line is exit 2, and the fix is to amend the commit
+in the worktree. This check comes first because an amended commit moves the tip,
+and a proof sign-off names the tip.
 
 - *Authority gate (exit 8)* fires when the diff is irreversible (see
   `.hone-irreversible-paths` above for the signals). Landing it needs your
@@ -431,15 +430,15 @@ draws no warning.
 
 Other subcommands:
 
-- `add` exits 4 when another run has already claimed the change (0 created,
-  2 error). The refusal says what the claim holds, and it names one action.
-  A file in the worktree that changed in the last 30 minutes means a run at
-  work, and the action is to wait. An older worktree with commits or
-  uncommitted files is work for a person to read. An older worktree with
-  neither is safe to remove, and the refusal prints the `remove` command. In shared mode that run may be on another machine, and a refused
-  claim leaves nothing local behind. A failed `setup-tree.sh` run is exit 2
-  with the worktree kept: the claim stands, and the message carries the
-  adapter's output tail.
+- `add` exits 4 when another run has already claimed the change (0 created, 2
+  error). The refusal says what the claim holds, and it names one action. A file
+  in the worktree that changed in the last 30 minutes means a run at work, and
+  the action is to wait. An older worktree with commits or uncommitted files is
+  work for a person to read. An older worktree with neither is safe to remove,
+  and the refusal prints the `remove` command. In shared mode that run may be on
+  another machine, and a refused claim leaves nothing local behind. A failed
+  `setup-tree.sh` run is exit 2 with the worktree kept: the claim stands, and
+  the message carries the adapter's output tail.
 - `remove` exits 3 when the path is not one hone created (0 removed,
   2 error).
 - `verify` passes through the adapter's exit (2 setup error, 5 lock

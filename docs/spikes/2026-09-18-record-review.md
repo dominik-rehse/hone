@@ -111,7 +111,7 @@ and its places. Four of them wrote to `docs/open-questions.md`.
 
 `docs/development.md` carries the method. The record section left
 `docs/roadmap.md`, because the notes in this directory and the two eval
-manuals carry what it held. `evals/floors` carries the floors and the exception for a
-guard. `.claude/rules/releasing.md` cites the clean noise floor.
-`docs/roadmap.md` lists what is open. The seeded scenarios ran, and the
-maintainer decided to keep the `consolidate-critic`.
+manuals carry what it held. `evals/floors` carries the floors and the
+exception for a guard. `.claude/rules/releasing.md` cites the clean noise
+floor. `docs/roadmap.md` lists what is open. The seeded scenarios ran, and
+the maintainer decided to keep the `consolidate-critic`.

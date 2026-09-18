@@ -80,21 +80,21 @@ mechanical steps.
      costs more than before if that level was lower. Nothing to install
      and nothing to configure.
 
-   - *Land demands the `Cut:` line since 0.55*: `worktree.sh land` refuses
-     a branch on which no commit body carries `Cut: <what>` (or `Repair:
-     <what>` for a garden repair), with exit 2. A change that removed
-     nothing writes `Cut: nothing` and the reason. Since 0.55.1 a bare
-     `Cut: nothing` and a placeholder in angle brackets do not count. The
-     loop writes the line already. A worktree that was in flight during the upgrade may lack
-     it. Amend its commit as the refusal says, and land again. A script of
-     yours that lands a branch must write the line too.
+   - *Land demands the `Cut:` line since 0.55*: `worktree.sh land` refuses a
+     branch on which no commit body carries `Cut: <what>` (or `Repair: <what>`
+     for a garden repair), with exit 2. A change that removed nothing writes
+     `Cut: nothing` and the reason. Since 0.55.1 a bare `Cut: nothing` and a
+     placeholder in angle brackets do not count. The loop writes the line
+     already. A worktree that was in flight during the upgrade may lack it.
+     Amend its commit as the refusal says, and land again. A script of yours
+     that lands a branch must write the line too.
    - *Two more things since 0.55 need nothing from you*: the nag names a
      `src/<area>/` over `HONE_AREA_MAX_LINES` (default 3000) when a change
-     about to land touched it. Since 0.56 `/hone:garden` names such an
-     area across the whole repo, and puts it into a proposed Plan. And the loop hands the `consolidate-critic`
-     every Note and Decision about the changed code, which
-     `worktree.sh governed` lists. A `Governs:` line on a Decision is what
-     puts it on that list, so the lines are worth more than before.
+     about to land touched it. Since 0.56 `/hone:garden` names such an area
+     across the whole repo, and puts it into a proposed Plan. And the loop
+     hands the `consolidate-critic` every Note and Decision about the changed
+     code, which `worktree.sh governed` lists. A `Governs:` line on a Decision
+     is what puts it on that list, so the lines are worth more than before.
 
 After that, run `worktree.sh status`. It shows what is present and what is
 missing. It also flags a policy file that is still uncommitted, and a

@@ -65,10 +65,10 @@ rules.
 ## Judging a change to hone
 
 A change to hone is a claim about the codebases that hone leaves behind.
-[`roadmap.md`](roadmap.md) names the outcomes that such a claim is about,
-and what measures each. This section says how to test the claim. `evals/candidate.sh` is the
-procedure as code, and its header lists every flag.
-`test/candidate_test.sh` proves it with no model call.
+[`roadmap.md`](roadmap.md) names the outcomes that such a claim is about, and
+what measures each. This section says how to test the claim.
+`evals/candidate.sh` is the procedure as code, and its header lists every
+flag. `test/candidate_test.sh` proves it with no model call.
 
 ### The rules
 

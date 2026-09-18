@@ -138,9 +138,9 @@ Creating the worktree is what **claims the change**, and the creation is atomic.
 Exit **4** means the change is already claimed: another `run` (in another
 session) owns it, or a crashed run left it behind. Do **not** adopt that
 worktree. A single named change **stops** and reports it (the human resumes
-leftover work by hand). The refusal says what the claim holds and names one
-next action. Put both into the report as they are. Under `--all` it is **skipped** (below). Only exit 0
-means you own this change and may proceed.
+leftover work by hand). The refusal says what the claim holds and names one next
+action. Put both into the report as they are. Under `--all` it is **skipped**
+(below). Only exit 0 means you own this change and may proceed.
 
 ### 2. Build: red → green, serial
 
@@ -384,18 +384,18 @@ scope is not that.
 Commit in the worktree, then hand the merge to `worktree.sh land`:
 
 1. In `$WT`: `git add -A && git commit` with a Conventional Commits message. The
-   Decision(s) this change makes land in **this same commit** as the code.
-   Pick the **commit type from what the change does**, not from what rode
-   along. A change that alters the behaviour of `deploy/` or `scripts/` is
-   never `docs:`, however much prose it also touched. The body carries a
-   **`Cut:` line** naming what consolidate removed (pruned tests, dead code,
-   deleted doc lines, a spent reference). Where there genuinely was nothing, it
-   reads `Cut: nothing` with the reason. The nag flags a zero-deletion change,
-   and this line is its answer. Land refuses a branch with no such line. If the Plan declared a `Proof: real-environment`
-   line, copy **that whole line verbatim** into the body, description and
-   all. That trailer is how land's proof gate knows the test suite alone
-   cannot prove this change. The text after the dash names the check the
-   human must run. The gate prints it back to them, so never drop it.
+   Decision(s) this change makes land in **this same commit** as the code. Pick
+   the **commit type from what the change does**, not from what rode along. A
+   change that alters the behaviour of `deploy/` or `scripts/` is never `docs:`,
+   however much prose it also touched. The body carries a **`Cut:` line** naming
+   what consolidate removed (pruned tests, dead code, deleted doc lines, a spent
+   reference). Where there genuinely was nothing, it reads `Cut: nothing` with
+   the reason. The nag flags a zero-deletion change, and this line is its
+   answer. Land refuses a branch with no such line. If the Plan declared a
+   `Proof: real-environment` line, copy **that whole line verbatim** into the
+   body, description and all. That trailer is how land's proof gate knows the
+   test suite alone cannot prove this change. The text after the dash names the
+   check the human must run. The gate prints it back to them, so never drop it.
 2. From the primary tree, land the branch:
 
    ```bash

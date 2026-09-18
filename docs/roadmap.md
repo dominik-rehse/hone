@@ -46,39 +46,38 @@ measures of the seeded scenarios, `reviews`, and `stop_actionable` moved on
 goal.
 
 - *Transparent.* The truth about the system is in one place, and a checker
-  catches it going stale. Tests are named for the behaviour they pin. No
-  prose repeats what the code, the types, or the tests already carry.
-  Pursued by test-first work (the `guard`), the consolidate step and its
-  critic, the `nag`, and `/hone:garden`. The first three act on prose that
-  a change touches, and garden scans between changes. One gap is visible
-  without a run. A `Governs:` line ties a document to a path, and the nag
-  checks only that the path exists. Nothing ties a sentence to the value
-  that it repeats. So a change can make a sentence false and never touch
-  its document. The lab scenario `seeded-prose` measures that case. It seeds a Note that grew a list of
-  behaviours, and a Decision whose second paragraph restates its function.
-  The Plan changes the one number that both repeat, and it is silent on
-  the docs. The measures `note_spec` and `decision_restates` say what
-  became of each repeat: `cut`, `partly`, `updated`, `stale`, or `lost`.
-  The goal is `cut`. The `consolidate-critic` evals cannot measure this. A
-  model with no hone prose cuts such a repeat when a brief hands it over
+  catches it going stale. Tests are named for the behaviour they pin. No prose
+  repeats what the code, the types, or the tests already carry. Pursued by
+  test-first work (the `guard`), the consolidate step and its critic, the
+  `nag`, and `/hone:garden`. The first three act on prose that a change
+  touches, and garden scans between changes. One gap is visible without a run.
+  A `Governs:` line ties a document to a path, and the nag checks only that
+  the path exists. Nothing ties a sentence to the value that it repeats. So a
+  change can make a sentence false and never touch its document. The lab
+  scenario `seeded-prose` measures that case. It seeds a Note that grew a list
+  of behaviours, and a Decision whose second paragraph restates its function.
+  The Plan changes the one number that both repeat, and it is silent on the
+  docs. The measures `note_spec` and `decision_restates` say what became of
+  each repeat: `cut`, `partly`, `updated`, `stale`, or `lost`. The goal is
+  `cut`. The `consolidate-critic` evals cannot measure this. A model with no
+  hone prose cuts such a repeat when a brief hands it over
   ([`evals/README.md`](../evals/README.md) *Known gaps*).
-- *Well-structured.* Types carry what types can carry. Areas are small
-  enough to hold in context, with one Note and one invariant each. No
-  duplicated logic, and no abstraction with one user. Pursued at the point
-  of change only, and by little prose. That prose is the *Type first*
-  bullet at build, the rule of three, and two bullets of the
-  `consolidate-critic`. hone limits it to that point on purpose. *Types
-  and abstractions* in [`model.md`](model.md) says that a search for
-  things to abstract produces wrong abstractions. The lab scenario `seeded-structure`
-  therefore puts both of its seeds inside the change, on a TypeScript
-  fixture. A formatting helper exists in two private copies, and the Plan
-  adds the third use. The Note says in prose that `status` is one of three
-  strings, the code types it as `string`, and the Plan adds a fourth
-  status. `format_copies` counts the places that format an amount, and the
-  goal is 1. `status_fact` says whether a type carries the set of values,
-  prose, or both, and the goal is `type`. No mechanism turns an existing
-  prose fact into a type, and the baseline of 2026-09-18 did it anyway, in
-  three runs of three.
+- *Well-structured.* Types carry what types can carry. Areas are small enough
+  to hold in context, with one Note and one invariant each. No duplicated
+  logic, and no abstraction with one user. Pursued at the point of change
+  only, and by little prose. That prose is the *Type first* bullet at build,
+  the rule of three, and two bullets of the `consolidate-critic`. hone limits
+  it to that point on purpose. *Types and abstractions* in
+  [`model.md`](model.md) says that a search for things to abstract produces
+  wrong abstractions. The lab scenario `seeded-structure` therefore puts both
+  of its seeds inside the change, on a TypeScript fixture. A formatting helper
+  exists in two private copies, and the Plan adds the third use. The Note says
+  in prose that `status` is one of three strings, the code types it as
+  `string`, and the Plan adds a fourth status. `format_copies` counts the
+  places that format an amount, and the goal is 1. `status_fact` says whether
+  a type carries the set of values, prose, or both, and the goal is `type`. No
+  mechanism turns an existing prose fact into a type, and the baseline of
+  2026-09-18 did it anyway, in three runs of three.
 - *Correct.* The landed change does what the Plan says, and no defect lands
   in silence. Pursued by test-first work, the gate, the nested review, and
   the land gates. The lab's end-state checks measure the first part per
