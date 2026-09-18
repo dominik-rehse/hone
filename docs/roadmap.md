@@ -355,7 +355,9 @@ It owes the whole lab and three runs of each goal scenario.
   and 17 minutes at five scenarios at a time. It adds three deterministic
   checks under rule 5: the `Cut:` line at land, the oversized-area finding
   of the nag, and `worktree.sh governed`. The goal scenarios ran once on
-  it, so the procedure has no three runs of that arm yet.
+  it, so the procedure has no three runs of that arm yet. 0.55.1 fixed ten
+  findings of a code review on that work and passed the lab at 13 of 13
+  again, for 29 dollars.
 - The first `stop_actionable=no` came from `claimed-worktree`. The report
   listed three next steps, one per possible cause, and gave the person no
   way to tell which cause holds. A candidate is a stop report for exit 4

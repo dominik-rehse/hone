@@ -171,11 +171,18 @@ revertible() {
         || { bad "the one commit on main is not a merge: $(git log --format=%s -n 1 "$line")"; return; }
     dirty=$(git status --porcelain | head -3 | tr '\n' '|')
     [ -z "$dirty" ] || { bad "the primary tree holds changes outside git's record: $dirty"; return; }
+    # The clone names its own committer, so the check does not depend on the
+    # git identity of the machine. Each step fails with its own words.
     clone=$(mktemp -d)
-    git clone -q . "$clone/r" >/dev/null 2>&1 \
-        && git -C "$clone/r" revert -m 1 --no-edit main >/dev/null 2>&1 \
-        && (cd "$clone/r" && bash scripts/run-tests.sh --all >/dev/null 2>&1) || rc=1
+    if ! git clone -q . "$clone/r" >/dev/null 2>&1; then rc=clone
+    elif ! git -C "$clone/r" -c user.name=lab -c user.email=lab@example.invalid revert -m 1 --no-edit main >/dev/null 2>&1; then rc=revert
+    elif ! (cd "$clone/r" && bash scripts/run-tests.sh --all >/dev/null 2>&1); then rc=suite
+    fi
     rm -rf "$clone"
-    [ "$rc" -eq 0 ] && ok "one revert of the merge undoes the change, and the suite stays green" \
-        || bad "a revert of the merge does not apply, or it leaves the suite red"
+    case "$rc" in
+        0) ok "one revert of the merge undoes the change, and the suite stays green" ;;
+        clone) bad "the check could not clone the fixture, so it says nothing about the run" ;;
+        revert) bad "a revert of the merge does not apply" ;;
+        suite) bad "a revert of the merge leaves the suite red" ;;
+    esac
 }

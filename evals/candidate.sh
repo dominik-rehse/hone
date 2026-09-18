@@ -127,7 +127,11 @@ size_words() {
     tmp=$(mktemp -d)
     for d in "${SHIPPED[@]}"; do
         if [ "$1" = tree ]; then
-            [ -d "$ROOT/$d" ] && cp -r "$ROOT/$d" "$tmp/"
+            # Tracked files and new files that git does not ignore: what a
+            # commit of the candidate would hold. An ignored scratch file in a
+            # shipped directory must not read as growth.
+            [ -d "$ROOT/$d" ] && (cd "$ROOT" && { git ls-files -z -- "$d"; git ls-files -z --others --exclude-standard -- "$d"; } \
+                | while IFS= read -r -d '' f; do [ -f "$f" ] && mkdir -p "$tmp/$(dirname "$f")" && cp "$f" "$tmp/$f"; done)
         else
             git -C "$ROOT" archive "$1" -- "$d" 2>/dev/null | tar -x -C "$tmp" 2>/dev/null
         fi
@@ -194,8 +198,10 @@ lab_records() {
     IFS=, read -ra list <<<"$dirs"
     for d in "${list[@]}"; do
         [ -d "$d" ] || { echo "no such run directory: $d" >&2; exit 2; }
+        ls "$d"/*/result.json >/dev/null 2>&1 \
+            || { echo "no result.json below $d. Pass the directory of one lab pass, /var/tmp/hone-lab/<time>, after the pass ended." >&2; exit 2; }
         for r in "$d"/*/result.json; do
-            [ -f "$r" ] && jq -c --arg arm "$arm" '. + {arm: $arm}' "$r"
+            jq -c --arg arm "$arm" '. + {arm: $arm}' "$r" || { echo "cannot read $r" >&2; exit 2; }
         done
     done
 }
@@ -204,7 +210,7 @@ unit_records() {
     IFS=, read -ra list <<<"$files"
     for f in "${list[@]}"; do
         [ -f "$f" ] || { echo "no such file: $f" >&2; exit 2; }
-        jq -c --arg arm "$arm" '. + {arm: $arm}' "$f"
+        jq -c --arg arm "$arm" '. + {arm: $arm}' "$f" || { echo "cannot read $f as the JSON lines of evals/run.sh --json" >&2; exit 2; }
     done
 }
 LAB=$( { [ -z "$BASE_DIRS" ] || lab_records base "$BASE_DIRS"; [ -z "$CAND_DIRS" ] || lab_records cand "$CAND_DIRS"; } ) || exit 2
@@ -306,8 +312,10 @@ jq -rs --argjson floors "$FLOOR_MAP" --argjson votes "$VOTES_TO_DECIDE" --argjso
      | map("UNDECIDED unit: a run measured \(.)") | .[]),
     (group_by([.target, .case])[] | . as $rs | "\($rs[0].target)/\($rs[0].case)" as $id
      | ($rs | arm("base")) as $b | ($rs | arm("cand")) as $c | select(($c | length) > 0)
-     | ($c[0].pass) as $cpass | (if ($b | length) > 0 then $b[0].pass else null end) as $bpass
-     | if $cpass == false and $bpass != false then "REJECT unit \($id): the candidate answers \($c[0].verdict), and the case expects \($c[0].expected) (\($c | right)/\($c | length) votes)"
+     # Each --json file carries the plurality of its own pass. An arm may have
+     # several files, and the case holds only when it passes in every one.
+     | ($c | all(.pass)) as $cpass | (if ($b | length) > 0 then ($b | all(.pass)) else null end) as $bpass
+     | if $cpass == false and $bpass != false then "REJECT unit \($id): the candidate answers \($c | map(select(.pass == false)) | .[0].verdict), and the case expects \($c[0].expected) (\($c | right)/\($c | length) votes)"
        elif $cpass == true and $bpass == false then "GAIN unit \($id): the baseline failed the case, and the candidate passes it (\($c | right)/\($c | length) votes)"
        elif ($b | length) == 0 then empty
        else (($c | right) / ($c | length) - ($b | right) / ($b | length)) as $d | ([($b | length), ($c | length)] | min) as $n

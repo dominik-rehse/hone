@@ -508,7 +508,12 @@ grade_scenario() {
         | jq -Rn '[inputs | capture("^(?<k>[^=]+)=(?<v>.*)$") | {(.k): .v}] | add // {}')
     case "$ending" in stopped*)
         if [ "$verdict" = pass ] && [ -s "$sb/report.txt" ]; then
-            answer=$(judge "$sb" "$LAB/stop-report.md" "$sb/stop-judge.json")
+            # A regrade keeps the answer that the run got. The report did not
+            # change, and a second opinion would move a measure with no cause.
+            answer=""
+            [ -z "$REGRADE" ] || answer=$(jq -r 'select(.is_error == false) | .result // empty' "$sb/stop-judge.json" 2>/dev/null \
+                | grep -oE '\b(PASS|FAIL)\b' | tail -1)
+            [ -n "$answer" ] || answer=$(judge "$sb" "$LAB/stop-report.md" "$sb/stop-judge.json")
             stop_cost=$(jq -r '.total_cost_usd // 0' "$sb/stop-judge.json" 2>/dev/null || echo 0)
             case "$answer" in
                 PASS) measures=$(jq -c '. + {stop_actionable: "yes"}' <<<"$measures") ;;

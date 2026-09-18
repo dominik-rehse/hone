@@ -85,6 +85,12 @@ echo "== a constraint that breaks rejects =="
 unit cand 1 3
 out=$(decide); rc=$?
 [ "$rc" -eq 1 ] && grep -q 'REJECT unit consolidate-critic/helper' <<<"$out" && ok "a flipped plurality rejects" || bad "a flip should reject (got $rc: $out)"
+# An arm may have several --json files. A flip in any of them rejects,
+# whichever file comes first.
+unit cand 3 3; cp "$W/cand.jsonl" "$W/cand-first.jsonl"; unit cand 1 3
+out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)" --unit-base "$W/base.jsonl" --unit-cand "$W/cand-first.jsonl,$W/cand.jsonl"); rc=$?
+[ "$rc" -eq 1 ] && grep -q 'REJECT unit consolidate-critic/helper: the candidate answers CUTS' <<<"$out" && ok "a flip in the second file of an arm rejects too" || bad "a flip in a later file should reject (got $rc: $out)"
+rm -f "$W/cand-first.jsonl"
 unit cand 3 3; lab_run cand 2 seeded-structure fail ""
 out=$(decide); rc=$?
 [ "$rc" -eq 1 ] && grep -q 'REJECT lab seeded-structure: 1 of 3' <<<"$out" && ok "a failed lab run rejects" || bad "a lab fail should reject (got $rc: $out)"
@@ -159,6 +165,22 @@ out=$(decide); rc=$?
 for i in 1 2 3; do for arm in base cand; do lab_run "$arm" "$i" seeded-structure pass "" "landed hone/x feat src" claude-below-1; done; done
 out=$(decide); rc=$?
 [ "$rc" -eq 0 ] && ok "both arms on a listed model below the floor are accepted" || bad "a listed model on both arms should accept (got $rc: $out)"
+
+echo "== a run directory with no result says so =="
+mkdir -p "$W/empty-run/seeded-prose"
+out=$(candidate decide --base "$(dirs base)" --cand "$W/empty-run"); rc=$?
+[ "$rc" -eq 2 ] && grep -q "no result.json below $W/empty-run" <<<"$out" && ok "an empty run directory exits 2 and names itself" || bad "an empty run directory should exit 2 with a message (got $rc: $out)"
+echo "not json" > "$W/broken.jsonl"
+out=$(candidate decide --unit-cand "$W/broken.jsonl"); rc=$?
+[ "$rc" -eq 2 ] && grep -q "cannot read $W/broken.jsonl" <<<"$out" && ok "a malformed --json file exits 2 and names itself" || bad "a malformed file should exit 2 with a message (got $rc: $out)"
+rm -rf "$W/empty-run" "$W/broken.jsonl"
+
+echo "== the size counts what git would commit =="
+echo "scratch scratch scratch scratch scratch scratch scratch scratch" > "$R/agents/scratch.md"
+echo "agents/scratch.md" > "$R/.git/info/exclude"
+out=$(candidate plan)
+grep -q 'prose 11 words at HEAD and 8 in the tree' <<<"$out" && ok "an ignored file in a shipped directory does not read as growth" || bad "an ignored file should not count: $out"
+rm -f "$R/agents/scratch.md"; : > "$R/.git/info/exclude"
 
 echo "== an owed suite with no result is undecided =="
 lab_arms "yes yes yes" "yes yes yes"

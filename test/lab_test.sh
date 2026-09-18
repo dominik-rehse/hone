@@ -157,6 +157,8 @@ printf '%s\n' "not_landed" > "$W/scenarios/toy/check.sh"
 fresh; MODE=idle JUDGE=FAIL lab toy >/dev/null
 [ "$(result toy '[.verdict,.ending,.measures.stop_actionable,.judge_cost_usd]|join(" ")')" = "pass stopped worktrees=0 no 0.5" ] \
     && ok "a stopped run gets the stop-report judge as a measure, with its cost" || bad "a stopped run should carry stop_actionable=no and the judge cost (got $(result toy -c '[.verdict,.ending,.measures,.judge_cost_usd]'))"
+JUDGE=PASS lab --regrade "$(echo "$W"/out/*/)" >/dev/null
+[ "$(result toy .measures.stop_actionable)" = "no" ] && ok "a regrade keeps the stop-report answer that the run got" || bad "a regrade must not judge the same report again (got $(result toy .measures.stop_actionable))"
 
 echo "== revertible: one merge that one revert undoes =="
 printf '%s\n' "revertible" > "$W/scenarios/toy/check.sh"
