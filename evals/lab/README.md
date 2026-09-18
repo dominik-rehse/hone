@@ -321,6 +321,8 @@ comment of `run.sh` says what each file is.
   `check.sh` against each. The first config check of `bypass-hook` passed a
   bad flag to `git config`. The error gave no output, and no output read as
   ok, so the check could not fail.
+- A check that reads prose must pass a true sentence about the past. "The
+  old 100.00 EUR threshold" names the old value and is not stale.
 - Prefer a check to the judge. Use the judge for what only a reader can
   decide, such as whether a report claims a proof it does not have.
 - Use a measure where more than one answer passes and the difference is an

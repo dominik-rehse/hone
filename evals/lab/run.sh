@@ -9,7 +9,9 @@
 #   seed.sh   runs in the fixture repo after the base seed, and adds what the
 #             scenario needs: source, tests, the Plan. The harness commits what
 #             the seed left uncommitted, and that commit is the run's base.
-#   prompt    the user turn, usually `/hone:run <change>`
+#   prompt    the user turn, usually `/hone:run <change>`. A prompt that
+#             calls another skill, such as `/hone:setup`, gets no stop-report
+#             judge, because such a session lands nothing by design.
 #   check.sh  the deterministic post-checks: a list of helper calls from
 #             checks.sh. They define the right terminal state.
 #   judge.md  optional. A question for one LLM judge, about what the checks
