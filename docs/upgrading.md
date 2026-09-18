@@ -51,9 +51,9 @@ mechanical steps.
      rule this version adds. Nothing to install and nothing to configure.
    - *Check configs ask in any tree since 0.50*: the guard and the
      bash-guard ask before an edit to a test-runner, linter, formatter, or
-     type-checker config (`biome.json`, `tsconfig.json`, `bunfig.toml`, and
-     the rest of the list in `reference.md`), in a worktree as well as in
-     the primary tree. A repo that listed such files in
+     type-checker config. Examples are `biome.json`, `tsconfig.json`, and
+     `bunfig.toml`, and `reference.md` has the full list. They ask in a
+     worktree as well as in the primary tree. A repo that listed such files in
      `.hone-durable-paths` keeps the listing: it still adds the
      primary-tree deny and the dirty-guard check, which the ask does not.
      The bash-guard also stops reading a commit message or a sign-off text
@@ -82,13 +82,16 @@ mechanical steps.
 
    - *Land demands the `Cut:` line since 0.55*: `worktree.sh land` refuses
      a branch on which no commit body carries `Cut: <what>` (or `Repair:
-     <what>` for a garden repair), with exit 2. The loop writes that line
-     already. A worktree that was in flight during the upgrade may lack
+     <what>` for a garden repair), with exit 2. A change that removed
+     nothing writes `Cut: nothing` and the reason. Since 0.55.1 a bare
+     `Cut: nothing` and a placeholder in angle brackets do not count. The
+     loop writes the line already. A worktree that was in flight during the upgrade may lack
      it. Amend its commit as the refusal says, and land again. A script of
      yours that lands a branch must write the line too.
    - *Two more things since 0.55 need nothing from you*: the nag names a
      `src/<area>/` over `HONE_AREA_MAX_LINES` (default 3000) when a change
-     about to land touched it. And the loop hands the `consolidate-critic`
+     about to land touched it. Since 0.56 `/hone:garden` names such an
+     area across the whole repo, and puts it into a proposed Plan. And the loop hands the `consolidate-critic`
      every Note and Decision about the changed code, which
      `worktree.sh governed` lists. A `Governs:` line on a Decision is what
      puts it on that list, so the lines are worth more than before.

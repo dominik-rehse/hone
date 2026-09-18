@@ -186,6 +186,9 @@ gate's pre-land full run waits (default 30). `HONE_LAND_RETRIES` sets how
 many times a shared-mode land redoes merge and suite after the remote
 rejected its push (default 3).
 
+One more variable tunes a hook. `HONE_AREA_MAX_LINES` sets the size above
+which the nag names a `src/<area>/` (default 3000, see *Hooks* below).
+
 ## Hooks
 
 `.hone-off` disables all of them at once. A project with no
@@ -205,10 +208,11 @@ irreversible. When you want that record, route the edit through the loop.
   themselves stay writable). In the primary tree, no edits to the protected
   paths at all, including the two policy files. That work belongs in a
   worktree, landed by a merge. In any tree, it asks before an edit to a
-  check config: the dedicated config file of a test runner (`bunfig.toml`,
-  `vitest.config.*`, `jest.config.*`, `pytest.ini`), a linter or formatter
-  (eslint, prettier, biome, dprint, ruff, shellcheck), or a type-checker
-  (`tsconfig*.json`, mypy, pyright). The gate's runs are only as strict as
+  check config. That is the dedicated config file of one of three tools.
+  The first is a test runner (`bunfig.toml`, `vitest.config.*`,
+  `jest.config.*`, `pytest.ini`). The second is a linter or formatter
+  (eslint, prettier, biome, dprint, ruff, shellcheck). The third is a
+  type-checker (`tsconfig*.json`, mypy, pyright). The gate's runs are only as strict as
   their config, so an edit there is the cheapest route from red to green.
   A manifest that also carries tool settings (`package.json`,
   `pyproject.toml`) is not in the set. `HONE_CHECK_CONFIG_RE` in
@@ -216,8 +220,9 @@ irreversible. When you want that record, route the edit through the loop.
 - *bash-guard* (PreToolUse on Bash) provides tamper resistance. It denies
   commands that would disable the gate (`--no-verify`, `core.hooksPath` in
   any case, creating `.hone-off`) or hand-write a grant or proof sign-off past the
-  `worktree.sh` helpers. It asks before commands that modify a protected artifact (an
-  adapter, a hook, settings, a policy file, a check config) or move HEAD in the primary tree.
+  `worktree.sh` helpers. It asks before a command that modifies a protected
+  artifact: an adapter, a hook, settings, a policy file, or a check config.
+  It also asks before a command that moves HEAD in the primary tree.
   It reads the command with its prose removed: the value of a git `-m` or
   `--message` option, and the text after `worktree.sh grant` or `attest`.
   So a commit message that names `--no-verify` or `bun add` is not the act,
@@ -273,16 +278,17 @@ irreversible. When you want that record, route the edit through the loop.
 
 ## Land gates
 
-`worktree.sh land` refuses two kinds of change until a grant or a proof
-exists. Both checks run before the merge, so a refused change never touches
-the primary tree, and the worktree stays for inspection.
+`worktree.sh land` runs three checks before the merge. The first reads the
+shape of the change. The other two refuse a kind of change until a grant
+or a proof exists. A refused change never touches the primary tree, and
+the worktree stays for inspection.
 
-Before those two, land checks the shape of the change. Some commit on the
-branch must carry a body line `Cut: <what the change removed>`, or
-`Cut: nothing` with the reason. A garden repair carries `Repair: <what>`
-instead. A line that is a placeholder in angle brackets, or a bare
-`Cut: nothing` with no reason, records nothing and does not count. A branch with no such line is exit 2, and the fix is to amend the
-commit in the worktree. This check comes first because an amended commit
+For the shape check, some commit on the branch must carry a body line
+`Cut: <what the change removed>`, or `Cut: nothing` with the reason. A
+garden repair carries `Repair: <what>` instead. A line that is a
+placeholder in angle brackets, or a bare `Cut: nothing` with no reason,
+records nothing and does not count. A branch with no such line is exit 2,
+and the fix is to amend the commit in the worktree. This check comes first because an amended commit
 moves the tip, and a proof sign-off names the tip.
 
 - *Authority gate (exit 8)* fires when the diff is irreversible (see
@@ -460,8 +466,9 @@ loop call them, so hone itself stays language-agnostic.
   `setup.sh` installs it.
 - `typecheck.sh` and `lint.sh` are optional, one line each. The gate and
   land's post-merge check run them when they exist. They are also where a
-  project enforces code quality with a tool of its choice: no copied code,
-  no dead code, small functions, boundaries between areas, strict types.
+  project enforces code quality with a tool of its choice. The goals are no
+  copied code, no dead code, small functions, boundaries between areas, and
+  strict types.
   [`templates/quality/README.md`](../templates/quality/README.md) maps each
   goal to the kinds of tool that check it.
 - `setup-tree.sh` is optional, one line for most ecosystems (`bun install`,
@@ -510,6 +517,7 @@ hone/
 ├── scripts/{worktree,setup}.sh
 ├── agents/                      # plan-critic, consolidate-critic
 ├── templates/{run-tests,proof}/ # adapter contracts and templates
+├── templates/quality/           # which existing analyzer fits which goal
 ├── templates/spike-note.md      # the shape of a frozen spike note
 ├── templates/settings/          # the canonical deny-rules list
 └── evals/                       # known-good answers for the critics and the loop

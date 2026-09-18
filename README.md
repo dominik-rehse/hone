@@ -29,13 +29,23 @@ Three hooks apply the rules mechanically:
   keeps the primary tree a merge target, edited only by landing merges.
 - The *gate* requires tests, type-check, and lint to be green before a
   turn may end.
-- The *nag* reports hygiene findings visibly, and never blocks.
+- The *nag* reports hygiene findings visibly, and never blocks. One
+  finding is an area of `src/` that has grown too large.
 
 Two critic agents check the plan and the consolidated result. Their
-prompts tell them to find fault rather than approve. Code review reuses
-Claude Code's built-in `/code-review`. Two land gates stop an
-irreversible or real-environment change until a person or the run signs
-it off in writing (see *Use* below).
+prompts tell them to find fault rather than approve. The second critic
+reads every Decision and Note about the changed code, and a script makes
+that list. Code review reuses Claude Code's built-in `/code-review`.
+
+The merge step refuses a change whose commits do not say what the change
+deleted, in a `Cut:` line. Two land gates then stop an irreversible or
+real-environment change until a person or the run signs it off in writing
+(see *Use* below).
+
+hone ships no code analyzer. A project enforces code quality through its
+own `scripts/lint.sh` and `scripts/typecheck.sh`, and the gate runs both.
+[`templates/quality/README.md`](templates/quality/README.md) says which
+kind of existing tool fits which goal.
 
 ## Documentation
 
