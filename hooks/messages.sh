@@ -236,6 +236,15 @@ Why: a Note is a map plus one invariant.
 EOF
 }
 
+msg_nag_area_oversized() {
+    local area="$1" lines="$2" cap="$3"
+    cat <<EOF
+$area holds $lines lines, over the $cap-line cap, and this change touched it.
+Do: land this change, then write a Plan that splits the area along a seam its Note can name.
+Why: an agent must hold one area in context.
+EOF
+}
+
 msg_nag_spike_undated() {
     local note="$1"
     cat <<EOF
@@ -452,7 +461,7 @@ hone_msg_attest_placeholders() {
 }
 
 msg_wt_usage() {
-    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|land <change>|landed <change>|sync|release <change>|remove <worktree-path>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
+    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|governed <change>|land <change>|landed <change>|sync|release <change>|remove <worktree-path>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
 }
 
 msg_wt_grant_usage() {
@@ -578,6 +587,15 @@ Do: run review-scope from the change's own run, after its branch carries commits
 Why: the scope reads the branch diff.
 EOF
 }
+msg_wt_governed_no_branch() {
+    local branch="$1"
+    cat <<EOF
+hone worktree: branch $branch does not exist, so no change is there to read.
+Do: run governed from the change's own run, after 'worktree.sh add <change>'.
+Why: the answer reads what the change touched.
+EOF
+}
+
 msg_wt_land_no_branch() {
     local branch="$1"
     cat <<EOF
@@ -592,6 +610,15 @@ msg_wt_land_detached() {
 hone worktree: the primary tree is in detached HEAD.
 Do: check the trunk out in the primary tree, then retry.
 Why: land merges the change into the trunk.
+EOF
+}
+
+msg_wt_land_no_cut_line() {
+    local branch="$1" wt="$2"
+    cat <<EOF
+hone worktree: no commit on $branch carries a 'Cut:' line.
+Do: amend the commit in $wt. Add a body line 'Cut: <what the change removed>', or 'Cut: nothing' with the reason. A garden repair says 'Repair: <what>' instead. Then land again.
+Why: every change removes something, and this line records it.
 EOF
 }
 
@@ -1138,6 +1165,7 @@ nag|plain|msg_nag_header
 nag|human|msg_nag_plan_survived|.plans/<change>.md|<evidence>
 nag|human|msg_nag_plans_pending|<count>
 nag|human|msg_nag_note_oversized|docs/notes/<area>.md|<count>|<cap>
+nag|human|msg_nag_area_oversized|src/<area>/|<count>|<cap>
 nag|human|msg_nag_note_orphan|docs/notes/<area>.md|<area>
 nag|human|msg_nag_spike_undated|docs/spikes/<entry>
 nag|human|msg_nag_governs_broken|docs/decisions/<topic>.md|<path>
@@ -1178,8 +1206,10 @@ worktree|human|msg_wt_no_flock|<land or full suite>
 worktree|human|msg_wt_lock_unopenable|<git-common-dir>/hone-land.lock
 worktree|human|msg_wt_lock_timeout|<seconds>
 worktree|human|msg_wt_review_scope_no_branch|hone/<change>
+worktree|human|msg_wt_governed_no_branch|hone/<change>
 worktree|human|msg_wt_land_no_branch|hone/<change>
 worktree|human|msg_wt_land_detached
+worktree|human|msg_wt_land_no_cut_line|hone/<change>|<main-root>/.worktrees/<change>
 worktree|human|msg_wt_land_authority_missing|hone/<change>|- <signal>|<diffstat>|git -C <main-root> diff <base>...hone/<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "who/why"
 worktree|human|msg_wt_land_grant_empty|<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "who/why"
 worktree|human|msg_wt_land_proof_adapter_failed|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>

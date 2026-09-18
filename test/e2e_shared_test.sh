@@ -61,7 +61,7 @@ const {$2} = require("./$2.js");
 if ($2(2,3) !== 5) throw new Error("$2 broken");
 EOF
     printf 'exports.%s = (a, b) => a + b;\n' "$2" > "$1/src/mathx/$2.js"
-    (cd "$1" && git add -A && git commit -qm "feat(mathx): $2()") || die "commit $2"
+    (cd "$1" && git add -A && git commit -qm "feat(mathx): $2()" -m "Cut: nothing, a test change") || die "commit $2"
 }
 # Capture the log, then grep the string. A `git log | grep -q` under pipefail
 # reads as failed whenever grep quits before git finishes writing (SIGPIPE),
@@ -165,7 +165,7 @@ git -C "$B" merge-base --is-ancestor "$(origin_main)" HEAD || die "B's main not 
 log_has "$B" -n 3 main "Merge branch 'hone/w'" || die "A's merge missing from B's main"
 step "Plan commit rebased and pushed, worktree cut from the team's main"
 write_change "$WTB" z
-(cd "$WTB" && git rm -q .plans/z.md && git commit -qm "chore: consolidate z") || die "consolidate z"
+(cd "$WTB" && git rm -q .plans/z.md && git commit -qm "chore: consolidate z" -m "Cut: nothing, a test change") || die "consolidate z"
 (cd "$B" && bash "$WSH" land z >/dev/null 2>&1) || die "B: land z"
 git -C "$ORIGIN" cat-file -e main:.plans/z.md 2>/dev/null && die "Plan z survived its land"
 out=$(cd "$A" && bash "$WSH" landed z) && [ "$out" = landed ] && step "A: landed z" || die "A: landed z -> $out"

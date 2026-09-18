@@ -282,7 +282,10 @@ build.
 
 Then submit the change to the `consolidate-critic` agent (Task tool,
 `subagent_type: consolidate-critic`) with a constructed brief: the diff, the
-Plan (still in hand), and the Decisions/Notes touched. It is prompted to argue
+Plan (still in hand), the Decisions/Notes touched, and every document that
+`bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" governed <change>` prints.
+Those are the documents about the code you changed. A change can make a
+sentence false in a document it never opened. It is prompted to argue
 for deletion. Its targets are a Decision restating code, a Note drifting into a
 spec, a redundant test, an abstraction not earning its keep. Apply its accepted
 findings (more pruning), or record why not.
@@ -380,7 +383,7 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    **`Cut:` line** naming what consolidate removed (pruned tests, dead code,
    deleted doc lines, a spent reference). Where there genuinely was nothing, it
    reads `Cut: nothing` with the reason. The nag flags a zero-deletion change,
-   and this line is its answer. If the Plan declared a `Proof: real-environment`
+   and this line is its answer. Land refuses a branch with no such line. If the Plan declared a `Proof: real-environment`
    line, copy **that whole line verbatim** into the body, description and
    all. That trailer is how land's proof gate knows the test suite alone
    cannot prove this change. The text after the dash names the check the

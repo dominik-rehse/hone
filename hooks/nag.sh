@@ -61,6 +61,14 @@
 #      human's own, and the nag does not check them. The file belongs to the
 #      human, so hone names it and never touches it.
 #
+#  11. Oversized area: on a clean hone/<change> branch, a src/<area>/ that the
+#      change touched and whose tracked files hold more lines than the cap
+#      (HONE_AREA_MAX_LINES, default 3000). hone's structure goal is an area
+#      small enough for an agent to hold in context, and a line count is the
+#      exact, tool-free proxy for that. The check is scoped to the areas of
+#      the change at hand. A repo-wide check would name every old large area
+#      on every turn, which is the alarm fatigue check 1 describes.
+#
 # The nag is ADVISORY: it reports its findings and exits 0, never blocking the
 # stop (the gate is the blocking hook). Findings go out as a {"systemMessage":
 # ...} on stdout, the one non-blocking channel a Stop hook has that the harness
@@ -83,6 +91,10 @@ cd "$PROJECT_ROOT" || exit 0
 # Note size cap: lines. "Half a screen". A Note past this has drifted toward a
 # spec and needs a cut or a split.
 NOTE_MAX_LINES=40
+
+# Area size cap: lines of every tracked file under one src/<area>/, tests
+# included, because an agent that works in an area reads its tests too.
+AREA_MAX_LINES="${HONE_AREA_MAX_LINES:-3000}"
 
 findings=""
 # One finding is a three-line template (what happened, Do, Why). Render it as a
@@ -162,22 +174,15 @@ fi
 
 # 6. Broken Governs link. A Decision or Note may declare a `Governs:` line
 # naming the src/ paths it explains. A dangling path proves the prose drifted
-# from the code. Path-shaped tokens only (exact existence check). The parse
-# strips backticks and trailing commas and periods, so
-# `Governs: `src/auth/token.ts`, ...` parses.
+# from the code. Path-shaped tokens only (exact existence check).
+# hone_governs_paths in common.sh is the parse.
 if [ -d "docs/decisions" ] || [ -d "docs/notes" ]; then
     while IFS= read -r doc; do
         [ -e "$doc" ] || continue
-        gov=$(grep -im1 '^[[:space:]]*[Gg]overns:' "$doc" 2>/dev/null | sed 's/.*[Gg]overns:[[:space:]]*//')
-        [ -n "$gov" ] || continue
-        gov=${gov//\`/}          # drop backticks
-        gov=${gov//,/ }          # commas → separators
-        for tok in $gov; do
-            tok=${tok%.}         # strip a trailing period
-            case "$tok" in
-                */*) [ -e "$tok" ] || add_finding "$(msg_nag_governs_broken "$doc" "$tok")" ;;
-            esac
-        done
+        while IFS= read -r tok; do
+            [ -n "$tok" ] || continue
+            [ -e "$tok" ] || add_finding "$(msg_nag_governs_broken "$doc" "$tok")"
+        done < <(hone_governs_paths "$doc")
     done < <(find docs/decisions docs/notes -type f -name '*.md' 2>/dev/null)
 fi
 
@@ -242,6 +247,14 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
                     if [ "${ins:-0}" -gt 0 ] && [ "${dels:-0}" -eq 0 ]; then
                         add_finding "$(msg_nag_no_deletions "$ins" "${primary_branch:-the merge base}")"
                     fi
+                    # 11. Oversized area, for the areas this change touched.
+                    while IFS= read -r area; do
+                        [ -n "$area" ] && [ -d "src/$area" ] || continue
+                        lines=$(git ls-files -z -- "src/$area" 2>/dev/null | xargs -0 -r cat 2>/dev/null | wc -l | tr -d '[:space:]')
+                        if [ "${lines:-0}" -gt "$AREA_MAX_LINES" ]; then
+                            add_finding "$(msg_nag_area_oversized "src/$area/" "$lines" "$AREA_MAX_LINES")"
+                        fi
+                    done < <(git diff --name-only "$base" HEAD 2>/dev/null | sed -n 's|^src/\([^/]*\)/.*|\1|p' | sort -u)
                 fi
             fi
             ;;

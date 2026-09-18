@@ -69,7 +69,7 @@ out=$(cd "$WT" && echo '{}' | bash "$GATE")
 echo "$out" | grep -q '"decision":"block"' && die "gate should pass on green suite" || step "gate green"
 
 echo "== 4. commit in the worktree =="
-(cd "$WT" && git add -A && git commit -qm "feat(mathx): add()") || die "commit"
+(cd "$WT" && git add -A && git commit -qm "feat(mathx): add()" -m "Cut: nothing, a test change") || die "commit"
 step "committed on branch hone/mathx-add"
 
 echo "== 5. land: merge + re-verify + remove, under the lock =="
@@ -88,6 +88,34 @@ echo "$out" | grep -q "removed the worktree" || die "the receipt should report t
 echo "$out" | grep -q "changed a lockfile" && die "a change with no lockfile should draw no reinstall notice"
 step "the receipt names the merge commit, the green suite, and the cleanup"
 
+echo "== 5-cut. shape gate: a change says what it removed =="
+# The run skill asks for a `Cut:` line in the commit body. Words alone do not
+# hold a run to it, so land refuses a branch with no such line, before every
+# other gate and before the merge.
+WT_C=$(bash "$WSH" add no-cut-line) || die "worktree add no-cut-line"
+printf '// a note\n' > "$WT_C/src/mathx/cutline.js"
+(cd "$WT_C" && git add -A && git commit -qm "chore(mathx): a change that names no cut") || die "commit no-cut-line"
+PRE=$(git rev-parse HEAD)
+out=$(bash "$WSH" land no-cut-line 2>&1); rc=$?
+[ "$rc" -eq 2 ] || die "a change with no Cut: line should exit 2 (got $rc: $out)"
+echo "$out" | grep -q "carries a 'Cut:' line" || die "the refusal should name the missing line"
+echo "$out" | grep -qF "$WT_C" || die "the refusal should name the worktree to amend in"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a refused land must not move the trunk"
+[ -d "$WT_C" ] || die "a refused land must keep the worktree"
+step "a change with no Cut: line is refused before the merge (exit 2)"
+(cd "$WT_C" && git commit -q --amend -m "chore(mathx): a change that names no cut" -m "Cut:   ") || die "amend"
+bash "$WSH" land no-cut-line >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 2 ] || die "an empty Cut: line should still exit 2 (got $rc)"
+step "an empty Cut: line does not open the gate"
+(cd "$WT_C" && git commit -q --amend -m "chore(mathx): a change that names no cut" -m "Cut: nothing, the change adds one comment file") || die "amend"
+bash "$WSH" land no-cut-line >/dev/null 2>&1 || die "a change with a Cut: line should land"
+step "the amended change lands"
+WT_RP=$(bash "$WSH" add a-repair) || die "worktree add a-repair"
+printf '// repointed\n' > "$WT_RP/src/mathx/repair.js"
+(cd "$WT_RP" && git add -A && git commit -qm "docs: repoint a reference" -m "Repair: the Governs path of the mathx Note") || die "commit a-repair"
+bash "$WSH" land a-repair >/dev/null 2>&1 || die "a garden repair with a Repair: line should land"
+step "a Repair: line opens the gate too"
+
 echo "== 5a. land names a landed lockfile =="
 # A merged lockfile leaves the primary tree's install behind the manifest, and
 # nothing reinstalls it. Every ecosystem's lockfile counts, at any depth.
@@ -96,7 +124,7 @@ printf '{"lockfileVersion":1}\n' > "$WT_L/bun.lock"
 mkdir -p "$WT_L/packages/api"
 printf 'version = 1\n' > "$WT_L/packages/api/uv.lock"
 printf '// unrelated\n' > "$WT_L/src/mathx/dep.js"
-(cd "$WT_L" && git add -A && git commit -qm "chore(deps): bump the lockfiles")
+(cd "$WT_L" && git add -A && git commit -qm "chore(deps): bump the lockfiles" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" land lock-bump 2>/dev/null); rc=$?
 [ "$rc" -eq 0 ] || die "a lockfile change should land (got $rc)"
 echo "$out" | grep -q "changed a lockfile" || die "land should name the lockfile change"
@@ -133,7 +161,7 @@ node -e '
   if (mul(2,3) !== 6) { console.error("mul broken"); process.exit(1); }
 ' 2>/dev/null
 EOF
-(cd "$WT_R" && git add -A && git commit -qm "feat(mathx): mul() [breaks add]")
+(cd "$WT_R" && git add -A && git commit -qm "feat(mathx): mul() [breaks add]" -m "Cut: nothing, a test change")
 PRE=$(git rev-parse HEAD)
 bash "$WSH" land mathx-regress >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 6 ] || die "land should exit 6 on a post-merge regression (got $rc)"
@@ -155,7 +183,7 @@ EOF
 git add scripts/lint.sh && git commit -qm "chore: add a lint adapter"
 WT_LR=$(bash "$WSH" add lint-red) || die "worktree add lint-red"
 echo "// LINT-RED" > "$WT_LR/src/mathx/styled.js"
-(cd "$WT_LR" && git add -A && git commit -qm "feat(mathx): a change lint rejects")
+(cd "$WT_LR" && git add -A && git commit -qm "feat(mathx): a change lint rejects" -m "Cut: nothing, a test change")
 PRE=$(git rev-parse HEAD)
 out=$(bash "$WSH" land lint-red 2>&1); rc=$?
 [ "$rc" -eq 6 ] || die "land should exit 6 on post-merge lint red (got $rc)"
@@ -168,7 +196,7 @@ bash scripts/lint.sh >/dev/null 2>&1 || die "trunk left lint-red after a rolled-
 step "lint-red merge rolled back (exit 6), trunk lint-green, evidence kept"
 # Fixed in the same worktree, the change lands, so a green adapter never blocks.
 echo "// styled" > "$WT_LR/src/mathx/styled.js"
-(cd "$WT_LR" && git add -A && git commit -qm "fix(mathx): satisfy lint")
+(cd "$WT_LR" && git add -A && git commit -qm "fix(mathx): satisfy lint" -m "Cut: nothing, a test change")
 bash "$WSH" land lint-red >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a lint-green change should land (got $rc)"
 step "the fixed change lands under the same adapter"
@@ -177,7 +205,7 @@ printf '#!/bin/bash\nexit 1\n' > scripts/typecheck.sh
 git add scripts/typecheck.sh && git commit -qm "chore: add a failing typecheck adapter"
 WT_TC=$(bash "$WSH" add type-red) || die "worktree add type-red"
 echo "// typed" > "$WT_TC/src/mathx/typed.js"
-(cd "$WT_TC" && git add -A && git commit -qm "feat(mathx): a change under red typecheck")
+(cd "$WT_TC" && git add -A && git commit -qm "feat(mathx): a change under red typecheck" -m "Cut: nothing, a test change")
 PRE=$(git rev-parse HEAD)
 out=$(bash "$WSH" land type-red 2>&1); rc=$?
 [ "$rc" -eq 6 ] || die "land should exit 6 on post-merge typecheck red (got $rc)"
@@ -220,7 +248,7 @@ if command -v flock >/dev/null 2>&1; then
   # same lock: while another suite is live it blocks the stop instead of
   # running red under contention.
   WT_G=$(bash "$WSH" add gate-lock) || die "worktree add gate-lock"
-  ( cd "$WT_G" && git commit -q --allow-empty -m "wip: pre-land" ) || die "commit in gate-lock"
+  ( cd "$WT_G" && git commit -q --allow-empty -m "wip: pre-land" -m "Cut: nothing, a test change" ) || die "commit in gate-lock"
   ( flock 8; sleep 3; ) 8>"$LOCK" &
   HOLDER=$!
   sleep 0.3
@@ -241,7 +269,7 @@ echo "== 5e. authority gate: irreversible changes need a grant =="
 # (a) A reversible change lands freely. The gate only bites irreversible diffs.
 WT_OK=$(bash "$WSH" add rev-change) || die "worktree add rev-change"
 echo "// harmless" > "$WT_OK/src/mathx/notes.js"
-(cd "$WT_OK" && git add -A && git commit -qm "chore(mathx): a reversible note")
+(cd "$WT_OK" && git add -A && git commit -qm "chore(mathx): a reversible note" -m "Cut: nothing, a test change")
 bash "$WSH" land rev-change >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a reversible change should land freely (got $rc)"
 step "reversible change lands without a grant"
@@ -250,7 +278,7 @@ step "reversible change lands without a grant"
 WT_C=$(bash "$WSH" add db-drop) || die "worktree add db-drop"
 mkdir -p "$WT_C/db/migrations"
 echo "DROP TABLE legacy_sessions;" > "$WT_C/db/migrations/0002_drop.sql"
-(cd "$WT_C" && git add -A && git commit -qm "feat(db): drop legacy_sessions")
+(cd "$WT_C" && git add -A && git commit -qm "feat(db): drop legacy_sessions" -m "Cut: nothing, a test change")
 PRE=$(git rev-parse HEAD)
 bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 8 ] || die "irreversible land without a grant should exit 8 (got $rc)"
@@ -267,7 +295,7 @@ WT_BIG=$(bash "$WSH" add db-big-drop) || die "worktree add db-big-drop"
 mkdir -p "$WT_BIG/db/migrations"
 { echo "DROP TABLE early_match;"; seq 1 60000 | sed 's/^/INSERT INTO filler VALUES (/;s/$/);/'; } \
     > "$WT_BIG/db/migrations/0003_big.sql"
-(cd "$WT_BIG" && git add -A && git commit -qm "feat(db): a large migration with an early drop")
+(cd "$WT_BIG" && git add -A && git commit -qm "feat(db): a large migration with an early drop" -m "Cut: nothing, a test change")
 bash "$WSH" land db-big-drop >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 8 ] || die "a large migration with destructive SQL should exit 8 (got $rc)"
 bash "$WSH" remove "$WT_BIG" >/dev/null 2>&1; git branch -D hone/db-big-drop >/dev/null 2>&1
@@ -305,7 +333,7 @@ step "the grant stamp separates the agent from the person"
 WT_N=$(bash "$WSH" add db/nested-drop) || die "worktree add db/nested-drop"
 mkdir -p "$WT_N/db/migrations"
 echo "DROP TABLE nested_junk;" > "$WT_N/db/migrations/0004_nested.sql"
-(cd "$WT_N" && git add -A && git commit -qm "feat(db): drop nested_junk")
+(cd "$WT_N" && git add -A && git commit -qm "feat(db): drop nested_junk" -m "Cut: nothing, a test change")
 bash "$WSH" grant db/nested-drop "nested_junk is unused" >/dev/null || die "grant helper failed for a nested slug"
 bash "$WSH" land db/nested-drop >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "granted nested-slug land should succeed (got $rc)"
@@ -319,7 +347,7 @@ echo "infra/**" > "$REPO/.hone-irreversible-paths"
 WT_C2=$(bash "$WSH" add infra-change) || die "worktree add infra-change"
 mkdir -p "$WT_C2/infra"
 echo "region = eu-central-1" > "$WT_C2/infra/prod.tf"
-(cd "$WT_C2" && git add -A && git commit -qm "feat(infra): touch prod config")
+(cd "$WT_C2" && git add -A && git commit -qm "feat(infra): touch prod config" -m "Cut: nothing, a test change")
 bash "$WSH" land infra-change >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 8 ] || die "a .hone-irreversible-paths match should exit 8 (got $rc)"
 mv "$REPO/.hone-irreversible-paths" "$REPO/.hone-consequential-paths"
@@ -334,7 +362,7 @@ echo "== 5f. proof gate: real-environment changes need proof or a sign-off =="
 # (a) An assertion-class change (no Proof: trailer) is never gated.
 WT_A2=$(bash "$WSH" add assert-change) || die "worktree add assert-change"
 echo "// assertion-class" > "$WT_A2/src/mathx/plain.js"
-(cd "$WT_A2" && git add -A && git commit -qm "chore(mathx): assertion-class change")
+(cd "$WT_A2" && git add -A && git commit -qm "chore(mathx): assertion-class change" -m "Cut: nothing, a test change")
 bash "$WSH" land assert-change >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "an assertion-class change should land (got $rc)"
 step "assertion-class change lands (no Proof: trailer, not gated)"
@@ -343,6 +371,7 @@ WT_P=$(bash "$WSH" add ui-flow) || die "worktree add ui-flow"
 echo "// browser flow" > "$WT_P/src/mathx/flow.js"
 (cd "$WT_P" && git add -A && git commit -qm "feat(mathx): checkout flow
 
+Cut: nothing, a test change
 Proof: real-environment")
 PRE=$(git rev-parse HEAD)
 out=$(bash "$WSH" land ui-flow 2>&1); rc=$?
@@ -368,6 +397,7 @@ for dash in "—" "-"; do
     echo "// described" > "$WT_D/src/mathx/described.js"
     (cd "$WT_D" && git add -A && git commit -qm "feat(mathx): described flow
 
+Cut: nothing, a test change
 Proof: real-environment $dash walk the checkout journey on staging")
     out=$(bash "$WSH" land "described-$n" 2>&1); rc=$?
     [ "$rc" -eq 7 ] || die "a described real-environment change should still exit 7 (got $rc)"
@@ -388,6 +418,7 @@ for trailer in "PROOF: REAL-ENVIRONMENT — walk the staging journey" \
     echo "// spelled" > "$WT_S/src/mathx/spelled.js"
     (cd "$WT_S" && git add -A && git commit -qm "feat(mathx): a spelled trailer
 
+Cut: nothing, a test change
 $trailer")
     out=$(bash "$WSH" land "spelling-$n" 2>&1); rc=$?
     [ "$rc" -eq 7 ] || die "the trailer '$trailer' should gate the land (got $rc)"
@@ -411,6 +442,7 @@ for target in scripts/proof.sh scripts/proof-probes/journey.sh; do
     printf '#!/bin/bash\n# rewritten by bootstrap-%s\nexit 0\n' "$n" > "$WT_BS/$target"
     (cd "$WT_BS" && git add -A && git commit -qm "feat(proof): rewrite $target
 
+Cut: nothing, a test change
 Proof: real-environment - run the new adapter by hand")
     out=$(bash "$WSH" land "bootstrap-$n" 2>&1); rc=$?
     [ "$rc" -eq 7 ] || die "a change rewriting $target should exit 7 (got $rc)"
@@ -426,6 +458,7 @@ mkdir -p "$WT_NP/scripts/proof-probes"
 printf '#!/bin/bash\nexit 0\n' > "$WT_NP/scripts/proof-probes/new-probe.sh"
 (cd "$WT_NP" && git add -A && git commit -qm "feat(proof): add this change's own probe
 
+Cut: nothing, a test change
 Proof: real-environment - run the probe by hand")
 out=$(bash "$WSH" land new-probe 2>&1); rc=$?
 [ "$rc" -eq 7 ] || die "the trailer should still gate the added-probe change (got $rc)"
@@ -447,7 +480,7 @@ step "sign-off naming no commit refused (exit 7)"
 # (d) A sign-off bound to an EARLIER commit stops counting once the branch moves.
 echo "$(git rev-parse hone/ui-flow) | journey ok" > "$REPO/.hone-proof/ui-flow"
 echo "// revised after the sign-off" >> "$WT_P/src/mathx/flow.js"
-(cd "$WT_P" && git add -A && git commit -qm "fixup(mathx): revise the flow")
+(cd "$WT_P" && git add -A && git commit -qm "fixup(mathx): revise the flow" -m "Cut: nothing, a test change")
 PRE=$(git rev-parse HEAD)
 bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 7 ] || die "a sign-off for an earlier commit should not discharge a newer tip (got $rc)"
@@ -524,6 +557,7 @@ WT_P2=$(bash "$WSH" add ui-flow2) || die "worktree add ui-flow2"
 echo "// second flow" > "$WT_P2/src/mathx/flow2.js"
 (cd "$WT_P2" && git add -A && git commit -qm "feat(mathx): second flow
 
+Cut: nothing, a test change
 Proof: real-environment")
 bash "$WSH" land ui-flow2 >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a green scripts/proof.sh should discharge the proof (got $rc)"
@@ -542,6 +576,7 @@ WT_P3=$(bash "$WSH" add ui-flow3) || die "worktree add ui-flow3"
 echo "// third flow" > "$WT_P3/src/mathx/flow3.js"
 (cd "$WT_P3" && git add -A && git commit -qm "feat(mathx): third flow
 
+Cut: nothing, a test change
 Proof: real-environment")
 PRE=$(git rev-parse HEAD)
 bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
@@ -569,6 +604,7 @@ WT_BG=$(bash "$WSH" add bootstrap-green) || die "worktree add bootstrap-green"
 printf '#!/bin/bash\n# the change rewrites the adapter\nexit 0\n' > "$WT_BG/scripts/proof.sh"
 (cd "$WT_BG" && git add -A && git commit -qm "feat(proof): rewrite the adapter
 
+Cut: nothing, a test change
 Proof: real-environment - run the new adapter by hand")
 PRE=$(git rev-parse HEAD)
 out=$(bash "$WSH" land bootstrap-green 2>&1); rc=$?
@@ -590,7 +626,7 @@ step "a bootstrap change runs no adapter (exit 7), and a sign-off lands it"
 # could weaken by itself. It now refuses exactly like the declared case.
 WT_BQ=$(bash "$WSH" add bootstrap-silent) || die "worktree add bootstrap-silent"
 printf '#!/bin/bash\n# weakened, and nothing declared\nexit 0\n' > "$WT_BQ/scripts/proof.sh"
-(cd "$WT_BQ" && git add -A && git commit -qm "chore(proof): rewrite the adapter, no trailer")
+(cd "$WT_BQ" && git add -A && git commit -qm "chore(proof): rewrite the adapter, no trailer" -m "Cut: nothing, a test change")
 PRE=$(git rev-parse HEAD)
 out=$(bash "$WSH" land bootstrap-silent 2>&1); rc=$?
 [ "$rc" -eq 7 ] || die "an undeclared adapter change should exit 7 (got $rc)"
@@ -612,7 +648,7 @@ step "an adapter change with no trailer is gated too (exit 7), and a sign-off la
 WT_BP=$(bash "$WSH" add probe-silent) || die "worktree add probe-silent"
 mkdir -p "$WT_BP/scripts/proof-probes"
 printf '#!/bin/bash\n# weakened, and nothing declared\nexit 0\n' > "$WT_BP/scripts/proof-probes/journey.sh"
-(cd "$WT_BP" && git add -A && git commit -qm "chore(proof): weaken a probe, no trailer")
+(cd "$WT_BP" && git add -A && git commit -qm "chore(proof): weaken a probe, no trailer" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" land probe-silent 2>&1); rc=$?
 [ "$rc" -eq 7 ] || die "an undeclared probe edit should exit 7 (got $rc)"
 echo "$out" | grep -q "land cannot use the copy it has" || die "the probe refusal should explain the bootstrap case"
@@ -622,7 +658,7 @@ step "an undeclared edit to an existing probe is gated too (exit 7)"
 # widened to the adapter's own files, and to nothing else.
 WT_BN=$(bash "$WSH" add adapter-untouched) || die "worktree add adapter-untouched"
 echo "// nowhere near the adapter" > "$WT_BN/src/mathx/untouched.js"
-(cd "$WT_BN" && git add -A && git commit -qm "feat(mathx): a change that leaves the adapter alone")
+(cd "$WT_BN" && git add -A && git commit -qm "feat(mathx): a change that leaves the adapter alone" -m "Cut: nothing, a test change")
 bash "$WSH" land adapter-untouched >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a change away from the adapter should still land ungated (got $rc)"
 rm -f "$REPO/proof-context"
@@ -642,7 +678,7 @@ git add scripts/proof.sh .hone-proof-always
 git commit -qm "chore: prove every change"
 WT_AL=$(bash "$WSH" add always-ok) || die "worktree add always-ok"
 echo "// no trailer" > "$WT_AL/src/mathx/always.js"
-(cd "$WT_AL" && git add -A && git commit -qm "chore(mathx): a change with no Proof trailer")
+(cd "$WT_AL" && git add -A && git commit -qm "chore(mathx): a change with no Proof trailer" -m "Cut: nothing, a test change")
 bash "$WSH" land always-ok >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a green adapter should land a proof-always change (got $rc)"
 grep -qx "change=always-ok" "$REPO/proof-context" || die "proof-always should run the adapter with the change named"
@@ -654,7 +690,7 @@ printf '#!/bin/bash\nexit 1\n' > "$REPO/scripts/proof.sh"
 git add scripts/proof.sh && git commit -qm "chore: make the proof adapter fail again"
 WT_AR=$(bash "$WSH" add always-red) || die "worktree add always-red"
 echo "// still no trailer" > "$WT_AR/src/mathx/always2.js"
-(cd "$WT_AR" && git add -A && git commit -qm "chore(mathx): another untrailered change")
+(cd "$WT_AR" && git add -A && git commit -qm "chore(mathx): another untrailered change" -m "Cut: nothing, a test change")
 PRE=$(git rev-parse HEAD)
 bash "$WSH" land always-red >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 7 ] || die "a red adapter should refuse a proof-always change (got $rc)"
@@ -669,7 +705,7 @@ step "proof-always refuses on red (exit 7), and a tip sign-off still discharges 
 git rm -q scripts/proof.sh && git commit -qm "chore: drop the proof adapter"
 WT_AN=$(bash "$WSH" add always-noadapter) || die "worktree add always-noadapter"
 echo "// third" > "$WT_AN/src/mathx/always3.js"
-(cd "$WT_AN" && git add -A && git commit -qm "chore(mathx): a third untrailered change")
+(cd "$WT_AN" && git add -A && git commit -qm "chore(mathx): a third untrailered change" -m "Cut: nothing, a test change")
 PRE=$(git rev-parse HEAD)
 out=$(bash "$WSH" land always-noadapter 2>&1); rc=$?
 [ "$rc" -eq 7 ] || die "the marker without an adapter should exit 7 (got $rc)"
@@ -724,7 +760,7 @@ EOF
 git add scripts/run-tests.sh && git commit -qm "chore: report tier summaries"
 WT_T=$(bash "$WSH" add tier-warn) || die "worktree add tier-warn"
 echo "// tiered" > "$WT_T/src/mathx/tiered.js"
-(cd "$WT_T" && git add -A && git commit -qm "chore(mathx): a change under a tiered adapter")
+(cd "$WT_T" && git add -A && git commit -qm "chore(mathx): a change under a tiered adapter" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" land tier-warn 2>&1); rc=$?
 [ "$rc" -eq 0 ] || die "the tier warning must not block a green land (got $rc)"
 echo "$out" | grep -q "ran no test at all" || die "land should warn about the empty tier"
@@ -737,7 +773,7 @@ git add scripts/run-tests.sh && git commit -qm "chore: back to a silent adapter"
 rm -f "$REPO/run-tests.orig"
 WT_TS=$(bash "$WSH" add tier-silent) || die "worktree add tier-silent"
 echo "// silent" > "$WT_TS/src/mathx/silent.js"
-(cd "$WT_TS" && git add -A && git commit -qm "chore(mathx): a change under a silent adapter")
+(cd "$WT_TS" && git add -A && git commit -qm "chore(mathx): a change under a silent adapter" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" land tier-silent 2>&1); rc=$?
 [ "$rc" -eq 0 ] || die "a silent adapter should land normally (got $rc)"
 echo "$out" | grep -q "ran no test at all" && die "a silent adapter should draw no tier warning"
@@ -750,7 +786,7 @@ echo "== 5i. review-scope: the diff decides how deep the review goes =="
 WT_RD=$(bash "$WSH" add doc-prune) || die "worktree add doc-prune"
 mkdir -p "$WT_RD/docs/notes"
 echo "# mathx" > "$WT_RD/docs/notes/mathx.md"
-(cd "$WT_RD" && git add -A && git commit -qm "docs(mathx): add an area note")
+(cd "$WT_RD" && git add -A && git commit -qm "docs(mathx): add an area note" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" review-scope doc-prune 2>&1); rc=$?
 [ "$rc" -eq 0 ] || die "review-scope should succeed on a live branch (got $rc)"
 [ "$out" = "docs-only" ] || die "a docs-only diff should classify as docs-only (got '$out')"
@@ -758,7 +794,7 @@ step "a diff confined to docs/ classifies as docs-only"
 
 # One source file alongside the prose is enough to demand the full review.
 echo "// mixed" > "$WT_RD/src/mathx/mixed.js"
-(cd "$WT_RD" && git add -A && git commit -qm "feat(mathx): a source file beside the note")
+(cd "$WT_RD" && git add -A && git commit -qm "feat(mathx): a source file beside the note" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" review-scope doc-prune 2>&1)
 [ "$out" = "full" ] || die "a mixed diff should classify as full (got '$out')"
 step "one source file beside the prose makes it full"
@@ -770,7 +806,7 @@ git add .hone-review-always && git commit -qm "chore: prose that is executed, no
 WT_RA=$(bash "$WSH" add prompt-edit) || die "worktree add prompt-edit"
 mkdir -p "$WT_RA/docs/prompts"
 echo "# critic" > "$WT_RA/docs/prompts/critic.md"
-(cd "$WT_RA" && git add -A && git commit -qm "docs(prompts): edit an executed prompt")
+(cd "$WT_RA" && git add -A && git commit -qm "docs(prompts): edit an executed prompt" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" review-scope prompt-edit 2>&1)
 [ "$out" = "full" ] || die ".hone-review-always should force full (got '$out')"
 step ".hone-review-always forces the full review inside docs/"
@@ -782,6 +818,39 @@ out=$(bash "$WSH" review-scope no-such-change 2>&1); rc=$?
 [ "$rc" -eq 2 ] || die "review-scope on a missing branch should exit 2 (got $rc)"
 echo "$out" | grep -q "no diff to classify" || die "the refusal should say why"
 step "review-scope on a missing branch exits 2"
+
+echo "== 5j. governed: the documents about the code a change touched =="
+# A change can make a sentence false in a document that it never opened. The
+# consolidate-critic reads only what the loop hands it, so a script picks the
+# documents: by their Governs: line, and for a Note by its name.
+mkdir -p docs/decisions docs/notes src/ship src/calm
+printf '# Rates\n\nGoverns: `src/ship/rates.js`\n\nWhy flat rates.\n' > docs/decisions/rates.md
+printf '# Areas\n\nGoverns: `src/ship/`, `src/calm/`.\n\nWhy two areas.\n' > docs/decisions/areas.md
+printf '# Other\n\nGoverns: `src/calm/x.js`\n\nWhy.\n' > docs/decisions/other.md
+printf '# ship\n\nMap and invariant.\n' > docs/notes/ship.md
+printf '# calm\n\nMap and invariant.\n' > docs/notes/calm.md
+printf '// rates\n' > src/ship/rates.js; printf '// x\n' > src/calm/x.js
+git add -A && git commit -qm "chore: two areas with their documents"
+WT_GV=$(bash "$WSH" add ship-rates) || die "worktree add ship-rates"
+printf '// rates, changed\n' > "$WT_GV/src/ship/rates.js"
+out=$(bash "$WSH" governed ship-rates 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "governed should succeed on a live change (got $rc: $out)"
+[ "$out" = "docs/decisions/areas.md
+docs/decisions/rates.md
+docs/notes/ship.md" ] || die "governed should print the file's Decision, the directory's Decision, and the area's Note, before any commit (got: $out)"
+step "an uncommitted change finds its documents by file, by directory, and by Note name"
+printf '// new\n' > "$WT_GV/src/calm/new.js"
+out=$(bash "$WSH" governed ship-rates 2>&1)
+echo "$out" | grep -qx "docs/notes/calm.md" || die "an untracked file should count as touched (got: $out)"
+echo "$out" | grep -qx "docs/decisions/other.md" && die "a Decision about another file of the area should stay out"
+step "an untracked file counts, and a Decision about an untouched file stays out"
+rm "$WT_GV/src/calm/new.js"
+(cd "$WT_GV" && git add -A && git commit -qm "feat(ship): change the rates" -m "Cut: nothing, a test change") || die "commit ship-rates"
+[ "$(bash "$WSH" governed ship-rates | wc -l)" -eq 3 ] || die "a committed change should give the same answer"
+bash "$WSH" land ship-rates >/dev/null 2>&1 || die "land ship-rates"
+out=$(bash "$WSH" governed no-such-change 2>&1); rc=$?
+[ "$rc" -eq 2 ] || die "governed on a missing branch should exit 2 (got $rc)"
+step "a committed change answers the same, and a missing branch exits 2"
 
 echo "== 6. status: the control surface at a glance =="
 out=$(bash "$WSH" status) || die "status failed"
@@ -823,8 +892,8 @@ step "status reports hooks, adapters, plans, worktrees, deny rules"
 echo "== 6b. a conflicting land exits 9, tree restored =="
 WT_CA=$(bash "$WSH" add conflict-a) || die "worktree add conflict-a"
 WT_CB=$(bash "$WSH" add conflict-b) || die "worktree add conflict-b"
-echo "version A" > "$WT_CA/README.md"; (cd "$WT_CA" && git add -A && git commit -qm "feat: a")
-echo "version B" > "$WT_CB/README.md"; (cd "$WT_CB" && git add -A && git commit -qm "feat: b")
+echo "version A" > "$WT_CA/README.md"; (cd "$WT_CA" && git add -A && git commit -qm "feat: a" -m "Cut: nothing, a test change")
+echo "version B" > "$WT_CB/README.md"; (cd "$WT_CB" && git add -A && git commit -qm "feat: b" -m "Cut: nothing, a test change")
 bash "$WSH" land conflict-a >/dev/null 2>&1 || die "first land should succeed"
 bash "$WSH" land conflict-b >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 9 ] || die "a conflicting land should exit 9 (got $rc)"
@@ -878,7 +947,7 @@ echo "== 7. add from inside a sibling worktree: anchors to the main tree =="
 # `add B` must land at <main_root>/.worktrees/B (not nested under A) and branch
 # off the primary HEAD (not A's unlanded commit).
 WT_A=$(bash "$WSH" add sib-a) || die "worktree add sib-a"
-( cd "$WT_A" && git commit -q --allow-empty -m "wip: A only, unlanded" ) || die "commit in A"
+( cd "$WT_A" && git commit -q --allow-empty -m "wip: A only, unlanded" -m "Cut: nothing, a test change" ) || die "commit in A"
 WT_B=$(cd "$WT_A" && bash "$WSH" add sib-b) || die "worktree add sib-b from inside A"
 [ "$WT_B" = "$REPO/.worktrees/sib-b" ] || die "sib-b nested/misplaced: $WT_B"
 step "sib-b at main tree, not nested under A"
@@ -929,7 +998,7 @@ EOF
 git add scripts/setup-tree.sh && git commit -qm "chore: fix the setup-tree adapter"
 WT_SL=$(bash "$WSH" add st-lock) || die "worktree add st-lock"
 printf '{"lockfileVersion":2}\n' > "$WT_SL/bun.lock"
-(cd "$WT_SL" && git add -A && git commit -qm "chore(deps): bump the lockfile")
+(cd "$WT_SL" && git add -A && git commit -qm "chore(deps): bump the lockfile" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" land st-lock 2>/dev/null); rc=$?
 [ "$rc" -eq 0 ] || die "a lockfile change with setup-tree should land (got $rc)"
 echo "$out" | grep -q "setup-tree reinstalled" || die "the receipt should report the setup-tree run"
@@ -942,7 +1011,7 @@ step "land ran setup-tree in the primary tree and said so"
 # 8d. a change with no lockfile in its diff triggers no setup-tree run.
 WT_SN=$(bash "$WSH" add st-nolock) || die "worktree add st-nolock"
 printf '// note\n' > "$WT_SN/src/mathx/note.js"
-(cd "$WT_SN" && git add -A && git commit -qm "chore: non-dependency change")
+(cd "$WT_SN" && git add -A && git commit -qm "chore: non-dependency change" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" land st-nolock 2>/dev/null); rc=$?
 [ "$rc" -eq 0 ] || die "st-nolock should land (got $rc)"
 echo "$out" | grep -q "setup-tree" && die "no lockfile change: land should not report setup-tree"
@@ -961,7 +1030,7 @@ git add scripts/setup-tree.sh && git commit -qm "chore: break the setup-tree ada
 pre_land=$(git rev-parse HEAD)
 WT_SR=$(bash "$WSH" add st-red) || die "worktree add st-red"
 printf '{"lockfileVersion":3}\n' > "$WT_SR/bun.lock"
-(cd "$WT_SR" && git add -A && git commit -qm "chore(deps): bump the lockfile")
+(cd "$WT_SR" && git add -A && git commit -qm "chore(deps): bump the lockfile" -m "Cut: nothing, a test change")
 err=$(bash "$WSH" land st-red 2>&1 >/dev/null); rc=$?
 [ "$rc" -eq 6 ] || die "a red setup-tree at land should exit 6 (got $rc)"
 echo "$err" | grep -q "setup-tree failed in the primary tree" || die "the message should name setup-tree"

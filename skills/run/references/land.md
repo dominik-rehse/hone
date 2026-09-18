@@ -50,8 +50,9 @@ re-run land. Never push the primary branch by hand.
 
 ## 2: usage or repo-state error
 
-The branch does not exist, the primary tree is on a detached HEAD, or the
-invocation was malformed. Nothing was merged. Read the stderr line. Fix the
+The branch does not exist, the primary tree is on a detached HEAD, no
+commit on the branch carries a `Cut:` line, or the invocation was
+malformed. Nothing was merged. Read the stderr line. Fix the
 state (from the primary tree) rather than retrying blindly.
 
 ## 7: the proof gate

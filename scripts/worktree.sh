@@ -31,6 +31,10 @@
 #       conflict and rolls back a post-merge regression), with the
 #       worktree/branch kept as evidence. Run from the primary tree, after
 #       committing in the worktree.
+#       Shape gate: some commit on the branch must carry a `Cut: <what>` line
+#       in its body, or `Repair: <what>` for a garden repair. Without one land
+#       refuses BEFORE every other gate (exit 2), because the fix amends a
+#       commit, and that moves the tip a proof sign-off names.
 #       Authority gate: an IRREVERSIBLE change (destructive SQL, a db/ deletion,
 #       or a .hone-irreversible-paths match) may not merge without a scoped
 #       grant at .hone-grant/<change>. Without it land refuses BEFORE the merge
@@ -90,6 +94,18 @@
 #       and .plans/. A committed .hone-review-always lists path globs that
 #       force `full` even inside docs/. Anything it cannot classify is
 #       `full`. Exit: 0 printed · 2 usage/not-a-repo/no such branch.
+#
+#   worktree.sh governed <change>
+#       Print the Decisions and Notes about the code that the change touched,
+#       one path per line. A document counts when a path on its `Governs:`
+#       line is a changed file or a directory above one. A Note also counts
+#       by its name: docs/notes/<area>.md is about src/<area>/. The answer
+#       reads the change's worktree, committed or not, so consolidate can ask
+#       before the commit. The loop hands these documents to the
+#       consolidate-critic. A change can make a sentence false in a document
+#       that it never opened, and nobody reads a document that nothing puts
+#       in front of them. Exit: 0 printed, or nothing to print · 2
+#       usage/not-a-repo/no such branch.
 #
 #   worktree.sh verify
 #       Run the full suite (scripts/run-tests.sh --all) in the current tree,
@@ -400,6 +416,54 @@ cmd_review_scope() {
     review_scope "$main_root" "$base" "$branch"
 }
 
+cmd_governed() {
+    local change="${1:-}"
+    [ -n "$change" ] || { msg_wt_needs_change governed >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
+
+    local common_dir main_root branch wt base tree changed doc path hit
+    common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+    main_root=$(git -C "$common_dir/.." rev-parse --show-toplevel 2>/dev/null)
+    branch="hone/$change"
+    wt="$main_root/.worktrees/$change"
+    git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch" || {
+        msg_wt_governed_no_branch "$branch" >&2; return 2; }
+    base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
+    [ -n "$base" ] || return 0
+    # Consolidate runs before the commit, so the worktree is the change. With
+    # no worktree the branch is all that is left to read.
+    if [ -d "$wt" ]; then
+        tree="$wt"
+        changed=$( { git -C "$wt" diff --no-renames --name-only "$base"
+                     git -C "$wt" ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
+    else
+        tree="$main_root"
+        changed=$(git -C "$main_root" diff --no-renames --name-only "$base" "$branch" 2>/dev/null)
+    fi
+    [ -n "$changed" ] || return 0
+
+    # One changed file under PATH (a file, or a directory above the file)?
+    governed_touched() {
+        local f want="${1%/}"
+        while IFS= read -r f; do
+            case "$f" in "$want"|"$want"/*) return 0 ;; esac
+        done <<<"$changed"
+        return 1
+    }
+    while IFS= read -r doc; do
+        [ -n "$doc" ] || continue
+        hit=""
+        while IFS= read -r path; do
+            [ -n "$path" ] && governed_touched "$path" && { hit=yes; break; }
+        done < <(hone_governs_paths "$tree/$doc")
+        case "$doc" in
+            docs/notes/*.md) [ -n "$hit" ] || { governed_touched "src/$(basename "$doc" .md)" && hit=yes; } ;;
+        esac
+        [ -z "$hit" ] || printf '%s\n' "$doc"
+    done < <(cd "$tree" && find docs/decisions docs/notes -type f -name '*.md' 2>/dev/null | sort)
+    return 0
+}
+
 # Classify a branch about to land as IRREVERSIBLE (an effectively irreversible
 # or high-blast-radius change), printing one reason line per signal (empty output
 # = reversible). Reversibility is the axis: `git revert` undoes a bad reversible
@@ -615,6 +679,21 @@ cmd_land() {
     git -C "$main_root" symbolic-ref -q HEAD >/dev/null || {
         msg_wt_land_detached >&2; return 2; }
 
+    # Shape gate: the change says what it removed. Every cycle removes
+    # something, and the `Cut:` line in a commit body is the record of it. A
+    # garden repair removes nothing and carries `Repair:` instead. The run and
+    # garden skills ask for the line, and this gate is what holds them to it.
+    # It comes first, because an amended commit moves the tip, and a proof
+    # sign-off names the tip.
+    local base
+    base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
+    if [ -n "$(git -C "$main_root" rev-list "$base..$branch" 2>/dev/null)" ] \
+       && ! git -C "$main_root" log --format=%B "$base..$branch" \
+            | grep -E '^(Cut|Repair): +[^[:space:]]' >/dev/null; then
+        msg_wt_land_no_cut_line "$branch" "$wt" >&2
+        return 2
+    fi
+
     # Authority gate: an IRREVERSIBLE change needs a scoped human grant before
     # it may merge. Capability (guard/bash-guard) is "can the agent act". This
     # is the separate contract: "may it, for this irreversible act". land
@@ -622,8 +701,7 @@ cmd_land() {
     # touches the trunk. The grant is scoped (one change), revocable (delete
     # the file), auditable (its text lands in the merge body below), and
     # recoverable (the worktree stays until granted).
-    local grant_note="" signoff_note="" reasons grant base grant_cmd
-    base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
+    local grant_note="" signoff_note="" reasons grant grant_cmd
     grant_cmd="bash $HONE_WSH grant $change \"$(hone_msg_grant_why)\""
     reasons=$(land_irreversible "$main_root" "$base" "$branch")
     if [ -n "$reasons" ]; then
@@ -1385,6 +1463,7 @@ main() {
         landable) cmd_landable "$@" ;;
         verify)   cmd_verify "$@" ;;
         review-scope) cmd_review_scope "$@" ;;
+        governed) cmd_governed "$@" ;;
         land)     cmd_land "$@" ;;
         remove)   cmd_remove "$@" ;;
         landed)   cmd_landed "$@" ;;

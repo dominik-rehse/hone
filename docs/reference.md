@@ -66,6 +66,12 @@ work. The loop calls it, and you can too:
   go: `full`, or `docs-only` when the diff touches nothing outside `docs/` and
   `.plans/`. The loop skips `/code-review` only on `docs-only`, where a code
   reviewer has no code to read. Anything it cannot classify is `full`.
+- `worktree.sh governed <change>` prints the Decisions and Notes about the
+  code that the change touched, one path per line. A document counts when
+  a path on its `Governs:` line is a changed file or a directory above one.
+  A Note also counts by its name, because `docs/notes/<area>.md` is about
+  `src/<area>/`. The loop hands these documents to the `consolidate-critic`,
+  whether the change opened them or not.
 - `worktree.sh land <change>` merges the branch into the primary tree,
   re-runs the suite there, and cleans up. Runs the land gates first. In
   shared mode it merges on top of the remote's latest and pushes the tested
@@ -253,6 +259,8 @@ irreversible. When you want that record, route the edit through the loop.
   - a merged `hone/*` branch left behind
   - a claim this clone holds on the remote with no worktree (shared mode)
   - a change about to land that deletes nothing
+  - a `src/<area>/` that a change about to land touched, with more lines
+    in its tracked files than `HONE_AREA_MAX_LINES` (default 3000)
   - a `type: project` entry in the harness's own memory store
 - *session-start* injects the workflow rule from the plugin. It warns when
   the test adapter or the `src/` layout is missing. It also warns, naming
@@ -266,6 +274,13 @@ irreversible. When you want that record, route the edit through the loop.
 `worktree.sh land` refuses two kinds of change until a grant or a proof
 exists. Both checks run before the merge, so a refused change never touches
 the primary tree, and the worktree stays for inspection.
+
+Before those two, land checks the shape of the change. Some commit on the
+branch must carry a body line `Cut: <what the change removed>`, or
+`Cut: nothing` with the reason. A garden repair carries `Repair: <what>`
+instead. A branch with no such line is exit 2, and the fix is to amend the
+commit in the worktree. This check comes first because an amended commit
+moves the tip, and a proof sign-off names the tip.
 
 - *Authority gate (exit 8)* fires when the diff is irreversible (see
   `.hone-irreversible-paths` above for the signals). Landing it needs your
@@ -379,7 +394,7 @@ The gate's error message prints the exact helper command with its full path.
 | Exit | Meaning |
 |------|---------|
 | 0 | landed and green |
-| 2 | usage or repo-state error (missing branch, detached HEAD), or in shared mode a push the host refused |
+| 2 | usage or repo-state error (missing branch, detached HEAD, no `Cut:` line on the branch), or in shared mode a push the host refused |
 | 5 | lock timeout: another land or full-suite run held the lock. In shared mode also: the remote moved on every attempt, merge rolled back |
 | 6 | suite, type-check, or lint red after the merge; rolled back, worktree kept, output in the land log |
 | 7 | proof gate: real-environment proof missing |
@@ -437,7 +452,11 @@ loop call them, so hone itself stays language-agnostic.
   templates: [`templates/run-tests/README.md`](../templates/run-tests/README.md).
   `setup.sh` installs it.
 - `typecheck.sh` and `lint.sh` are optional, one line each. The gate and
-  land's post-merge check run them when they exist.
+  land's post-merge check run them when they exist. They are also where a
+  project enforces code quality with a tool of its choice: no copied code,
+  no dead code, small functions, boundaries between areas, strict types.
+  [`templates/quality/README.md`](../templates/quality/README.md) maps each
+  goal to the kinds of tool that check it.
 - `setup-tree.sh` is optional, one line for most ecosystems (`bun install`,
   `uv sync`). It makes the current tree runnable: dependencies installed,
   local hooks wired. `worktree.sh add` runs it inside every fresh worktree,

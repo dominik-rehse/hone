@@ -627,6 +627,23 @@ out=$(cd "$WT" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "deletes nothing" && bad "change with deletions should not be flagged" || ok "change with deletions passes"
 
 echo
+echo "== nag: oversized area (advisory, pre-land, only for an area the change touched) =="
+(cd "$WT" && mkdir -p src/big && seq 1 40 > src/big/table.js && git add -A && git commit -qm "feat: a big area")
+out=$(cd "$WT" && echo '{}' | HONE_AREA_MAX_LINES=30 bash "$NAG" 2>&1)
+echo "$out" | grep -q "src/big/ holds 40 lines, over the 30-line cap" && ok "an area over the cap that the change touched is flagged" || bad "should flag src/big/ over HONE_AREA_MAX_LINES"
+out=$(cd "$WT" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q "holds 40 lines" && bad "an area under the default cap should not be flagged" || ok "an area under the default cap passes"
+# An old large area that this change never touched stays quiet.
+(cd "$REPO" && mkdir -p src/old && seq 1 40 > src/old/table.js && git add -A && git commit -qm "chore: an old large area")
+WT_AQ="$REPO/.worktrees/area-quiet"
+git -C "$REPO" worktree add -q -b hone/area-quiet "$WT_AQ"
+(cd "$WT_AQ" && mkdir -p src/calm && seq 1 41 > src/calm/table.js && git add -A && git commit -qm "feat: touch the calm area only")
+out=$(cd "$WT_AQ" && echo '{}' | HONE_AREA_MAX_LINES=30 bash "$NAG" 2>&1)
+echo "$out" | grep -q "src/calm/ holds 41 lines" && ok "the touched area is flagged" || bad "should flag src/calm/"
+echo "$out" | grep -q "src/old/" && bad "an area the change did not touch should stay quiet" || ok "an untouched large area stays quiet"
+git -C "$REPO" worktree remove --force "$WT_AQ" && git -C "$REPO" branch -q -D hone/area-quiet
+
+echo
 echo "== nag: merged hone/* branch left behind =="
 git -C "$REPO" branch hone/landed-ghost HEAD
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)

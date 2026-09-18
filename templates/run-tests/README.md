@@ -50,7 +50,8 @@ The gate also runs `scripts/typecheck.sh` and `scripts/lint.sh` *if they exist*
 (exit `0` = clean). Add them where the language has them, for example a
 `typecheck.sh` running `tsc --noEmit` or `mypy`/`pyright`, and a `lint.sh`
 running `eslint` or `ruff`. There is no template: they are one line each and
-project-specific.
+project-specific. [`../quality/README.md`](../quality/README.md) says which
+kinds of tool check hone's goals for a codebase through these two adapters.
 
 `typecheck.sh` must cover *everything the repo compiles* (`src/`, `tests/`,
 `scripts/`, tooling), not only production code. A tsconfig whose `include`
