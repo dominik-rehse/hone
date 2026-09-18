@@ -13,6 +13,23 @@ in `releasing.md` beside this file. A measurement or an audit goes under
 fact fits none of those, ask where it belongs instead of storing it outside
 the repo.
 
+## Keeping the docs short
+
+The maintainer wants docs that read easily: short, and not dense. Four
+habits keep them that way.
+
+- A dated fact goes into a note under `docs/spikes/`, never into a manual.
+  The manual gets the rule that came out of the fact, in one sentence.
+- Do not describe in prose what a script's header, its output, or its
+  tests already say. Point at the script.
+- State a behavior for people in two places at most: `docs/reference.md`
+  for what, and `docs/model.md` for why. The README links.
+- Give a reason only where a reader would otherwise do the wrong thing.
+
+`test/prose_test.sh` holds each maintained doc to a word budget. When a doc
+goes over, cut or move text. Do not raise the budget without the
+maintainer's word.
+
 ## How to write to the maintainer
 
 Write plain English. hone's own docs and prompts use a dense, aphoristic

@@ -202,42 +202,57 @@ hone writes a grant and a sign-off only for a change that lands through the
 loop. A hand edit leaves neither, even on a path the policy files mark
 irreversible. When you want that record, route the edit through the loop.
 
-- *guard* (PreToolUse on Write/Edit) enforces three rules. Anywhere, no writes
-  into `.hone-grant/` or `.hone-proof/` (the helpers write those). Anywhere, no
-  new file under `src/` unless a test for it exists (test files themselves stay
-  writable). In the primary tree, no edits to the protected paths at all,
-  including the two policy files. That work belongs in a worktree, landed by a
-  merge. In any tree, it asks before an edit to a check config. That is the
-  dedicated config file of one of three tools. The first is a test runner
-  (`bunfig.toml`, `vitest.config.*`, `jest.config.*`, `pytest.ini`). The second
-  is a linter or formatter (eslint, prettier, biome, dprint, ruff, shellcheck).
-  The third is a type-checker (`tsconfig*.json`, mypy, pyright). The gate's runs
-  are only as strict as their config, so an edit there is the cheapest route
-  from red to green. A manifest that also carries tool settings (`package.json`,
+- *guard* (PreToolUse on Write/Edit) enforces three rules and asks in one
+  case:
+  - Anywhere, no writes into `.hone-grant/` or `.hone-proof/`. The helpers
+    write those.
+  - Anywhere, no new file under `src/` unless a test for it exists. Test
+    files themselves stay writable.
+  - In the primary tree, no edits to the protected paths at all, including
+    the two policy files. That work belongs in a worktree, landed by a
+    merge.
+  - In any tree, it asks before an edit to a check config. The gate's runs
+    are only as strict as their config, so an edit there is the cheapest
+    route from red to green.
+
+  A check config is the dedicated config file of one of three tools:
+  - a test runner (`bunfig.toml`, `vitest.config.*`, `jest.config.*`,
+    `pytest.ini`)
+  - a linter or formatter (eslint, prettier, biome, dprint, ruff,
+    shellcheck)
+  - a type-checker (`tsconfig*.json`, mypy, pyright)
+
+  A manifest that also carries tool settings (`package.json`,
   `pyproject.toml`) is not in the set. `HONE_CHECK_CONFIG_RE` in
   `hooks/common.sh` is the full list.
-- *bash-guard* (PreToolUse on Bash) provides tamper resistance. It denies
-  commands that would disable the gate (`--no-verify`, `core.hooksPath` in
-  any case, creating `.hone-off`) or hand-write a grant or proof sign-off past the
-  `worktree.sh` helpers. It asks before a command that modifies a protected
-  artifact: an adapter, a hook, settings, a policy file, or a check config.
-  It also asks before a command that moves HEAD in the primary tree.
+- *bash-guard* (PreToolUse on Bash) provides tamper resistance. It is a
+  deterrent, not a sandbox. It closes the obvious shell routes, and the
+  settings.json deny rules (see *Install* in the README) close the
+  file-tool routes.
+  - It denies a command that would disable the gate: `--no-verify`,
+    `core.hooksPath` in any case, or creating `.hone-off`.
+  - It denies a command that hand-writes a grant or a proof sign-off past
+    the `worktree.sh` helpers.
+  - It asks before a command that modifies a protected artifact: an
+    adapter, a hook, settings, a policy file, or a check config.
+  - It asks before a command that moves HEAD in the primary tree.
+    `git checkout -- <paths>` and `git checkout <ref> -- <paths>` restore
+    files and move no HEAD, so both pass.
+  - It asks before a package manager, a formatter, or a migration tool
+    runs in the primary tree. Such a tool writes its own files, so no
+    command text ever spells that write out. A bare sync install
+    (`bun install`, `npm ci`, with flags only) passes, because it installs
+    what the lockfile already says. An install that names a package still
+    asks.
+
   It reads the command with its prose removed: the value of a git `-m` or
   `--message` option, and the text after `worktree.sh grant` or `attest`.
   So a commit message that names `--no-verify` or `bun add` is not the act,
   while the same token outside the message still is.
-  `git checkout -- <paths>` and `git checkout <ref> -- <paths>` restore files
-  and move no HEAD, so both pass.
-  It asks before a package manager, a formatter, or a migration tool runs in
-  the primary tree. Such a tool writes its own files, so no command text ever
-  spells that write out. A bare sync install (`bun install`, `npm ci`, with
-  flags only) passes, because it installs what the lockfile already says.
-  An install that names a package still asks. Every primary-tree rule reads the
-  directory the *shell* stands in, which the harness reports in the hook input.
-  So the loop's one `cd` into its worktree is enough, and the commands after it
-  pass. It is a deterrent, not a
-  sandbox. It closes the obvious shell routes, and the settings.json deny
-  rules (see *Install* in the README) close the file-tool routes.
+
+  Every primary-tree rule reads the directory the *shell* stands in, which
+  the harness reports in the hook input. So the loop's one `cd` into its
+  worktree is enough, and the commands after it pass.
 - *dirty-guard* (PostToolUse on Bash) reads the effect instead of the command.
   In the primary tree it asks git what the command left dirty, and blocks when
   that list holds a protected path. This catches the writer the bash-guard's name
@@ -245,17 +260,19 @@ irreversible. When you want that record, route the edit through the loop.
   write, so it stops the run before the commit rather than preventing the edit.
 - *gate* (Stop) runs `scripts/run-tests.sh`, plus `scripts/typecheck.sh`
   and `scripts/lint.sh` when they exist, and blocks the turn on any failure.
-  With an uncommitted change to any durable path it runs the fast unit tier.
-  On a clean `hone/<change>` branch it runs the full suite (the pre-land
-  check). A dependency refresh dirties the manifest and the lockfile rather
-  than `src/`, and it breaks the suite just as easily. So the gate reads the
-  whole durable perimeter, not `src/` and `tests/` alone. The full suite
-  runs once per change branch. A green run records the branch and the tree it
-  verified in `<git-dir>/hone-gate-green`. Every later Stop on that branch
-  skips the run and says so, and a plugin upgrade invalidates the record. One
-  early warning per change is what this backstop is for. `land` re-runs the
-  full suite after the merge, so it still catches a regression that a later
-  commit introduces.
+  - With an uncommitted change to any durable path it runs the fast unit
+    tier. A dependency refresh dirties the manifest and the lockfile rather
+    than `src/`, and it breaks the suite just as easily. So the gate reads
+    the whole durable perimeter, not `src/` and `tests/` alone.
+  - On a clean `hone/<change>` branch it runs the full suite, once per
+    change branch. This is the pre-land check. A green run records the
+    branch and the tree it verified in `<git-dir>/hone-gate-green`. Every
+    later Stop on that branch skips the run and says so, and a plugin
+    upgrade invalidates the record.
+
+  One early warning per change is what this backstop is for. `land` re-runs
+  the full suite after the merge, so it still catches a regression that a
+  later commit introduces.
 - *nag* (Stop, advisory) reports hygiene findings as a visible message,
   never a block. The findings:
   - a Plan that survived its landing

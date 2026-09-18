@@ -1,6 +1,7 @@
 #!/bin/bash
 # Check the shipped prose against the files and commands it names. Four checks,
-# all exact, all derived from the repo itself (no hand-kept list):
+# all exact, all derived from the repo itself (no hand-kept list). A fifth
+# check holds each maintained doc to a word budget:
 #
 #   1. Path integrity. Prose names a file the plugin ships: a
 #      ${CLAUDE_PLUGIN_ROOT}/<path> token, or a skill-relative
@@ -25,6 +26,11 @@
 #      name the model that fills the slot. An alias there floats: the
 #      provider re-points it, and production changes with no commit here.
 #      So each slot must carry a full model ID.
+#   5. Word budgets. Each maintained doc has a budget in words. A doc grows
+#      one true sentence at a time, and no single edit looks like the one
+#      that made it too long. The fix for a doc over its budget is a cut, or
+#      a move of dated text into a note under docs/spikes/, which has no
+#      budget. Raise a budget only when the maintainer says so.
 #
 # Run: bash test/prose_test.sh
 set -uo pipefail
@@ -129,6 +135,25 @@ case "$review_model" in
     claude-*) ok "the review command pins $review_model" ;;
     *) bad "the review command in skills/run/SKILL.md has model '$review_model', which is not a full model ID" ;;
 esac
+
+# 5. Word budgets, about a tenth above the count of 2026-09-18.
+while read -r doc budget; do
+    words=$(wc -w < "$doc")
+    if [ "$words" -le "$budget" ]; then
+        ok "$doc holds $words words of $budget"
+    else
+        bad "$doc holds $words words, and its budget is $budget: cut, or move dated text to docs/spikes/"
+    fi
+done <<'BUDGETS'
+README.md 1700
+docs/model.md 5000
+docs/reference.md 6000
+docs/development.md 2000
+docs/roadmap.md 700
+docs/upgrading.md 1400
+evals/README.md 3200
+evals/lab/README.md 3000
+BUDGETS
 
 echo
 echo "prose_test: $pass passed, $fail failed"
