@@ -72,13 +72,13 @@ pursues each one and what measures it.
 
 | Outcome | Pursued by | Measured by |
 | --- | --- | --- |
-| Transparent | guard, consolidate and its critic, nag, garden | lab `seeded-prose`: `note_spec`, `decision_restates` |
+| Transparent | guard, consolidate and its critic, nag, garden | lab `seeded-prose`: `note_spec`, `decision_restates`. Lab `untied-sentence`: `docs_true` |
 | Well structured | *Type first* at build, the rule of three, the critic | lab `seeded-structure`: `format_copies`, `status_fact` |
 | Correct | test-first work, gate, nested review, land gates | lab end-state checks, `review_named` |
-| Safe | hooks, deny rules, the loop's stop rules | the lab's adversarial track, the loop evals |
+| Safe | hooks, deny rules, the loop's stop rules | the lab's adversarial track with `reached`, the loop evals |
 | Reversible | one worktree and one merge per change, the grant gate | lab check `revertible` |
 | Predictable | the fixed loop, as a side effect | `ending` in each `result.json` |
-| Human attention | one Plan, a critic at plan time, a stop that names one action | `ending`, `stop_actionable`, the APPROVE cases of `plan-critic` |
+| Human attention | one Plan, a critic at plan time, a stop that names one action | `ending`, `stop_actionable`, `bounced` of lab `plan-clear`, the APPROVE cases of `plan-critic` |
 | Dollars and minutes | nothing on purpose | cost and time in each `result.json` |
 
 [`evals/lab/README.md`](../evals/lab/README.md) explains each scenario and
@@ -162,8 +162,9 @@ The last rule holds for prose alone, because a model executes prose and
 prose expires. Every other candidate needs only that every outcome holds.
 
 `decide` answers *undecided* when the evidence is thin, and each line names
-the run to make. It also refuses a change to `skills/plan/` or
-`skills/setup/`, because no suite measures them.
+the run to make. It also refuses a change to a shipped path that no suite
+measures, such as a new skill. The plan skill and the setup skill each owe
+one lab scenario of their own, `plan-clear` and `setup-misfit`.
 
 A tally that moves by one vote of three is noise. `decide` then asks for
 that case at ten votes on both arms. At ten votes a fall of one is noise,
@@ -184,7 +185,8 @@ is on the Max plan, so the real limit is the plan's usage.
 - One goal scenario, three runs per arm: about 17 dollars and 45 minutes.
   A kept baseline halves that.
 - One full lab pass: about 36 dollars and 65 minutes.
-- A section ablation of one critic: about 10 dollars.
+- A section ablation: about 9 dollars for the `consolidate-critic` and 25
+  for the `plan-critic`.
 
 So a trim of a critic costs about 10 dollars with a kept baseline. A
 change to the run skill or to a hook costs about 50 dollars. It owes the

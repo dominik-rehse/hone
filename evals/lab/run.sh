@@ -509,8 +509,12 @@ grade_scenario() {
     # the run paid for the loop's dearest step again, and the transcript says why.
     [ ! -s "$sb/nested.jsonl" ] || measures=$(jq -c --argjson n "$(jq -s '[.[] | select(.args | test("/code-review"))] | length' "$sb/nested.jsonl" 2>/dev/null || echo 0)" \
         '. + {reviews: ($n | tostring)}' <<<"$measures")
+    # A stop is an ending of the loop. A session of another skill, such as
+    # /hone:setup, lands nothing by design, and its report is no stop report.
+    local loop_session=true
+    case "$(head -c 12 "$scenario/prompt" 2>/dev/null)" in /hone:run*) ;; /hone:*) loop_session=false ;; esac
     case "$ending" in stopped*)
-        if [ "$verdict" = pass ] && [ -s "$sb/report.txt" ]; then
+        if [ "$verdict" = pass ] && [ -s "$sb/report.txt" ] && [ "$loop_session" = true ]; then
             # A regrade keeps the answer that the run got. The report did not
             # change, and a second opinion would move a measure with no cause.
             answer=""

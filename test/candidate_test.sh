@@ -15,7 +15,7 @@ bad() { fail=$((fail+1)); printf '  FAIL %s\n' "$1"; }
 W=$(mktemp -d)
 trap 'rm -rf "$W"' EXIT
 R="$W/hone"
-mkdir -p "$R"/{agents,hooks,skills/run,skills/plan,templates,scripts,docs,test} "$R"/evals/lab/scenarios/{seeded-prose,seeded-structure,happy-path}
+mkdir -p "$R"/{agents,hooks,skills/run,skills/plan,templates,scripts,docs,test} "$R"/evals/lab/scenarios/{seeded-prose,seeded-structure,happy-path,setup-misfit}
 printf 'one two three four five six\n' > "$R/agents/consolidate-critic.md"
 printf 'the loop\n' > "$R/skills/run/SKILL.md"
 printf 'the plan skill\n' > "$R/skills/plan/SKILL.md"
@@ -24,7 +24,7 @@ printf 'echo adapter\n' > "$R/templates/node.sh"
 printf 'echo setup\n' > "$R/scripts/setup.sh"
 printf '# Upgrading\n' > "$R/docs/upgrading.md"
 printf 'exit "$(cat "$(dirname "$0")/rc")"\n' > "$R/test/run.sh"; echo 0 > "$R/test/rc"
-for s in seeded-prose seeded-structure happy-path; do echo landed > "$R/evals/lab/scenarios/$s/check.sh"; done
+for s in seeded-prose seeded-structure happy-path setup-misfit; do echo landed > "$R/evals/lab/scenarios/$s/check.sh"; done
 echo "tidy yes" > "$R/evals/lab/scenarios/seeded-prose/goals"
 printf '%s\n' "# floors" "consolidate-critic claude-floor-1" "lab claude-floor-1 claude-below-1" > "$R/evals/floors"
 git -C "$R" init -q -b main
@@ -136,7 +136,7 @@ echo "== a deterministic check may grow the code with no gain =="
 reset_tree
 echo "echo guard and one more exact check" > "$R/hooks/guard.sh"
 lab_arms "yes yes yes" "yes yes yes"
-for i in 1 2 3; do lab_run base "$i" happy-path pass ""; lab_run cand "$i" happy-path pass ""; done
+for i in 1 2 3; do for s in happy-path setup-misfit; do lab_run base "$i" "$s" pass ""; lab_run cand "$i" "$s" pass ""; done; done
 out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)"); rc=$?
 [ "$rc" -eq 0 ] && grep -q 'The shipped code has 11, and it had 6 (5)' <<<"$out" && ok "a hook that grows is accepted when every constraint holds" || bad "code growth should need no gain (got $rc: $out)"
 
@@ -200,10 +200,13 @@ out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)"); rc=$?
 echo "== the upgrade path is part of the candidate =="
 reset_tree
 echo "x" > "$R/templates/node.sh"
-out=$(candidate decide); rc=$?
+# A template owes the scenario of the setup skill, so both arms have its runs.
+for i in 1 2 3; do lab_run base "$i" setup-misfit pass ""; lab_run cand "$i" setup-misfit pass ""; done
+decide_setup() { candidate decide --base "$(dirs base)" --cand "$(dirs cand)"; }
+out=$(decide_setup); rc=$?
 [ "$rc" -eq 1 ] && grep -q 'REJECT upgrade' <<<"$out" && ok "a template change with no path rejects" || bad "a missing upgrade path should reject (got $rc: $out)"
 echo "- 9.9.9: copy the new adapter by hand" >> "$R/docs/upgrading.md"
-out=$(candidate decide); rc=$?
+out=$(decide_setup); rc=$?
 [ "$rc" -eq 0 ] && grep -q 'PRICE upgrade: a person must act' <<<"$out" && ok "a manual path is accepted, and it shows in the price" || bad "a manual path should accept with a price line (got $rc: $out)"
 reset_tree
 echo "x" > "$R/skills/run/SKILL.md"
@@ -212,9 +215,25 @@ grep -q 'upgrade path: missing' <<<"$out" && ok "--state-change declares a chang
 
 echo "== a path that no suite measures is undecided =="
 reset_tree
-echo "x" > "$R/skills/plan/SKILL.md"
+mkdir -p "$R/skills/new"; echo "a new skill" > "$R/skills/new/SKILL.md"
+git -C "$R" add -A; git -C "$R" -c user.name=t -c user.email=t@example.invalid commit -qm "feat: a new skill"
+echo "x" > "$R/skills/new/SKILL.md"
 out=$(candidate decide); rc=$?
-[ "$rc" -eq 3 ] && grep -q 'no suite measures skills/plan/SKILL.md' <<<"$out" && ok "the plan skill has no suite, and the verdict says so" || bad "an unmeasured path should be undecided (got $rc: $out)"
+[ "$rc" -eq 3 ] && grep -q 'no suite measures skills/new/SKILL.md' <<<"$out" && ok "a new skill has no suite, and the verdict says so" || bad "an unmeasured path should be undecided (got $rc: $out)"
+
+echo "== a skill that a person calls owes its own scenario, and the whole lab does not owe it thrice =="
+reset_tree
+echo "x" > "$R/skills/plan/SKILL.md"
+out=$(candidate plan)
+grep -q 'evals/lab/run.sh plan-clear, 3 runs per arm' <<<"$out" && ok "the plan skill owes plan-clear" || bad "a change to the plan skill should owe plan-clear: $out"
+reset_tree
+echo "bounced no" > "$R/evals/lab/scenarios/setup-misfit/goals"; printf '/hone:setup\n' > "$R/evals/lab/scenarios/setup-misfit/prompt"
+git -C "$R" add -A; git -C "$R" -c user.name=t -c user.email=t@example.invalid commit -qm "chore: a goal for setup"
+echo "echo guard two" > "$R/hooks/guard.sh"
+lab_arms "yes yes yes" "yes yes yes"
+for arm in base cand; do lab_run "$arm" 1 happy-path pass ""; lab_run "$arm" 1 setup-misfit pass ""; done
+out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)"); rc=$?
+grep -q 'UNDECIDED lab setup-misfit' <<<"$out" && bad "a hook change should not owe three runs of the setup scenario: $out" || ok "one run of another skill's scenario is enough under the whole lab"
 
 echo "== the reach is counted beside the verdict =="
 reset_tree

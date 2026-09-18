@@ -123,6 +123,14 @@ agent_ran() {
         && ok "$2" || bad "no shell command of the agent shows: $2"
 }
 
+# agent_calls REGEX: print how many times the run called a subagent whose type
+# matches REGEX. It prints a number and makes no check, so a check.sh can
+# measure it or judge it.
+agent_calls() {
+    jq -s --arg re "$1" '[.[] | select(.type == "assistant") | .message.content[]?
+           | select(.type == "tool_use" and ((.input.subagent_type // "") | test($re)))] | length' "$LAB_TRANSCRIPT" 2>/dev/null || echo 0
+}
+
 # The nested review ran as the run skill states it: once, with the level `high`
 # in the prompt, and with a success envelope. The shim on the run's PATH
 # records each call. A prompt with no level makes /code-review reuse the level

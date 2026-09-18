@@ -160,6 +160,11 @@ fresh; MODE=idle JUDGE=FAIL lab toy >/dev/null
     && ok "a stop report that hands over no action fails the run, and the judge's cost is kept" || bad "a stopped run with a FAIL from the stop judge should fail (got $(result toy -c '[.verdict,.ending,.measures,.judge_cost_usd]'))"
 JUDGE=PASS lab --regrade "$(echo "$W"/out/*/)" >/dev/null
 [ "$(result toy .measures.stop_actionable)" = "no" ] && ok "a regrade keeps the stop-report answer that the run got" || bad "a regrade must not judge the same report again (got $(result toy .measures.stop_actionable))"
+cp "$W/scenarios/toy/prompt" "$W/prompt.keep"; echo "/hone:setup" > "$W/scenarios/toy/prompt"
+fresh; MODE=idle JUDGE=FAIL lab toy >/dev/null
+[ "$(result toy '[.verdict, (.measures | has("stop_actionable"))] | join(" ")')" = "pass false" ] \
+    && ok "a session that is not the loop gets no stop-report judge" || bad "only a /hone:run session should reach the stop-report judge (got $(result toy -c '[.verdict,.measures]'))"
+cp "$W/prompt.keep" "$W/scenarios/toy/prompt"
 
 echo "== revertible: one merge that one revert undoes =="
 printf '%s\n' "revertible" > "$W/scenarios/toy/check.sh"

@@ -92,6 +92,9 @@ owed() {
     if touches '^agents/consolidate-critic\.md$'; then
         echo unit:consolidate-critic; echo lab:seeded-prose; echo lab:seeded-structure
     fi
+    # The two skills that a person calls. Each has one scenario of its own.
+    touches '^skills/plan/|^agents/plan-critic\.md$' && echo lab:plan-clear
+    touches '^skills/setup/|^scripts/setup\.sh$|^templates/' && echo lab:setup-misfit
     touches '^skills/run/' && echo unit:loop
     touches '^skills/garden/' && echo unit:garden
     if touches '^rules/workflow\.md$'; then
@@ -101,9 +104,11 @@ owed() {
     return 0
 }
 OWED=$(owed | sort -u)
-# No suite measures these shipped paths, so a change to them is outside what
-# the method can judge (rule 1 of docs/development.md: coverage sets the limit).
-UNMEASURED=$(printf '%s\n' "$CHANGED" | grep -E '^skills/(plan|setup)/' || true)
+# A shipped path that owed() does not know has no suite, so a change to it is
+# outside what the method can judge (rule 1 of docs/development.md: coverage
+# sets the limit). A new skill or a new rule file lands here.
+UNMEASURED=$(printf '%s\n' "$CHANGED" | grep -E "^($(IFS='|'; echo "${SHIPPED[*]}"))/" \
+    | grep -vE '^(agents|hooks|scripts|templates)/|^skills/(run|garden|plan|setup)/|^rules/workflow\.md$' || true)
 
 # The upgrade path: none needed, mechanical, manual, or missing.
 upgrade_path() {
@@ -173,9 +178,9 @@ print_plan() {
         esac
     done
     if printf '%s\n' "$OWED" | grep -x 'lab:all' >/dev/null; then
-        line=$(jq -n --argjson r "$RUNS_PER_ARM" --argjson c "$USD_PER_LAB_RUN" --argjson g "$(goal_scenarios | grep -c .)" '$g * ($r * 2 - 1) * $c | round')
+        line=$(jq -n --argjson r "$RUNS_PER_ARM" --argjson c "$USD_PER_LAB_RUN" --argjson g "$(loop_goal_scenarios | grep -c .)" '$g * ($r * 2 - 1) * $c | round')
         usd=$(jq -n --argjson a "$usd" --argjson b "$line" '$a + $b')
-        echo "  owes  each scenario with a goals file, $RUNS_PER_ARM runs per arm   about $line dollars more"
+        echo "  owes  each /hone:run scenario with a goals file, $RUNS_PER_ARM runs per arm   about $line dollars more"
     fi
     echo "  a baseline arm that an earlier candidate measured on the same base counts again"
     echo "  total: about $usd dollars at API prices"
@@ -185,6 +190,16 @@ print_plan() {
 }
 
 goal_scenarios() { local f; for f in "$SCENARIOS"/*/goals; do [ -f "$f" ] && basename "$(dirname "$f")"; done; return 0; }
+# The goal scenarios of the loop: what a candidate that owes the whole lab
+# also owes at three runs per arm. A scenario whose prompt calls another skill
+# measures that skill, and only a change to that skill owes it three times.
+loop_goal_scenarios() {
+    local s
+    for s in $(goal_scenarios); do
+        case "$(head -c 12 "$SCENARIOS/$s/prompt" 2>/dev/null)" in /hone:run*|"") echo "$s" ;; /hone:*) ;; *) echo "$s" ;; esac
+    done
+    return 0
+}
 
 if [ "$MODE" = plan ]; then print_plan; exit 0; fi
 
@@ -252,8 +267,12 @@ case "$(upgrade_path)" in
     manual) say "PRICE upgrade: a person must act in every consumer repository (docs/upgrading.md). A mechanical path would be cheaper." ;;
 esac
 
+# The scenarios whose measures the candidate owes at RUNS_PER_ARM runs.
+THRICE=$( { printf '%s\n' "$OWED" | sed -n 's/^lab://p' | grep -vx all
+            printf '%s\n' "$OWED" | grep -qx 'lab:all' && loop_goal_scenarios; } | sort -u | jq -R . | jq -s .)
+
 # The lab: verdicts, goals, endings, price.
-jq -rs --argjson goals "$GOALS" --argjson floors "$FLOOR_MAP" --argjson need "$RUNS_PER_ARM" --argjson move "$MOVE" '
+jq -rs --argjson goals "$GOALS" --argjson thrice "$THRICE" --argjson floors "$FLOOR_MAP" --argjson need "$RUNS_PER_ARM" --argjson move "$MOVE" '
     def arm(a): map(select(.arm == a));
     def held(m; g): map(select(.measures[m]? != null)) | {n: length, held: (map(select(.measures[m] == g)) | length)};
     def mean(f): if length == 0 then 0 else (map(f) | add / length) end;
@@ -282,7 +301,7 @@ jq -rs --argjson goals "$GOALS" --argjson floors "$FLOOR_MAP" --argjson need "$R
           | ($bok | held($m; $g)) as $bh | ($cok | held($m; $g)) as $ch
           | select($ch.n > 0 or ($goals[$s][$m]? != null))
           | if $bh.n < $need or $ch.n < $need then
-                (if $goals[$s][$m]? != null
+                (if $goals[$s][$m]? != null and ($thrice | index($s)) != null
                  then "UNDECIDED lab \($s): the measure \($m) has \($bh.n) baseline and \($ch.n) candidate run(s), and it needs \($need) per arm"
                  else empty end)
             else (($ch.held / $ch.n - $bh.held / $bh.n) * ([$bh.n, $ch.n] | min) | runs) as $d

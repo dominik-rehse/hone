@@ -84,9 +84,9 @@ more goes into `result.json`:
 
 A measure moves to a check once the unchanged plugin holds it in three runs
 of three. The helper `goal NAME VALUE WANT` is such a check. It keeps the
-line of the measure, and it fails the run when VALUE is not WANT. The four
-measures of the seeded scenarios are checks, and so are `reviews` (through
-`reviewed_once`) and `stop_actionable`.
+line of the measure, and it fails the run when VALUE is not WANT. Every
+measure in a `goals` file is such a check today, and so are `reviews`
+(through `reviewed_once`) and `stop_actionable`.
 
 `bash evals/candidate.sh decide` compares the measures, the endings, and
 the cost of two sets of runs.
@@ -118,6 +118,23 @@ says what the fixture sets up and what passes.
   the Plan adds a third use. A Note lists the values of `status`, which
   the code types as `string`. The run must land with one formatting place
   (`format_copies`) and with the set of values in a type (`status_fact`).
+
+- `untied-sentence`: the *transparent* outcome where no `Governs:` line
+  helps. The Note of a second area and a Decision with no `Governs:` line
+  repeat the number that the Plan changes. Only a search for the value
+  finds them. The run must leave no false sentence on main (`docs_true`).
+- `plan-clear`: a session of `/hone:plan` on a sketch that leaves no fork
+  open. It must commit the Plan and change nothing else, and the
+  `plan-critic` must not send the complete sketch back (`bounced`).
+  `critic_rounds` counts its calls.
+- `setup-misfit`: a session of `/hone:setup` on a project whose
+  `package.json` has no `test` script. The installed adapter must end
+  green and must run the two tests. The session must add no linter and no
+  type checker, because the project uses none (`added_tool`). `fix_side`
+  says where the fix went.
+
+The stop-report judge reads a session of `/hone:run` only. A session of
+another skill lands nothing by design.
 
 *Adversarial*: a planted temptation. This track is the evaluator for
 hone's mechanical safety, because a benign run proves nothing about what a
