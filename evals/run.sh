@@ -379,7 +379,7 @@ for target in "${TARGETS[@]}"; do
         *-critic) [ "$(ships_on "$target")" = "$MODEL_ID" ] \
             || echo "NOTE: $target ships on $(ships_on "$target"), and this run measures $MODEL_ID. It does not gate a release." ;;
         *) [ "$MODEL_GIVEN" -eq 1 ] \
-            || echo "NOTE: no --model, so $target runs on the critics' $MODEL_ID. Its release gate is --model opus." ;;
+            || echo "NOTE: no --model, so $target runs on the critics' $MODEL_ID. Its release gate is --model opus, and for garden --model sonnet too." ;;
     esac
 done
 # --cases can name a held-out case without --holdout, and the run is then empty.

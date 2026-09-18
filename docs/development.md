@@ -46,9 +46,9 @@ known-good answers. [`evals/README.md`](../evals/README.md) is the manual:
 targets and cases, the balance between reject and near-miss pass cases,
 plurality voting, and the held-out set discipline. Two rules matter most.
 Match the model to what runs in production. The critic frontmatter pins a
-full model ID, and the harness defaults to it. The loop and garden targets
-run with `--model opus`. And never read or
-tune against a `*-holdout` case while editing prose.
+full model ID, and the harness defaults to it. The loop target runs with
+`--model opus`. The garden target runs on opus and on its floor, sonnet.
+And never read or tune against a `*-holdout` case while editing prose.
 
 *End to end*: `bash evals/lab/run.sh`. The scenario lab runs the whole
 plugin headless against fixture repos and grades the state each run leaves.
