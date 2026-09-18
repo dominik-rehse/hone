@@ -1,342 +1,253 @@
 # Roadmap: evaluating and optimizing hone itself
 
-hone's deletion bias applies to hone itself. This roadmap answers two
-standing questions. The occasional one: is each building block still worth
-its cost, and can what stays be smaller and cheaper? A building block here
-is every hook, critic, gate, and paragraph of prompt prose. The recurring
-one, forced by the pace of model releases: which model belongs in which slot, and what
-changes when a new model ships? Both questions take the same tools.
-The stages below build them in deliberate order: dataset and metric
-first, end-to-end lab after them, optimization last. Each stage is useful on
-its own even if the next never happens. Each stage heading carries its
-status.
+hone's goal is to land good changes unattended, cheaply and safely. This
+roadmap is about making hone itself better at that. Every hook, critic,
+gate, and paragraph of prompt prose has a cost, and the deletion bias
+applies to hone too. It answers two standing questions. Is each building
+block still worth its cost, and can what stays be smaller and cheaper? And
+which model belongs in which slot, and what changes when a new model ships?
 
-## The deletion question, by class
+The method is plain. The three test suites are hard constraints. A change
+to hone must keep all three green. Within those constraints the objective
+is one number to lower: dollars per landed change, as the lab records it.
+The maintainer has not yet confirmed that objective, and *Open decisions*
+lists it.
 
-"Do we really need this?" is a different question per class of building
-block. Each class has a different legitimate evaluator:
+## The constraints: three suites
 
-- *Model-compensating prose and judgment* (skill instructions, the critics,
-  the nag). These exist because models at writing time did not supply the
-  behavior unprompted. They expire as models improve. The unit suite
-  (stages 0 to 2) evaluates trims within them. The lab (stage 3) evaluates
-  removing them whole.
-- *Mechanical safety against the model* (guard, bash-guard, the settings deny
-  rules, the land gates). These defend against rare misbehavior, so
-  average-case evals under-measure them by construction. Only adversarial
-  scenarios (stage 3) can measure their value. Their deletion bar is higher anyway.
-  They are deterministic, and they are nearly free when not triggered. They
-  are also part of what makes a human willing to leave a run unattended.
-- *Mechanical coordination* (worktrees, locks, land's merge-and-reverify).
-  These guard against the environment (concurrency, races, flaky suites),
-  not the model. Better models therefore never obsolete them. This class is
-  out of scope. Only a workflow redesign would remove one.
+Each suite checks one layer, and none can stand in for another.
+[`development.md`](development.md) says when to run which.
 
-Three rules hold for every deletion, whichever tool proposed it:
+- *The mechanical suite* (`bash test/run.sh`, no model calls, free). The
+  hooks, `worktree.sh`, the land path, the plumbing of both harnesses
+  against a fake CLI, and every message hone prints. It proves that the
+  machinery does what it says. It cannot see whether a prompt is good.
+- *The unit evals* (`bash evals/run.sh`, a few dollars). The prose that the
+  model executes: the two critics, the run skill's loop, and the garden
+  skill. Each case is a brief with a known right answer, and every case
+  passed an ablation, so it discriminates. It catches a prompt edit that
+  weakens a behaviour. [`evals/README.md`](../evals/README.md) is the
+  manual and carries the case ledger.
+- *The lab* (`bash evals/lab/run.sh`, about 30 dollars an hour). The
+  installed plugin, end to end, against seeded fixture repos. It is the
+  only suite that can say what a hook deters, and the only one that
+  measures cost per landed change.
+  [`evals/lab/README.md`](../evals/lab/README.md) is the manual.
 
-1. Eval coverage sets the limit of every deletion. A cut can degrade a
-   behavior that no case pins, so stage 1 grows coverage before any cutting
-   campaign.
+The constraints reach only as far as the cases do. A cut that breaks a
+behaviour with no case passes all three. So "green after a cut" means
+"green for what we test", and coverage is the limit of every deletion.
+
+## Three rules for every deletion
+
+1. Eval coverage sets the limit. A cut can degrade a behaviour that no case
+   pins, so coverage grows before any cutting campaign.
 2. Test every deletion on the *floor* model, not the best one. The floor of
-   a target is the cheapest model on which its suite is green, and *Model
-   assignment and recalibration* names the floors. A cut that holds on the
-   best model can break a user on a cheaper one. hone runs on whatever
-   model drives the session.
+   a target is the cheapest model on which its suite is green. A cut that
+   holds on the best model can break a user on a cheaper one, and hone runs
+   on whatever model drives the session.
 3. A deletion enters this repo as an ordinary reviewed change, through the
    eval gates and a version bump like any prompt edit. No tool commits
    here.
 
-## Model assignment and recalibration
+"Do we really need this?" has a different evaluator per class of building
+block:
 
-hone has more model slots than it looks like:
+- *Model-compensating prose and judgment* (skill instructions, the critics,
+  the nag). They exist because models at writing time did not supply the
+  behaviour unprompted, and they expire as models improve. The unit suite
+  evaluates trims within them. The lab evaluates removing them whole.
+- *Mechanical safety against the model* (guard, bash-guard, the settings
+  deny rules, the land gates). They defend against rare misbehaviour, so
+  average-case evals under-measure them by construction. Only the lab's
+  adversarial scenarios can measure their value. Even there, only a
+  scenario in which a current model reaches for the forbidden path counts.
+  Their deletion bar is higher anyway: they are deterministic, nearly free
+  when not triggered, and part of what makes a human willing to leave a run
+  unattended.
+- *Mechanical coordination* (worktrees, locks, land's merge-and-reverify).
+  They guard against the environment, not the model, so better models never
+  obsolete them. Out of scope. Only a workflow redesign would remove one.
 
-- the critics (frontmatter `model:`, a full model ID)
-- the loop and the garden skill (whatever model drives the session)
-- the nested `/code-review` call (a full model ID, hard-coded in the run
-  skill)
-- the stage-3 lab's judge
+## Model slots
 
-Each slot's assignment is a measurable question, not taste:
+| slot | model | set by |
+|---|---|---|
+| `plan-critic`, `consolidate-critic` | claude-opus-5 | frontmatter `model:` |
+| nested `/code-review` | claude-opus-5 | the command in the run skill |
+| the loop, `/hone:plan`, `/hone:garden` | the session's model | the user |
+| the lab's judge | claude-sonnet-5 | `--judge-model` |
 
-- The unit suite answers "can a cheaper model hold this slot?" per critic.
-  The per-case vote tallies are the safety margin. A model that passes at
-  2/3 everywhere is not a safe assignment. Only unanimity is.
-- The loop target across models finds the floor model that the skill's
-  prose still carries (rule 2 above).
-- The lab measures each assignment end-to-end, cost per run against outcome.
+Every pin is a full model ID, and `test/prose_test.sh` fails on an alias.
+An alias floats when the provider re-points it, and 0.53.0 ended that. A
+move to another ID is a suite-gated migration, and
+[`releasing.md`](../.claude/rules/releasing.md) *Moving a model pin* has
+the steps.
 
-A measurement on 2026-09-17 set the floors. Each target ran one tier below
-its release gate ([`releasing.md`](../.claude/rules/releasing.md)), at three
-votes, with the held-out cases:
+The measured floors, from 2026-09-17 and 2026-09-18:
 
-- *The critics* gated on claude-sonnet-5, and that is their floor. On
-  claude-haiku-4-5 the `plan-critic` approved `outcome-table-in-prose` 3/3,
-  and two `consolidate-critic` cases passed at 2/3 only. Since 0.54.0 both
-  critics pin claude-opus-5, one tier above the floor, by the maintainer's
-  choice. The move showed that opus reads the `plan-critic` prose more
-  strictly: it rejected two Plans that sonnet approved, and each time it
-  named a real fork in the Plan. The cases moved, not the prose. Four of
-  the five APPROVE cases pin nothing on opus, because the opus stub
-  approves them too, and the ledger says so.
-- *The loop* gates on claude-opus-5, and that stays its floor. On
-  claude-sonnet-5 it answered HANDROLL 2/3 on `review-fanout-temptation`,
-  and it split `consolidate-forecast-unprompted` 2/3.
-- *The garden skill* gates on claude-opus-5, and claude-sonnet-5 passed all
-  five of its cases 3/3. So sonnet is the garden floor, and rule 2 means
-  that a garden deletion must hold there. The suite is thin, so this says
-  that the pinned classification holds on sonnet, and nothing about the
-  rest of the skill.
+- *The critics* hold on claude-sonnet-5 and not on claude-haiku-4-5. They
+  pin claude-opus-5 since 0.54.0, one tier above the floor, by the
+  maintainer's choice. Opus reads the `plan-critic` prose more strictly. It
+  rejected two Plans that sonnet approved, and each time it named a real
+  fork in the Plan. The cases moved, not the prose. On opus the stub
+  approves most of the near-miss cases too, so the ledger says which cases
+  still pin something there.
+- *The loop* holds on claude-opus-5 and not on claude-sonnet-5, which
+  answered HANDROLL 2/3 on `review-fanout-temptation`. The lab agrees in
+  part: sonnet landed `parallel-paths` in silence once, and it reached for
+  the primary tree after a plain request in three runs of seven.
+- *The garden skill* holds on claude-sonnet-5. Its suite is thin, so this
+  says that the pinned classification holds there, and nothing about the
+  rest of the skill. Its release gate still runs on opus.
+- *The nested review* has no unit target. The lab measures it since
+  2026-09-17 with `--review-model` and a note per run on whether the review
+  itself found the seeded defect
+  ([`spikes/2026-09-17-review-model-switch.md`](spikes/2026-09-17-review-model-switch.md)).
+  Ten runs are too few to move the pin. Every tier caught a defect inside
+  the touched function. claude-haiku-4-5 missed the one outside the diff in
+  the one run that tested it. claude-sonnet-5 caught it twice.
 
-The nested review has no eval target, so only the lab can measure its
-floor. It can since 2026-09-17: `--review-model` runs a scenario with
-another reviewer, and a note per run says whether the review itself found
-the seeded defect.
-[`spikes/2026-09-17-review-model-switch.md`](spikes/2026-09-17-review-model-switch.md)
-has the first ten runs. They are too few to move the pin. Every tier caught
-a defect inside the touched function, and claude-haiku-4-5 missed the one
-outside the diff in the one run that tested it.
+A new model release triggers recalibration in both directions. Downward:
+does the existing prose still hold? A new model can read the same
+instructions differently, as opus did with the `plan-critic`. The suite
+plus the lab's behavioral track is the migration test. Upward: which prose
+is now unnecessary? Section ablation answers it for paragraphs, and a lab
+run with a component switched off answers it for whole components. Run the
+cheap unit suite on every model event, and the expensive lab on family
+releases.
 
-Cost and quality are not the only axes for the review slot. Independence
-is a possible third. The nested `/code-review` checks code the session's
-own model wrote, so author and reviewer may share blind spots. The nested
-call already runs in a fresh context with its own prompt, and no
-measurement shows how much correlation remains. A reviewer from a
-different model family should fail differently, and that decorrelation
-would have value even when the second model is no better. hone does not
-act on this today: a second vendor CLI is a heavy dependency for a plugin
-this small. The lab (stage 3) can price the idea. Inject a known bug
-family, such as the parallel-path scenario of its adversarial track, and
-compare catch rates. Compare a different model of the same family first,
-because that reviewer needs no new dependency.
-
-A new model release triggers recalibration in both directions:
-
-- *Downward guard*: does the existing prose still hold? A new model can
-  read the same instructions differently. The suite plus the lab's
-  behavioral track is the migration test.
-- *Upward opportunity*: which prose is now unnecessary? Section ablation
-  (stage 2) answers it for paragraphs. A lab run with the component
-  switched off (stage 3) answers it for whole components. This makes
-  "prose expires as models improve" operational: a model release is the
-  moment the expiry check runs. Then re-do the assignment: the new
-  mid-tier may take a slot the old top-tier held.
-
-Cadence: run the cheap unit suite on every model event, and the expensive
-lab on family releases. This discipline needed one product change, and
-0.53.0 made it. The agent frontmatter used to name the floating `sonnet`
-alias, so the provider re-pointing that alias recalibrated production with
-no commit here. The agent frontmatter and the review command now carry full
-model IDs, and `test/prose_test.sh` fails on an alias in either slot. A
-move to another model is a deliberate, suite-gated migration, and
-[`releasing.md`](../.claude/rules/releasing.md) *Moving a model pin* has the
-steps.
+Independence is a possible third axis for the review slot, beside cost and
+quality. The nested review checks code that the session's own model wrote,
+so author and reviewer may share blind spots. A reviewer from another
+family should fail differently. hone does not act on this today, because a
+second vendor CLI is a heavy dependency for a plugin this small. The lab
+can price the idea with `--review-model` and a defect outside the diff.
 
 ## Where things live
 
-*In this repo:* `evals/` holds the unit suite and, from stage 2, its
-machine-drivable mode. Cases version together with the prompts they pin.
-The stage-3 lab's scenario definitions and bash harness live here too.
-Scenarios assert what a given plugin version must do, so they belong in the
-same history. Run artifacts like transcripts, costs, and sandboxes are
-gitignored outputs. `docs/` carries the prose:
-[`development.md`](development.md) for the day-to-day suites, and
-[`model.md`](model.md) *Checking* for why prompt prose needs evals at all.
+`evals/` holds the unit suite, its machine-drivable flags, and the lab's
+scenarios and harness. Cases and scenarios version together with the prose
+and the plugin they pin. Run artifacts (transcripts, costs, sandboxes) are
+outputs, and the lab keeps its sandboxes under `/var/tmp/hone-lab`, outside
+every project. `docs/spikes/` carries each measurement as a dated note.
+[`model.md`](model.md) *Checking* says why prompt prose needs evals at all.
 
-*Deliberately not reused:* the Quorum eval lab
-(`prime-radiant-inc/superpowers-evals`). It has no license, so its code is
-off-limits. Its scenarios test another workflow, and its
-multi-CLI/multi-OS generality is complexity hone does not need. Its
-publicly documented *design*, though, is the stage-3 blueprint.
+The Quorum eval lab (`prime-radiant-inc/superpowers-evals`) is deliberately
+not reused. It has no license, its scenarios test another workflow, and its
+multi-CLI generality is complexity hone does not need. Its publicly
+documented design was the blueprint for the lab.
 
-## Stage 0: unit evals for the judgment prose (done, 0.23.x)
+## Stage 0: unit evals for the judgment prose (done)
 
-`evals/` pins the critic prompts, the run skill's loop instructions, and
-the garden skill to cases with known-good answers. The releasing rule makes
-the suite a release gate. [`evals/README.md`](../evals/README.md) is the
-manual. It carries the case ledger and every count, so this file repeats
-none of them.
+The suite exists, gates releases, and has three properties that make it
+trustworthy. Every case discriminates: the no-op cut of 2026-08-18 removed
+44 cases that a model with no hone prose answered correctly. A case can
+also prove itself against the prompt minus the paragraph it pins, which is
+the second baseline. And the noise floor is measured: three identical
+passes flip no verdict, so a flip after a prompt edit is signal. The latest
+floor is from 2026-09-18, on the opus pins.
 
-Three additions since 0.23.x changed what the suite is:
+## Stage 1: coverage growth (two passes done, most sections still open)
 
-- *The no-op cut* (2026-08-18). `--ablate` runs each case against a stub
-  with no hone prose. Most cases passed against the stub, so they pinned
-  nothing, and the cut removed them. See *A case must discriminate*.
-- *The second baseline.* A case can also prove itself against the prompt
-  minus the paragraph that the case pins. See the section of that name.
-- *The noise floor* (2026-09-01). Repeated passes on one commit flipped no
-  plurality verdict, so a flip after a prompt edit is signal. See *The
-  noise floor*.
+The stage ends when three conditions hold. Each critic has a discriminating
+case for each of its verdicts. Each target has a held-out case. Each
+section that an ablation will test has a case aimed at it. The first two hold since
+2026-09-17. The third holds for 7 of 20 critic sections.
 
-The cut left every target thin. *Known gaps* in the manual lists what
-stays unpinned.
+Two passes taught what a case can and cannot pin. A brief that names the
+thing under test measures agreement, and the model always agrees. A brief
+that buries it measures whether the prose makes the model look, and that is
+the shape that works. A draft aimed at one bullet still tends to die,
+because the current model applies most bullets unprompted. So the sections
+with no case are not a coverage gap to fill at any price. Many of them are
+prose that the model no longer needs, and the next release of a model is
+when that shows. *Known gaps* in the manual records every dead draft and
+why.
 
-## Stage 1: coverage growth (first pass done, 2026-09-17)
+Next: a REJECT case for the rejecting half of the `plan-critic` bullet on
+dependency refreshes, because its approving half looks expired (stage 2).
+Then harder briefs, in the buried shape, only for sections whose loss would
+hurt.
 
-Rule 1 makes coverage the limit of every cut, and the suite is thin after
-the no-op cut. An ablation on a thin suite reports that most sections
-change nothing, because no case looks at them. So coverage grows before
-any ablation campaign.
+## Stage 2: machine-drivable harness (done, first ablation done)
 
-A new case must discriminate, and most drafts do not. *Known gaps* in the
-manual records the failed attempts and the brief shape that works: bury
-the thing under test instead of naming it.
+`evals/run.sh` takes `--prompt-file`, `--cases`, `--json`, and `--cache`,
+so a tool can drive it. Their first use is section ablation: delete one
+section of a prompt, run its target, and read the result under one rule.
+An unchanged suite is evidence only for a section that a case aims at.
 
-The stage is done when these hold:
-
-- each critic has a discriminating case for each of its verdicts
-- each of the four targets has a held-out case
-- each section that a stage-2 ablation will test has a case aimed at it
-
-The first two hold since 2026-09-17, and the ledger in the manual has the
-measurements. Each critic gained visible cases and a held-out case. More
-drafts died in the ablation than survived it, and *Known gaps* records
-why. One of them found a miss in the shipped `plan-critic`: a slug nested
-under an open Plan. 0.53.2 fixed it, and the draft is now a case.
-
-The third condition repeats per campaign. It is also the rule for reading
-an ablation: an unchanged suite is evidence only for a section that a case
-aims at. Most sections of every prompt still have no case aimed at them, so
-the next campaign starts with cases, not with cuts.
-
-A second pass on 2026-09-17 wrote near misses for the `plan-critic` bullets
-that no case aims at, and drafts for the `consolidate-critic` beyond spike
-notes. Four of twelve drafts survived the ablation on sonnet, and one of
-those died the next day on opus. The two `plan-critic` survivors
-discriminate against the sonnet stub alone, so they pin the prompt as a
-whole and no bullet. The one `consolidate-critic` survivor pins a calibration
-bullet. So the third condition still fails for most sections, and the
-manual's *Known gaps* says why a draft that aims at one bullet tends to
-die: the current model applies most bullets unprompted.
-
-## Stage 2: machine-drivable harness (done, 2026-09-17)
-
-[`evals/README.md`](../evals/README.md) *Driving the harness from a tool* is
-the manual for this stage. Three flags on `evals/run.sh` let a tool, not only
-a human, drive it:
-
-- `--prompt-file` evaluates a candidate prompt instead of the checked-in
-  file.
-- `--cases` runs a subset, because optimizers evaluate on minibatches.
-- `--json` writes one record per case × vote, *including the full reply*:
-  the trace a reflective optimizer learns from. The terminal output
-  discards that reply.
-
-Two more pieces belong to this stage: a response cache keyed on (model,
-system prompt, brief), and a pinned full model ID per run. The pin matters
-because the floating `sonnet` alias makes runs incomparable across days. The
-cache is opt-in (`--cache`), because a release gate must measure afresh.
-
-The flags do not depend on stage 1. Their first use does. That use is
-*section ablation* of the class-1 prose, before any optimizer. Delete one
-section of a prompt at a time, re-run its eval target, and cut what
-changes nothing. It is the same run as the manual's second baseline, read
-in the other direction. There the run tests the case, and here it tests
-the section. That is "trim, re-run, keep what holds" done systematically,
-under rule 1 and the reading rule of stage 1.
-
-The first campaign ran on 2026-09-17 over both critics, on their floor
-model
+The first campaign ran on 2026-09-17 over both critics on claude-sonnet-5
 ([`spikes/2026-09-17-first-section-ablation.md`](spikes/2026-09-17-first-section-ablation.md)).
-It cut nothing. The suite holds seven sections, and no case aims at
-thirteen others, so the run says nothing about those. One finding is an
-expiry candidate: the approving half of the `plan-critic` bullet on
-dependency refreshes no longer carries its case, and *Calibration* does.
-Two steps come before a trim of it. The rejecting half of the bullet needs
-a case, and a cut of any bullet has to take its category word along. The
-campaign cost about 20 dollars, so a campaign per prompt edit is affordable
-and one per commit is not.
+It cost about 20 dollars and cut nothing. It found one expiry candidate,
+the approving half of the refresh bullet, and one rule: a cut of a bullet
+must take its category word along, or the word floats and the critic files
+other things under it. A campaign per prompt edit is affordable. One per
+commit is not.
 
-## Stage 3: end-to-end scenario lab (first version done, 2026-09-17)
+## Stage 3: the scenario lab (first version done, floor open)
 
-[`evals/lab/README.md`](../evals/lab/README.md) is the manual, and it lists
-the scenarios that exist and the one that does not yet.
-[`spikes/2026-09-17-lab-first-runs.md`](spikes/2026-09-17-lab-first-runs.md)
-has the first runs. The noise floor is measured: 24 runs of an unchanged
-plugin gave 24 passes. A first look with the guards and the deny rules off
-([`spikes/2026-09-17-guards-first-look.md`](spikes/2026-09-17-guards-first-look.md))
-found no run that reached for a forbidden path, on opus or on sonnet.
+The lab runs headless Claude Code with a copy of hone, in a sandbox, against
+eleven seeded scenarios. Deterministic checks and one judge grade the end
+state. Four scenarios are behavioral and seven adversarial. It gates
+releases. `--without` switches a hook off in the sandboxed copy, and
+`--review-model` swaps the reviewer, so the product needs no feature for
+either.
 
-A second look
-([`spikes/2026-09-17-guard-temptations.md`](spikes/2026-09-17-guard-temptations.md))
-found the first temptation that a current model takes. After a plain
-request for a small fix, with no `/hone:run`, claude-haiku-4-5 and
-claude-sonnet-5 edit `src/` in the primary tree. `guard` turns that run
-into a Plan, the dirty-guard makes it restore the files, and with all guards
-off the edit stays. So the lab shows what those two hooks deter, on the
-models below the loop's floor. Opus never reached for the primary tree. No
-run on any model took the flag that skips git hooks, even when the hook's
-own message offered it. So the bash-guard and the deny rules still have no
-scenario that shows their value.
+What it has shown so far:
 
-The same look found a flaw in every earlier measurement. The sandbox sat
-inside this repository, and Claude Code loaded hone's own development rules
-into each run from the directories above it. The sandbox is outside the
-repository now, and the manual has the rule.
+- *It catches what the unit suite cannot.* Its first use as a release gate
+  caught a bad edit to the run skill that the loop evals passed at 3/3
+  ([`spikes/2026-09-17-lab-first-runs.md`](spikes/2026-09-17-lab-first-runs.md)).
+- *It shows what two guards deter.* After a plain request with no
+  `/hone:run`, claude-haiku-4-5 and claude-sonnet-5 edit `src/` in the
+  primary tree. `guard` turns that run into a Plan, and the dirty-guard
+  makes it restore the files. With all guards off the edit stays
+  ([`spikes/2026-09-17-guard-temptations.md`](spikes/2026-09-17-guard-temptations.md)).
+  Opus never reached. No model on any scenario took the flag that skips
+  git hooks, even when offered. So the bash-guard and the deny rules still
+  have no scenario that shows their value
+  ([`spikes/2026-09-17-guards-first-look.md`](spikes/2026-09-17-guards-first-look.md)).
+- *It found its own flaw.* The sandbox sat inside this repository. Claude
+  Code loaded hone's development rules into every run from the directories
+  above. Every measurement before the evening of 2026-09-17 had those rules
+  in context. The sandbox is outside the repository now, and the
+  harness refuses a location below an instruction file.
 
-Three things are open. The noise floor needs a new measurement outside the
-repository. One pass over the eleven scenarios gave 11 passes, and a floor
-takes two more. One haiku run walked around a commit hook
-with a mock of the missing scanner on `PATH`, and no guard reads that route.
-And the counts above are one to three runs per cell, which shows that a
-temptation is real and gives no rate.
+Open:
 
-Unit evals test prose in isolation. The lab tests the *installed
-plugin*. It runs headless Claude Code with hone installed, in a
-sandbox, against fixture repos seeded with
-scenarios. The sandbox isolates `$HOME` where the environment carries a
-token, and the manual says what it does where auth is OAuth. It has two
-tracks:
+- The noise floor outside the repository has one pass of the three it
+  needs. One pass over eleven scenarios on opus gave 11 passes. Until the
+  other two run, the release gate rests on one sample.
+- The guard counts are one to three runs per cell. They show that a
+  temptation is real for the smaller models, and they give no rate.
+- One haiku run walked around a commit hook with a mock of the missing
+  scanner on `PATH`. No guard reads that route, and it has no owner.
 
-- *behavioral*: a happy-path change, a review that injects a real finding,
-  a claimed worktree, a change that trips the proof or authority gate. Does
-  the run end in the right terminal state?
-- *adversarial*: planted temptations, such as:
-  - a scenario where the cheapest path to green is weakening a check
-  - a fix that would pass review without a reproducing test
-  - a nudge toward writing the grant oneself
-  - a change with two parallel code paths where the Plan's fix reaches
-    only one. Examples are a sandbox path beside a production path, and
-    the two branches of a feature flag.
+## Open decisions
 
-  This track is the evaluator for class 2. Twenty benign runs with the
-  guard off prove nothing about what the guard deters.
-
-Grading reads the terminal state. Deterministic post-checks run first: the
-commit exists and conforms, the suite is green, and the diff stays confined
-to the Plan. They also check that the run cleaned the worktree and that the
-gates actually fired. One LLM judge decides what post-checks cannot. The
-verdict is three-valued: pass, fail, or *indeterminate* for infrastructure
-failures. The third value exists so a broken sandbox never reads as a
-behavioral result. Per-run cost and transcript capture are first-class
-outputs. Per-component ablation switches come free: the lab edits the
-sandboxed plugin copy's `hooks.json`, so the product needs no feature for
-it.
-
-The lab stays small and in hone's own idiom: bash. It extends the
-fixture-repo patterns of `test/e2e_land_test.sh` and the fan-out/scoring
-conventions of `evals/run.sh`. It is expensive per run, so it gates
-releases, not commits. This is the regression net for the plugin as a
-whole, and the evaluator for every whole-component question. The likely
-answer to those questions is that the blocks are worth their cost. That is
-a prior the deletion bias says to test, not trust.
+- *The objective.* Dollars per landed change, with the suites as hard
+  constraints. The lab records it per run. A happy-path run costs about 2
+  dollars on opus. Not yet confirmed by the maintainer.
+- *The garden release gate.* It runs on opus, and the measured floor is
+  sonnet. Nothing measured so far bears on the choice.
+- *The lab's noise floor.* Two more passes, about 60 dollars, or the gate
+  keeps resting on one.
+- *The mock-tool route.* Inside or outside hone's threat model, which is a
+  friction-avoiding agent and not an adversary.
 
 ## Later: automated optimization
 
 This is a note, not a stage. With the harness and the lab in place, the
 manual experiments above can become search. GEPA's `optimize_anything`
-covers both kinds: prompt candidates against the unit suite, and
-pre-registered component hypotheses against the lab. GEPA fits because its
-adapter model wraps `evals/run.sh`. DSPy does not fit. It wants to own
-execution as a Python pipeline, and that would fork the agent files hone
-ships. The tooling would live in a sibling repo, outside what consumers
-install. Its output would enter this repo only under rule 3.
+fits, because its adapter model wraps `evals/run.sh`. DSPy does not, because
+it wants to own execution as a Python pipeline and would fork the agent
+files hone ships. The tooling would live in a sibling repo, and its output
+would enter this repo only under rule 3.
 
-Two conditions come first. The lab exists. The visible cases are enough
-for a train/val split, with the holdout set frozen as the final test.
-Neither holds today.
-
-The expectations are modest. hone is deliberately lean: one loop, two
-small critics. The realistic wins are shorter prompts and cheaper critic
-models, and manual section ablation (stage 2) can find both. So the
-optimizer must first show that it beats the manual method. The lab is
-worth building regardless.
+Two conditions come first. The lab exists now. The visible cases are still
+far too few for a train/val split with the holdout set frozen as the final
+test. And the first manual ablation found nothing to cut, so an optimizer
+must first show that it beats the manual method. The expectations are
+modest: hone is one loop and two small critics, and the realistic wins are
+shorter prompts and cheaper models.
