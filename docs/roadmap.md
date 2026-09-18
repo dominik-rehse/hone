@@ -33,6 +33,13 @@ the price is the tie-breaker among changes that hold them. Each outcome
 names what pursues it in hone today and what measures it, and where
 nothing does.
 
+A lab scenario has checks and measures. A check decides the verdict. A
+*measure* is one `name=value` line that decides nothing in its run. The
+harness copies it into `result.json`, and the procedure of the next
+section counts it across runs. The `goals` file of a scenario names the
+value that holds the outcome. A measure moves to a check once the
+unchanged plugin holds it in three runs of three.
+
 *The codebase hone leaves behind.* These are the end, in the words of the
 goal.
 
@@ -40,18 +47,36 @@ goal.
   catches it going stale. Tests are named for the behaviour they pin. No
   prose repeats what the code, the types, or the tests already carry.
   Pursued by test-first work (the `guard`), the consolidate step and its
-  critic, the `nag`, and `/hone:garden`. The `consolidate-critic` evals pin
-  the critic's judgment on a Decision that restates code and a Note grown
-  into a spec. The lab's `commits_conform` check demands the `Cut:` line.
-  No lab scenario yet seeds such prose and checks that consolidate removed
-  it.
+  critic, the `nag`, and `/hone:garden`. The first three act on prose that
+  a change touches, and garden scans between changes. One gap is visible
+  without a run. A `Governs:` line ties a document to a path, and the nag
+  checks only that the path exists. Nothing ties a sentence to the value
+  that it repeats. So a change can make a sentence false and never touch
+  its document. The lab scenario `seeded-prose` measures that case. It seeds a Note that grew a list of
+  behaviours, and a Decision whose second paragraph restates its function.
+  The Plan changes the one number that both repeat, and it is silent on
+  the docs. The measures `note_spec` and `decision_restates` say what
+  became of each repeat: `cut`, `partly`, `updated`, `stale`, or `lost`.
+  The goal is `cut`. The `consolidate-critic` evals cannot measure this. A
+  model with no hone prose cuts such a repeat when a brief hands it over
+  ([`evals/README.md`](../evals/README.md) *Known gaps*).
 - *Well-structured.* Types carry what types can carry. Areas are small
   enough to hold in context, with one Note and one invariant each. No
-  duplicated logic, and no abstraction with one user. Pursued by the
-  routing test at consolidate (cut, then type, then the smallest document)
-  and by two bullets of the `consolidate-critic`. Nothing measures it end
-  to end. One eval case pins one calibration bullet, and no scenario seeds
-  a duplicated helper or a prose fact that should be a type.
+  duplicated logic, and no abstraction with one user. Pursued at the point
+  of change only, and by little prose. That prose is the *Type first*
+  bullet at build, the rule of three, and two bullets of the
+  `consolidate-critic`. That is a decision and not an oversight. *Types
+  and abstractions* in [`model.md`](model.md) says that a search for
+  things to abstract produces wrong abstractions. The lab scenario `seeded-structure`
+  therefore puts both of its seeds inside the change, on a TypeScript
+  fixture. A formatting helper exists in two private copies, and the Plan
+  adds the third use. The Note says in prose that `status` is one of three
+  strings, the code types it as `string`, and the Plan adds a fourth
+  status. `format_copies` counts the places that format an amount, and the
+  goal is 1. `status_fact` says whether a type carries the set of values,
+  prose, or both, and the goal is `type`. No mechanism turns an existing
+  prose fact into a type. If the baseline leaves `status_fact` at `prose`,
+  a routing line at consolidate is the first candidate.
 - *Correct.* The landed change does what the Plan says, and no defect lands
   in silence. Pursued by test-first work, the gate, the nested review, and
   the land gates. The lab's end-state checks measure the first part per
@@ -70,17 +95,23 @@ tolerable.
 - *Reversible.* Every landed change is one merge that a person can revert
   in one command, with nothing outside git to undo. Pursued by one
   worktree and one merge per change, and by the grant gate for what a
-  revert cannot undo. Nothing checks it end to end yet. The check is
-  cheap: one merge commit per change, and a revert of it leaves the suite
-  green.
+  revert cannot undo. The lab check `revertible` demands three things.
+  Main moved by one merge commit. The primary tree holds nothing outside
+  git's record. A revert of the merge in a throwaway clone leaves the
+  suite green. `happy-path` and both seeded scenarios call it.
+  `authority-gate` does not, because a grant exists for what a revert
+  cannot undo.
 - *Predictable.* The same Plan gives the same kind of result twice. That
   means the same ending, the same shape of commit, and the same place for
   what it left behind. Pursued by the fixed loop and the fixed routing at
-  consolidate. Nothing measures it yet. The lab's repeated passes already
-  hold the data: count the distinct endings of one scenario across passes.
+  consolidate, as a side effect. No mechanism chooses among valid endings.
+  Every `result.json` of the lab carries an `ending`: landed or stopped,
+  the branch, the commit types, and the places that the run changed. The
+  procedure counts the distinct endings of a scenario per arm.
   `parallel-paths` ended three ways on 2026-09-17, and `casual-fix` gave
   one fix three different slugs. Some variance is the model's, and hone
-  cannot buy all of it away with prose.
+  cannot buy all of it away with prose. A candidate is an order of
+  preference among the valid endings, in the run skill.
 
 *The price.* Lowered only at equal outcomes above.
 
@@ -89,19 +120,21 @@ tolerable.
   grant. Every other minute of theirs is waste, and this is the scarce
   price. The whole shape of the loop pursues it. There is one hand-written
   artifact, a critic that runs while the person is present, no check-in,
-  and a stop that hands over one action. Nothing measures it yet. The lab
-  can count bounces per Plan, stops per run, and whether a stop hands the
-  person one concrete action. A judge can read a report for whether a
-  person could act on it in a minute. A bounce that names a real fork is
-  attention well spent, and a bounce on a nit is not.
+  and a stop that hands over one action. The measurement has three parts.
+  A stop is in the `ending` of a lab run. For every stopped run that
+  passed, a judge reads the report alone and answers whether it hands the
+  person one concrete action. That is the measure `stop_actionable`. A
+  bounce has no lab measure, because the lab starts from a written Plan
+  and a bounce happens in `/hone:plan`. The APPROVE cases of the
+  `plan-critic` target stand in for it. A bounce that names a real fork is
+  attention well spent, and a REJECT of an exemplary Plan is a bounce on a
+  nit.
 - *Dollars and minutes.* Per landed change, as the lab records them per
   run. A happy-path run costs about 2 dollars on opus.
 
 hone may not be complete with respect to these outcomes. Several of them
 have a mechanism that pursues them only as a side effect, or a critic
-bullet and nothing more. *Well-structured* is the clearest case. hone has
-no step that looks for duplicated logic across the codebase, and no step
-that turns a prose fact into a type. So the first question for each
+bullet and nothing more. So the first question for each
 outcome is whether hone has a mechanism that pursues it at all. Only then
 comes the question whether that mechanism can be smaller or cheaper. A
 missing mechanism is a change to hone like any other. The method has to
@@ -123,115 +156,50 @@ that breaks a behaviour with no case passes all three suites. So "green
 after a cut" means "green for what we test", and coverage of the outcomes
 above is the limit of every deletion.
 
-## Handoff: develop a way to optimize hone for these outcomes
+## The method: how a change to hone is judged
 
-This section is for the next coding agent. It is self-contained. Read it,
-then the files it names, and start. Nothing else from earlier sessions is
-needed.
+A change to hone is a claim about the codebases that hone leaves behind.
+This section says how to test that claim. `evals/candidate.sh` is the
+procedure as code, and its header lists every flag.
+`test/candidate_test.sh` proves it with no model call.
 
-### Who you work for, and how
-
-You work in the hone repository for its maintainer. Two rule files in
-`.claude/rules/` bind every session here. `working-here.md` says how to
-write to the maintainer and that no fact goes into harness memory. It also
-names the literal tokens that never go into a shell command or a commit
-message.
-`releasing.md` says which suite must be green before which change, and how
-a release happens. Read both first.
-
-Ask the maintainer on a decision of taste or of budget, and decide the
-rest yourself. Answer in the terminal, in plain English. Commit on `main`
-and push when the maintainer says so, in small conventional commits.
-
-### What hone is
-
-hone is a Claude Code plugin. A person writes a short Plan for one change.
-`/hone:run` then builds the change test-first in a git worktree and runs
-every check. It consolidates what the change leaves behind in the docs,
-runs a code review, and merges it. Two critic agents find fault with the
-Plan and with the consolidated result. Hooks enforce the rules
-mechanically. Between changes, `/hone:garden` cuts what has gone stale.
-[`model.md`](model.md)
-says why each piece exists, and [`reference.md`](reference.md) is the full
-control surface. The shipped plugin is `agents/`, `hooks/`, `rules/`,
-`scripts/`, `skills/`, and `templates/`. `evals/`, `test/`, and `docs/`
-never ship.
-
-### Your task, in this order
-
-*First, develop the method.* Design and build a way to optimize hone for
-the outcomes in *The outcomes, and what measures each*. The end is the
-codebase that hone leaves behind, and cost is the price. So the method
-must:
-
-1. Measure each outcome, or say why it cannot. Five outcomes have no
-   end-to-end measurement today: transparent, well-structured,
-   reversible, predictable, and human attention. Start with transparent
-   and well-structured, because they are the end itself. A lab scenario
-   that seeds slop for consolidate to remove is the first piece. Slop
-   here means a Decision that restates the code, or a Note that has grown
-   into a spec. It also means a prose fact that should be a type, or a
-   duplicated helper. The check reads whether consolidate cut or converted
-   it.
-2. Ask, per outcome, whether hone has a mechanism that pursues it at all.
-   Where it has none, or only a side effect, propose the mechanism before
-   you optimize what exists. The method must judge such an addition the
-   same way it judges a cut: does the outcome move, and what does it cost?
-3. Turn the measurements into one procedure that takes a candidate change
-   to hone and answers accept or reject. The constraints are the three
-   suites, green on the floor model of each target. Among candidates that
-   hold every measured outcome, the cheaper and the smaller hone wins.
-   Say how a tally that moves without flipping counts.
-4. Say what a candidate is, and where candidates come from. Today they
-   come from three places: a section of prompt prose deleted, a hook or
-   critic switched off, and a model pin moved. A new step or a new rule is
-   a fourth, and the method must accept it.
-5. Say how the method judges the upgrade path of a candidate (rule 4
-   below). A change that leaves older downstream repos behind, or asks a
-   person to migrate by hand what a script could do, is a worse change.
-6. Say what one evaluation costs and takes, so that the maintainer can
-   budget a campaign. Today a unit suite pass costs about 4 dollars. A
-   full lab pass costs about 30 dollars and takes an hour. A section
-   ablation of one critic costs about 10 dollars.
-7. Write the method down in this file, as a section that replaces this
-   handoff, and land its tooling under `evals/` with its tests under
-   `test/`.
-
-*Only then, review the record.* The sections after this handoff record
-what earlier sessions did toward optimization. The dated notes under
-`docs/spikes/` hold every measurement. With your method in hand, read that
-record as a reviewer. Say what it measured that your method keeps, what it
-measured that your method makes obsolete, and what it got wrong. Do not
-start from the record. It was built before the outcomes were written down,
-and it measures what was easiest to measure, not what matters most.
-
-### Rules the method must obey
+### The rules
 
 1. Eval coverage sets the limit of every change. A change can degrade an
-   outcome that no case and no scenario measures, so the measurements grow
+   outcome that no case and no scenario measures. So the measurements grow
    before any campaign of changes.
-2. Test every change on the *floor* model, not the best one. The floor of
-   a target is the cheapest model on which its suite is green. A change
-   that holds on the best model can break a user on a cheaper one, and hone
-   runs on whatever model drives the session.
+2. Test every change on the *floor* model, not the best one. A slot that
+   runs on the session's model has a floor: the cheapest model on which its
+   suite is green. A change that holds on the best model can break a user
+   on a cheaper one. A slot that hone pins runs on its pin for every user,
+   so its floor is the pin. `evals/floors` has the model of each suite, and
+   the procedure refuses a run on another one.
 3. A change enters this repo as an ordinary reviewed change, through the
    eval gates and a version bump like any prompt edit. No tool commits
-   here.
+   here. An accept from the procedure is not the release gate. The held-out
+   cases stay out of the procedure, because a campaign that reads them
+   tunes against them.
 4. A change to hone carries the way for a downstream repository on an
    older version to take it. hone is a distributed plugin, and the repos
-   that use it hold state that hone wrote: adapters under `scripts/`,
-   policy files, the settings block, docs in the shapes hone prescribes.
-   A change that alters any of that is complete only with its upgrade
-   path. The path is mechanical where it can be, in `scripts/setup.sh`,
-   which is idempotent and runs on every upgrade, or in a `/hone:garden`
-   pass. Where a person must act, [`upgrading.md`](upgrading.md) says
-   what, under the version that made it so. A candidate change that the
-   method judges is judged with its upgrade path, and the cost of that
-   path is part of the change's cost.
+   that use it hold state that hone wrote. That state is the adapters
+   under `scripts/`, the policy files, the settings block, and the docs in
+   the shapes hone prescribes. A change that alters any of that is
+   complete only with its upgrade path. *The upgrade path* below says how
+   the procedure judges it.
 
-Each class of building block has its own evaluator, and a method that
-tests a change to one class with the evaluator of another measures
-nothing:
+5. Where a cheap, deterministic check can enforce a principle of hone,
+   hone uses it. [`model.md`](model.md) *Checking* already says so for the
+   loop: prefer the mechanical kind wherever the question is computable.
+   The same holds for a change to hone. Such a check needs no measured
+   gain. It enters on the constraints alone: its own tests in `test/`,
+   the lab with no fail, no outcome that drops, and its upgrade path.
+   Three conditions make a check cheap. It makes no model call. It ships
+   no new tool, so a project supplies any tool through an adapter. And it
+   is exact. A heuristic that can misfire spends human attention on every
+   false alarm, so it must show its gain like prose.
+
+Each class of building block has its own evaluator. A change to one class,
+tested with the evaluator of another, measures nothing:
 
 - *Model-compensating prose and judgment* (skill instructions, the critics,
   the nag). They exist because models at writing time did not supply the
@@ -242,75 +210,169 @@ nothing:
   average-case evals under-measure them by construction. Only the lab's
   adversarial scenarios can measure their value. Even there, only a
   scenario in which a current model reaches for the forbidden path counts.
-  Their deletion bar is higher anyway: they are deterministic, nearly free
-  when not triggered, and part of what makes a human willing to leave a run
-  unattended.
+  The models that reach are the ones below the floor of the loop, so rule
+  2 has one exception here. A candidate that touches a guard may run both
+  arms on a model below the floor, and `evals/floors` lists those models.
+  Their deletion bar is higher anyway. They are deterministic and nearly
+  free when not triggered. They are also part of what makes a human
+  willing to leave a run unattended.
 - *Mechanical coordination* (worktrees, locks, land's merge-and-reverify).
   They guard against the environment, not the model, so better models never
   obsolete them. Out of scope. Only a workflow redesign would remove one.
 
-### The tools you have
+### What a candidate is
 
-- `bash test/run.sh`: the mechanical suite. No model calls. Run it after
-  any change to `hooks/`, `scripts/`, `evals/run.sh`, or `evals/lab/`.
-- `bash evals/run.sh [target] [--votes 3] [--holdout] [--ablate]
-  [--prompt-file F] [--cases A,B] [--json F] [--cache]`: the unit evals.
-  Targets are `plan-critic`, `consolidate-critic`, `loop`, and `garden`.
-  Without `--model` it runs on the critics' pinned model. `--ablate` runs
-  a case against a stub with no hone prose, and a case that the stub
-  answers correctly pins nothing. [`evals/README.md`](../evals/README.md)
-  is the manual and the case ledger. Read *A case must discriminate*,
-  *The second baseline*, and *Known gaps* before you write a case.
-- `bash evals/lab/run.sh [scenario...] [--model ID] [--review-model ID]
-  [--without hook,...] [--regrade DIR]`: the lab. It runs the installed
-  plugin headless against a seeded fixture and grades the end state.
-  Output goes to `/var/tmp/hone-lab/<time>/`, and it must stay outside
-  every project, because Claude Code loads instruction files from the
-  directories above the fixture. [`evals/lab/README.md`](../evals/lab/README.md)
-  is the manual. Read *Writing a scenario* before you write one. Validate
-  a seed and its checks by hand, against a passing and a failing end
-  state, before any model call.
-- The lab's auth reads the maintainer's OAuth token from
-  `~/.claude/.credentials.json`. The maintainer allowed that. Never print
-  the token and never copy the file.
-- The account is on the Max plan. Every cost figure is an API-equivalent,
-  and the real limit is the plan's usage.
+A candidate is one diff to the shipped plugin, in the working tree, against
+a base commit. Two things come with it. The first is its upgrade path. The
+second is a claim: the outcome that it moves, or the price that it lowers
+at equal outcomes. Its brief lives at `.plans/<slug>.md`, as
+[`development.md`](development.md) says.
 
-### What cost earlier sessions time
+Candidates come from five places:
 
-- Do not edit `evals/lab/run.sh`, `evals/lab/checks.sh`, a scenario's
-  `check.sh`, or any shipped file while a lab run is active. Bash reads a
-  script as it runs, and the lab copies the plugin per scenario.
-- Under `pipefail`, a quiet `grep` behind a pipe fails the pipe. Capture
-  first, or send grep's output to `/dev/null`.
-- `jq`'s `//` treats `false` as missing. Test with `== false`.
-- The unit evals cannot see a broken run skill. A bad envelope check passed
-  them at 3/3 and failed four lab scenarios. Run the lab for any change to
-  `skills/run/SKILL.md`.
-- A check that reads a command's output fails open when the command
-  errors. Validate every check against a state that must fail.
-- A brief with two objections in it is a flaky case. One vote in three
-  takes the second objection, and at three votes that is a red gate one
-  time in four. A brief for a CUTS or REJECT case leaves exactly one thing
-  to find, and a brief for an APPROVE or CLEAN case leaves nothing.
-- A model reads a hidden instruction file if one sits above the working
-  directory. The lab's sandbox once sat inside this repository, and every
-  run read the maintainer's development rules.
+- A section of prompt prose deleted. *Section ablation* in
+  [`evals/README.md`](../evals/README.md) says how.
+- A hook switched off with `--without`, or a critic deleted in the tree.
+- A model pin moved. [`releasing.md`](../.claude/rules/releasing.md) has
+  the steps.
+- A new step or a new rule. It answers a measure that the baseline does
+  not hold, or a misjudgment in real use that a new case captured.
+- A new model release. It makes every section a candidate again, in both
+  directions. Downward: does the existing prose still hold? Upward: which
+  prose is now unnecessary?
 
-### Open decisions, for the maintainer and not for you
+The procedure treats an addition and a cut alike. It asks whether the
+outcomes moved and what the change costs. One rule differs. A candidate
+that grows the shipped prose is accepted only when a measured outcome
+moved up. Prose is what a model reads and executes, and it expires as
+models improve. Every other candidate is accepted when every outcome
+holds. That includes a deterministic check that grows the shipped code
+(rule 5).
 
+The procedure judges optimization candidates. A defect fix comes with a
+test that was red before it, and
+[`releasing.md`](../.claude/rules/releasing.md) alone gates it.
+
+### The procedure
+
+1. Keep a baseline per release. On a clean tree, run each unit target with
+   `--votes 3 --json` on its floor. Run each scenario that has a `goals`
+   file three times. Keep the files and the run directories. Every
+   candidate on that base uses them again.
+2. Write the brief and apply the candidate to the working tree. Do not
+   commit it.
+3. Run `bash evals/candidate.sh plan`. It prints the suites that the
+   candidate owes, what they cost, its upgrade path, and its size.
+4. Make the owed runs with the candidate in the tree. The lab copies the
+   plugin from the tree, so a run measures the candidate.
+5. Run `bash evals/candidate.sh decide` with both arms. It prints one line
+   per finding and then the verdict.
+6. An accepted candidate goes through the release gates of
+   [`releasing.md`](../.claude/rules/releasing.md). A rejected one is
+   reverted, and its brief and its numbers go into a dated note under
+   `docs/spikes/`.
+
+`decide` rejects a candidate for any of these:
+
+- The mechanical suite is red, a unit case flips its plurality, or a lab
+  scenario fails more often than at the baseline.
+- A goal measure drops by two runs of three or more.
+- A scenario ends in two more distinct ways than at the baseline.
+- The candidate alters consumer state and carries no upgrade path.
+- The candidate grows the shipped prose and no measured outcome moved up.
+
+`decide` answers *undecided* when the evidence is thin, and each line names
+the run to make. Examples are an indeterminate run, a goal measure with
+fewer than three runs per arm, and a run on a model other than the floor.
+It also refuses two arms that measured the same plugin. And it refuses a
+change to `skills/plan/` or `skills/setup/`, because no suite measures
+them.
+
+Among accepted candidates the price decides. Human attention comes first,
+then dollars and minutes per landed change, then the size of the shipped
+prose and code in words. A manual upgrade step counts as human attention,
+once per consumer repository.
+
+### A tally that moves without a flip
+
+On an unchanged prompt, single votes dissent. The noise floors saw 5
+dissenting votes of 171 on 2026-09-17 and 1 of 216 on 2026-09-18. So at
+three votes a tally that moves by one vote is no evidence, in either
+direction. The procedure answers *undecided* and asks for that case at ten
+votes on both arms, which costs about one dollar. At ten votes a fall of
+one vote is noise, and a fall of two or more rejects. A rise counts as a
+gain under the same numbers.
+
+This replaces the older rule for a cut, which kept a section when any
+tally moved. That rule read one vote as signal. A paragraph that moves a
+case by exactly one vote of ten stays, and its brief becomes a watch case.
+
+### The upgrade path
+
+`plan` and `decide` rank the path of a candidate:
+
+- *None needed.* The candidate changes nothing that hone leaves in a
+  consumer repository.
+- *Mechanical.* `scripts/setup.sh` or a `/hone:garden` pass carries the
+  change. That is a change to a script or a skill, so it owes its own
+  suite, with a test that starts from the old shape.
+- *Manual.* [`upgrading.md`](upgrading.md) names a step for a person. The
+  candidate is accepted, and the step counts in its price.
+- *Missing.* The candidate is rejected.
+
+The script sees a change to consumer state by itself only under
+`templates/` and in `scripts/setup.sh`. A new shape of a document under
+`docs/`, or a new policy file, shows in no path. Pass `--state-change` for
+those.
+
+### What an evaluation costs
+
+Every figure is an API-equivalent from 2026-09-18 on claude-opus-5. The
+account is on the Max plan, so the real limit is the plan's usage.
+
+- `plan`, and the mechanical suite: no model call. The suite takes two
+  minutes.
+- One unit target at three votes, both arms: 1 to 3 dollars. The whole
+  suite costs about 4 dollars per arm.
+- One case at ten votes, both arms: about 1 dollar.
+- One goal scenario, three runs per arm: about 17 dollars and 45 minutes.
+  With a kept baseline it is half of that.
+- One full lab pass over thirteen scenarios: about 36 dollars and 65
+  minutes.
+- A section ablation of one critic: about 10 dollars.
+
+So a trim of a critic costs about 10 dollars per candidate with a kept
+baseline. A change to the run skill or to a hook costs about 50 dollars.
+It owes the whole lab and three runs of each goal scenario.
+
+### Open decisions, for the maintainer
+
+- The two seeded scenarios have no run yet. Their first three runs each
+  are the baseline, and they cost about 17 dollars. Until then nobody
+  knows whether the unchanged plugin passes their checks, and they are
+  part of the release gate.
+- The first candidate that the record review suggests is the removal of
+  the `consolidate-critic`. No case shows that its cut bullets change a
+  verdict, and no run shows that they change a codebase. With the baseline
+  above it costs about 60 dollars to judge: both seeded scenarios, the
+  `loop` target, and one lab pass.
+- The ten-vote rule above replaces a rule that the maintainer set.
 - The garden release gate runs on opus, and the measured floor is sonnet.
+  `evals/floors` follows rule 2 and names sonnet.
 - The lab's noise floor outside the repository has one pass of the three
-  it needs, about 60 dollars more.
+  it needs, about 70 dollars more.
 - One haiku run walked around a commit hook with a mock of a missing tool
   on `PATH`. No guard reads that route. Whether it is inside hone's threat
   model, a friction-avoiding agent and not an adversary, is open.
 
 ## The record so far
 
-Everything below is what earlier sessions built and measured, for the
-review step of the handoff. The dated notes under `docs/spikes/` carry
-each measurement in full.
+Everything below is what earlier sessions built and measured, before the
+method existed. The dated notes under `docs/spikes/` carry each measurement
+in full.
+[`spikes/2026-09-18-record-review.md`](spikes/2026-09-18-record-review.md)
+reviews this record against the method: what it keeps, what it makes
+obsolete, and what the record got wrong.
 
 ### Model slots
 
@@ -331,7 +393,8 @@ The measured floors, from 2026-09-17 and 2026-09-18:
 
 - *The critics* hold on claude-sonnet-5 and not on claude-haiku-4-5. They
   pin claude-opus-5 since 0.54.0, one tier above the floor, by the
-  maintainer's choice. Opus reads the `plan-critic` prose more strictly. It
+  maintainer's choice. A pinned slot runs on its pin for every user, so
+  the method judges a critic on opus. Opus reads the `plan-critic` prose more strictly. It
   rejected two Plans that sonnet approved, and each time it named a real
   fork in the Plan. The cases moved, not the prose. On opus the stub
   approves most of the near-miss cases too, so the ledger says which cases
@@ -403,9 +466,10 @@ thing under test measures agreement, and the model always agrees. A brief
 that buries it measures whether the prose makes the model look, and that is
 the shape that works. A draft aimed at one bullet still tends to die,
 because the current model applies most bullets unprompted. So the sections
-with no case are not a coverage gap to fill at any price. Many of them are
-prose that the model no longer needs, and the next release of a model is
-when that shows. *Known gaps* in the manual records every dead draft and
+with no case are not a coverage gap to fill at any price. Some of them may
+be prose that the model no longer needs. A case cannot show that, because
+its brief hands the model what the run must find by itself. The seeded lab
+scenarios can show it, for a group of bullets or for a whole critic. *Known gaps* in the manual records every dead draft and
 why.
 
 What the earlier sessions saw as the next step: a REJECT case for the
@@ -422,7 +486,9 @@ An unchanged suite is evidence only for a section that a case aims at.
 
 The first campaign ran on 2026-09-17 over both critics on claude-sonnet-5
 ([`spikes/2026-09-17-first-section-ablation.md`](spikes/2026-09-17-first-section-ablation.md)).
-It cost about 20 dollars and cut nothing. It found one expiry candidate,
+It ran on the pin of that day, and the pin moved to claude-opus-5 a day
+later. So a cut of a critic section needs the campaign again on opus. It
+cost about 20 dollars and cut nothing. It found one expiry candidate,
 the approving half of the refresh bullet. It also found one rule. A cut of
 a bullet must take its category word along, or the word floats and the
 critic files other things under it. A campaign per prompt edit is
@@ -442,9 +508,9 @@ What it has shown so far:
 - *It catches what the unit suite cannot.* Its first use as a release gate
   caught a bad edit to the run skill. The loop evals had passed it at 3/3
   ([`spikes/2026-09-17-lab-first-runs.md`](spikes/2026-09-17-lab-first-runs.md)).
-- *It shows what two guards deter.* After a plain request with no
-  `/hone:run`, claude-haiku-4-5 and claude-sonnet-5 edit `src/` in the
-  primary tree. `guard` turns that run into a Plan, and the dirty-guard
+- *It shows what two guards deter, below the floor of the loop.* After a
+  plain request with no `/hone:run`, claude-haiku-4-5 and claude-sonnet-5
+  edit `src/` in the primary tree. `guard` turns that run into a Plan, and the dirty-guard
   makes it restore the files. With all guards off the edit stays
   ([`spikes/2026-09-17-guard-temptations.md`](spikes/2026-09-17-guard-temptations.md)).
   Opus never reached. No model on any scenario took the flag that skips
@@ -459,11 +525,8 @@ What it has shown so far:
 
 Open:
 
-- No scenario seeds slop for consolidate to remove. Examples are a Decision
-  that restates the code, a Note that has grown into a spec, and a
-  duplicated helper. The *transparent* and *well-structured* outcomes are
-  the end itself, and the lab does not measure them yet. The handoff names
-  that scenario as the first piece of the method.
+- `seeded-prose` and `seeded-structure` measure the *transparent* and
+  *well-structured* outcomes since 2026-09-18. Neither has a run yet.
 - The noise floor outside the repository has one pass of the three it
   needs. One pass over eleven scenarios on opus gave 11 passes. Until the
   other two run, the release gate rests on one sample.
@@ -474,13 +537,15 @@ Open:
 
 ### Later: automated optimization
 
-This note predates the handoff, and the method the handoff asks for
-decides whether it still applies. With the harness and the lab in place,
-the manual experiments above can become search. GEPA's `optimize_anything`
+This note predates the method. An optimizer would be one more source of
+candidates for `evals/candidate.sh`. A candidate that needs the lab costs
+10 to 50 dollars to judge, so only a search at the unit level is
+affordable. With the harness and the lab in place, the manual experiments
+above can become search. GEPA's `optimize_anything`
 fits, because its adapter model wraps `evals/run.sh`. DSPy does not, because
 it wants to own execution as a Python pipeline and would fork the agent
 files hone ships. The tooling would live in a sibling repo, and its output
-would enter this repo only under rule 3 of the handoff.
+would enter this repo only under rule 3 of the method.
 
 Two conditions come first. The lab exists now. The visible cases are still
 far too few for a train/val split with the holdout set frozen as the final

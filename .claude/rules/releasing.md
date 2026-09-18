@@ -53,8 +53,9 @@ Before the release commit, the changed layer must pass its suite:
 - a behavior change to the hooks, to `scripts/worktree.sh`, or to the loop in
   `skills/run/SKILL.md`: `bash evals/lab/run.sh` with no fail. Run an
   indeterminate scenario again. Read a failed one in its sandbox before you
-  decide: the noise floor is 24 passes out of 24, so a fail is signal, and
-  it has twice been a bug in a check. See `evals/lab/README.md`.
+  decide: the noise floor outside this repository is one pass of 11 out
+  of 11, so a fail is signal, and it has twice been a bug in a check. See
+  `evals/lab/README.md`.
 
 ## Moving a model pin
 
