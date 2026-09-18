@@ -185,7 +185,7 @@ at it and `bash evals/candidate.sh decide` accepts the cut. It reads the
 `--json` files of both prompts. A flipped plurality rejects. A tally that
 moved by one vote of three is inside the noise floor below, so the script
 asks for that case at ten votes on both prompts. At ten votes a fall of two
-or more rejects. [`docs/roadmap.md`](../docs/roadmap.md) has the reasons.
+or more rejects. [`docs/development.md`](../docs/development.md) has the reasons.
 The cut then enters the repo as an ordinary prompt edit, through the
 release gate.
 

@@ -24,7 +24,7 @@ sources=$(find src/billing -name '*.ts' ! -name '*.test.ts')
 # the helper again. The count reads the formatting call and not a name, so a
 # copy under another name still counts.
 # shellcheck disable=SC2086  # the file list splits on purpose
-measure format_copies "$(cat $sources | grep -c 'toFixed(')"
+goal format_copies "$(cat $sources | grep -c 'toFixed(')" 1
 
 # Where the fact lives that `status` has a closed set of values.
 #   type   a type carries the set, and the Note no longer lists it
@@ -32,7 +32,9 @@ measure format_copies "$(cat $sources | grep -c 'toFixed(')"
 #   prose  no type carries it, so `status` is still any string
 # shellcheck disable=SC2086
 if cat $sources | grep -E "[\"']draft[\"'][[:space:]]*(\||,)|(\||,)[[:space:]]*[\"']draft[\"']" >/dev/null; then
-    grep -E '`draft`' docs/notes/billing.md >/dev/null 2>&1 && measure status_fact both || measure status_fact type
+    status_fact="type"
+    grep -E '`draft`' docs/notes/billing.md >/dev/null 2>&1 && status_fact="both"
 else
-    measure status_fact prose
+    status_fact="prose"
 fi
+goal status_fact "$status_fact" type

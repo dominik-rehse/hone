@@ -1,6 +1,6 @@
 #!/bin/bash
 # Mechanical proof of evals/candidate.sh, the procedure that judges a candidate
-# change to hone (docs/roadmap.md). A scratch repository plays hone, and
+# change to hone (docs/development.md). A scratch repository plays hone, and
 # hand-written result files play the two arms, so this test makes no model
 # call. Run: bash test/candidate_test.sh
 set -uo pipefail

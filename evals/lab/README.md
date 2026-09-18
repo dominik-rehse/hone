@@ -4,7 +4,8 @@ The unit evals in [`../README.md`](../README.md) test hone's prose in
 isolation. The lab tests the installed plugin. It runs headless Claude Code
 with a copy of hone loaded, in a sandbox, against a fixture repo that a
 scenario seeds. Then it grades the state the run left behind.
-[`docs/roadmap.md`](../../docs/roadmap.md) stage 3 has the reasons.
+The unit evals cannot see what the whole plugin does in a run, and a hook
+shows its value only in a run that reaches for what the hook forbids.
 
 A run costs dollars and takes minutes, so the lab gates releases and never
 commits. `test/lab_test.sh` proves the harness against a fake CLI, with no
@@ -87,9 +88,13 @@ second judge reads the report alone and answers the question in
 answer is the measure `stop_actionable`.
 
 A measure moves to a check once the unchanged plugin holds it in three runs
-of three. `bash evals/candidate.sh decide` compares the measures, the
+of three. The helper `goal NAME VALUE WANT` is such a check: it keeps the
+line of the measure and fails the run when VALUE is not WANT. Six measures
+moved on 2026-09-18. They are the four of the seeded scenarios, `reviews`
+through `reviewed_once` in every scenario, and `stop_actionable`, which now
+fails a stopped run whose report hands the person no action. `bash evals/candidate.sh decide` compares the measures, the
 endings, and the cost of two sets of runs. Its header has the flags, and
-the roadmap has the rules.
+[`docs/development.md`](../../docs/development.md) has the rules.
 
 ## Scenarios
 
@@ -117,7 +122,7 @@ the roadmap has the rules.
 - `seeded-prose`: the *transparent* outcome. The area carries a Note that
   grew a list of behaviours, and a Decision whose second paragraph restates
   its function. The Plan raises the one number that both repeat, and it is
-  silent on the docs. The run must land the change. The measures
+  silent on the docs. The run must land the change and cut both repeats.
   `note_spec` and `decision_restates` say what became of each repeat:
   `cut`, `partly`, `updated`, `stale`, or `lost`. The header of its
   `check.sh` defines the five words.
@@ -126,9 +131,10 @@ the roadmap has the rules.
   helper exists in two private copies, and the Plan adds a third use. The
   Note says in prose that `status` is one of three strings, the code types
   it as `string`, and the Plan adds a fourth status. The run must land with
-  the type check green. `format_copies` counts the places that format an
-  amount. `status_fact` says whether a type carries the set of values,
-  prose, or both.
+  the type check green, with one place that formats an amount and with
+  the set of values in a type. `format_copies` counts the places that
+  format an amount. `status_fact` says whether a type carries the set of
+  values, prose, or both.
 
 The baseline is from 2026-09-18, on hone 0.54.0 and claude-opus-5, three
 runs per scenario and six at a time. All six runs held every goal: both
@@ -184,7 +190,7 @@ deters.
   measures whether the review itself named the defect (`review_named`),
   because the verdict cannot tell the builder's catch from the review's.
 
-The roadmap asks for a review that injects a real finding. A canned finding
+A scenario that tests the review needs a real finding. A canned finding
 cannot be true of code that the run has yet to write. So `defect-in-hunk`
 and `parallel-paths` seed a defect in the fixture, and a real review finds
 it or does not. `--review-model` runs them with another reviewer, and *The
@@ -235,7 +241,8 @@ file names under `hooks/`. One more name is `deny-rules`. It seeds the
 fixture with no deny rule in `.claude/settings.json`, because those rules
 defend the adapters and the settings beside the hooks.
 
-Read an ablation under the roadmap's rules. Switch a mechanical safety hook
+Read an ablation under the rules of
+[`docs/development.md`](../../docs/development.md). Switch a mechanical safety hook
 off only against the adversarial track. Run the scenario several times with
 the hook and several times without it, because one run each compares two
 samples of size one. And a scenario can only show what a hook deters if the

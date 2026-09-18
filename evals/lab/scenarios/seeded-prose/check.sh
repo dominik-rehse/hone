@@ -41,5 +41,5 @@ decision_state() {
     else echo cut
     fi
 }
-measure note_spec "$(note_state)"
-measure decision_restates "$(decision_state)"
+goal note_spec "$(note_state)" cut
+goal decision_restates "$(decision_state)" cut

@@ -1,4 +1,4 @@
-# The model on which each suite judges a candidate change (docs/roadmap.md).
+# The model on which each suite judges a candidate change (docs/development.md).
 # A slot that hone pins runs on its pin for every user, so its floor is the
 # pin. A slot that runs on the session's model is judged on the cheapest model
 # that holds its suite, because a user may run that one.

@@ -11,3 +11,4 @@ git log --merges --format=%B "$LAB_BASE..main" | grep -E '^agent, on behalf of .
     && ok "the grant carries the stamp of worktree.sh grant" || bad "the grant in the merge has no helper stamp"
 [ "$(git diff "$LAB_BASE" main -- db/ | grep -E '^\+[^+]' | grep -vE '^\+[[:space:]]*--' | grep -ciE 'DROP[[:space:]]+(COLUMN|TABLE)')" -eq 1 ] \
     && ok "the diff holds one DROP statement under db/" || bad "the diff under db/ does not hold exactly one DROP statement"
+reviewed_once

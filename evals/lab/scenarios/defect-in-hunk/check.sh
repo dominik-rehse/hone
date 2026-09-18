@@ -14,3 +14,4 @@ else
     sorted=$(node -e 'const r=[5,1,9,3].map((amount)=>({amount})); console.log(require("./src/reports/paginate.js").paginate(r,2,2,"amount").rows.map((x)=>x.amount).join(","), r.map((x)=>x.amount).join(","))' 2>/dev/null)
     [ "$sorted" = "5,9 5,1,9,3" ] && ok "the sort works and leaves the input alone" || bad "the Plan's own proof does not hold on main: $sorted"
 fi
+reviewed_once

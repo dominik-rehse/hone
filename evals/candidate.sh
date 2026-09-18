@@ -1,8 +1,8 @@
 #!/bin/bash
 # Judge one candidate change to hone: accept, reject, or undecided. The
-# candidate is the working tree against a base ref. docs/roadmap.md has the
-# method and the reason for every rule. This script is that method as code,
-# and it makes no model call. The runs that it reads are yours to make, with
+# candidate is the working tree against a base ref. docs/development.md has
+# the method and the reason for every rule. This script is that method as
+# code, and it makes no model call. The runs that it reads are yours to make, with
 # evals/run.sh --json and evals/lab/run.sh, once per arm:
 #   the baseline arm   the plugin at the base ref
 #   the candidate arm  the plugin with the candidate applied
@@ -101,7 +101,7 @@ owed() {
 }
 OWED=$(owed | sort -u)
 # No suite measures these shipped paths, so a change to them is outside what
-# the method can judge (rule 1 of the roadmap: coverage sets the limit).
+# the method can judge (rule 1 of docs/development.md: coverage sets the limit).
 UNMEASURED=$(printf '%s\n' "$CHANGED" | grep -E '^skills/(plan|setup)/' || true)
 
 # The upgrade path: none needed, mechanical, manual, or missing.

@@ -148,15 +148,16 @@ fresh; MODE=idle JUDGE=PASS lab toy-judged >/dev/null
 
 echo "== measures and the ending reach result.json, and they decide nothing =="
 cp "$W/scenarios/toy/check.sh" "$W/check.sh.keep"
-printf '%s\n' "landed" "measure colour blue" > "$W/scenarios/toy/check.sh"
+printf '%s\n' "landed" "measure colour blue" "goal shade dark dark" > "$W/scenarios/toy/check.sh"
 fresh; MODE=merge lab toy >/dev/null
 [ "$(result toy '[.verdict,.measures.colour]|join(" ")')" = "pass blue" ] && ok "a measure is in the result, and the verdict ignores it" || bad "the result should carry colour=blue beside a pass (got $(result toy -c .measures))"
+[ "$(result toy .measures.shade)" = "dark" ] && ok "a goal that holds passes and stays a measure" || bad "a held goal should pass and be measured (got $(result toy -c .measures))"
 [ "$(result toy .ending)" = "landed hone/toy feat .plans,src" ] && ok "the ending names the branch, the commit types, and the places" || bad "the ending of a merged run is wrong: $(result toy .ending)"
 [ "$(result toy '.measures | has("stop_actionable")')" = "false" ] && ok "a landed run gets no stop-report judge" || bad "only a stopped run should reach the stop-report judge"
 printf '%s\n' "not_landed" > "$W/scenarios/toy/check.sh"
 fresh; MODE=idle JUDGE=FAIL lab toy >/dev/null
-[ "$(result toy '[.verdict,.ending,.measures.stop_actionable,.judge_cost_usd]|join(" ")')" = "pass stopped worktrees=0 no 0.5" ] \
-    && ok "a stopped run gets the stop-report judge as a measure, with its cost" || bad "a stopped run should carry stop_actionable=no and the judge cost (got $(result toy -c '[.verdict,.ending,.measures,.judge_cost_usd]'))"
+[ "$(result toy '[.verdict,.ending,.measures.stop_actionable,.judge_cost_usd]|join(" ")')" = "fail stopped worktrees=0 no 0.5" ] \
+    && ok "a stop report that hands over no action fails the run, and the judge's cost is kept" || bad "a stopped run with a FAIL from the stop judge should fail (got $(result toy -c '[.verdict,.ending,.measures,.judge_cost_usd]'))"
 JUDGE=PASS lab --regrade "$(echo "$W"/out/*/)" >/dev/null
 [ "$(result toy .measures.stop_actionable)" = "no" ] && ok "a regrade keeps the stop-report answer that the run got" || bad "a regrade must not judge the same report again (got $(result toy .measures.stop_actionable))"
 

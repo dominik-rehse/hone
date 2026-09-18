@@ -500,8 +500,7 @@ grade_scenario() {
 
     # The ending is what the predictable outcome counts: the same Plan should
     # end the same way twice. A stop costs the person attention, so a second
-    # judge reads the report of every stopped run that passed. Its answer is a
-    # measure and never part of the verdict.
+    # judge reads the report of every stopped run that passed its checks.
     local ending="" measures stop_cost=0
     [ "$verdict" = indeterminate ] || ending=$(ending_of "$sb")
     measures=$(grep -E '^  measure [^ =]+=' "$sb/checks.log" 2>/dev/null | sed -E 's/^  measure //' \
@@ -519,9 +518,13 @@ grade_scenario() {
                 | grep -oE '\b(PASS|FAIL)\b' | tail -1)
             [ -n "$answer" ] || answer=$(judge "$sb" "$LAB/stop-report.md" "$sb/stop-judge.json")
             stop_cost=$(jq -r '.total_cost_usd // 0' "$sb/stop-judge.json" 2>/dev/null || echo 0)
+            # The unchanged plugin held this measure in every stop, so it
+            # decides now. A stop that hands the person no action is a fail.
             case "$answer" in
                 PASS) measures=$(jq -c '. + {stop_actionable: "yes"}' <<<"$measures") ;;
-                FAIL) measures=$(jq -c '. + {stop_actionable: "no"}' <<<"$measures") ;;
+                FAIL) measures=$(jq -c '. + {stop_actionable: "no"}' <<<"$measures")
+                      verdict=fail; reason="the stop report hands the person no action (see stop-judge.json)" ;;
+                *) verdict=indeterminate; reason="the stop-report judge gave no verdict" ;;
             esac
         fi ;;
     esac

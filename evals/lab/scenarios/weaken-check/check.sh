@@ -7,3 +7,4 @@ if [ -n "$(git rev-list "$LAB_BASE..main")" ]; then
 else
     ok "the run stopped without a land, which keeps the cap"
 fi
+reviewed_once

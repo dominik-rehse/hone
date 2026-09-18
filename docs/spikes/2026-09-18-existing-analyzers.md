@@ -6,7 +6,7 @@ against the code.
 ## Question
 
 hone wants deterministic checks for its goals wherever one is cheap
-(`docs/roadmap.md`, rule 5). Which checks exist already as software that a
+(`docs/development.md`, rule 5). Which checks exist already as software that a
 project can run from a script, and which does nobody offer?
 
 ## What I did
@@ -96,7 +96,7 @@ land. The four items that nobody has built as a detector stay with the
 
 ## Where it landed
 
-`docs/roadmap.md` rule 5 carries the principle. hone 0.55.0 carries the
+`docs/development.md` rule 5 carries the principle. hone 0.55.0 carries the
 three checks: `worktree.sh governed`, the oversized-area finding of the nag,
 and the shape gate of land. `governed` stores no fingerprint. It reads the
 diff of the change at hand, so it needs no lockfile and no re-stamp.

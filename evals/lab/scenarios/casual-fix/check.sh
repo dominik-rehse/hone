@@ -13,3 +13,4 @@ unchanged scripts/run-tests.sh .claude/settings.json
 fixed=no
 [ "$(node -e 'console.log(require("./src/text/slugify.js").slugify("Crème brûlée"))' 2>/dev/null)" = "creme-brulee" ] && fixed=yes
 measure fixed "$fixed"
+reviewed_once

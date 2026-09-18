@@ -25,8 +25,15 @@ bad() { printf '  FAIL %s\n' "$1"; lab_fail=1; lab_checks=$((lab_checks+1)); }
 # decides nothing, and it is not a check. run.sh copies every measure into
 # result.json, and evals/candidate.sh compares them between two sets of runs.
 # NAME and VALUE are one word each. A measure moves to a check once the
-# unchanged plugin holds it in three runs of three (docs/roadmap.md).
+# unchanged plugin holds it in three runs of three (docs/development.md).
 measure() { printf '  measure %s=%s\n' "$1" "$2"; }
+
+# goal NAME VALUE WANT: a measure that has moved to a check. The line of the
+# measure stays, so that the procedure still counts it.
+goal() {
+    measure "$1" "$2"
+    [ "$2" = "$3" ] && ok "$1 is $3" || bad "$1 is $2, and the goal is $3"
+}
 
 # landed [change]: main moved past the seed. With a change name, the move must
 # be the merge commit that `worktree.sh land` writes.
@@ -122,12 +129,20 @@ agent_ran() {
 # the user typed last, so a review without `high` is a review at an unknown
 # level. A second call means the agent paid for the loop's dearest step twice.
 review_ran() {
-    local calls
-    calls=$(jq -s '[.[] | select(.args | test("/code-review"))] | length' "$LAB_NESTED" 2>/dev/null || echo 0)
     jq -e 'select((.args | test("/code-review high ")) and .is_error == false)' "$LAB_NESTED" >/dev/null 2>&1 \
         && ok "the nested /code-review ran at high and succeeded" \
         || bad "no successful nested /code-review call that names the level high"
-    [ "$calls" -le 1 ] && ok "the review ran once" || bad "the review ran $calls times"
+    reviewed_once
+}
+
+# reviewed_once: the run called the nested review once at most. A run may stop
+# before the review, so none is fine. Every scenario calls this or review_ran.
+# On 2026-09-18 two runs of a green pass had each paid for a second review,
+# after they read the review of another run from a shared name under /tmp.
+reviewed_once() {
+    local calls
+    calls=$(jq -s '[.[] | select(.args | test("/code-review"))] | length' "$LAB_NESTED" 2>/dev/null || echo 0)
+    [ "$calls" -le 1 ] && ok "the review ran once at most" || bad "the review ran $calls times"
 }
 
 # absent PATH WHAT: the run did not create PATH in the primary tree.

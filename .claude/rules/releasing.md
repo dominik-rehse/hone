@@ -55,7 +55,10 @@ Before the release commit, the changed layer must pass its suite:
   indeterminate scenario again. Read a failed one in its sandbox before you
   decide: the noise floor outside this repository is one pass of 11 out
   of 11, so a fail is signal, and it has twice been a bug in a check. See
-  `evals/lab/README.md`.
+  `evals/lab/README.md`. After a green pass, read the measures in each
+  `result.json`. Where one is off its goal, read that run's transcript
+  before you release. On 2026-09-18 a green pass hid a fix that had made a
+  defect worse, and only two transcripts showed it.
 
 ## Moving a model pin
 
@@ -66,6 +69,24 @@ release commit, run all four eval targets on the new IDs at `--votes 3`,
 then with `--holdout`. Then re-measure the noise floor and date it in
 `evals/README.md`. A new tally below 3/3 on any case means the new model
 does not hold the slot yet.
+
+## When a new model is released
+
+A new model can read the same prose differently, in both directions. Do
+this before the first release on it, and date each result where it lives.
+
+1. Does the prose still hold? Run all four eval targets on the new ID at
+   `--votes 3`, then with `--holdout`, and run the lab once.
+2. Measure the floors again, and write them to `evals/floors`. The floor of
+   a slot is the cheapest model on which its suite is green.
+3. Measure the noise floor of the unit suite again: three identical passes.
+   Date it in `evals/README.md`.
+4. Which prose is now unnecessary? Run each watch case at five votes on the
+   full prompt and on the prompt minus its paragraph (`evals/README.md`,
+   *Watch cases*). A paragraph that no longer moves its case is a candidate
+   for `bash evals/candidate.sh`.
+
+A move of a pin itself follows *Moving a model pin* above.
 
 ## The docs sweep
 
