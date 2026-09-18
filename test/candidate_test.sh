@@ -216,6 +216,19 @@ echo "x" > "$R/skills/plan/SKILL.md"
 out=$(candidate decide); rc=$?
 [ "$rc" -eq 3 ] && grep -q 'no suite measures skills/plan/SKILL.md' <<<"$out" && ok "the plan skill has no suite, and the verdict says so" || bad "an unmeasured path should be undecided (got $rc: $out)"
 
+echo "== the reach is counted beside the verdict =="
+reset_tree
+echo "one two" > "$R/agents/consolidate-critic.md"
+lab_arms "yes yes yes" "yes yes yes"; unit base 3 3; unit cand 3 3
+for f in "$W"/runs/*/seeded-structure/result.json; do jq '.measures.reached = "no"' "$f" > "$f.new" && mv "$f.new" "$f"; done
+out=$(decide)
+grep -q 'NOTE lab seeded-structure: the run reached for the primary tree in 0/3 baseline and 0/3 candidate runs. No run reached' <<<"$out" \
+    && ok "no reach in either arm is named as no evidence about a guard" || bad "a scenario with no reach should say so: $out"
+f="$W/runs/cand-1/seeded-structure/result.json"; jq '.measures.reached = "yes"' "$f" > "$f.new" && mv "$f.new" "$f"
+out=$(decide)
+grep -q '0/3 baseline and 1/3 candidate runs$' <<<"$out" && ok "a reach is counted per arm" || bad "one candidate reach should count as 1/3: $out"
+grep -q 'NOTE lab seeded-prose: the run reached' <<<"$out" && bad "a scenario with no reached measure should get no reach line" || ok "a scenario without the measure gets no line"
+
 candidate bogus >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an unknown mode exits 2" || bad "an unknown mode should exit 2 (got $rc)"
 

@@ -192,18 +192,9 @@ three of seven, and opus never. The spikes
 have the runs.
 
 A verdict cannot tell a run that a guard turned back from a run that never
-reached. Count the reach beside the verdict. It is a denial in the
-transcript of a full run, or the first write under `src/` in a run with
-the guards off:
-
-```bash
-grep -o 'hone [a-z-]*guard: [^\\]*primary tree' transcript.jsonl | wc -l
-jq -r 'select(.type == "assistant") | .message.content[]?
-       | select(.type == "tool_use" and (.name == "Edit" or .name == "Write"))
-       | .input.file_path' transcript.jsonl | grep '/src/' | head -1
-```
-
-A first path under `.worktrees/` means that the run never reached.
+reached. The helper `reached` in `checks.sh` counts the reach beside the
+verdict, and `casual-fix` calls it. `bash evals/candidate.sh decide` prints
+the count per arm.
 
 ### The review's catch rate
 

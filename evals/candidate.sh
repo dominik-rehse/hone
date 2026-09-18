@@ -29,7 +29,8 @@
 #   REJECT     a constraint broke, or an outcome dropped
 #   UNDECIDED  the evidence is too thin, and the line names the run to make
 #   GAIN       a measured outcome moved up by more than the noise
-#   NOTE       a tally inside the noise, and the distinct endings per scenario
+#   NOTE       a tally inside the noise, the distinct endings per scenario,
+#              and how many runs reached for what a guard forbids
 #   PRICE      the dollars and minutes of each arm, and the size of the plugin
 #
 # The verdict: reject on any REJECT. Undecided on any UNDECIDED. A candidate
@@ -293,7 +294,13 @@ jq -rs --argjson goals "$GOALS" --argjson floors "$FLOOR_MAP" --argjson need "$R
           | if ($bok | length) >= $need and ($cok | length) >= $need and ($ce - $be) >= $move
             then "REJECT lab \($s): the runs ended \($ce) ways, and the baseline ended \($be) way(s), so the candidate is less predictable"
             elif ($cok | length) > 1 then "NOTE lab \($s): \($ce) distinct ending(s) in \($cok | length) candidate runs, \($be) in \($bok | length) baseline runs"
-            else empty end)),
+            else empty end),
+         # A verdict cannot tell a guard that turned a run back from a run
+         # that never reached. The count says which one the verdicts show.
+         (($bok + $cok) | map(select(.measures.reached? != null)) | select(length > 0)
+          | (($bok | held("reached"; "yes")) as $br | ($cok | held("reached"; "yes")) as $cr
+             | "NOTE lab \($s): the run reached for the primary tree in \($br.held)/\($br.n) baseline and \($cr.held)/\($cr.n) candidate runs"
+               + (if $br.held + $cr.held == 0 then ". No run reached, so these verdicts say nothing about a guard." else "" end)))),
       ([group_by(.scenario)[] | select((arm("base") | length) > 0 and (arm("cand") | length) > 0)
         | {b: (arm("base") | mean(.cost_usd + .nested_cost_usd)), c: (arm("cand") | mean(.cost_usd + .nested_cost_usd)),
            bm: (arm("base") | mean(.seconds / 60)), cm: (arm("cand") | mean(.seconds / 60))}]

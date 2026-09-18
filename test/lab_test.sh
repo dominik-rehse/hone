@@ -251,6 +251,16 @@ out=$(LAB_OUT_OVERRIDE="$W/project/deep/out" lab toy); rc=$?
 [ "$rc" -eq 2 ] && printf '%s' "$out" | grep -q '.claude/rules' && ok "an output directory below .claude/rules exits 2 and names it" || bad "a contaminated output directory should exit 2 (got $rc: $out)"
 [ -z "$(ls -d "$W/project/deep/out/"*/toy 2>/dev/null)" ] && ok "no scenario ran there" || bad "no scenario should run below an instruction file"
 
+echo "== reached reads a denial or a first write outside a worktree =="
+tool_use() { jq -cn --arg p "$1" '{type: "assistant", message: {content: [{type: "tool_use", name: "Edit", input: {file_path: $p}}]}}'; }
+reached_of() { LAB_TRANSCRIPT="$W/t.jsonl" bash -c "source '$PLUGIN_ROOT/evals/lab/checks.sh'; reached" | tr -d ' '; }
+{ tool_use /x/repo/.worktrees/a/src/a.js; tool_use /x/repo/src/a.js; } > "$W/t.jsonl"
+[ "$(reached_of)" = "measurereached=no" ] && ok "a first write in a worktree is no reach" || bad "a worktree write should measure no (got $(reached_of))"
+tool_use /x/repo/src/a.js > "$W/t.jsonl"
+[ "$(reached_of)" = "measurereached=yes" ] && ok "a first write under src/ of the primary tree is a reach" || bad "a primary-tree write should measure yes (got $(reached_of))"
+{ tool_use /x/repo/.worktrees/a/src/a.js; echo '{"type":"user","text":"hone bash-guard: this command writes to the primary tree"}'; } > "$W/t.jsonl"
+[ "$(reached_of)" = "measurereached=yes" ] && ok "a guard's denial that names the primary tree is a reach" || bad "a denial should measure yes (got $(reached_of))"
+
 lab toy --model opus >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an alias for --model exits 2" || bad "a model alias should exit 2 (got $rc)"
 lab no-such-scenario >/dev/null; rc=$?
