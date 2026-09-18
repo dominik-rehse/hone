@@ -18,7 +18,7 @@ quality. Each agent checked its claims against the tool's own repository or
 documentation where it could, and it named what it could not check. One
 agent ran jscpd 5.2.1 and pylint on three identical files. No other tool
 was installed or run. I did not check the agents' reports myself, so treat
-every version, date, and license below as a lead and not as a fact.
+every version, date, and license below as a lead to check.
 
 ## Finding
 
@@ -89,13 +89,15 @@ separate `scripts/duplication.sh` slot that I proposed earlier the same day
 is not needed.
 
 Three checks rest on concepts that only hone has, so no tool can supply
-them. They are the `Governs:` fingerprint, the size cap of a
-`src/<area>/`, and the `Cut:` line at land. The four items that nobody has built as a detector
-stay with the `consolidate-critic`.
+them. They are a list of the documents about changed code, read from the
+`Governs:` lines, the size cap of a `src/<area>/`, and the `Cut:` line at
+land. The four items that nobody has built as a detector stay with the
+`consolidate-critic`.
 
 ## Where it landed
 
-`docs/roadmap.md` rule 5 carries the principle. Nothing in hone changed
-because of this note. The next step is a decision by the maintainer. It
-covers the three hone-owned checks, and a page of adapter recipes per
-language under `templates/`.
+`docs/roadmap.md` rule 5 carries the principle. hone 0.55.0 carries the
+three checks: `worktree.sh governed`, the oversized-area finding of the nag,
+and the shape gate of land. `governed` stores no fingerprint. It reads the
+diff of the change at hand, so it needs no lockfile and no re-stamp.
+`templates/quality/README.md` maps each goal to the kinds of tool above.

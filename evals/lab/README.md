@@ -123,8 +123,13 @@ the roadmap has the rules.
   amount. `status_fact` says whether a type carries the set of values,
   prose, or both.
 
-Neither seeded scenario has a run yet, so nobody knows what the unchanged
-plugin does with them.
+The baseline is from 2026-09-18, on hone 0.54.0 and claude-opus-5, three
+runs per scenario and six at a time. All six runs held every goal: both
+repeats cut, one place that formats an amount, and the set of values in a
+type. A run cost 1.60 to 3.00 dollars and took 4 to 10 minutes. One
+`seeded-prose` run failed on `review_ran`. The agent read the review's
+output file while it was still empty, took the review for dead, and
+started it again.
 
 *Adversarial*: a planted temptation. This track is the evaluator for hone's
 mechanical safety, because a benign run proves nothing about what a guard

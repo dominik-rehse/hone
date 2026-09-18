@@ -65,7 +65,7 @@ goal.
   duplicated logic, and no abstraction with one user. Pursued at the point
   of change only, and by little prose. That prose is the *Type first*
   bullet at build, the rule of three, and two bullets of the
-  `consolidate-critic`. That is a decision and not an oversight. *Types
+  `consolidate-critic`. hone limits it to that point on purpose. *Types
   and abstractions* in [`model.md`](model.md) says that a search for
   things to abstract produces wrong abstractions. The lab scenario `seeded-structure`
   therefore puts both of its seeds inside the change, on a TypeScript
@@ -75,8 +75,8 @@ goal.
   status. `format_copies` counts the places that format an amount, and the
   goal is 1. `status_fact` says whether a type carries the set of values,
   prose, or both, and the goal is `type`. No mechanism turns an existing
-  prose fact into a type. If the baseline leaves `status_fact` at `prose`,
-  a routing line at consolidate is the first candidate.
+  prose fact into a type, and the baseline of 2026-09-18 did it anyway, in
+  three runs of three.
 - *Correct.* The landed change does what the Plan says, and no defect lands
   in silence. Pursued by test-first work, the gate, the nested review, and
   the land gates. The lab's end-state checks measure the first part per
@@ -303,9 +303,9 @@ votes on both arms, which costs about one dollar. At ten votes a fall of
 one vote is noise, and a fall of two or more rejects. A rise counts as a
 gain under the same numbers.
 
-This replaces the older rule for a cut, which kept a section when any
-tally moved. That rule read one vote as signal. A paragraph that moves a
-case by exactly one vote of ten stays, and its brief becomes a watch case.
+The same numbers decide a cut. A rule that keeps a section whenever a
+tally moves reads one vote as signal. A paragraph that moves a case by
+exactly one vote of ten stays, and its brief becomes a watch case.
 
 ### The upgrade path
 
@@ -347,16 +347,30 @@ It owes the whole lab and three runs of each goal scenario.
 
 ### Open decisions, for the maintainer
 
-- The two seeded scenarios have no run yet. Their first three runs each
-  are the baseline, and they cost about 17 dollars. Until then nobody
-  knows whether the unchanged plugin passes their checks, and they are
-  part of the release gate.
+- The baseline of the two seeded scenarios is from 2026-09-18, on hone
+  0.54.0: every goal held in three runs of three, for 13 dollars. So hone
+  showed no gap there, and a candidate can only hold these measures or
+  lose them. The measures are due to move to checks.
+- hone 0.55.0 passed the lab at 13 of 13 on 2026-09-18, for 31 dollars
+  and 17 minutes at five scenarios at a time. It adds three deterministic
+  checks under rule 5: the `Cut:` line at land, the oversized-area finding
+  of the nag, and `worktree.sh governed`. The goal scenarios ran once on
+  it, so the procedure has no three runs of that arm yet.
+- The first `stop_actionable=no` came from `claimed-worktree`. The report
+  listed three next steps, one per possible cause, and gave the person no
+  way to tell which cause holds. A candidate is a stop report for exit 4
+  that names `worktree.sh status` as the way to tell.
+- One baseline run of six started the nested review twice. The agent read
+  the review's output file while it was still empty. That costs 12 cents
+  and fails `review_ran`. A fix belongs in the review step of the run
+  skill, as a candidate.
 - The first candidate that the record review suggests is the removal of
   the `consolidate-critic`. No case shows that its cut bullets change a
   verdict, and no run shows that they change a codebase. With the baseline
   above it costs about 60 dollars to judge: both seeded scenarios, the
   `loop` target, and one lab pass.
-- The ten-vote rule above replaces a rule that the maintainer set.
+- The ten-vote rule above differs from the maintainer's rule that a cut
+  needs an unmoved tally.
 - The garden release gate runs on opus, and the measured floor is sonnet.
   `evals/floors` follows rule 2 and names sonnet.
 - The lab's noise floor outside the repository has one pass of the three

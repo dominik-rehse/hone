@@ -55,7 +55,7 @@ new fields on real end states.
   50 dollars to judge. So a search over many candidates is not affordable.
   A search at the unit level is affordable, and the record shows that the
   unit level pins little. An optimizer would be one more source of
-  candidates for `evals/candidate.sh`, and nothing more.
+  candidates for `evals/candidate.sh`.
 
 ### What the record got wrong, or what went stale
 
