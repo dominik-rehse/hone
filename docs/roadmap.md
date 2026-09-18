@@ -27,54 +27,86 @@ tie-breaker, and the outcomes come first.
 A change to hone is good when two things hold. The codebases that hone
 produces get closer to that end or stay as close. And hone gets smaller or
 cheaper. The end itself is not measurable in one number. What is measurable
-is the outcomes below, which are what hone does to a codebase on the way
-there. So the outcomes come first, and cost is the tie-breaker among changes
-that hold them. Each outcome names what measures it today, and where nothing
-does.
+is the outcomes below, in three groups: what the codebase is like, what
+each change is like, and what it all costs. The outcomes come first, and
+the price is the tie-breaker among changes that hold them. Each outcome
+names what pursues it in hone today and what measures it, and where
+nothing does.
 
+*The codebase hone leaves behind.* These are the end, in the words of the
+goal.
+
+- *Transparent.* The truth about the system is in one place, and a checker
+  catches it going stale. Tests are named for the behaviour they pin. No
+  prose repeats what the code, the types, or the tests already carry.
+  Pursued by test-first work (the `guard`), the consolidate step and its
+  critic, the `nag`, and `/hone:garden`. The `consolidate-critic` evals pin
+  the critic's judgment on a Decision that restates code and a Note grown
+  into a spec. The lab's `commits_conform` check demands the `Cut:` line.
+  No lab scenario yet seeds such prose and checks that consolidate removed
+  it.
+- *Well-structured.* Types carry what types can carry. Areas are small
+  enough to hold in context, with one Note and one invariant each. No
+  duplicated logic, and no abstraction with one user. Pursued by the
+  routing test at consolidate (cut, then type, then the smallest document)
+  and by two bullets of the `consolidate-critic`. Nothing measures it end
+  to end. One eval case pins one calibration bullet, and no scenario seeds
+  a duplicated helper or a prose fact that should be a type.
 - *Correct.* The landed change does what the Plan says, and no defect lands
-  in silence. The lab's end-state checks measure the first part per
+  in silence. Pursued by test-first work, the gate, the nested review, and
+  the land gates. The lab's end-state checks measure the first part per
   scenario. The review's catch rate (`review_named`) and the
-  `parallel-paths` and `defect-in-hunk` scenarios measure the second. The
-  loop evals pin that the run stops on a check it cannot make green.
-- *Test-driven.* No production code without a failing test, and tests named
-  for the behaviour they pin. The `guard` enforces the first mechanically,
-  and the lab's `fix-without-test` scenario measures it where the guard
-  cannot reach. Nothing measures the second beyond the review.
-- *Honed.* What a change leaves behind is minimal. No Decision that
-  restates code, no Note that grows into a spec, no redundant test, no
-  abstraction with one user, and every change cuts something. The
-  `consolidate-critic` evals pin the critic's judgment on these, and the
-  lab's `commits_conform` check demands the `Cut:` line. No lab scenario
-  yet seeds slop and checks that consolidate removed it. That is the
-  largest gap between the goal and the measurements.
-- *Unattended and safe.* The loop takes no shortcut around a gate, and it
-  never reports a partial run as done. The lab's adversarial track measures
-  it. `casual-fix` is the first scenario in which a model reaches for a
-  shortcut and a guard turns it back.
-- *Light on human attention.* The person writes the Plan and reads the
-  report. In between they answer a bounce from the critic, and they sign a
-  proof or a grant. Every other minute of theirs is waste. A bounce that
-  names a real fork is attention well spent, and a bounce on a nit is not.
-  Nothing measures this yet. The lab can count bounces per Plan, stops per
-  run, and whether a stop hands the person one concrete action. A judge can
-  read a report for whether a person could act on it in a minute.
+  `parallel-paths` and `defect-in-hunk` scenarios measure the second.
+
+*Each change hone makes.* These are what makes unattended landing
+tolerable.
+
+- *Safe.* The loop takes no shortcut around a gate, and it never reports a
+  partial run as done. Pursued by the hooks, the deny rules, and the loop's
+  stop rules. The lab's adversarial track measures it, and the loop evals
+  pin that the run stops on a check it cannot make green. `casual-fix` is
+  the first scenario in which a model reaches for a shortcut and a guard
+  turns it back.
+- *Reversible.* Every landed change is one merge that a person can revert
+  in one command, with nothing outside git to undo. Pursued by one
+  worktree and one merge per change, and by the grant gate for what a
+  revert cannot undo. Nothing checks it end to end yet. The check is
+  cheap: one merge commit per change, and a revert of it leaves the suite
+  green.
 - *Predictable.* The same Plan gives the same kind of result twice. That
   means the same ending, the same shape of commit, and the same place for
-  what it left behind. Nothing measures this yet. The lab's repeated passes
-  already hold the data: count the distinct endings of one scenario across
-  passes. `parallel-paths` ended three ways on 2026-09-17, and `casual-fix`
-  gave one fix three different slugs. Some variance is the model's, and hone
+  what it left behind. Pursued by the fixed loop and the fixed routing at
+  consolidate. Nothing measures it yet. The lab's repeated passes already
+  hold the data: count the distinct endings of one scenario across passes.
+  `parallel-paths` ended three ways on 2026-09-17, and `casual-fix` gave
+  one fix three different slugs. Some variance is the model's, and hone
   cannot buy all of it away with prose.
-- *Reversible.* Every landed change is one merge that a person can revert
-  in one command, with nothing outside git to undo. hone has this mostly by
-  construction, one worktree and one merge per change, plus the grant gate
-  for what a revert cannot undo. Nothing checks it end to end yet. The
-  check is cheap: one merge commit per change, and a revert of it leaves
-  the suite green.
-- *Cheap and fast.* Dollars and minutes per landed change, as the lab
-  records them per run. Lowered only at equal outcomes above. A happy-path
-  run costs about 2 dollars on opus.
+
+*The price.* Lowered only at equal outcomes above.
+
+- *Human attention.* The person writes the Plan and reads the report. In
+  between they answer a bounce from the critic, and they sign a proof or a
+  grant. Every other minute of theirs is waste, and this is the scarce
+  price. The whole shape of the loop pursues it. There is one hand-written
+  artifact, a critic that runs while the person is present, no check-in,
+  and a stop that hands over one action. Nothing measures it yet. The lab
+  can count bounces per Plan, stops per run, and whether a stop hands the
+  person one concrete action. A judge can read a report for whether a
+  person could act on it in a minute. A bounce that names a real fork is
+  attention well spent, and a bounce on a nit is not.
+- *Dollars and minutes.* Per landed change, as the lab records them per
+  run. A happy-path run costs about 2 dollars on opus.
+
+hone may not be complete with respect to these outcomes. Several of them
+have a mechanism that pursues them only as a side effect, or a critic
+bullet and nothing more. *Well-structured* is the clearest case. hone has
+no step that looks for duplicated logic across the codebase, and no step
+that turns a prose fact into a type. So the first question for each
+outcome is whether hone has a mechanism that pursues it at all. Only then
+comes the question whether that mechanism can be smaller or cheaper. A
+missing mechanism is a change to hone like any other. The method has to
+judge it the same way: does adding this step move the outcome, and what
+does it cost?
 
 The three suites are how the measured outcomes are measured, so they are
 the constraints on every change to hone. [`development.md`](development.md)
@@ -117,8 +149,9 @@ hone is a Claude Code plugin. A person writes a short Plan for one change.
 `/hone:run` then builds the change test-first in a git worktree and runs
 every check. It consolidates what the change leaves behind in the docs,
 runs a code review, and merges it. Two critic agents find fault with the
-Plan and with the consolidated result. Hooks enforce the rules mechanically. Between
-changes, `/hone:garden` cuts what has gone stale. [`model.md`](model.md)
+Plan and with the consolidated result. Hooks enforce the rules
+mechanically. Between changes, `/hone:garden` cuts what has gone stale.
+[`model.md`](model.md)
 says why each piece exists, and [`reference.md`](reference.md) is the full
 control surface. The shipped plugin is `agents/`, `hooks/`, `rules/`,
 `scripts/`, `skills/`, and `templates/`. `evals/`, `test/`, and `docs/`
@@ -131,26 +164,33 @@ the outcomes in *The outcomes, and what measures each*. The end is the
 codebase that hone leaves behind, and cost is the price. So the method
 must:
 
-1. Measure each outcome, or say why it cannot. Four outcomes have no
-   measurement today: honed (end to end), light on attention,
-   predictable, and reversible. Start with honed, because it is the
-   outcome hone is named for. A lab scenario that seeds slop for
-   consolidate to remove is the first piece. Examples of slop are a
-   Decision that restates the code, a Note that has grown into a spec,
-   and a duplicated helper. The check reads whether consolidate cut it.
-2. Turn the measurements into one procedure that takes a candidate change
+1. Measure each outcome, or say why it cannot. Five outcomes have no
+   end-to-end measurement today: transparent, well-structured,
+   reversible, predictable, and human attention. Start with transparent
+   and well-structured, because they are the end itself. A lab scenario
+   that seeds slop for consolidate to remove is the first piece. Slop
+   here means a Decision that restates the code, or a Note that has grown
+   into a spec. It also means a prose fact that should be a type, or a
+   duplicated helper. The check reads whether consolidate cut or converted
+   it.
+2. Ask, per outcome, whether hone has a mechanism that pursues it at all.
+   Where it has none, or only a side effect, propose the mechanism before
+   you optimize what exists. The method must judge such an addition the
+   same way it judges a cut: does the outcome move, and what does it cost?
+3. Turn the measurements into one procedure that takes a candidate change
    to hone and answers accept or reject. The constraints are the three
    suites, green on the floor model of each target. Among candidates that
    hold every measured outcome, the cheaper and the smaller hone wins.
    Say how a tally that moves without flipping counts.
-3. Say what a candidate is, and where candidates come from. Today they
+4. Say what a candidate is, and where candidates come from. Today they
    come from three places: a section of prompt prose deleted, a hook or
-   critic switched off, and a model pin moved. The method may add sources.
-4. Say what one evaluation costs and takes, so that the maintainer can
+   critic switched off, and a model pin moved. A new step or a new rule is
+   a fourth, and the method must accept it.
+5. Say what one evaluation costs and takes, so that the maintainer can
    budget a campaign. Today a unit suite pass costs about 4 dollars. A
    full lab pass costs about 30 dollars and takes an hour. A section
    ablation of one critic costs about 10 dollars.
-5. Write the method down in this file, as a section that replaces this
+6. Write the method down in this file, as a section that replaces this
    handoff, and land its tooling under `evals/` with its tests under
    `test/`.
 
@@ -407,9 +447,9 @@ Open:
 
 - No scenario seeds slop for consolidate to remove. Examples are a Decision
   that restates the code, a Note that has grown into a spec, and a
-  duplicated helper. The *Honed* outcome is the one hone is named for, and
-  the lab does not measure it yet. The handoff names it as the first piece
-  of the method.
+  duplicated helper. The *transparent* and *well-structured* outcomes are
+  the end itself, and the lab does not measure them yet. The handoff names
+  that scenario as the first piece of the method.
 - The noise floor outside the repository has one pass of the three it
   needs. One pass over eleven scenarios on opus gave 11 passes. Until the
   other two run, the release gate rests on one sample.
