@@ -358,14 +358,17 @@ It owes the whole lab and three runs of each goal scenario.
   it, so the procedure has no three runs of that arm yet. 0.55.1 fixed ten
   findings of a code review on that work and passed the lab at 13 of 13
   again, for 29 dollars.
-- The first `stop_actionable=no` came from `claimed-worktree`. The report
-  listed three next steps, one per possible cause, and gave the person no
-  way to tell which cause holds. A candidate is a stop report for exit 4
-  that names `worktree.sh status` as the way to tell.
-- One baseline run of six started the nested review twice. The agent read
-  the review's output file while it was still empty. That costs 12 cents
-  and fails `review_ran`. A fix belongs in the review step of the run
-  skill, as a candidate.
+- 0.55.2 fixed two defects that the lab had measured, with no experiment,
+  because each had a known cause. `claimed-worktree` read
+  `stop_actionable=no` twice: the refusal of `add` gave two possible causes
+  and no way to tell them apart. It now says what the claim holds and names
+  one action, and the measure reads `yes`. The second defect was a review
+  that ran twice. Its first fix made things worse, and only the transcripts
+  showed it. The agent chose a fixed file name under `/tmp`, so it read the
+  review of a concurrent scenario, or a file that an earlier pass had left.
+  The brief and the output now sit in a directory from `mktemp -d`. Every
+  result carries the measure `reviews`, and the pass of 2026-09-18 read 1 in
+  every scenario that reached the review.
 - The first candidate that the record review suggests is the removal of
   the `consolidate-critic`. No case shows that its cut bullets change a
   verdict, and no run shows that they change a codebase. With the baseline

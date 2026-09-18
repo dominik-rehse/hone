@@ -214,6 +214,7 @@ grep -rqE 'tok-from-file|never-copy-me' "$W/out" && bad "a token reached the out
 fresh; CRED="$W/cred.json" MODE=nested lab toy >/dev/null
 [ "$(cat "$W/nested-token")" = "tok-from-file" ] && ok "the shim gives a nested call the token that Claude Code withholds" || bad "a nested call should get the token (got '$(cat "$W/nested-token")')"
 [ "$(result toy .nested_cost_usd)" = "0.2" ] && ok "the result carries the nested cost" || bad "nested cost should be 0.2"
+[ "$(result toy .measures.reviews)" = "1" ] && ok "the result counts the nested reviews" || bad "measures.reviews should be 1 (got $(result toy -c .measures))"
 grep -rqE 'tok-from-file' "$W/out" && bad "the token reached the output directory through the shim" || ok "the shim holds no token"
 fresh; CRED="$W/cred.json" MODE=nologin lab toy >/dev/null; rc=$?
 [ "$rc" -eq 3 ] && [ "$(result toy .verdict)" = "indeterminate" ] && ok "a nested call that is not logged in makes the run indeterminate" || bad "a nested login failure should give indeterminate (exit $rc, $(result toy .verdict))"

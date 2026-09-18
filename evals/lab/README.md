@@ -74,6 +74,13 @@ three more things go into `result.json`. None of them changes a verdict.
   or stopped, the branch, the commit types, and the places that the run
   changed. Two runs of one scenario with the same line ended the same way.
 
+The harness also writes the measure `reviews` for every run: how often the
+run called the nested `/code-review`. More than 1 means that the run paid for
+the loop's dearest step again, and the transcript says why. Read it. On
+2026-09-18 two runs of one pass read each other's review, because both
+agents had chosen the same file name under `/tmp`. Scenarios share `/tmp`
+with each other and with every earlier pass.
+
 A stop costs the person attention. For every stopped run that passed, a
 second judge reads the report alone and answers the question in
 `stop-report.md`: does the report hand the person one concrete action? The

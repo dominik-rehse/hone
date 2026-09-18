@@ -506,6 +506,10 @@ grade_scenario() {
     [ "$verdict" = indeterminate ] || ending=$(ending_of "$sb")
     measures=$(grep -E '^  measure [^ =]+=' "$sb/checks.log" 2>/dev/null | sed -E 's/^  measure //' \
         | jq -Rn '[inputs | capture("^(?<k>[^=]+)=(?<v>.*)$") | {(.k): .v}] | add // {}')
+    # How often the run called the nested review. More than once means that
+    # the run paid for the loop's dearest step again, and the transcript says why.
+    [ ! -s "$sb/nested.jsonl" ] || measures=$(jq -c --argjson n "$(jq -s '[.[] | select(.args | test("/code-review"))] | length' "$sb/nested.jsonl" 2>/dev/null || echo 0)" \
+        '. + {reviews: ($n | tostring)}' <<<"$measures")
     case "$ending" in stopped*)
         if [ "$verdict" = pass ] && [ -s "$sb/report.txt" ]; then
             # A regrade keeps the answer that the run got. The report did not
