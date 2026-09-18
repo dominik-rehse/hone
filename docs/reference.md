@@ -15,7 +15,8 @@ Slash commands, in the order a change flows:
   fails, and completes the settings block. It is interactive, so run it with
   the human present.
 - `/hone:plan <change>` writes and commits the Plan for one change. The
-  `plan-critic` checks the Plan while its caller is present. This is the one
+  `plan-critic` checks the Plan against the caller's sketch while that caller
+  is present. This is the one
   step outside the loop. A human usually invokes it, and another agent may
   invoke it too, as it may invoke `/hone:run`.
 - `/hone:run <change>` executes the Plan unattended (worktree, build, verify,

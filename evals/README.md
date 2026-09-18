@@ -207,6 +207,16 @@ Re-measure a case before you lean on its entry.
   prompt minus the *Prose doing an artifact's job* bullet and its category
   word still rejects, and never says the word. So the substring is the
   whole case.
+- `fork-closed-by-author`: REJECT with `ambiguity`. Its brief carries the
+  caller's sketch, and the Plan settles a fork the sketch left open. The
+  stub rejects too and never says the word, so the substring is the whole
+  case. It pins the sketch in the brief, not any paragraph: the same brief
+  with the sketch cut approves 2 of 3. No flag makes that baseline.
+- `fork-settled-by-decision`: APPROVE. The same brief, with a Decision that
+  settles the fork and a Plan that follows it. It guards the case above
+  against a critic that asks what the repository already answered. The stub
+  approves too, so its baseline is the prompt minus the two Decision
+  sentences.
 - `schema-split-column-holdout`: held out, a paraphrase of
   `schema-silent-on-data`.
 

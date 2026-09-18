@@ -126,11 +126,12 @@ says what the fixture sets up and what passes.
 - `plan-clear`: a session of `/hone:plan` on a sketch that leaves no fork
   open. It must commit the Plan and change nothing else, and the
   `plan-critic` must not send the complete sketch back (`bounced`).
-  `critic_rounds` counts its calls.
+  `critic_rounds` counts its calls. Its sketch leaves `characters` undefined
+  for non-ASCII on purpose. Never clean that: it is the over-ask detector.
 - `plan-fork`: a session of `/hone:plan` on a sketch with a fork in it. Two
-  builds hold its proof, and the repository settles neither. The session
-  must commit no Plan (`bounced`), and a judge reads whether the report
-  hands the choice to the person.
+  builds hold its proof, and the repository settles neither. It must commit
+  no Plan (`bounced`), and a judge reads whether the report hands the choice
+  back.
 - `setup-misfit`: a session of `/hone:setup` on a project whose
   `package.json` has no `test` script. The installed adapter must end
   green and must run the two tests. The session must add no linter and no

@@ -207,10 +207,12 @@ never the acceptance criteria. Those stay the tests' job.
 ### 6. Check: `plan-critic`
 
 Submit the finished Plan to the `plan-critic` agent (Task tool,
-`subagent_type: plan-critic`). Give it a **constructed brief**: the Plan text,
-the list of open changes, and the relevant existing Decisions/Notes, never your
-own transcript. Open changes are other `.plans/**/*.md`, since slugs nest, and
-existing `hone/*` worktrees. It returns structured findings and an
+`subagent_type: plan-critic`). Give it a **constructed brief**, and never your
+own transcript. It holds the sketch as the caller gave it, verbatim, the Plan
+text, the list of open changes, and the relevant Decisions and Notes. The
+sketch goes in because a fork you closed while writing the Plan is one the
+critic can see nowhere else. Open changes are other `.plans/**/*.md`, since
+slugs nest, and existing `hone/*` worktrees. It returns structured findings and an
 `APPROVE`/`REJECT` verdict.
 
 **It may reject** for a placeholder, contradiction, ambiguity, wrong scope,

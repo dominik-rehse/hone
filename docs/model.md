@@ -335,7 +335,9 @@ are three judgment checks, and each runs once per change:
 - `plan-critic`: placeholders, contradictions, ambiguity, scope, prose
   carrying data a file should carry, collisions with open changes. It
   runs inside `/hone:plan`, so its caller fixes a rejection on the spot,
-  and no flawed plan reaches the unattended run.
+  and no flawed plan reaches the unattended run. Its brief carries the
+  caller's sketch beside the Plan. A fork the author closed while writing
+  the Plan shows up nowhere else, and the choice was the caller's.
 - `consolidate-critic`: is a Decision just restating code? Has a Note
   grown into a spec? Is a test redundant? Is an abstraction worth its
   cost?
