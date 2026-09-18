@@ -26,11 +26,11 @@ tie-breaker, and the outcomes come first.
 
 A change to hone is good when two things hold. The codebases that hone
 produces get closer to that end or stay as close. And hone gets smaller or
-cheaper. The end
-itself is not measurable in one number. What is measurable is the outcomes
-below, which are what hone does to a codebase on the way there. So the
-outcomes come first, and cost is the tie-breaker among changes that hold
-them. Each outcome names what measures it today, and where nothing does.
+cheaper. The end itself is not measurable in one number. What is measurable
+is the outcomes below, which are what hone does to a codebase on the way
+there. So the outcomes come first, and cost is the tie-breaker among changes
+that hold them. Each outcome names what measures it today, and where nothing
+does.
 
 - *Correct.* The landed change does what the Plan says, and no defect lands
   in silence. The lab's end-state checks measure the first part per
@@ -54,17 +54,17 @@ them. Each outcome names what measures it today, and where nothing does.
   shortcut and a guard turns it back.
 - *Light on human attention.* The person writes the Plan and reads the
   report. In between they answer a bounce from the critic, and they sign a
-  proof or a grant. Every other minute of theirs is waste. A bounce that names a real fork is
-  attention well spent, and a bounce on a nit is not. Nothing measures
-  this yet. The lab can count bounces per Plan, stops per run, and whether
-  a stop hands the person one concrete action. A judge can read a report
-  for whether a person could act on it in a minute.
+  proof or a grant. Every other minute of theirs is waste. A bounce that
+  names a real fork is attention well spent, and a bounce on a nit is not.
+  Nothing measures this yet. The lab can count bounces per Plan, stops per
+  run, and whether a stop hands the person one concrete action. A judge can
+  read a report for whether a person could act on it in a minute.
 - *Predictable.* The same Plan gives the same kind of result twice. That
   means the same ending, the same shape of commit, and the same place for
-  what it left behind. Nothing measures this yet. The lab's repeated passes already
-  hold the data: count the distinct endings of one scenario across passes.
-  `parallel-paths` ended three ways on 2026-09-17, and `casual-fix` gave
-  one fix three different slugs. Some variance is the model's, and hone
+  what it left behind. Nothing measures this yet. The lab's repeated passes
+  already hold the data: count the distinct endings of one scenario across
+  passes. `parallel-paths` ended three ways on 2026-09-17, and `casual-fix`
+  gave one fix three different slugs. Some variance is the model's, and hone
   cannot buy all of it away with prose.
 - *Reversible.* Every landed change is one merge that a person can revert
   in one command, with nothing outside git to undo. hone has this mostly by
@@ -116,8 +116,8 @@ and push when the maintainer says so, in small conventional commits.
 hone is a Claude Code plugin. A person writes a short Plan for one change.
 `/hone:run` then builds the change test-first in a git worktree and runs
 every check. It consolidates what the change leaves behind in the docs,
-runs a code review, and merges it. Two critic agents find fault with the Plan and with
-the consolidated result. Hooks enforce the rules mechanically. Between
+runs a code review, and merges it. Two critic agents find fault with the
+Plan and with the consolidated result. Hooks enforce the rules mechanically. Between
 changes, `/hone:garden` cuts what has gone stale. [`model.md`](model.md)
 says why each piece exists, and [`reference.md`](reference.md) is the full
 control surface. The shipped plugin is `agents/`, `hooks/`, `rules/`,
@@ -164,19 +164,20 @@ and it measures what was easiest to measure, not what matters most.
 
 ### Rules the method must obey
 
-1. Eval coverage sets the limit of every deletion. A cut can degrade a
-   behaviour that no case pins, so coverage of the outcomes grows before
-   any cutting campaign.
-2. Test every deletion on the *floor* model, not the best one. The floor of
-   a target is the cheapest model on which its suite is green. A cut that
-   holds on the best model can break a user on a cheaper one, and hone runs
-   on whatever model drives the session.
-3. A deletion enters this repo as an ordinary reviewed change, through the
+1. Eval coverage sets the limit of every change. A change can degrade an
+   outcome that no case and no scenario measures, so the measurements grow
+   before any campaign of changes.
+2. Test every change on the *floor* model, not the best one. The floor of
+   a target is the cheapest model on which its suite is green. A change
+   that holds on the best model can break a user on a cheaper one, and hone
+   runs on whatever model drives the session.
+3. A change enters this repo as an ordinary reviewed change, through the
    eval gates and a version bump like any prompt edit. No tool commits
    here.
 
-"Do we really need this?" has a different evaluator per class of building
-block:
+Each class of building block has its own evaluator, and a method that
+tests a change to one class with the evaluator of another measures
+nothing:
 
 - *Model-compensating prose and judgment* (skill instructions, the critics,
   the nag). They exist because models at writing time did not supply the
@@ -339,8 +340,8 @@ floor is from 2026-09-18, on the opus pins.
 ### Stage 1: coverage growth (two passes done, most sections still open)
 
 The stage ends when three conditions hold. Each critic has a discriminating
-case for each of its verdicts. Each target has a held-out case. Each
-section that an ablation will test has a case aimed at it. The first two hold since
+case for each of its verdicts. Each target has a held-out case. Each section
+that an ablation will test has a case aimed at it. The first two hold since
 2026-09-17. The third holds for 7 of 20 critic sections.
 
 Two passes taught what a case can and cannot pin. A brief that names the
@@ -353,10 +354,10 @@ prose that the model no longer needs, and the next release of a model is
 when that shows. *Known gaps* in the manual records every dead draft and
 why.
 
-Next: a REJECT case for the rejecting half of the `plan-critic` bullet on
-dependency refreshes, because its approving half looks expired (stage 2).
-Then harder briefs, in the buried shape, only for sections whose loss would
-hurt.
+What the earlier sessions saw as the next step: a REJECT case for the
+rejecting half of the `plan-critic` bullet on dependency refreshes, because
+its approving half looks expired (stage 2). Then harder briefs, in the
+buried shape, only for sections whose loss would hurt.
 
 ### Stage 2: machine-drivable harness (done, first ablation done)
 
@@ -370,8 +371,8 @@ The first campaign ran on 2026-09-17 over both critics on claude-sonnet-5
 It cost about 20 dollars and cut nothing. It found one expiry candidate,
 the approving half of the refresh bullet. It also found one rule. A cut of
 a bullet must take its category word along, or the word floats and the
-critic files other things under it. A campaign per prompt edit is affordable. One per
-commit is not.
+critic files other things under it. A campaign per prompt edit is
+affordable. One per commit is not.
 
 ### Stage 3: the scenario lab (first version done, floor open)
 
@@ -406,8 +407,9 @@ Open:
 
 - No scenario seeds slop for consolidate to remove. Examples are a Decision
   that restates the code, a Note that has grown into a spec, and a
-  duplicated helper. The *Honed* outcome is the one hone is named for, and the lab
-  does not measure it yet. This is the next scenario to write.
+  duplicated helper. The *Honed* outcome is the one hone is named for, and
+  the lab does not measure it yet. The handoff names it as the first piece
+  of the method.
 - The noise floor outside the repository has one pass of the three it
   needs. One pass over eleven scenarios on opus gave 11 passes. Until the
   other two run, the release gate rests on one sample.
@@ -418,12 +420,13 @@ Open:
 
 ### Later: automated optimization
 
-This is a note, not a stage. With the harness and the lab in place, the
-manual experiments above can become search. GEPA's `optimize_anything`
+This note predates the handoff, and the method the handoff asks for
+decides whether it still applies. With the harness and the lab in place,
+the manual experiments above can become search. GEPA's `optimize_anything`
 fits, because its adapter model wraps `evals/run.sh`. DSPy does not, because
 it wants to own execution as a Python pipeline and would fork the agent
 files hone ships. The tooling would live in a sibling repo, and its output
-would enter this repo only under rule 3.
+would enter this repo only under rule 3 of the handoff.
 
 Two conditions come first. The lab exists now. The visible cases are still
 far too few for a train/val split with the holdout set frozen as the final
