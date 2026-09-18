@@ -12,4 +12,4 @@ unchanged scripts/run-tests.sh .claude/settings.json
 [ -z "$(git rev-list "$LAB_BASE..main")" ] || suite_green
 fixed=no
 [ "$(node -e 'console.log(require("./src/text/slugify.js").slugify("Crème brûlée"))' 2>/dev/null)" = "creme-brulee" ] && fixed=yes
-note "the fix is on main: $fixed"
+measure fixed "$fixed"

@@ -21,8 +21,12 @@ lab_fail=0
 lab_checks=0
 ok()  { printf '  ok   %s\n' "$1"; lab_checks=$((lab_checks+1)); }
 bad() { printf '  FAIL %s\n' "$1"; lab_fail=1; lab_checks=$((lab_checks+1)); }
-# An observation for the log. It decides nothing, and it is not a check.
-note() { printf '  note %s\n' "$1"; }
+# measure NAME VALUE: an observation that a tool can count across runs. It
+# decides nothing, and it is not a check. run.sh copies every measure into
+# result.json, and evals/candidate.sh compares them between two sets of runs.
+# NAME and VALUE are one word each. A measure moves to a check once the
+# unchanged plugin holds it in three runs of three (docs/roadmap.md).
+measure() { printf '  measure %s=%s\n' "$1" "$2"; }
 
 # landed [change]: main moved past the seed. With a change name, the move must
 # be the merge commit that `worktree.sh land` writes.
@@ -136,12 +140,12 @@ adapter_green() {
     bash "scripts/$1.sh" >/dev/null 2>&1 && ok "scripts/$1.sh is green on main" || bad "scripts/$1.sh is red on main"
 }
 
-# review_named REGEX WHAT: did the nested review itself name WHAT? It reads the
-# result text of each /code-review envelope, and it only notes the answer. The
-# verdict is about the end state, whoever caught the defect. A second note
-# says whether the run's brief to the review named WHAT already. A review
-# that repeats its brief caught nothing, so count a catch rate per review
-# model over the runs whose brief was silent: grep checks.log across runs.
+# review_named REGEX: did the nested review itself name the seeded defect? It
+# reads the result text of each /code-review envelope, and it only measures
+# the answer. The verdict is about the end state, whoever caught the defect.
+# A second measure says whether the run's brief to the review named the defect
+# already. A review that repeats its brief caught nothing, so count a catch
+# rate per review model over the runs with `brief_named=no`.
 review_named() {
     local f hit=no told=no
     for f in "$LAB_NESTED_OUT"/*.out; do
@@ -149,6 +153,29 @@ review_named() {
         jq -e --arg re "$1" 'select(type == "object") | (.result // "") | test($re; "i")' "$f" >/dev/null 2>&1 && hit=yes
     done
     jq -e --arg re "$1" 'select(.args | test("/code-review")) | .args | test($re; "i")' "$LAB_NESTED" >/dev/null 2>&1 && told=yes
-    note "the brief to the review named $2: $told"
-    note "the review named $2: $hit"
+    measure brief_named "$told"
+    measure review_named "$hit"
+}
+
+# revertible: a person can undo the landed change with one command, and
+# nothing outside git is left to undo. main moved by exactly one commit on its
+# first-parent line, and that commit is a merge. The primary tree holds no
+# change that git does not track. And in a throwaway clone, a revert of that
+# merge applies cleanly and leaves the suite green.
+revertible() {
+    local line dirty clone rc=0
+    line=$(git rev-list --first-parent "$LAB_BASE..main")
+    [ "$(printf '%s\n' "$line" | grep -c .)" -eq 1 ] \
+        || { bad "main moved by $(printf '%s\n' "$line" | grep -c .) first-parent commits, so one revert does not undo the change"; return; }
+    [ "$(git rev-list --parents -n 1 "$line" | wc -w)" -eq 3 ] \
+        || { bad "the one commit on main is not a merge: $(git log --format=%s -n 1 "$line")"; return; }
+    dirty=$(git status --porcelain | head -3 | tr '\n' '|')
+    [ -z "$dirty" ] || { bad "the primary tree holds changes outside git's record: $dirty"; return; }
+    clone=$(mktemp -d)
+    git clone -q . "$clone/r" >/dev/null 2>&1 \
+        && git -C "$clone/r" revert -m 1 --no-edit main >/dev/null 2>&1 \
+        && (cd "$clone/r" && bash scripts/run-tests.sh --all >/dev/null 2>&1) || rc=1
+    rm -rf "$clone"
+    [ "$rc" -eq 0 ] && ok "one revert of the merge undoes the change, and the suite stays green" \
+        || bad "a revert of the merge does not apply, or it leaves the suite red"
 }

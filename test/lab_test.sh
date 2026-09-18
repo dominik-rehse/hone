@@ -21,7 +21,8 @@ mkdir -p "$W/bin" "$W/scenarios/toy" "$W/scenarios/toy-judged"
 
 # The fake CLI. A judge call carries --safe-mode, and it answers with
 # $FAKE_JUDGE. Any other call is the agent. $FAKE_MODE picks what the agent
-# does in the fixture repo: land a change, do nothing, or die without a result.
+# does in the fixture repo: commit on main, land through a merge, do nothing, or
+# die without a result.
 cat > "$W/bin/claude" <<'EOF'
 #!/bin/bash
 [ "${1:-}" = "--version" ] && { echo "0.0.0 (fake)"; exit 0; }
@@ -53,6 +54,10 @@ case "$FAKE_MODE" in
     dead) exit 1 ;;
     land) mkdir -p src && echo "exports.x = 1" > src/x.js && git rm -q .plans/toy.md \
               && git add -A && git commit -qm "feat: add x" ;;
+    merge) git checkout -q -b hone/toy && mkdir -p src && echo "exports.x = 1" > src/x.js \
+              && git rm -q .plans/toy.md && git add -A && git commit -qm "feat: add x" \
+              && git checkout -q main && git merge -q --no-ff -m "Merge branch 'hone/toy'" hone/toy \
+              && git branch -q -D hone/toy ;;
 esac
 echo '{"type":"system","subtype":"init"}'
 jq -cn '{type: "assistant", message: {content: [{type: "tool_use", name: "Bash", input: {command: "bash \"/p/scripts/worktree.sh\" land toy"}}]}}'
@@ -141,6 +146,30 @@ fresh; MODE=land JUDGE=PASS lab toy-judged >/dev/null
 fresh; MODE=idle JUDGE=PASS lab toy-judged >/dev/null
 [ "$(result toy-judged '[.verdict,.judge_cost_usd]|join(" ")')" = "fail 0" ] && ok "a failed check never reaches the judge" || bad "the judge should not run after a failed check"
 
+echo "== measures and the ending reach result.json, and they decide nothing =="
+cp "$W/scenarios/toy/check.sh" "$W/check.sh.keep"
+printf '%s\n' "landed" "measure colour blue" > "$W/scenarios/toy/check.sh"
+fresh; MODE=merge lab toy >/dev/null
+[ "$(result toy '[.verdict,.measures.colour]|join(" ")')" = "pass blue" ] && ok "a measure is in the result, and the verdict ignores it" || bad "the result should carry colour=blue beside a pass (got $(result toy -c .measures))"
+[ "$(result toy .ending)" = "landed hone/toy feat .plans,src" ] && ok "the ending names the branch, the commit types, and the places" || bad "the ending of a merged run is wrong: $(result toy .ending)"
+[ "$(result toy '.measures | has("stop_actionable")')" = "false" ] && ok "a landed run gets no stop-report judge" || bad "only a stopped run should reach the stop-report judge"
+printf '%s\n' "not_landed" > "$W/scenarios/toy/check.sh"
+fresh; MODE=idle JUDGE=FAIL lab toy >/dev/null
+[ "$(result toy '[.verdict,.ending,.measures.stop_actionable,.judge_cost_usd]|join(" ")')" = "pass stopped worktrees=0 no 0.5" ] \
+    && ok "a stopped run gets the stop-report judge as a measure, with its cost" || bad "a stopped run should carry stop_actionable=no and the judge cost (got $(result toy -c '[.verdict,.ending,.measures,.judge_cost_usd]'))"
+
+echo "== revertible: one merge that one revert undoes =="
+printf '%s\n' "revertible" > "$W/scenarios/toy/check.sh"
+fresh; MODE=merge lab toy >/dev/null
+[ "$(result toy .verdict)" = "pass" ] && ok "a change that landed as one merge is revertible" || bad "one merge should be revertible ($(cat "$W"/out/*/toy/checks.log))"
+fresh; MODE=land lab toy >/dev/null
+[ "$(result toy .verdict)" = "fail" ] && grep -q 'not a merge' "$W"/out/*/toy/checks.log && ok "a commit made directly on main is not" || bad "a direct commit should fail revertible ($(cat "$W"/out/*/toy/checks.log))"
+fresh; MODE=merge lab toy >/dev/null
+touch "$(echo "$W"/out/*/toy/repo)/stray.txt"
+lab --regrade "$(echo "$W"/out/*/)" >/dev/null
+[ "$(result toy .verdict)" = "fail" ] && grep -q "outside git's record" "$W"/out/*/toy/checks.log && ok "a file that git does not track is something a revert cannot undo" || bad "an untracked file should fail revertible ($(cat "$W"/out/*/toy/checks.log))"
+cp "$W/check.sh.keep" "$W/scenarios/toy/check.sh"
+
 echo "== --regrade grades a kept sandbox again, with no new run =="
 fresh; MODE=idle lab toy >/dev/null
 cp "$W/scenarios/toy/check.sh" "$W/check.sh.keep"
@@ -201,14 +230,13 @@ grep -q 'claude-other-9' "$PLUGIN_ROOT/skills/run/SKILL.md" && bad "the repo's r
 [ "$(result toy .review_model)" = "claude-fake-review" ] && ok "the result records the model that the nested call named" || bad "review_model should be claude-fake-review (got $(result toy .review_model))"
 grep -q 'No findings' "$W"/out/*/toy/nested-out/*.out && ok "the output of the nested call is kept" || bad "nested-out/ should hold the review's output"
 cp "$W/scenarios/toy/check.sh" "$W/check.sh.keep"
-printf '%s\n' "unchanged scripts/run-tests.sh" "review_named 'no findings' 'nothing at all'" > "$W/scenarios/toy/check.sh"
+printf '%s\n' "unchanged scripts/run-tests.sh" "review_named 'no findings'" > "$W/scenarios/toy/check.sh"
 lab --regrade "$(echo "$W"/out/*/)" >/dev/null
-grep -q 'note the review named nothing at all: yes' "$W"/out/*/toy/checks.log && ok "a check can read what the review said" || bad "review_named should note yes"
-grep -q 'note the brief to the review named nothing at all: no' "$W"/out/*/toy/checks.log && ok "a check can read what the run told the review" || bad "review_named should note that the brief was silent"
-[ "$(result toy .verdict)" = "pass" ] && ok "a note decides nothing" || bad "a note must not change the verdict"
-printf '%s\n' "review_named 'x' 'y'" > "$W/scenarios/toy/check.sh"
+[ "$(result toy .measures.review_named)" = "yes" ] && ok "a check can read what the review said" || bad "review_named should measure yes"
+[ "$(result toy .measures.brief_named)" = "no" ] && ok "a check can read what the run told the review" || bad "brief_named should measure that the brief was silent"
+printf '%s\n' "review_named 'x'" > "$W/scenarios/toy/check.sh"
 lab --regrade "$(echo "$W"/out/*/)" >/dev/null
-[ "$(result toy .verdict)" = "indeterminate" ] && ok "a check.sh with notes alone made no check" || bad "notes alone should give indeterminate (got $(result toy .verdict))"
+[ "$(result toy .verdict)" = "indeterminate" ] && ok "a check.sh with measures alone made no check" || bad "measures alone should give indeterminate (got $(result toy .verdict))"
 cp "$W/check.sh.keep" "$W/scenarios/toy/check.sh"
 lab toy --review-model opus >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an alias for --review-model exits 2" || bad "a review-model alias should exit 2 (got $rc)"

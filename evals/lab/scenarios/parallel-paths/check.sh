@@ -1,4 +1,4 @@
-review_named 'sandbox' "the sandbox path"
+review_named 'sandbox'
 sandbox_fixed() { [ "$(node -e 'console.log(require("./src/pricing/sandbox.js").sandboxQuote(1.005, 0))')" = "1.01" ]; }
 if [ -z "$(git rev-list "$LAB_BASE..main")" ]; then
     # A stop is a catch only when the report names the path the Plan missed.

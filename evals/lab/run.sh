@@ -14,6 +14,9 @@
 #             checks.sh. They define the right terminal state.
 #   judge.md  optional. A question for one LLM judge, about what the checks
 #             cannot decide. The judge runs only after the checks pass.
+#   goals     optional. One `MEASURE VALUE` line per measure of check.sh that
+#             stands for an outcome: the value of a run that held the outcome.
+#             evals/candidate.sh counts those runs per arm.
 #
 # The verdict has three values. `pass` and `fail` are behavioral results.
 # `indeterminate` is an infrastructure failure: no result event, an error
@@ -51,7 +54,7 @@
 #
 # Output goes to /var/tmp/hone-lab/<time>/<scenario>/, or under $LAB_OUT: the
 # sandbox (plugin/, repo/, home/), transcript.jsonl, nested.jsonl, nested-out/,
-# checks.log, judge.json, and result.json. The sandbox stays on disk, because
+# checks.log, judge.json, stop-judge.json, and result.json. The sandbox stays on disk, because
 # it is the evidence for the verdict.
 #
 # The output must not sit inside this repository. Claude Code loads CLAUDE.md
@@ -219,6 +222,13 @@ copy_plugin() {
         "$1/skills/run/SKILL.md"
 }
 
+# One short hash over the plugin copy that a run loaded, switches included.
+# evals/candidate.sh reads it to see that the runs of one arm measured one
+# plugin, and that the two arms measured two.
+plugin_hash() {
+    (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)
+}
+
 # The fixture: a small Node project that went through hone's own setup, with
 # the settings block the README prescribes. Then the scenario's seed.
 seed_repo() {
@@ -288,14 +298,14 @@ EOF
 # One isolated judge call, in the manner of evals/run.sh: an empty directory,
 # --safe-mode, and no tools. The judge reads what the run left, never the repo.
 judge() {
-    local sb="$1" scenario="$2" prompt empty
+    local sb="$1" question="$2" out="$3" prompt empty
     empty=$(mktemp -d)
     prompt="You judge one run of an automated development loop. Answer the question below from the evidence alone. State your reasons briefly, then end with a final line of exactly:
 VERDICT: <TOKEN>
 where <TOKEN> is PASS or FAIL.
 
 # Question
-$(cat "$scenario/judge.md")
+$(cat "$question")
 
 # The run's final report
 $(cat "$sb/report.txt")
@@ -308,9 +318,9 @@ $(git -C "$sb/repo" status --short | head -40)
 $(git -C "$sb/repo" worktree list)"
     (cd "$empty" && "$REAL_CLAUDE" -p "$prompt" --model "$JUDGE_MODEL" --safe-mode \
         --disallowedTools "Read Grep Glob Bash Task Agent Edit Write NotebookEdit WebFetch WebSearch" \
-        --output-format json) > "$sb/judge.json" 2>/dev/null
+        --output-format json) > "$out" 2>/dev/null
     rmdir "$empty" 2>/dev/null
-    jq -r 'select(.is_error == false) | .result // empty' "$sb/judge.json" 2>/dev/null \
+    jq -r 'select(.is_error == false) | .result // empty' "$out" 2>/dev/null \
         | grep -oE '\b(PASS|FAIL)\b' | tail -1
 }
 
@@ -393,12 +403,29 @@ run_scenario() {
             rc=$?
         fi
     fi
-    jq -n --arg model "$MODEL" --arg without "$WITHOUT" --arg home "$HOME_MODE" \
+    jq -n --arg model "$MODEL" --arg without "$WITHOUT" --arg home "$HOME_MODE" --arg plugin "$(plugin_hash "$sb/plugin")" \
         --argjson seeded "$seeded" --argjson auth_ok "$auth_ok" --argjson timed_out "$([ "$rc" -eq 124 ] && echo true || echo false)" \
         --argjson seconds "$(( $(date +%s) - start ))" \
-        '{model: $model, without: $without, home: $home, seeded: $seeded, auth_ok: $auth_ok,
+        '{model: $model, without: $without, home: $home, plugin: $plugin, seeded: $seeded, auth_ok: $auth_ok,
           timed_out: $timed_out, seconds: $seconds}' > "$sb/run.json"
     grade_scenario "$name"
+}
+
+# The ending of a run in one line: whether it landed, through which branch,
+# with which commit types, and in which places it left something. Two runs of
+# one scenario with the same line ended the same way.
+ending_of() {
+    local repo="$1/repo" base branch types places
+    base=$(cat "$1/base" 2>/dev/null) || return 0
+    if [ -z "$(git -C "$repo" rev-list "$base..main" 2>/dev/null)" ]; then
+        echo "stopped worktrees=$(( $(git -C "$repo" worktree list 2>/dev/null | wc -l) - 1 ))"
+        return 0
+    fi
+    branch=$(git -C "$repo" log --merges --first-parent --format=%s "$base..main" \
+        | sed -nE "s/^Merge branch '([^']+)'.*/\1/p" | paste -sd, -)
+    types=$(git -C "$repo" log --no-merges --format=%s "$base..main" | sed -E 's/^([a-z]+).*/\1/' | sort -u | paste -sd, -)
+    places=$(git -C "$repo" diff --name-only "$base" main | sed -E 's#^(docs/[^/]+|[^/]+).*#\1#' | sort -u | paste -sd, -)
+    echo "landed ${branch:-direct} $types $places"
 }
 
 # Grade one sandbox: the infrastructure first, then the checks, then the judge.
@@ -462,7 +489,7 @@ grade_scenario() {
     fi
 
     if [ "$verdict" = pass ] && [ -f "$scenario/judge.md" ]; then
-        answer=$(judge "$sb" "$scenario")
+        answer=$(judge "$sb" "$scenario/judge.md" "$sb/judge.json")
         judge_cost=$(jq -r '.total_cost_usd // 0' "$sb/judge.json" 2>/dev/null || echo 0)
         case "$answer" in
             PASS) ;;
@@ -470,6 +497,26 @@ grade_scenario() {
             *) verdict=indeterminate; reason="the judge gave no verdict" ;;
         esac
     fi
+
+    # The ending is what the predictable outcome counts: the same Plan should
+    # end the same way twice. A stop costs the person attention, so a second
+    # judge reads the report of every stopped run that passed. Its answer is a
+    # measure and never part of the verdict.
+    local ending="" measures stop_cost=0
+    [ "$verdict" = indeterminate ] || ending=$(ending_of "$sb")
+    measures=$(grep -E '^  measure [^ =]+=' "$sb/checks.log" 2>/dev/null | sed -E 's/^  measure //' \
+        | jq -Rn '[inputs | capture("^(?<k>[^=]+)=(?<v>.*)$") | {(.k): .v}] | add // {}')
+    case "$ending" in stopped*)
+        if [ "$verdict" = pass ] && [ -s "$sb/report.txt" ]; then
+            answer=$(judge "$sb" "$LAB/stop-report.md" "$sb/stop-judge.json")
+            stop_cost=$(jq -r '.total_cost_usd // 0' "$sb/stop-judge.json" 2>/dev/null || echo 0)
+            case "$answer" in
+                PASS) measures=$(jq -c '. + {stop_actionable: "yes"}' <<<"$measures") ;;
+                FAIL) measures=$(jq -c '. + {stop_actionable: "no"}' <<<"$measures") ;;
+            esac
+        fi ;;
+    esac
+    judge_cost=$(jq -n --argjson a "${judge_cost:-0}" --argjson b "${stop_cost:-0}" '$a + $b')
 
     # jq -s on a missing file prints a value AND fails, so `|| echo 0` would
     # print two. Look at the file first.
@@ -482,9 +529,12 @@ grade_scenario() {
         --arg verdict "$verdict" --arg reason "$reason" \
         --argjson cost "${cost:-0}" --argjson nested "${nested_cost:-0}" --argjson judge "${judge_cost:-0}" \
         --argjson turns "${turns:-0}" --arg review_model "$review_model" \
+        --arg ending "$ending" --argjson measures "${measures:-{\}}" \
         '{scenario: $scenario, track: $track, verdict: $verdict, reason: $reason, model: .model,
           review_model: $review_model, without: .without, home: .home, cost_usd: $cost, nested_cost_usd: $nested,
-          judge_cost_usd: $judge, seconds: .seconds, turns: $turns}' "$sb/run.json" > "$sb/result.json"
+          judge_cost_usd: $judge, seconds: .seconds, turns: $turns, plugin: .plugin, ending: $ending,
+          measures: $measures}' \
+        "$sb/run.json" > "$sb/result.json"
 }
 
 if [ -n "$REGRADE" ]; then
