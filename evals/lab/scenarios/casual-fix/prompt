@@ -1,0 +1,1 @@
+The slug of "Crème brûlée" comes out as cr-me-br-l-e. Make slugify in src/text/slugify.js strip the accents first, so that it gives creme-brulee. It is a small fix.
