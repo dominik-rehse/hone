@@ -1,42 +1,65 @@
 # Roadmap: evaluating and optimizing hone itself
 
-hone's goal is to land good changes unattended, cheaply and safely. This
-roadmap is about making hone itself better at that. Every hook, critic,
-gate, and paragraph of prompt prose has a cost, and the deletion bias
-applies to hone too. It answers two standing questions. Is each building
-block still worth its cost, and can what stays be smaller and cheaper? And
-which model belongs in which slot, and what changes when a new model ships?
+hone exists for the codebase it leaves behind. [`model.md`](model.md) says
+what that codebase looks like. No production code without a failing test
+first. Documentation that lives only where a checker catches staleness,
+and never a sentence that repeats what the code, the types, or the tests
+already carry. Every change deletes something. A loop that stops and
+reports rather than forces past a failed check. That is the goal, and cost
+is the price hone pays for it.
 
-The method is plain. The three test suites are hard constraints. A change
-to hone must keep all three green. Within those constraints the objective
-is one number to lower: dollars per landed change, as the lab records it.
-The maintainer has not yet confirmed that objective, and *Open decisions*
-lists it.
+This roadmap is about making hone itself better at that goal. The deletion
+bias applies to hone too. Every hook, critic, gate, and paragraph of prompt
+prose is a claim that without it the codebase would be worse. Each claim
+can be tested. So the roadmap answers two standing questions. Is each
+building block still worth its cost? And which model belongs in which slot,
+and what changes when a new model ships?
 
-## The constraints: three suites
+## The outcomes, and what measures each
 
-Each suite checks one layer, and none can stand in for another.
-[`development.md`](development.md) says when to run which.
+A change to hone is good when the codebases that hone produces get better
+or stay as good, and hone gets smaller or cheaper. So the outcomes come
+first, and cost is the tie-breaker among changes that hold them. Each
+outcome below names what measures it today, and where nothing does.
 
-- *The mechanical suite* (`bash test/run.sh`, no model calls, free). The
-  hooks, `worktree.sh`, the land path, the plumbing of both harnesses
-  against a fake CLI, and every message hone prints. It proves that the
-  machinery does what it says. It cannot see whether a prompt is good.
-- *The unit evals* (`bash evals/run.sh`, a few dollars). The prose that the
-  model executes: the two critics, the run skill's loop, and the garden
-  skill. Each case is a brief with a known right answer, and every case
-  passed an ablation, so it discriminates. It catches a prompt edit that
-  weakens a behaviour. [`evals/README.md`](../evals/README.md) is the
-  manual and carries the case ledger.
-- *The lab* (`bash evals/lab/run.sh`, about 30 dollars an hour). The
-  installed plugin, end to end, against seeded fixture repos. It is the
-  only suite that can say what a hook deters, and the only one that
-  measures cost per landed change.
-  [`evals/lab/README.md`](../evals/lab/README.md) is the manual.
+- *Correct.* The landed change does what the Plan says, and no defect lands
+  in silence. The lab's end-state checks measure the first part per
+  scenario. The review's catch rate (`review_named`) and the
+  `parallel-paths` and `defect-in-hunk` scenarios measure the second. The
+  loop evals pin that the run stops on a check it cannot make green.
+- *Test-driven.* No production code without a failing test, and tests named
+  for the behaviour they pin. The `guard` enforces the first mechanically,
+  and the lab's `fix-without-test` scenario measures it where the guard
+  cannot reach. Nothing measures the second beyond the review.
+- *Honed.* What a change leaves behind is minimal. No Decision that
+  restates code, no Note that grows into a spec, no redundant test, no
+  abstraction with one user, and every change cuts something. The
+  `consolidate-critic` evals pin the critic's judgment on these, and the
+  lab's `commits_conform` check demands the `Cut:` line. No lab scenario
+  yet seeds slop and checks that consolidate removed it. That is the
+  largest gap between the goal and the measurements.
+- *Unattended and safe.* The loop takes no shortcut around a gate, and it
+  never reports a partial run as done. The lab's adversarial track measures
+  it. `casual-fix` is the first scenario in which a model reaches for a
+  shortcut and a guard turns it back.
+- *Cheap and fast.* Dollars and minutes per landed change, as the lab
+  records them per run. Lowered only at equal outcomes above. A happy-path
+  run costs about 2 dollars on opus.
 
-The constraints reach only as far as the cases do. A cut that breaks a
-behaviour with no case passes all three. So "green after a cut" means
-"green for what we test", and coverage is the limit of every deletion.
+The three suites are how the first four outcomes are measured, so they are
+the constraints on every change to hone. [`development.md`](development.md)
+says when to run which. The mechanical suite (`bash test/run.sh`) proves
+that the hooks and scripts do what they say. The unit evals
+(`bash evals/run.sh`) pin the prose that the model executes, case by case,
+and [`evals/README.md`](../evals/README.md) carries the ledger. The lab
+(`bash evals/lab/run.sh`) runs the installed plugin end to end. It is the
+only suite that can say what a hook deters or what a change costs.
+[`evals/lab/README.md`](../evals/lab/README.md) is its manual.
+
+The constraints reach only as far as the cases and scenarios do. A cut
+that breaks a behaviour with no case passes all three suites. So "green
+after a cut" means "green for what we test", and coverage of the outcomes
+above is the limit of every deletion.
 
 ## Three rules for every deletion
 
@@ -180,9 +203,9 @@ An unchanged suite is evidence only for a section that a case aims at.
 The first campaign ran on 2026-09-17 over both critics on claude-sonnet-5
 ([`spikes/2026-09-17-first-section-ablation.md`](spikes/2026-09-17-first-section-ablation.md)).
 It cost about 20 dollars and cut nothing. It found one expiry candidate,
-the approving half of the refresh bullet, and one rule: a cut of a bullet
-must take its category word along, or the word floats and the critic files
-other things under it. A campaign per prompt edit is affordable. One per
+the approving half of the refresh bullet. It also found one rule. A cut of
+a bullet must take its category word along, or the word floats and the
+critic files other things under it. A campaign per prompt edit is affordable. One per
 commit is not.
 
 ## Stage 3: the scenario lab (first version done, floor open)
@@ -197,7 +220,7 @@ either.
 What it has shown so far:
 
 - *It catches what the unit suite cannot.* Its first use as a release gate
-  caught a bad edit to the run skill that the loop evals passed at 3/3
+  caught a bad edit to the run skill. The loop evals had passed it at 3/3
   ([`spikes/2026-09-17-lab-first-runs.md`](spikes/2026-09-17-lab-first-runs.md)).
 - *It shows what two guards deter.* After a plain request with no
   `/hone:run`, claude-haiku-4-5 and claude-sonnet-5 edit `src/` in the
@@ -216,6 +239,10 @@ What it has shown so far:
 
 Open:
 
+- No scenario seeds slop for consolidate to remove. Examples are a Decision
+  that restates the code, a Note that has grown into a spec, and a
+  duplicated helper. The *Honed* outcome is the one hone is named for, and the lab
+  does not measure it yet. This is the next scenario to write.
 - The noise floor outside the repository has one pass of the three it
   needs. One pass over eleven scenarios on opus gave 11 passes. Until the
   other two run, the release gate rests on one sample.
@@ -226,9 +253,6 @@ Open:
 
 ## Open decisions
 
-- *The objective.* Dollars per landed change, with the suites as hard
-  constraints. The lab records it per run. A happy-path run costs about 2
-  dollars on opus. Not yet confirmed by the maintainer.
 - *The garden release gate.* It runs on opus, and the measured floor is
   sonnet. Nothing measured so far bears on the choice.
 - *The lab's noise floor.* Two more passes, about 60 dollars, or the gate
