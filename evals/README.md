@@ -184,6 +184,13 @@ nothing about it, and the section stays. Cut a section only when a case aims
 at it, the suite stays green without it, and no tally moves. The cut then
 enters the repo as an ordinary prompt edit, through the release gate.
 
+The first campaign ran on 2026-09-17 over both critics, on claude-sonnet-5.
+[`docs/spikes/2026-09-17-first-section-ablation.md`](../docs/spikes/2026-09-17-first-section-ablation.md)
+has every tally. It found no section to cut. It found one section whose
+case no longer needs it: `dep-refresh-no-red-test` approves 3/3 on the
+prompt minus the *Dependency and toolchain refreshes* bullet, and flips on
+the prompt minus *Calibration*.
+
 ## Targets and cases
 
 Each entry gives the expected answer, then what the stub answered without hone's
@@ -217,15 +224,38 @@ isolated, three votes, moved three numbers and left the rest standing:
   to invent objections.
 - `dep-refresh-no-red-test`: APPROVE, stub REJECT 2/3. A toolchain refresh has no
   red test to write first. Without the rule that says so, the missing test reads
-  as a placeholder.
+  as a placeholder. The section ablation of 2026-09-17 moved this pin. On
+  claude-sonnet-5 the prompt minus the refresh bullet approves 3/3, and the
+  prompt minus *Calibration* rejects 2/3. So the case pins *Calibration*
+  today, and no case pins the refresh bullet.
 - `thin-proof-right-level`: APPROVE 3/3, stub REJECT 3/3. The Plan opens a
   new area with one worked example as its proof. The stub lists five edge
   cases the Plan leaves open (a tiny `max`, `archive.tar.gz`, the ellipsis
   character) and rejects on them. The critic approves, because that is
   detail the loop can decide. The prompt minus its *Calibration* paragraph
-  still approves, at 2/3, so that paragraph carries part of the answer and
-  the *Ambiguity* bullet carries the rest. Measured 2026-09-17,
-  claude-sonnet-5.
+  still approves, at 2/3, so that paragraph carries part of the answer. The
+  *Ambiguity* bullet does not carry the rest: the prompt minus that bullet
+  approves 3/3. Measured 2026-09-17, claude-sonnet-5.
+- `real-env-proof-described`, `handler-proof-for-endpoint`, and
+  `baseline-only-preserved`: APPROVE, three near misses of 2026-09-17 on
+  claude-sonnet-5. Each Plan is exemplary and sits close to one bullet. The
+  first proves a mail header by a `Proof: real-environment` line with a
+  concrete check. The second proves a tenant check on an endpoint through
+  the router and an in-memory database. The third changes shipped behaviour
+  and says only what it preserves. The stub rejects them 3/3, 2/3, and 3/5,
+  and never for the bullet the Plan sits close to. It wants a mailbox for
+  the bounces, an audit of the sibling endpoints, and a definition of
+  "goods". So the three pin what `named-references` pins: the critic does
+  not invent an objection. No clause of the prompt carries that alone. Each
+  case still approves on the prompt minus the limiting clause of its bullet,
+  and on the prompt minus *Calibration*.
+
+  The first brief of `baseline-only-preserved` had a second objection in it.
+  Its *Why* named a start date for a campaign, and its *What* had no date
+  gate. One critic vote in six rejected on that fork, and so did 3 of 33
+  votes on the section-deleted prompts. The *Why* lost the date, and the case now
+  answers APPROVE 5/5 on the full prompt and on both second baselines. The
+  fix cost discrimination: the stub went from REJECT 3/3 to REJECT 3/5.
 - `nested-slug-open-plan`: REJECT with the substring `slug-collision`, 5/5.
   An exemplary Plan `export/csv-quoting`, an open Plan `export`, and no file
   in common. The stub approves 3/3. The second baseline is the prompt as it
@@ -318,6 +348,17 @@ isolated, three votes, moved three numbers and left the rest standing:
   cut that sentence 3/3. A brief for a CUTS case must leave the critic
   exactly one thing to cut.
 
+- `helper-single-caller`: CLEAN 3/3, stub CLEAN 3/3. The change extracts a
+  four-line pure helper with one caller, and the Context says that no other
+  caller exists. The second baseline is the prompt minus the calibration
+  bullet on a single-caller helper, and it answers CUTS 2/3 as
+  `over-abstraction`. The case has a second dependency, which the section
+  ablation found. The prompt minus the *Decision that restates code* bullet
+  answers CUTS 3/3, and each vote files the function's docstring under
+  `decision-restates-code`. The category word stays in the output list, and
+  without its bullet nothing ties it to `docs/decisions/`. Measured
+  2026-09-17, claude-sonnet-5.
+
 *`loop`*, the next action `run` takes:
 
 - `land-authority-gate`: RECORD, stub ASK 3/3 (measured 2026-08-18, when the
@@ -392,8 +433,9 @@ against the model's default, which is why the case carries the second baseline.
 The cut left two gaps, and the `garden` target opened a third. All three are
 deliberate, and the suite barely covers any of them.
 
-*`consolidate-critic` has two visible cases, and most of the target stays
-ungated.* Both pin the spike paragraph. All
+*`consolidate-critic` has three visible cases, and most of the target stays
+ungated.* Two pin the spike paragraph, and `helper-single-caller` pins one
+calibration bullet. All
 13 original cases were no-ops. A model with no hone prose reached the
 same verdict on every one. `spike-note-may-age` (2026-08-19) is the first
 replacement, and it pins one paragraph rather than the critic as a whole.
@@ -437,6 +479,17 @@ an open question in `docs/open-questions.md` that the change's new Decision
 answers. The stub found and cut each one 3/3. A leftover is what any
 reviewer looks for, so a leftover case pins nothing, however deep the brief
 buries it.
+
+A second round on 2026-09-17 aimed one buried draft at each of three cut
+bullets: a Decision that restates its code, a Note that grows per-behaviour
+prose, and two tests of one behaviour through one surface. The stub cut
+them 3/3, 3/3, and 2/3. It cannot say the category word, and that is all
+that separates it from the critic. The prompt minus the bullet still cut
+each one 3/3, under the same category word, because the word stays in the
+output list. So a CUTS case on this critic pins a word at best, as a REJECT
+case does on the `plan-critic`. A fourth draft put an example test beside a
+property test. Every baseline answered CLEAN, the prompt minus that
+calibration bullet too.
 
 A first `loop` case for the same rule died the same day, and what killed it is
 the most useful thing measured here. It asked point-blank what to do with a
@@ -487,6 +540,13 @@ that discriminate here are the near misses, where a limiting clause stops a
 false reject: `named-references`, `dep-refresh-no-red-test`, and
 `thin-proof-right-level`. A fourth near miss, a new area with no baseline
 to state, split both the critic and the stub 2/3 and pins nothing.
+
+Three more near misses died on 2026-09-17, because everything approved
+them: the critic, the stub, and the prompt minus the limiting clause. One
+had a sibling slug beside an open Plan of the same area. One had an enum
+column whose wider value space nobody can know yet. One proved a claim
+about a form with a render test. A near miss discriminates only where the
+stub invents an objection, and the stub found none in these three.
 
 One more plan-critic draft died the same day. `refresh-handwritten-version`
 hand-writes a version string into `package.json`. The stub rejected it 2/3,

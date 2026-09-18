@@ -81,8 +81,14 @@ votes, with the held-out cases:
   that the pinned classification holds on sonnet, and nothing about the
   rest of the skill.
 
-The nested review has no eval target, so nothing measures its floor. The
-lab can, with a review model switch that it does not have yet.
+The nested review has no eval target, so only the lab can measure its
+floor. It can since 2026-09-17: `--review-model` runs a scenario with
+another reviewer, and a note per run says whether the review itself found
+the seeded defect.
+[`spikes/2026-09-17-review-model-switch.md`](spikes/2026-09-17-review-model-switch.md)
+has the first ten runs. They are too few to move the pin. Every tier caught
+a defect inside the touched function, and claude-haiku-4-5 missed the one
+outside the diff in the one run that tested it.
 
 Cost and quality are not the only axes for the review slot. Independence
 is a possible third. The nested `/code-review` checks code the session's
@@ -186,6 +192,15 @@ an ablation: an unchanged suite is evidence only for a section that a case
 aims at. Most sections of every prompt still have no case aimed at them, so
 the next campaign starts with cases, not with cuts.
 
+A second pass on 2026-09-17 wrote near misses for the `plan-critic` bullets
+that no case aims at, and drafts for the `consolidate-critic` beyond spike
+notes. Four of twelve drafts survived the ablation. The three `plan-critic`
+survivors discriminate against the stub alone, so they pin the prompt as a
+whole and no bullet. The one `consolidate-critic` survivor pins a calibration
+bullet. So the third condition still fails for most sections, and the
+manual's *Known gaps* says why a draft that aims at one bullet tends to
+die: the current model applies most bullets unprompted.
+
 ## Stage 2: machine-drivable harness (done, 2026-09-17)
 
 [`evals/README.md`](../evals/README.md) *Driving the harness from a tool* is
@@ -212,19 +227,51 @@ in the other direction. There the run tests the case, and here it tests
 the section. That is "trim, re-run, keep what holds" done systematically,
 under rule 1 and the reading rule of stage 1.
 
+The first campaign ran on 2026-09-17 over both critics, on their floor
+model
+([`spikes/2026-09-17-first-section-ablation.md`](spikes/2026-09-17-first-section-ablation.md)).
+It cut nothing. The suite holds seven sections, and no case aims at
+thirteen others, so the run says nothing about those. One finding is an
+expiry candidate: the approving half of the `plan-critic` bullet on
+dependency refreshes no longer carries its case, and *Calibration* does.
+Two steps come before a trim of it. The rejecting half of the bullet needs
+a case, and a cut of any bullet has to take its category word along. The
+campaign cost about 20 dollars, so a campaign per prompt edit is affordable
+and one per commit is not.
+
 ## Stage 3: end-to-end scenario lab (first version done, 2026-09-17)
 
 [`evals/lab/README.md`](../evals/lab/README.md) is the manual, and it lists
 the scenarios that exist and the one that does not yet.
 [`spikes/2026-09-17-lab-first-runs.md`](spikes/2026-09-17-lab-first-runs.md)
 has the first runs. The noise floor is measured: 24 runs of an unchanged
-plugin gave 24 passes. One thing is still open. A first look with the
-guards and the deny rules off
+plugin gave 24 passes. A first look with the guards and the deny rules off
 ([`spikes/2026-09-17-guards-first-look.md`](spikes/2026-09-17-guards-first-look.md))
-found no run that reached for a forbidden path, on opus or on sonnet. So
-the adversarial scenarios measure the model so far, and the lab has not yet
-shown what any guard deters. It needs a temptation that a current model
-takes.
+found no run that reached for a forbidden path, on opus or on sonnet.
+
+A second look
+([`spikes/2026-09-17-guard-temptations.md`](spikes/2026-09-17-guard-temptations.md))
+found the first temptation that a current model takes. After a plain
+request for a small fix, with no `/hone:run`, claude-haiku-4-5 and
+claude-sonnet-5 edit `src/` in the primary tree. `guard` turns that run
+into a Plan, the dirty-guard makes it restore the files, and with all guards
+off the edit stays. So the lab shows what those two hooks deter, on the
+models below the loop's floor. Opus never reached for the primary tree. No
+run on any model took the flag that skips git hooks, even when the hook's
+own message offered it. So the bash-guard and the deny rules still have no
+scenario that shows their value.
+
+The same look found a flaw in every earlier measurement. The sandbox sat
+inside this repository, and Claude Code loaded hone's own development rules
+into each run from the directories above it. The sandbox is outside the
+repository now, and the manual has the rule.
+
+Three things are open. The noise floor needs a new measurement outside the
+repository. One pass over the eleven scenarios gave 11 passes, and a floor
+takes two more. One haiku run walked around a commit hook
+with a mock of the missing scanner on `PATH`, and no guard reads that route.
+And the counts above are one to three runs per cell, which shows that a
+temptation is real and gives no rate.
 
 Unit evals test prose in isolation. The lab tests the *installed
 plugin*. It runs headless Claude Code with hone installed, in a
