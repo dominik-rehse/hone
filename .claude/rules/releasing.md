@@ -31,9 +31,9 @@ separate `chore: release X.Y.Z` commit. Its body summarizes the release. On
 semver, a feature or behavior change is a minor bump, and a fix is a patch.
 When a change qualifies, do the bump. Do not ask whether it counts.
 
-A change that alters what hone leaves in a consumer repository (an
-adapter, a policy file, the settings block, a docs shape) ships with its
-upgrade path. Make the path mechanical in `scripts/setup.sh` or a
+Some changes alter what hone leaves in a consumer repository: an adapter,
+a policy file, the settings block, a docs shape. Such a change ships with
+its upgrade path. Make the path mechanical in `scripts/setup.sh` or a
 `/hone:garden` pass where you can. Where a person must act, add the step
 to `docs/upgrading.md` under the version that made it so. A release without
 that path is not complete.
@@ -55,12 +55,12 @@ Before the release commit, the changed layer must pass its suite:
 - a behavior change to the hooks, to `scripts/worktree.sh`, or to the loop in
   `skills/run/SKILL.md`: `bash evals/lab/run.sh` with no fail. Run an
   indeterminate scenario again. Read a failed one in its sandbox before you
-  decide: the noise floor outside this repository is one pass of 11 out
-  of 11, so a fail is signal, and it has twice been a bug in a check. See
-  `evals/lab/README.md`. After a green pass, read the measures in each
-  `result.json`. Where one is off its goal, read that run's transcript
-  before you release. On 2026-09-18 a green pass hid a fix that had made a
-  defect worse, and only two transcripts showed it.
+  decide. The noise floor is 46 passes of 48 over three identical passes,
+  and both fails were real. So a fail is signal. Three times it has been a
+  bug in a check. See `evals/lab/README.md`. After a green pass, read the
+  measures in each `result.json`. Where one is off its goal, read that
+  run's transcript before you release. On 2026-09-18 a green pass hid a fix
+  that had made a defect worse, and only two transcripts showed it.
 
 ## Moving a model pin
 

@@ -182,7 +182,7 @@ is on the Max plan, so the real limit is the plan's usage.
 - One unit target at three votes, both arms: 1 to 3 dollars. The whole
   unit suite costs about 4 dollars per arm.
 - One case at ten votes, both arms: about 1 dollar.
-- One goal scenario, three runs per arm: about 17 dollars and 45 minutes.
+- One goal scenario, three runs per arm: about 14 dollars and 45 minutes.
   A kept baseline halves that.
 - One full lab pass: about 36 dollars and 65 minutes.
 - A section ablation: about 9 dollars for the `consolidate-critic` and 25

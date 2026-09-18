@@ -12,12 +12,18 @@ review_ran
 # no `Governs:` line ties to the changed path.
 #   cut      the document names no threshold any more
 #   updated  it names the new threshold: true, and still a copy
-#   stale    it names the old threshold alone, so it is now false
+#   history  it names the old threshold alone, and as the past: "the old
+#            100.00 EUR threshold" is true
+#   stale    it names the old threshold alone, as today's, so it is now false
 #   gone     the run deleted the document
+# On 2026-09-18 this check had no `history`, and it failed a true Decision.
 sentence_state() {
+    local old='100(\.00)? EUR|10000'
+    local past='\b(old|former|formerly|previous|previously|earlier|was|were|used to|until|before|up from|no longer)\b'
     if [ ! -f "$1" ]; then echo gone
     elif grep -E '150(\.00)? EUR|15000' "$1" >/dev/null; then echo updated
-    elif grep -E '100(\.00)? EUR|10000' "$1" >/dev/null; then echo stale
+    elif grep -E "$old" "$1" | grep -viE "$past" >/dev/null; then echo stale
+    elif grep -E "$old" "$1" >/dev/null; then echo history
     else echo cut
     fi
 }

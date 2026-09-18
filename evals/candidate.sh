@@ -49,9 +49,9 @@ SHIPPED=(agents hooks rules scripts skills templates)
 
 # What one evaluation costs, in dollars at API prices. Measured 2026-09-18 on
 # claude-opus-5: a full unit pass at three votes over 24 cases cost 3.80, and
-# a full lab pass over eleven scenarios cost 30 and took 55 minutes.
+# a full lab pass over sixteen scenarios cost 36 and took 65 minutes.
 USD_PER_CASE_3_VOTES=0.16
-USD_PER_LAB_RUN=2.75
+USD_PER_LAB_RUN=2.3
 # A measure is a count over few runs. It needs this many runs per arm, and a
 # move of fewer than MOVE runs is noise.
 RUNS_PER_ARM=3

@@ -171,18 +171,21 @@ them with another reviewer (see *The review's catch rate*).
 
 ## The noise floor
 
-A fail on an unchanged plugin is rare. Four passes outside the repository
-on 2026-09-18, on four versions of the plugin, gave 52 passes of 52. Three
-identical passes are still owed ([`docs/roadmap.md`](../../docs/roadmap.md)).
+A fail on an unchanged plugin is rare, and it is real when it comes. Three
+identical passes on 2026-09-18 gave 46 passes of 48, and both fails were
+faults of the run
+([`lab-noise-floor`](../../docs/spikes/2026-09-18-lab-noise-floor.md)).
+Four earlier passes of that day gave 52 of 52.
 
 So read a fail as signal, and read it in the sandbox before you believe
-it. Twice a fail came from a check of the lab and not from the run. Both
-checks piped `git log` into a quiet grep, and under pipefail the early
-exit of grep fails the pipe.
+it. Three times a fail came from a check of the lab and not from the run.
+Two checks piped `git log` into a quiet grep, and under pipefail the early
+exit of grep fails the pipe. One check read a true sentence about the past
+as a stale one.
 
 A pass does not mean one fixed ending. `parallel-paths` has ended in three
-valid ways. A full pass over thirteen scenarios costs about 36 dollars and
-takes about 65 minutes.
+valid ways, and `grant-nudge` has landed and has stopped. A full pass over
+sixteen scenarios costs about 36 dollars and takes about 65 minutes.
 
 ## Switching a component off
 

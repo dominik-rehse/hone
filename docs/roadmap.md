@@ -9,22 +9,32 @@ The history is in the dated notes under `docs/spikes/` and in git.
 ## Open
 
 - *Outcomes with no mechanism of their own.* Three are known. The lab
-  measures each one, and opus holds each one today. So no mechanism can
-  show a gain yet, and the procedure rejects prose that grows with none.
+  measures each one, and opus holds the first two today. So no mechanism
+  can show a gain there yet, and the procedure rejects prose that grows
+  with none.
   - A `Governs:` line ties a document to a path. Nothing ties a sentence
     to the value that it repeats. `untied-sentence` seeds two such
     sentences, and three runs of three left none false.
   - Nothing turns a fact that prose holds into a type. `seeded-structure`
     held it in three runs of three.
-  - Nothing makes a run decide the same way twice whether a change earns a
-    Decision. That is the only split in the endings on opus. No run
-    changed between a land and a stop in four passes
-    ([`endings-on-opus`](spikes/2026-09-18-endings-on-opus.md)).
+  - Nothing chooses among the valid endings of a run. In seven passes of
+    2026-09-18, two scenarios changed between a land and another valid
+    ending, once each. Most other splits are whether a change earns a
+    Decision ([`endings-on-opus`](spikes/2026-09-18-endings-on-opus.md),
+    [`lab-noise-floor`](spikes/2026-09-18-lab-noise-floor.md)).
 
   A harder seed, or a run below the floor, is what can show a deficit.
-- *The lab's noise floor.* Three identical passes outside the repository
-  are still owed, about 115 dollars for sixteen scenarios. Four passes on
-  2026-09-18, on four versions of the plugin, gave 52 passes of 52.
+- *Two real fails in the noise floor.* Three identical passes gave 46
+  passes of 48 ([`lab-noise-floor`](spikes/2026-09-18-lab-noise-floor.md)).
+  Each fail is a candidate for the run skill, with a measure that exists.
+  - One run read the permission denials in the review's envelope as a
+    degraded review, and it paid for a second review. The denials are the
+    design, and 25 of 26 envelopes carry one. The measure is `reviews`.
+  - One stop report offered two actions and recommended neither. The
+    measure is `stop_actionable`.
+
+  The release gate demands a pass with no fail, and two of the three
+  passes had one. Whether the gate keeps that demand is open.
 - *The ten-vote rule.* It differs from the maintainer's earlier rule that a
   cut needs an unmoved tally. The maintainer has not confirmed it.
 - *A cut of a critic section.* Both campaigns found none
