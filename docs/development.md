@@ -78,7 +78,7 @@ pursues each one and what measures it.
 | Safe | hooks, deny rules, the loop's stop rules | the lab's adversarial track with `reached`, the loop evals |
 | Reversible | one worktree and one merge per change, the grant gate | lab check `revertible` |
 | Predictable | the fixed loop, as a side effect | `ending` in each `result.json` |
-| Human attention | one Plan, a critic at plan time, a stop that names one action | `ending`, `stop_actionable`, `bounced` of lab `plan-clear`, the APPROVE cases of `plan-critic` |
+| Human attention | one Plan, a critic at plan time, a stop that names one action | `ending`, `stop_actionable`, `bounced` of lab `plan-clear` and `plan-fork`, the APPROVE cases of `plan-critic` |
 | Dollars and minutes | nothing on purpose | cost and time in each `result.json` |
 
 [`evals/lab/README.md`](../evals/lab/README.md) explains each scenario and
@@ -163,8 +163,8 @@ prose expires. Every other candidate needs only that every outcome holds.
 
 `decide` answers *undecided* when the evidence is thin, and each line names
 the run to make. It also refuses a change to a shipped path that no suite
-measures, such as a new skill. The plan skill and the setup skill each owe
-one lab scenario of their own, `plan-clear` and `setup-misfit`.
+measures, such as a new skill. The plan skill owes `plan-clear` and
+`plan-fork`, and the setup skill owes `setup-misfit`.
 
 A tally that moves by one vote of three is noise. `decide` then asks for
 that case at ten votes on both arms. At ten votes a fall of one is noise,

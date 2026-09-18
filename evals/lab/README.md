@@ -127,6 +127,10 @@ says what the fixture sets up and what passes.
   open. It must commit the Plan and change nothing else, and the
   `plan-critic` must not send the complete sketch back (`bounced`).
   `critic_rounds` counts its calls.
+- `plan-fork`: a session of `/hone:plan` on a sketch with a fork in it. Two
+  builds hold its proof, and the repository settles neither. The session
+  must commit no Plan (`bounced`), and a judge reads whether the report
+  hands the choice to the person.
 - `setup-misfit`: a session of `/hone:setup` on a project whose
   `package.json` has no `test` script. The installed adapter must end
   green and must run the two tests. The session must add no linter and no
@@ -185,7 +189,7 @@ as a stale one.
 
 A pass does not mean one fixed ending. `parallel-paths` has ended in three
 valid ways, and `grant-nudge` has landed and has stopped. A full pass over
-sixteen scenarios costs about 36 dollars and takes about 65 minutes.
+seventeen scenarios costs about 39 dollars and takes about 70 minutes.
 
 ## Switching a component off
 

@@ -92,8 +92,11 @@ owed() {
     if touches '^agents/consolidate-critic\.md$'; then
         echo unit:consolidate-critic; echo lab:seeded-prose; echo lab:seeded-structure
     fi
-    # The two skills that a person calls. Each has one scenario of its own.
-    touches '^skills/plan/|^agents/plan-critic\.md$' && echo lab:plan-clear
+    # The two skills that a person calls. The plan skill has two scenarios:
+    # a sketch it must carry through, and a sketch it must hand back.
+    if touches '^skills/plan/|^agents/plan-critic\.md$'; then
+        echo lab:plan-clear; echo lab:plan-fork
+    fi
     touches '^skills/setup/|^scripts/setup\.sh$|^templates/' && echo lab:setup-misfit
     touches '^skills/run/' && echo unit:loop
     touches '^skills/garden/' && echo unit:garden

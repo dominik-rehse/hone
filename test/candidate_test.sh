@@ -226,6 +226,7 @@ reset_tree
 echo "x" > "$R/skills/plan/SKILL.md"
 out=$(candidate plan)
 grep -q 'evals/lab/run.sh plan-clear, 3 runs per arm' <<<"$out" && ok "the plan skill owes plan-clear" || bad "a change to the plan skill should owe plan-clear: $out"
+grep -q 'evals/lab/run.sh plan-fork, 3 runs per arm' <<<"$out" && ok "the plan skill owes plan-fork" || bad "a change to the plan skill should owe plan-fork: $out"
 reset_tree
 echo "bounced no" > "$R/evals/lab/scenarios/setup-misfit/goals"; printf '/hone:setup\n' > "$R/evals/lab/scenarios/setup-misfit/prompt"
 git -C "$R" add -A; git -C "$R" -c user.name=t -c user.email=t@example.invalid commit -qm "chore: a goal for setup"
