@@ -13,12 +13,14 @@ only where a checker catches staleness. Every change deletes something. A
 loop that stops and reports rather than forces past a failed check. Cost is
 the price hone pays for it, not the goal.
 
-This roadmap is about making hone itself better at that goal. The deletion
-bias applies to hone too. Every hook, critic, gate, and paragraph of prompt
-prose is a claim that without it the codebase would be worse. Each claim
-can be tested. So the roadmap answers two standing questions. Is each
-building block still worth its cost? And which model belongs in which slot,
-and what changes when a new model ships?
+This roadmap is about making hone itself better at that goal. It answers
+one standing question: how does a change to hone make the software that
+hone produces better, and how do we know? A change to hone can add a rule,
+reword a prompt, delete a hook or a paragraph, or move a model pin. Each
+one is a claim about the codebase that hone leaves behind, and each claim
+can be tested. The deletion bias applies to hone too, so a change that
+makes hone smaller at equal outcomes is a good change. But smaller is the
+tie-breaker, and the outcomes come first.
 
 ## The outcomes, and what measures each
 
