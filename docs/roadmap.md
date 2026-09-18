@@ -8,30 +8,33 @@ The history is in the dated notes under `docs/spikes/` and in git.
 
 ## Open
 
-- *Outcomes with no mechanism of their own.* Three are known.
+- *Outcomes with no mechanism of their own.* Three are known. The lab
+  measures each one, and opus holds each one today. So no mechanism can
+  show a gain yet, and the procedure rejects prose that grows with none.
   - A `Governs:` line ties a document to a path. Nothing ties a sentence
-    to the value that it repeats, so a change can make a sentence false
-    and never open its document.
-  - Nothing turns a fact that prose holds into a type.
-  - Nothing chooses among the valid endings of a run. A candidate is an
-    order of preference in the run skill.
+    to the value that it repeats. `untied-sentence` seeds two such
+    sentences, and three runs of three left none false.
+  - Nothing turns a fact that prose holds into a type. `seeded-structure`
+    held it in three runs of three.
+  - Nothing makes a run decide the same way twice whether a change earns a
+    Decision. That is the only split in the endings on opus. No run
+    changed between a land and a stop in four passes
+    ([`endings-on-opus`](spikes/2026-09-18-endings-on-opus.md)).
 
-  The seeded scenarios measure the first two, and the baseline of
-  2026-09-18 held both in three runs of three.
+  A harder seed, or a run below the floor, is what can show a deficit.
 - *The lab's noise floor.* Three identical passes outside the repository
-  are still owed, about 100 dollars. Four passes on 2026-09-18, on four
-  versions of the plugin, gave 52 passes of 52.
+  are still owed, about 115 dollars for sixteen scenarios. Four passes on
+  2026-09-18, on four versions of the plugin, gave 52 passes of 52.
 - *The ten-vote rule.* It differs from the maintainer's earlier rule that a
   cut needs an unmoved tally. The maintainer has not confirmed it.
-- *The garden gate.* Its release gate runs on opus, and the measured floor
-  is sonnet. `evals/floors` names sonnet.
-- *A cut of a critic section.* The section ablation of 2026-09-17 ran on
-  sonnet, and the critics run on opus since 0.54.0. It needs the campaign
-  again on opus first, about 10 dollars per critic.
-- *Coverage.* No suite measures `skills/plan/` or `skills/setup/`, so the
-  procedure cannot judge a change there. A bounce of the `plan-critic` has
-  no lab measure. `casual-fix` counts the reach by hand, and a measure
-  `reached` would let the procedure count it.
+- *A cut of a critic section.* Both campaigns found none
+  ([`section-ablation-on-opus`](spikes/2026-09-18-section-ablation-on-opus.md)).
+  A cut needs a case that aims at the section, and thirteen sections of
+  the two critics have none. `thin-proof-right-level` moves with any
+  shorter prompt, so its brief needs a firmer proof first.
+- *Coverage.* The plan skill and the setup skill have one scenario each,
+  with one sketch and one misfit. A sketch with a fork, where the right
+  answer is a bounce, has no scenario.
 - *The mock on `PATH`.* One haiku run walked around a commit hook with a
   mock of a missing tool. No guard reads that route. Whether it is inside
   hone's threat model is open.
