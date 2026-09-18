@@ -70,7 +70,12 @@ and verify each the same way (execute it, exit 0 = clean):
   repo compiles (`src/`, tests, `scripts/`, tooling), not only production
   code. A checker whose scope stops at `src/` makes the gate's green
   overstate what was checked.
-- `scripts/lint.sh` when there is a linter config (`eslint`, `ruff`).
+- `scripts/lint.sh` when there is a linter config (`eslint`, `ruff`). These
+  two adapters are also where a project enforces code quality: no copied
+  code, no dead code, boundaries between areas.
+  `${CLAUDE_PLUGIN_ROOT}/templates/quality/README.md` says which kind of
+  tool fits which goal. Name that page in the report. Do not install an
+  analyzer that the project does not use yet.
 - `scripts/setup-tree.sh` when the ecosystem has an install step (`bun.lock`
   → `bun install`, `package-lock.json` → `npm ci`, `uv.lock` → `uv sync`).
   It makes the current tree runnable. `worktree.sh add` runs it in every

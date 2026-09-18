@@ -1,6 +1,6 @@
 ---
 name: garden
-description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, broken Governs links, redundant tests, dead code, stale open questions, drift in the project's own CLAUDE.md and skills), then land the safe changes one at a time through the same worktree loop. Two units of work, each with its own proof: a cut removes something and the suite proves it safe, and a repair repoints a durable reference in docs/ whose target moved, proven by the new target existing. Escalates every judgment call instead of forcing it, batched as one Plan per area. Use it when the caller asks for a maintenance, cleanup, or staleness pass over the repo, or when a larger workflow schedules one between changes. Never start it on your own in the middle of other work. Invoke with /hone:garden."
+description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, oversized areas, broken Governs links, redundant tests, dead code, stale open questions, drift in the project's own CLAUDE.md and skills), then land the safe changes one at a time through the same worktree loop. Two units of work, each with its own proof: a cut removes something and the suite proves it safe, and a repair repoints a durable reference in docs/ whose target moved, proven by the new target existing. Escalates every judgment call instead of forcing it, batched as one Plan per area. Use it when the caller asks for a maintenance, cleanup, or staleness pass over the repo, or when a larger workflow schedules one between changes. Never start it on your own in the middle of other work. Invoke with /hone:garden."
 argument-hint: "[area-or-scope]"
 ---
 
@@ -52,6 +52,9 @@ behind the team's, so first run
   the prose governs nothing and it is a cut.
 - **Orphan or oversized Note**: a `docs/notes/<area>.md` with no `src/<area>/`, or
   one past the size cap that has drifted toward a spec.
+- **Oversized area**: a `src/<area>/` whose tracked text files hold more lines
+  than `HONE_AREA_MAX_LINES` (default 3000). The `nag` names one only when a
+  change touched it.
 - **Redundant test**: two tests pinning the same behaviour through the same
   surface, or a test the codebase made dead.
 - **Dead code**: a `src/` symbol or file with no remaining caller (confirm with a
