@@ -69,6 +69,11 @@ mechanical steps.
      and `opus` aliases. Nothing to do on the Anthropic API. On a provider
      that names its models differently, read the pin paragraph under
      *Commands* in `reference.md`.
+   - *The critics run on opus since 0.54*: `plan-critic` and
+     `consolidate-critic` pin claude-opus-5 where they pinned
+     claude-sonnet-5. A Plan review costs more, and the `plan-critic`
+     sends more Plans back at plan time. Each bounce names a concrete gap,
+     often a fork that the Plan left to the loop. Nothing to install.
    - *The review names its level since 0.53.1*: the loop's nested
      `/code-review` now runs at `high`. Before, it ran at whichever level
      you typed last in any session, because the prompt named none. A review

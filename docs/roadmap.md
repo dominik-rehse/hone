@@ -69,9 +69,15 @@ A measurement on 2026-09-17 set the floors. Each target ran one tier below
 its release gate ([`releasing.md`](../.claude/rules/releasing.md)), at three
 votes, with the held-out cases:
 
-- *The critics* gate on claude-sonnet-5, and that stays their floor. On
+- *The critics* gated on claude-sonnet-5, and that is their floor. On
   claude-haiku-4-5 the `plan-critic` approved `outcome-table-in-prose` 3/3,
-  and two `consolidate-critic` cases passed at 2/3 only.
+  and two `consolidate-critic` cases passed at 2/3 only. Since 0.54.0 both
+  critics pin claude-opus-5, one tier above the floor, by the maintainer's
+  choice. The move showed that opus reads the `plan-critic` prose more
+  strictly: it rejected two Plans that sonnet approved, and each time it
+  named a real fork in the Plan. The cases moved, not the prose. Four of
+  the five APPROVE cases pin nothing on opus, because the opus stub
+  approves them too, and the ledger says so.
 - *The loop* gates on claude-opus-5, and that stays its floor. On
   claude-sonnet-5 it answered HANDROLL 2/3 on `review-fanout-temptation`,
   and it split `consolidate-forecast-unprompted` 2/3.
@@ -194,8 +200,9 @@ the next campaign starts with cases, not with cuts.
 
 A second pass on 2026-09-17 wrote near misses for the `plan-critic` bullets
 that no case aims at, and drafts for the `consolidate-critic` beyond spike
-notes. Four of twelve drafts survived the ablation. The three `plan-critic`
-survivors discriminate against the stub alone, so they pin the prompt as a
+notes. Four of twelve drafts survived the ablation on sonnet, and one of
+those died the next day on opus. The two `plan-critic` survivors
+discriminate against the sonnet stub alone, so they pin the prompt as a
 whole and no bullet. The one `consolidate-critic` survivor pins a calibration
 bullet. So the third condition still fails for most sections, and the
 manual's *Known gaps* says why a draft that aims at one bullet tends to

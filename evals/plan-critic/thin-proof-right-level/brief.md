@@ -7,7 +7,9 @@ This opens a new area: nothing shortens a long file name today, and the file
 list breaks its layout on one. Add `truncateMiddle(name, max)` under
 `src/text/`. A name no longer than `max` comes back unchanged. A longer one
 keeps its start and its extension, and an ellipsis character replaces the
-middle, so the result is exactly `max` characters long.
+middle, so the result is exactly `max` characters long. A name with no
+extension, or one whose extension leaves no room for the start, keeps the
+start alone and ends in the ellipsis.
 
 ### Why
 Support has screenshots from four customers whose file list is unusable

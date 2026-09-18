@@ -236,26 +236,32 @@ isolated, three votes, moved three numbers and left the rest standing:
   still approves, at 2/3, so that paragraph carries part of the answer. The
   *Ambiguity* bullet does not carry the rest: the prompt minus that bullet
   approves 3/3. Measured 2026-09-17, claude-sonnet-5.
-- `real-env-proof-described`, `handler-proof-for-endpoint`, and
-  `baseline-only-preserved`: APPROVE, three near misses of 2026-09-17 on
-  claude-sonnet-5. Each Plan is exemplary and sits close to one bullet. The
-  first proves a mail header by a `Proof: real-environment` line with a
-  concrete check. The second proves a tenant check on an endpoint through
-  the router and an in-memory database. The third changes shipped behaviour
-  and says only what it preserves. The stub rejects them 3/3, 2/3, and 3/5,
-  and never for the bullet the Plan sits close to. It wants a mailbox for
-  the bounces, an audit of the sibling endpoints, and a definition of
-  "goods". So the three pin what `named-references` pins: the critic does
-  not invent an objection. No clause of the prompt carries that alone. Each
-  case still approves on the prompt minus the limiting clause of its bullet,
-  and on the prompt minus *Calibration*.
 
-  The first brief of `baseline-only-preserved` had a second objection in it.
-  Its *Why* named a start date for a campaign, and its *What* had no date
-  gate. One critic vote in six rejected on that fork, and so did 3 of 33
-  votes on the section-deleted prompts. The *Why* lost the date, and the case now
-  answers APPROVE 5/5 on the full prompt and on both second baselines. The
-  fix cost discrimination: the stub went from REJECT 3/3 to REJECT 3/5.
+  On claude-opus-5 (2026-09-18) the first brief failed REJECT 5/5. Opus
+  read "keeps its extension" and "exactly `max` characters" as a
+  contradiction for a long extension, and it stated two builds. The brief
+  now says what a name with no room for both keeps. On that brief opus
+  approves 4/5, the opus stub approves 3/3, and the prompt minus
+  *Calibration* rejects 3/3. So on opus the case pins *Calibration* alone,
+  and one vote in five still finds a fork inside the new sentence.
+- `real-env-proof-described` and `handler-proof-for-endpoint`: APPROVE,
+  two near misses of 2026-09-17, measured on claude-sonnet-5. Each Plan is
+  exemplary and sits close to one bullet. The first proves a mail header by
+  a `Proof: real-environment` line with a concrete check. The second proves
+  a tenant check on an endpoint through the router and an in-memory
+  database. The sonnet stub rejects them 3/3 and 2/3, and never for the
+  bullet the Plan sits close to. It wants a mailbox for the bounces and an
+  audit of the sibling endpoints. So they pin what `named-references` pins:
+  the critic does not invent an objection. No clause of the prompt carries
+  that alone. Each case still approves on the prompt minus the limiting
+  clause of its bullet, and on the prompt minus *Calibration*.
+
+  A third near miss, `baseline-only-preserved`, changed shipped behaviour
+  and said only what it preserved. It died on 2026-09-18 with the move of
+  the pin to claude-opus-5. Opus rejected it 2/5 for a real fork, whether
+  "goods" means the amount before or after a discount. With that sentence
+  added, the opus stub approved it 3/3, and so did the prompt minus
+  *Calibration*. So on opus it pinned nothing.
 - `nested-slug-open-plan`: REJECT with the substring `slug-collision`, 5/5.
   An exemplary Plan `export/csv-quoting`, an open Plan `export`, and no file
   in common. The stub approves 3/3. The second baseline is the prompt as it
@@ -416,6 +422,17 @@ Three cases that survived neither baseline were cut the same day:
 - `renamed-governs-holdout`: REPAIR, held out. It paraphrases
   `moved-governs-path` with different content, and it measured the same way:
   stub REPAIR 3/3, prior prose ESCALATE 3/3.
+
+The plan-critic pins claude-opus-5 since 0.54.0. On that model the stub
+approves `dep-refresh-no-red-test` (2/3), `named-references`, and
+`handler-proof-for-endpoint` (3/3 each), and so does the prompt minus
+*Calibration*. So on the production model these three pin nothing today.
+They stay for now, because they still measure the sonnet floor, and the
+next cut of no-op cases decides them. `real-env-proof-described` still
+discriminates against the opus stub (REJECT 3/3), and
+`thin-proof-right-level` pins *Calibration*. On the consolidate-critic the
+opus stub misses `spike-conclusion-only` and agrees on the two CLEAN cases,
+as the sonnet stub did.
 
 Read the loop gap precisely. The stub halts on every land gate and picks `ASK`.
 `land-proof-gate` and `land-grant-beyond-plan` therefore pin hone's action
@@ -651,6 +668,14 @@ has the cause and the fix. The other two were one REJECT vote each on
 `dep-refresh-no-red-test` and `named-references`, both in the first pass.
 So a flip is still signal. A 2/3 on a plan-critic APPROVE case is within
 the noise, and a 2/3 on `spike-note-may-age` no longer is.
+
+The floor was measured a third time on 2026-09-18, on claude 2.1.275,
+with every target on claude-opus-5, after the critics' pins moved there.
+Three identical passes at `--votes 3` over the 24 visible cases gave 216
+votes. No plurality verdict flipped (0/72). One single vote dissented:
+`thin-proof-right-level` gave one REJECT in the first pass, and its entry
+above says why that brief still carries one fork. A pass cost about 3.80
+dollars.
 
 ## Extending
 
