@@ -31,6 +31,13 @@ separate `chore: release X.Y.Z` commit. Its body summarizes the release. On
 semver, a feature or behavior change is a minor bump, and a fix is a patch.
 When a change qualifies, do the bump. Do not ask whether it counts.
 
+A change that alters what hone leaves in a consumer repository (an
+adapter, a policy file, the settings block, a docs shape) ships with its
+upgrade path. Make the path mechanical in `scripts/setup.sh` or a
+`/hone:garden` pass where you can. Where a person must act, add the step
+to `docs/upgrading.md` under the version that made it so. A release without
+that path is not complete.
+
 Before the release commit, the changed layer must pass its suite:
 
 - a change to a critic prompt (`agents/*.md`), to `skills/run/SKILL.md` or its

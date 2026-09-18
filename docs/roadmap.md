@@ -186,11 +186,14 @@ must:
    come from three places: a section of prompt prose deleted, a hook or
    critic switched off, and a model pin moved. A new step or a new rule is
    a fourth, and the method must accept it.
-5. Say what one evaluation costs and takes, so that the maintainer can
+5. Say how the method judges the upgrade path of a candidate (rule 4
+   below). A change that leaves older downstream repos behind, or asks a
+   person to migrate by hand what a script could do, is a worse change.
+6. Say what one evaluation costs and takes, so that the maintainer can
    budget a campaign. Today a unit suite pass costs about 4 dollars. A
    full lab pass costs about 30 dollars and takes an hour. A section
    ablation of one critic costs about 10 dollars.
-6. Write the method down in this file, as a section that replaces this
+7. Write the method down in this file, as a section that replaces this
    handoff, and land its tooling under `evals/` with its tests under
    `test/`.
 
@@ -214,6 +217,17 @@ and it measures what was easiest to measure, not what matters most.
 3. A change enters this repo as an ordinary reviewed change, through the
    eval gates and a version bump like any prompt edit. No tool commits
    here.
+4. A change to hone carries the way for a downstream repository on an
+   older version to take it. hone is a distributed plugin, and the repos
+   that use it hold state that hone wrote: adapters under `scripts/`,
+   policy files, the settings block, docs in the shapes hone prescribes.
+   A change that alters any of that is complete only with its upgrade
+   path. The path is mechanical where it can be, in `scripts/setup.sh`,
+   which is idempotent and runs on every upgrade, or in a `/hone:garden`
+   pass. Where a person must act, [`upgrading.md`](upgrading.md) says
+   what, under the version that made it so. A candidate change that the
+   method judges is judged with its upgrade path, and the cost of that
+   path is part of the change's cost.
 
 Each class of building block has its own evaluator, and a method that
 tests a change to one class with the evaluator of another measures
