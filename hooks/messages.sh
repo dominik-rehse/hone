@@ -130,6 +130,21 @@ Why: the primary tree stays on the trunk as a merge target for every session. La
 EOF
 }
 
+# The primary-branch half of rule 3. It stays apart from msg_bashguard_head_move,
+# whose Do: line sends the reader to a scratch tree. That is the right remedy
+# for an investigation and the wrong one for a merge, which has a helper of its
+# own. The second sentence covers a branch that never came through the loop:
+# land takes a hone change, so the only other honest move is to hand it back.
+# It names no git command, because every spelling that would finish the job
+# here is the route this hook just stopped.
+msg_bashguard_branch_move() {
+    cat <<'EOF'
+hone bash-guard: this command moves the primary branch.
+Do: for a hone change, run 'bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" land <change>'. For a branch that did not come through the loop, stop, name the branch, and leave the move to the person.
+Why: land holds the land lock and clears the shape, authority, and proof gates. It re-runs the whole suite after the merge, and rolls the merge back when it reds. A merge here skips the review and all of that.
+EOF
+}
+
 msg_bashguard_self_writer() {
     cat <<'EOF'
 hone bash-guard: this command runs a tool that writes its own files in the primary tree.
@@ -1174,6 +1189,7 @@ bash-guard|agent|msg_bashguard_signoff
 bash-guard|agent|msg_bashguard_attest
 bash-guard|agent|msg_bashguard_protected
 bash-guard|agent|msg_bashguard_head_move
+bash-guard|agent|msg_bashguard_branch_move
 bash-guard|agent|msg_bashguard_self_writer
 bash-guard|agent|msg_bashguard_formatter
 dirty-guard|agent|msg_dirtyguard_primary_tree|src/<area>/<file>|git checkout HEAD -- 'src/<area>/<file>'

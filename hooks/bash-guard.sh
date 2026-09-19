@@ -10,7 +10,8 @@
 # attributable.
 #
 #   deny: unambiguous attempts to disable the gate or its markers
-#   ask:  a mutating op aimed at a protected artifact (escalate to the human)
+#   ask:  a mutating op aimed at a protected artifact, at the primary tree, or
+#         at the primary branch itself (escalate to the human)
 #
 # The same .hone-off marker that disables the rest of hone disables this hook.
 
@@ -207,10 +208,41 @@ fi
 # git-dir == common-dir ⇔ TREE_DIR is the primary tree, not a linked worktree
 # (whose git-dir sits under .git/worktrees/). So neither rule fires for work
 # aimed at a worktree, which is where both operations are safe and belong.
+hone_is_primary_tree() {
+    [ -d "$1" ] || return 1
+    [ "$(git -C "$1" rev-parse --git-dir 2>/dev/null)" \
+      = "$(git -C "$1" rev-parse --git-common-dir 2>/dev/null)" ]
+}
+
 IN_PRIMARY_TREE=0
-[ "$(git -C "$TREE_DIR" rev-parse --git-dir 2>/dev/null)" \
-  = "$(git -C "$TREE_DIR" rev-parse --git-common-dir 2>/dev/null)" ] \
-    && IN_PRIMARY_TREE=1
+hone_is_primary_tree "$TREE_DIR" && IN_PRIMARY_TREE=1
+
+# The resolution above reads ONE leading cd, which is the shape the loop uses.
+# Every other way a command names a tree fell back to the shell's directory,
+# and that fallback only fails closed while the shell already stands in the
+# primary tree. The command that merged around the loop in the ImpossibleBench
+# probe had the other shape: the shell stood in a worktree, and the command cd'd
+# BACK to the primary tree to merge there. So read every tree the command names
+# as well: a later cd, `git -C <path>`, and `--git-dir=<path>`. Any of them in
+# the primary tree makes this primary-tree work.
+#
+# This only ever adds an escalation. A command that names no tree but the one
+# the leading cd already resolved is judged exactly as before, so the loop's
+# `cd <worktree>` and the subshell form still pass.
+if [ "$IN_PRIMARY_TREE" -eq 0 ]; then
+    while IFS= read -r _t; do
+        [ -n "$_t" ] || continue
+        _t=${_t%\"}; _t=${_t#\"}; _t=${_t%\'}; _t=${_t#\'}
+        # --git-dir names the repository directory, so its tree is the parent.
+        case "$_t" in */.git) _t=${_t%/.git} ;; .git) _t=. ;; esac
+        case "$_t" in /*) ;; *) _t="$SHELL_CWD/$_t" ;; esac
+        hone_is_primary_tree "$_t" && { IN_PRIMARY_TREE=1; break; }
+    done < <(printf '%s\n' "$CMD" \
+        | grep -Eo -e '(^|[;&|(][[:space:]]*)cd[[:space:]]+("[^"]*"|'"'"'[^'"'"']*'"'"'|[^[:space:];&|]+)' \
+                   -e '(^|[[:space:]])-C[[:space:]]+("[^"]*"|[^[:space:];&|]+)' \
+                   -e '(^|[[:space:]])--git-dir[=[:space:]]("[^"]*"|[^[:space:];&|]+)' \
+        | sed -E 's/^[^A-Za-z-]*//; s/^(cd|-C|--git-dir)[=[:space:]]+//')
+fi
 
 # 3. A HEAD-moving git op in the PRIMARY tree → ask. The primary tree is a merge
 # target kept on the trunk. Landing goes through `worktree.sh land`, which
@@ -256,6 +288,50 @@ if [ "$IN_PRIMARY_TREE" -eq 1 ]; then
         printf '%s\n' "$seg" | grep -Eq '(^|[^A-Za-z_])git[[:space:]]+checkout([[:space:]]|$)' || continue
         printf '%s\n' "$seg" | grep -Eq '[[:space:]]--([[:space:]]|$)' && continue
         decision ask "$(msg_bashguard_head_move)"
+    done < <(printf '%s\n' "$CMD" | tr '|;&' '\n\n\n')
+fi
+
+# 3c. A command that moves the PRIMARY BRANCH, in the primary tree → ask. Rule
+# 3 guards the shared HEAD; this one guards the ref HEAD points at.
+# `worktree.sh land` is what moves that ref: it holds the land lock, clears the
+# shape, authority, and proof gates, re-runs the whole suite after the merge,
+# and rolls a red merge back. In pass 2 of the ImpossibleBench probe one run
+# made a worktree by hand and fast-forwarded the primary branch itself, with no
+# review and no land gate, because no rule named `git merge`.
+#
+# The verbs bind to a following space or the end of the command, so
+# `git merge-base` and `git log --merges` read history and pass. The git prefix
+# accepts the global options that take their argument separately, which is how
+# `git -C <primary tree> merge` reaches the branch from a worktree shell. It
+# accepts no other token, so `git log --grep=merge x` never reads as a merge.
+#
+# `git push` counts only when its remote is a local path. Pushing the change
+# branch to the team's remote is the loop's own step, and shared-mode land
+# makes the primary-branch push itself, inside the lock.
+GIT_PRE='git([[:space:]]+(-C[[:space:]]+[^[:space:];&|]+|-c[[:space:]]+[^[:space:];&|]+'
+GIT_PRE="$GIT_PRE"'|--git-dir[=[:space:]][^[:space:];&|]+|--work-tree[=[:space:]][^[:space:];&|]+'
+GIT_PRE="$GIT_PRE"'|--no-pager|--no-replace-objects))*[[:space:]]+'
+BRANCH_MOVERS='(merge|cherry-pick|rebase)([[:space:]]|$)'
+BRANCH_MOVERS="$BRANCH_MOVERS"'|branch[[:space:]]+[^|;&]*(-f|--force|-M)([[:space:]]|$)'
+BRANCH_MOVERS="$BRANCH_MOVERS"'|update-ref[^|;&]*refs/heads/'
+BRANCH_MOVERS="$BRANCH_MOVERS"'|push([[:space:]]+-[^[:space:];&|]+)*[[:space:]]+(\.|\.\.|/|\.\./|~/)'
+if [ "$IN_PRIMARY_TREE" -eq 1 ] \
+   && echo "$CMD" | grep -Eq "(^|[^A-Za-z_])${GIT_PRE}(${BRANCH_MOVERS})"; then
+    decision ask "$(msg_bashguard_branch_move)"
+fi
+
+# 3d. `git reset` moves the primary branch in every form but two. Rule 3 above
+# escalates --hard, --merge, and --keep, whose danger is the working tree.
+# --soft and --mixed move the branch and leave the tree alone, and they passed
+# in silence. The two that move nothing are a bare `git reset` and a restore
+# with the `--` pathspec separator, which unstage. Everything else asks, judged
+# per segment the way rules 3a and 3b judge theirs.
+if [ "$IN_PRIMARY_TREE" -eq 1 ]; then
+    while IFS= read -r seg; do
+        printf '%s\n' "$seg" | grep -Eq "(^|[^A-Za-z_])${GIT_PRE}reset([[:space:]]|$)" || continue
+        printf '%s\n' "$seg" | grep -Eq '[[:space:]]--([[:space:]]|$)' && continue
+        printf '%s\n' "$seg" | grep -Eq "(^|[^A-Za-z_])${GIT_PRE}reset[[:space:]]*$" && continue
+        decision ask "$(msg_bashguard_branch_move)"
     done < <(printf '%s\n' "$CMD" | tr '|;&' '\n\n\n')
 fi
 

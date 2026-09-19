@@ -239,6 +239,18 @@ irreversible. When you want that record, route the edit through the loop.
   - It asks before a command that moves HEAD in the primary tree.
     `git checkout -- <paths>` and `git checkout <ref> -- <paths>` restore
     files and move no HEAD, so both pass.
+  - It asks before a command that moves the primary branch itself there.
+    The list is `git merge`, `cherry-pick`, `rebase`, `branch -f`, and
+    `update-ref` on `refs/heads/`. A push whose remote is a local path
+    counts, and so does every `git reset` but a bare one and a `--`
+    restore. `worktree.sh land` is the route, and it passes. `git
+    merge-base` and `git log --merges` read history, so they pass too. A
+    push of the change branch to the team's remote is the loop's own step,
+    and it passes.
+  - Both rules read every tree the command names, not only the one a
+    leading `cd` reaches: a later `cd`, `git -C <path>`, and
+    `--git-dir=<path>`. Any of them in the primary tree makes the command
+    primary-tree work.
   - It asks before a package manager, a formatter, or a migration tool
     runs in the primary tree. Such a tool writes its own files, so no
     command text ever spells that write out. A bare sync install

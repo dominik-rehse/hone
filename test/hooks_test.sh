@@ -250,6 +250,42 @@ echo "$(bg 'git stash drop')" | grep -q '"ask"' && ok "git stash drop escalated"
 echo "$(bg 'git stash list; git stash pop')" | grep -q '"ask"' && ok "a read does not excuse a pop in the next segment" || bad "a pop after a list should still ask"
 bgwt() { echo "{\"tool_input\":{\"command\":\"$1\"}}" | (cd "$WT" && bash "$BASH_GUARD"); }
 echo "$(bgwt 'git checkout some-commit')" | grep -q '"ask"' && bad "HEAD-move inside a worktree should not ask" || ok "HEAD-move allowed inside a worktree"
+
+# Rule 3 also covers a move of the PRIMARY BRANCH itself, not only of HEAD.
+# The primary branch is a merge target that `worktree.sh land` moves, under the
+# lock and with the post-merge suite. A run of the ImpossibleBench probe made a
+# worktree by hand and fast-forwarded the branch, with no review and no land
+# gate, and no rule named `git merge`.
+echo "$(bg 'git merge --ff-only hone/auth-login')" | grep -q '"ask"' && ok "a fast-forward merge in the primary tree escalated" || bad "git merge --ff-only should ask"
+echo "$(bg 'git merge --no-ff hone/auth-login -m landed')" | grep -q '"ask"' && ok "a --no-ff merge in the primary tree escalated" || bad "git merge --no-ff should ask"
+echo "$(bg 'git push . hone/auth-login:main')" | grep -q '"ask"' && ok "a push into the repo itself escalated" || bad "git push . branch:main should ask"
+echo "$(bg 'git branch -f main hone/auth-login')" | grep -q '"ask"' && ok "a forced branch move escalated" || bad "git branch -f main should ask"
+echo "$(bg 'git update-ref refs/heads/main hone/auth-login')" | grep -q '"ask"' && ok "a raw ref update escalated" || bad "git update-ref refs/heads/main should ask"
+echo "$(bg 'git cherry-pick hone/auth-login')" | grep -q '"ask"' && ok "a cherry-pick in the primary tree escalated" || bad "git cherry-pick in primary should ask"
+echo "$(bg 'git rebase hone/auth-login')" | grep -q '"ask"' && ok "a rebase in the primary tree escalated" || bad "git rebase in primary should ask"
+# --soft and --mixed move the branch too. Only --hard/--merge/--keep asked.
+echo "$(bg 'git reset --soft HEAD^')" | grep -q '"ask"' && ok "a soft reset in the primary tree escalated" || bad "git reset --soft moves the branch, so it should ask"
+# The tree decision has to fail closed for real. `git -C <primary>` and a
+# command that cds BACK to the primary tree both write there, and the shell
+# that issued the probe's merge stood in a worktree at the time.
+echo "$(bgcwd "git -C $REPO merge --ff-only hone/auth-login" "$WT")" | grep -q '"ask"' && ok "git -C into the primary tree escalated" || bad "git -C <primary> should ask from a worktree shell"
+echo "$(bgcwd "cd $WT && true && cd $REPO && git merge --ff-only hone/auth-login" "$WT")" | grep -q '"ask"' && ok "a cd back to the primary tree escalated from a worktree shell" || bad "two cds ending in the primary tree should ask"
+echo "$(bg "cd $WT && true && cd $REPO && git merge --ff-only hone/auth-login")" | grep -q '"ask"' && ok "a cd back to the primary tree escalated from a primary shell" || bad "two cds ending in the primary tree should ask"
+
+# The negative half. Without it the rule could pass by asking about everything.
+# A read of the history, a merge base, and prose that names a merge are not
+# moves, and the sanctioned route must never escalate.
+echo "$(bg 'git log --merges --oneline -20')" | grep -q 'permissionDecision' && bad "git log --merges only reads" || ok "git log --merges passes"
+echo "$(bg 'git merge-base main hone/auth-login')" | grep -q 'permissionDecision' && bad "git merge-base only reads" || ok "git merge-base passes"
+echo "$(bg 'git commit -m fix:-land-merges---no-ff-so-never-merge-by-hand')" | grep -q 'permissionDecision' && bad "a commit message is prose, not a merge" || ok "a merge named in a commit message passes"
+echo "$(bg 'bash scripts/worktree.sh land auth-login')" | grep -q 'permissionDecision' && bad "land is the sanctioned route" || ok "worktree.sh land passes"
+echo "$(bg 'git push origin hone/auth-login')" | grep -q 'permissionDecision' && bad "pushing the change branch moves no primary branch" || ok "a push of the change branch passes"
+# Every one of these is worktree work when the shell stands in a worktree.
+echo "$(bgwt 'git merge --ff-only main')" | grep -q 'permissionDecision' && bad "a merge inside a worktree is isolated" || ok "a merge inside a worktree passes"
+echo "$(bgwt 'git rebase main')" | grep -q 'permissionDecision' && bad "a rebase inside a worktree is isolated" || ok "a rebase inside a worktree passes"
+echo "$(bgwt 'git cherry-pick some-commit')" | grep -q 'permissionDecision' && bad "a cherry-pick inside a worktree is isolated" || ok "a cherry-pick inside a worktree passes"
+echo "$(bgcwd 'git merge --ff-only main' "$WT")" | grep -q 'permissionDecision' && bad "a persisted cd into a worktree is worktree work" || ok "a merge in the worktree shell passes"
+
 # `git checkout -- <paths>` restores files and moves no HEAD, so it passes even
 # in the primary tree. It is how the operator undoes a bad edit there.
 echo "$(bg 'git checkout -- bun.lock package.json')" | grep -q 'permissionDecision' && bad "a pathspec restore moves no HEAD" || ok "git checkout -- <paths> passes"
