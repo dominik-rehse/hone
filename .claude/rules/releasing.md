@@ -56,7 +56,9 @@ Before the release commit, the changed layer must pass its suite:
   `skills/run/SKILL.md`: `bash evals/lab/run.sh` with no fail. Run an
   indeterminate scenario again. Read a failed one in its sandbox before you
   decide. The noise floor is 46 passes of 48 over three identical passes,
-  and both fails were real. So a fail is signal. Three times it has been a
+  and both fails were real. So a fail is signal. A fail in a part that the
+  release does not touch does not block the release, once you have read it
+  in its sandbox. It goes on the roadmap. Three times a fail has been a
   bug in a check. See `evals/lab/README.md`. After a green pass, read the
   measures in each `result.json`. Where one is off its goal, read that
   run's transcript before you release. On 2026-09-18 a green pass hid a fix
