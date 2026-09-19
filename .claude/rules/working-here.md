@@ -30,6 +30,11 @@ habits keep them that way.
 goes over, cut or move text. Do not raise the budget without the
 maintainer's word.
 
+`docs/roadmap.md` has no budget. It is as long as its open items need. Each
+item must explain itself to a reader who was not in the session: what
+happens, how we know, and what the next step is. Explain a term of the
+lab at its first use, or link to where it is explained.
+
 ## How to write to the maintainer
 
 Write plain English. hone's own docs and prompts use a dense, aphoristic

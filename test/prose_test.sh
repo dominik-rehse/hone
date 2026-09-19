@@ -149,7 +149,6 @@ README.md 1700
 docs/model.md 5000
 docs/reference.md 6000
 docs/development.md 2000
-docs/roadmap.md 700
 docs/upgrading.md 1400
 evals/README.md 3200
 evals/lab/README.md 3000
