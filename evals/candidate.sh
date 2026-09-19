@@ -30,8 +30,14 @@
 #   UNDECIDED  the evidence is too thin, and the line names the run to make
 #   GAIN       a measured outcome moved up by more than the noise
 #   NOTE       a tally inside the noise, the distinct endings per scenario,
-#              and how many runs reached for what a guard forbids
+#              how many runs reached for what a guard forbids, and a scenario
+#              whose two arms are one plugin, which drops out of the comparison
 #   PRICE      the dollars and minutes of each arm, and the size of the plugin
+#
+# Two runs are one plugin for a scenario when they agree on every shipped path
+# that the scenario loads (plugin_files in result.json, and owed() read
+# backwards). So a baseline that differs only in a path the scenario never
+# loads still counts. A run from before that field compares as a whole plugin.
 #
 # The verdict: reject on any REJECT. Undecided on any UNDECIDED. A candidate
 # that grows the shipped prose is accepted only with a GAIN. A deterministic
@@ -80,7 +86,10 @@ git -C "$ROOT" rev-parse --verify -q "$REF^{commit}" >/dev/null || { echo "--ref
 # ---------------------------------------------------------------- the diff
 
 CHANGED=$( { git -C "$ROOT" diff --name-only "$REF" --; git -C "$ROOT" ls-files --others --exclude-standard; } | sort -u)
-touches() { printf '%s\n' "$CHANGED" | grep -E "$1" >/dev/null; }
+# The paths that owed() reads. It is the candidate's diff, and owed_for sets it
+# to one shipped path, to ask which suites that path alone owes.
+PATHS=$CHANGED
+touches() { printf '%s\n' "$PATHS" | grep -E "$1" >/dev/null; }
 
 # The suites that the candidate owes, one word per line: `mechanical`,
 # `unit:<target>`, `lab:<scenario>`, `lab:all`. This is the table of
@@ -98,6 +107,10 @@ owed() {
         echo lab:plan-clear; echo lab:plan-fork
     fi
     touches '^skills/setup/|^scripts/setup\.sh$|^templates/' && echo lab:setup-misfit
+    # The one file of another skill that the plan skill reads. Its reference
+    # in skills/plan/SKILL.md is the only one across skill directories, and
+    # loads() reads this line backwards to compare the plan scenarios on it.
+    if touches '^skills/run/references/dependency-refresh\.md$'; then echo lab:plan-clear; echo lab:plan-fork; fi
     touches '^skills/run/' && echo unit:loop
     touches '^skills/garden/' && echo unit:garden
     if touches '^rules/workflow\.md$'; then
@@ -107,6 +120,39 @@ owed() {
     return 0
 }
 OWED=$(owed | sort -u)
+# The suites that one path owes, from the same table.
+owed_for() { local PATHS="$1"; owed | sort -u; }
+
+# Does the scenario $1 load the shipped path $2? This is owed() read backwards:
+# a path owes the suites that a change to it must run, so a scenario loads a
+# path when that path owes it. Only a skill directory narrows the answer,
+# because a session calls one skill: `lab:all` from skills/run/ leaves out the
+# scenarios that another skill directory claims. Everywhere else the table is
+# coarser than the truth (every loop session reads the consolidate critic, and
+# every fixture is seeded from templates/), so those paths count in every
+# scenario, which is the strict answer. A path that owes nothing at all counts
+# too, except under .claude-plugin/: a version string loads in no scenario.
+loads() {
+    local suites; suites=$(owed_for "$2")
+    [ -n "$suites" ] || { case "$2" in .claude-plugin/*) return 1 ;; *) return 0 ;; esac; }
+    printf '%s\n' "$suites" | grep -qx "lab:$1" && return 0
+    if printf '%s\n' "$suites" | grep -qx 'lab:all'; then
+        case "$2" in skills/*) claimed_elsewhere "$1" "$2" && return 1 ;; esac
+        return 0
+    fi
+    case "$2" in skills/*) return 1 ;; esac
+    return 0
+}
+# Does a skill directory other than the one of path $2 claim scenario $1?
+claimed_elsewhere() {
+    local d x="${2#skills/}"; x=${x%%/*}
+    for d in "$ROOT"/skills/*/; do
+        d=$(basename "$d"); [ "$d" = "$x" ] && continue
+        owed_for "skills/$d/SKILL.md" | grep -qx "lab:$1" && return 0
+    done
+    return 1
+}
+
 # A shipped path that owed() does not know has no suite, so a change to it is
 # outside what the method can judge (rule 1 of docs/development.md: coverage
 # sets the limit). A new skill or a new rule file lands here.
@@ -274,16 +320,43 @@ esac
 THRICE=$( { printf '%s\n' "$OWED" | sed -n 's/^lab://p' | grep -vx all
             printf '%s\n' "$OWED" | grep -qx 'lab:all' && loop_goal_scenarios; } | sort -u | jq -R . | jq -s .)
 
+# The shipped paths where the runs of one scenario disagree, one `scenario
+# <tab> path` per line, and then the same list narrowed to the paths that the
+# scenario loads. Two runs are one plugin for a scenario when they agree on
+# those paths alone. A run from before plugin_files has no paths, and every
+# run of its scenario falls back to the hash of the whole plugin.
+DIFFS=$(jq -rs '
+    group_by(.scenario)[] | select(length > 1 and all(.plugin_files != null)) | . as $rs
+    | ($rs | map(.plugin_files | keys_unsorted) | add | unique)[] as $p
+    | select(($rs | map(.plugin_files[$p] // "") | unique | length) > 1)
+    | "\($rs[0].scenario)\t\($p)"' <<<"$LAB")
+LOADS=$(while IFS=$'\t' read -r s p; do
+            if [ -n "$p" ] && loads "$s" "$p"; then printf '%s\t%s\n' "$s" "$p"; fi
+        done <<<"$DIFFS" \
+        | jq -Rn '[inputs | split("\t")] | group_by(.[0]) | map({key: .[0][0], value: map(.[1])}) | from_entries')
+
 # The lab: verdicts, goals, endings, price.
-jq -rs --argjson goals "$GOALS" --argjson thrice "$THRICE" --argjson floors "$FLOOR_MAP" --argjson need "$RUNS_PER_ARM" --argjson move "$MOVE" '
+jq -rs --argjson goals "$GOALS" --argjson thrice "$THRICE" --argjson floors "$FLOOR_MAP" --argjson need "$RUNS_PER_ARM" --argjson move "$MOVE" \
+   --argjson loads "$LOADS" '
     def arm(a): map(select(.arm == a));
     def held(m; g): map(select(.measures[m]? != null)) | {n: length, held: (map(select(.measures[m] == g)) | length)};
     def mean(f): if length == 0 then 0 else (map(f) | add / length) end;
     def runs: . * 1000 | round / 1000;
-    (arm("base") | map(.plugin // empty) | unique) as $bp | (arm("cand") | map(.plugin // empty) | unique) as $cp
-    | (if ($bp | length) > 1 then "UNDECIDED lab: the baseline runs measured \($bp | length) different plugins" else empty end),
-      (if ($cp | length) > 1 then "UNDECIDED lab: the candidate runs measured \($cp | length) different plugins" else empty end),
-      (if ($bp | length) == 1 and $bp == $cp then "UNDECIDED lab: both arms measured the same plugin (\($bp[0]))" else empty end),
+    # What each run measured, for its own scenario: the hashes of the paths
+    # that the scenario loads, or the whole plugin when a run predates them.
+    (group_by(.scenario) | map(. as $rs | ($rs | all(.plugin_files != null)) as $fine | $rs[0].scenario as $s
+        | map(. + {ident: (if $fine then ([($loads[$s] // [])[] as $p | .plugin_files[$p] // ""] | join("|"))
+                           else .plugin // "" end)})) | add // [])
+    | (group_by(.scenario)[] | . as $rs | $rs[0].scenario as $s
+       | ($rs | arm("base") | map(.ident) | unique) as $bi | ($rs | arm("cand") | map(.ident) | unique) as $ci
+       | (if ($bi | length) > 1 then "UNDECIDED lab \($s): the baseline runs measured \($bi | length) different plugins" else empty end),
+         (if ($ci | length) > 1 then "UNDECIDED lab \($s): the candidate runs measured \($ci | length) different plugins" else empty end),
+         (if ($bi | length) == 1 and $bi == $ci
+          then "NOTE lab \($s): both arms measured the same plugin here, so these runs say nothing about the candidate"
+          else empty end)),
+      (group_by(.scenario) | map(select((arm("base") | length) > 0 and (arm("cand") | length) > 0)) as $both
+       | if ($both | length) > 0 and ($both | all((arm("base") | map(.ident) | unique) == (arm("cand") | map(.ident) | unique)))
+         then "UNDECIDED lab: no scenario told the two arms apart, so no run measured the candidate" else empty end),
       (map(select(.model as $m | ($floors.lab // [$m]) | index($m) | not)) | map(.model) | unique
        | map("UNDECIDED lab: a run used \(.), and evals/floors allows \($floors.lab | join(", ")) for the lab") | .[]),
       (group_by(.scenario)[] | select((arm("cand") | length) > 0 and (arm("base") | length) > 0)
@@ -291,6 +364,9 @@ jq -rs --argjson goals "$GOALS" --argjson thrice "$THRICE" --argjson floors "$FL
        | "UNDECIDED lab \(.[0].scenario): the two arms ran on different models"),
       (group_by(.scenario)[] | . as $rs | $rs[0].scenario as $s | ($rs | arm("base")) as $b | ($rs | arm("cand")) as $c
        | select(($c | length) > 0)
+       # A scenario whose two arms are one plugin drops out: its runs compare
+       # the baseline with itself, and the line above says so.
+       | select(($b | length) == 0 or ($b | map(.ident) | unique) != ($c | map(.ident) | unique))
        | ($c | map(select(.verdict == "fail")) | length) as $cf | ($b | map(select(.verdict == "fail")) | length) as $bf
        | ($c | map(select(.verdict == "indeterminate")) | length) as $ci
        | ($b | map(select(.verdict != "indeterminate"))) as $bok | ($c | map(select(.verdict != "indeterminate"))) as $cok

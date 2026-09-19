@@ -128,18 +128,6 @@ in git.
 - Next step: none now. If it happens again, the skill names the value or
   warns about the loop.
 
-#### `candidate.sh decide` rejects baselines that are good enough
-
-- What happens: `decide` compares the runs of a candidate with baseline
-  runs. It demands that all baseline runs come from one version of the
-  plugin. It answers *undecided* when the versions differ, even when they
-  differ only in files that the scenario never loads.
-- How we know: the first accepted candidate changed the plan skill. Its
-  baseline runs differed only in the run skill, which a plan session
-  never loads. `decide` reported two gains, no loss, and *undecided*.
-- Next step: let `decide` compare only the paths that a scenario loads,
-  with a test in `test/candidate_test.sh`.
-
 ### A question for the maintainer
 
 #### May hone land a correct solution beside a test that it reports as wrong?

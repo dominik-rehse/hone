@@ -200,6 +200,21 @@ fresh; MODE=idle lab toy --without deny-rules,nag >/dev/null
 grep -q '/nag\.sh' "$W"/out/*/toy/plugin/hooks/hooks.json && bad "nag.sh should be off beside deny-rules" || ok "a hook and the deny rules switch off together"
 fresh; MODE=idle lab toy >/dev/null
 [ "$(jq '.permissions.deny | length' "$W"/out/*/toy/repo/.claude/settings.json)" -gt 5 ] && ok "the full fixture carries the canonical deny rules" || bad "the fixture should carry the deny rules"
+
+echo "== the result hashes the plugin copy once per shipped path =="
+# The full run above is still in $W/out. evals/candidate.sh reads these hashes
+# to compare two runs path by path.
+full_files=$(result toy .plugin_files)
+[ "$(jq -r '."hooks/guard.sh"' <<<"$full_files")" = "$(sha256sum "$W"/out/*/toy/plugin/hooks/guard.sh | cut -c1-12)" ] \
+    && ok "the hash of a path is the hash of that file in the copy" || bad "the per-path hash should be the file's own hash"
+[ "$(jq 'length' <<<"$full_files")" -gt 20 ] && ok "every file of the copy has an entry" || bad "the copy has more files than $(jq 'length' <<<"$full_files") entries"
+fresh; MODE=idle lab toy --without guard >/dev/null
+off_files=$(result toy .plugin_files)
+[ "$(jq -r '."hooks/hooks.json"' <<<"$full_files")" != "$(jq -r '."hooks/hooks.json"' <<<"$off_files")" ] \
+    && ok "a switched hook changes the hash of the file it edits" || bad "--without should change hooks.json"
+[ "$(jq -r '."skills/plan/SKILL.md"' <<<"$full_files")" = "$(jq -r '."skills/plan/SKILL.md"' <<<"$off_files")" ] \
+    && ok "it changes no other path" || bad "--without must not change the hash of another file"
+
 lab toy --without no-such-hook >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an unknown hook name exits 2" || bad "an unknown hook should exit 2 (got $rc)"
 

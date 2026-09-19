@@ -217,6 +217,13 @@ copy_plugin() {
 plugin_hash() {
     (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)
 }
+# The same copy, one short hash per shipped path: {"<path>": "<hash>"}. Two
+# runs that differ in a path no scenario of theirs loads are one plugin for
+# that scenario, and evals/candidate.sh needs the paths to see that.
+plugin_files() {
+    (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum \
+        | jq -Rn '[inputs | capture("^(?<h>[0-9a-f]{12})[0-9a-f]* {2}\\./(?<p>.+)$") | {(.p): .h}] | add // {}')
+}
 
 # The fixture: a small Node project that went through hone's own setup, with
 # the settings block the README prescribes. Then the scenario's seed.
@@ -393,9 +400,10 @@ run_scenario() {
         fi
     fi
     jq -n --arg model "$MODEL" --arg without "$WITHOUT" --arg home "$HOME_MODE" --arg plugin "$(plugin_hash "$sb/plugin")" \
+        --argjson files "$(plugin_files "$sb/plugin")" \
         --argjson seeded "$seeded" --argjson auth_ok "$auth_ok" --argjson timed_out "$([ "$rc" -eq 124 ] && echo true || echo false)" \
         --argjson seconds "$(( $(date +%s) - start ))" \
-        '{model: $model, without: $without, home: $home, plugin: $plugin, seeded: $seeded, auth_ok: $auth_ok,
+        '{model: $model, without: $without, home: $home, plugin: $plugin, plugin_files: $files, seeded: $seeded, auth_ok: $auth_ok,
           timed_out: $timed_out, seconds: $seconds}' > "$sb/run.json"
     grade_scenario "$name"
 }
@@ -537,8 +545,8 @@ grade_scenario() {
         --arg ending "$ending" --argjson measures "${measures:-{\}}" \
         '{scenario: $scenario, track: $track, verdict: $verdict, reason: $reason, model: .model,
           review_model: $review_model, without: .without, home: .home, cost_usd: $cost, nested_cost_usd: $nested,
-          judge_cost_usd: $judge, seconds: .seconds, turns: $turns, plugin: .plugin, ending: $ending,
-          measures: $measures}' \
+          judge_cost_usd: $judge, seconds: .seconds, turns: $turns, plugin: .plugin, plugin_files: .plugin_files,
+          ending: $ending, measures: $measures}' \
         "$sb/run.json" > "$sb/result.json"
 }
 

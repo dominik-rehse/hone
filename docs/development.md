@@ -166,6 +166,10 @@ the run to make. It also refuses a change to a shipped path that no suite
 measures, such as a new skill. The plan skill owes `plan-clear` and
 `plan-fork`, and the setup skill owes `setup-misfit`.
 
+Two runs count as one plugin for a scenario when they agree on every
+shipped path that the scenario loads. So a baseline that differs only
+elsewhere still compares.
+
 A tally that moves by one vote of three is noise. `decide` then asks for
 that case at ten votes on both arms. At ten votes a fall of one is noise,
 and a fall of two rejects. A rise counts as a gain under the same numbers.

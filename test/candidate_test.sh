@@ -39,8 +39,21 @@ lab_run() {
     local plugin; [ "$1" = base ] && plugin=aaa || plugin=bbb
     mkdir -p "$W/runs/$1-$2/$3"
     jq -n --arg s "$3" --arg v "$4" --arg tidy "$5" --arg e "${6:-landed hone/x feat src}" --arg m "${7:-claude-floor-1}" --arg p "${PLUGIN:-$plugin}" \
+        --argjson files "${PLUGIN_FILES:-null}" \
         '{scenario: $s, verdict: $v, reason: "a check failed", model: $m, plugin: $p, ending: $e, cost_usd: 2, nested_cost_usd: 0.5,
-          judge_cost_usd: 0, seconds: 600, measures: (if $tidy == "" then {} else {tidy: $tidy} end)}' > "$W/runs/$1-$2/$3/result.json"
+          judge_cost_usd: 0, seconds: 600, measures: (if $tidy == "" then {} else {tidy: $tidy} end)}
+         | if $files == null then . else . + {plugin_files: $files} end' > "$W/runs/$1-$2/$3/result.json"
+}
+# files_json PATH=HASH ...: the plugin_files map of a lab record. Every shipped
+# path of the fixture has a hash, and each argument overrides one of them.
+files_json() {
+    local out kv
+    out='{"hooks/guard.sh":"h1","scripts/setup.sh":"s1","templates/node.sh":"t1",
+          ".claude-plugin/plugin.json":"m1","agents/consolidate-critic.md":"c1",
+          "skills/run/SKILL.md":"r1","skills/run/references/dependency-refresh.md":"d1",
+          "skills/plan/SKILL.md":"p1"}'
+    for kv in "$@"; do out=$(jq -c --arg k "${kv%%=*}" --arg v "${kv#*=}" '.[$k] = $v' <<<"$out"); done
+    printf '%s' "$out"
 }
 # The two seeded scenarios, three runs per arm. $1 and $2 are the tidy values
 # of the three baseline and the three candidate runs of seeded-prose.
@@ -248,6 +261,94 @@ f="$W/runs/cand-1/seeded-structure/result.json"; jq '.measures.reached = "yes"' 
 out=$(decide)
 grep -q '0/3 baseline and 1/3 candidate runs$' <<<"$out" && ok "a reach is counted per arm" || bad "one candidate reach should count as 1/3: $out"
 grep -q 'NOTE lab seeded-prose: the run reached' <<<"$out" && bad "a scenario with no reached measure should get no reach line" || ok "a scenario without the measure gets no line"
+
+echo "== baseline runs that differ outside what the scenario loads still compare =="
+reset_tree
+for s in plan-clear plan-fork; do
+    mkdir -p "$R/evals/lab/scenarios/$s"; echo landed > "$R/evals/lab/scenarios/$s/check.sh"
+    printf '/hone:plan x\n' > "$R/evals/lab/scenarios/$s/prompt"
+done
+echo "tidy yes" > "$R/evals/lab/scenarios/plan-clear/goals"
+git -C "$R" add -A; git -C "$R" -c user.name=t -c user.email=t@example.invalid commit -qm "chore: the plan scenarios"
+# The candidate changes the plan skill, so it owes the two plan scenarios.
+echo "x" > "$R/skills/plan/SKILL.md"
+# plan_arms BASE_FILE: three baseline runs of plan-clear that differ from each
+# other in BASE_FILE alone, against three candidate runs of the plan skill.
+plan_arms() {
+    local i v
+    rm -rf "$W/runs"
+    i=0; for v in no no no; do i=$((i+1))
+        PLUGIN="aaa$i" PLUGIN_FILES=$(files_json "$1=v$i") lab_run base "$i" plan-clear pass "$v"
+    done
+    i=0; for v in yes yes yes; do i=$((i+1))
+        PLUGIN=bbb PLUGIN_FILES=$(files_json "skills/plan/SKILL.md=p2") lab_run cand "$i" plan-clear pass "$v"
+    done
+    PLUGIN=bbb PLUGIN_FILES=$(files_json "skills/plan/SKILL.md=p2") lab_run cand 1 plan-fork pass ""
+}
+plan_arms skills/run/SKILL.md
+out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)"); rc=$?
+grep -q 'different plugins' <<<"$out" \
+    && bad "baselines that differ only in the run skill should still compare for a /hone:plan scenario: $out" \
+    || ok "a baseline difference outside what the scenario loads is not a different plugin"
+[ "$rc" -eq 0 ] && grep -q 'GAIN lab plan-clear' <<<"$out" \
+    && ok "the gain of the plan scenario is decided" || bad "the plan scenario should decide on its gain (got $rc: $out)"
+plan_arms skills/plan/SKILL.md
+out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)"); rc=$?
+[ "$rc" -eq 3 ] && grep -q 'different plugins' <<<"$out" \
+    && ok "baselines that differ in the skill the scenario loads are undecided" || bad "a difference in the loaded skill should be undecided (got $rc: $out)"
+plan_arms hooks/guard.sh
+out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)"); rc=$?
+[ "$rc" -eq 3 ] && grep -q 'different plugins' <<<"$out" \
+    && ok "baselines that differ in a hook are undecided in every scenario" || bad "a difference in a hook should be undecided (got $rc: $out)"
+# The plan skill reads one file of the run skill's references, so that file
+# counts for the plan scenarios like a file of the plan skill.
+plan_arms skills/run/references/dependency-refresh.md
+out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)"); rc=$?
+[ "$rc" -eq 3 ] && grep -q 'different plugins' <<<"$out" \
+    && ok "baselines that differ in the reference the plan skill reads are undecided" || bad "the shared reference should count for a plan scenario (got $rc: $out)"
+# A version string loads in no scenario, and kept baselines from two releases
+# always differ in it.
+plan_arms .claude-plugin/plugin.json
+out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)"); rc=$?
+[ "$rc" -eq 0 ] && grep -q 'GAIN lab plan-clear' <<<"$out" \
+    && ok "baselines from two releases still compare" || bad "a difference in the manifest alone should compare (got $rc: $out)"
+# A record from before the per-path field falls back to the whole-plugin hash.
+rm -rf "$W/runs"
+i=0; for v in no no no; do i=$((i+1)); PLUGIN="aaa$i" lab_run base "$i" plan-clear pass "$v"; done
+i=0; for v in yes yes yes; do i=$((i+1)); PLUGIN=bbb lab_run cand "$i" plan-clear pass "$v"; done
+PLUGIN=bbb lab_run cand 1 plan-fork pass ""
+out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)"); rc=$?
+[ "$rc" -eq 3 ] && grep -q 'different plugins' <<<"$out" \
+    && ok "a baseline record without the per-path field keeps the strict rule" || bad "an old record should stay strict (got $rc: $out)"
+
+echo "== a scenario that both arms measured the same way drops out =="
+plan_arms skills/run/SKILL.md
+# A /hone:run scenario does not load the plan skill, so its two arms are one
+# plugin, whatever the candidate changed in that skill.
+for i in 1 2 3; do
+    PLUGIN=aaa PLUGIN_FILES=$(files_json) lab_run base "$i" happy-path pass ""
+    PLUGIN=bbb PLUGIN_FILES=$(files_json "skills/plan/SKILL.md=p2") lab_run cand "$i" happy-path pass ""
+done
+out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)"); rc=$?
+[ "$rc" -eq 0 ] && grep -q 'NOTE lab happy-path: both arms measured the same plugin here' <<<"$out" \
+    && ok "a scenario that says nothing about the candidate is a note, not undecided" || bad "an unaffected scenario should be a note (got $rc: $out)"
+grep -q 'NOTE lab happy-path: 1 distinct ending' <<<"$out" \
+    && bad "a scenario that both arms measured the same way should not be compared: $out" \
+    || ok "the runs of that scenario are left out of the comparison"
+
+echo "== arms that no scenario tells apart measured nothing =="
+reset_tree
+rm -rf "$W/runs"
+for i in 1 2 3; do
+    PLUGIN=aaa PLUGIN_FILES=$(files_json ".claude-plugin/plugin.json=m$i") lab_run base "$i" happy-path pass ""
+    PLUGIN=bbb PLUGIN_FILES=$(files_json) lab_run cand "$i" happy-path pass ""
+done
+out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)"); rc=$?
+[ "$rc" -eq 3 ] && grep -q 'no scenario told the two arms apart' <<<"$out" \
+    && ok "two arms that no scenario tells apart are undecided" || bad "arms that nothing tells apart should be undecided (got $rc: $out)"
+for i in 1 2 3; do PLUGIN=bbb PLUGIN_FILES=$(files_json "hooks/guard.sh=h2") lab_run cand "$i" happy-path pass ""; done
+out=$(candidate decide --base "$(dirs base)" --cand "$(dirs cand)"); rc=$?
+[ "$rc" -eq 0 ] && ok "one scenario that tells the arms apart is enough" || bad "a scenario that tells the arms apart should decide (got $rc: $out)"
 
 candidate bogus >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an unknown mode exits 2" || bad "an unknown mode should exit 2 (got $rc)"
