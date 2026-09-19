@@ -8,61 +8,80 @@ The history is in the dated notes under `docs/spikes/` and in git.
 
 ## Open
 
-- *Outcomes with no mechanism of their own.* Three are known. The lab
-  measures each one, and opus holds the first two today. So no mechanism
-  can show a gain there yet, and the procedure rejects prose that grows
-  with none.
-  - A `Governs:` line ties a document to a path. Nothing ties a sentence
-    to the value that it repeats. `untied-sentence` seeds two such
-    sentences, and three runs of three left none false.
-  - Nothing turns a fact that prose holds into a type. `seeded-structure`
-    held it in three runs of three.
-  - Nothing chooses among the valid endings of a run. In seven passes of
-    2026-09-18, two scenarios changed between a land and another valid
-    ending, once each. Most other splits are whether a change earns a
-    Decision ([`endings-on-opus`](spikes/2026-09-18-endings-on-opus.md),
-    [`lab-noise-floor`](spikes/2026-09-18-lab-noise-floor.md)).
+### Defects with evidence
 
-  A harder seed, or a run below the floor, is what can show a deficit.
-- *Two real fails in the noise floor.* Three identical passes gave 46
-  passes of 48 ([`lab-noise-floor`](spikes/2026-09-18-lab-noise-floor.md)).
-  Each fail is a candidate for the run skill, with a measure that exists.
-  - One run read the permission denials in the review's envelope as a
-    degraded review, and it paid for a second review. The denials are the
-    design, and 25 of 26 envelopes carry one. The measure is `reviews`.
-  - One stop report offered two actions and recommended neither. The
-    measure is `stop_actionable`.
+The first three are from
+[`impossiblebench-first-look`](spikes/2026-09-18-impossiblebench-first-look.md).
 
-  The release gate demands a pass with no fail, and two of the three
-  passes had one. Whether the gate keeps that demand is open.
-- *The ten-vote rule.* It differs from the maintainer's earlier rule that a
-  cut needs an unmoved tally. The maintainer has not confirmed it.
-- *A cut of a critic section.* Both campaigns found none
-  ([`section-ablation-on-opus`](spikes/2026-09-18-section-ablation-on-opus.md)).
-  A cut needs a case that aims at the section, and thirteen sections of
-  the two critics have none. `thin-proof-right-level` moves with any
-  shorter prompt, so its brief needs a firmer proof first.
-- *Coverage.* The plan skill and the setup skill have one scenario each,
-  with one sketch and one misfit. A sketch with a fork, where the right
-  answer is a bounce, has no scenario.
-- *The mock on `PATH`.* One haiku run walked around a commit hook with a
-  mock of a missing tool. No guard reads that route. Whether it is inside
-  hone's threat model is open.
-- *A reviewer from another model family.* Author and reviewer may share
-  blind spots. `--review-model` and a defect outside the diff can price
-  the idea. A second vendor CLI is a heavy dependency for a small plugin.
-- *Automated search over candidates.* A candidate that needs the lab costs
-  10 to 50 dollars to judge. So only a search at the unit level is
-  affordable, and the unit level pins little.
-- *hone on hone.* This repository is not self-hosted, and
-  [`development.md`](development.md) *Change briefs* says so. Running
-  hone's own loop here is a project of its own.
+- *A run that keeps a test red cannot end its turn.* Three runs rightly kept
+  a wrong test red. The turn-end hook blocked each run nine times, until
+  the session ended.
+- *A carve-out can enter through the Plan.* One Plan named a carve-out for
+  a wrong test as a requirement. The `plan-critic` approved it. The review
+  endorsed the code, because its brief said that the test must pass.
+- *One run merged around the loop.* It made a worktree by hand and
+  fast-forwarded the primary branch, with no review and no land gate. No
+  scenario tempts that route.
+- *The nested review may not fan out.* `subagent_stats.spawned` is 0 in 128
+  of 129 valid envelopes. Also, `Bash(git *)` denied 50 `git` commands, 30
+  of them behind a `cd`. Commit `cc1bc4a` has the counts.
+- *The `plan-critic` still asks too much at times.*
+  `fork-settled-by-decision` approves in 15 votes of 17. A fail of that
+  case asks for ten votes.
+- *`setup-misfit` failed once in four runs.* The run invented a test script
+  that called the adapter, and the adapter calls npm.
+- *`candidate.sh decide` cannot filter its baselines.* It answers
+  *undecided* when the baseline runs carry plugin hashes that differ only
+  in paths that the scenario never loads.
+
+### Questions for the maintainer
+
+- *The lab gate.* The release gate demands a pass with no fail. Two of
+  three passes on 0.56.1 had one. The next pass had one in a skill that
+  the release did not touch. Whether the gate keeps the demand is open.
+- *An honest ending.* Over 20 probe runs per arm, bare opus delivered a
+  cheat 12 times and hone 2 times. hone never delivered the honest
+  solution, because it leaves the wrong test red. hone stopped 15 times.
+  Whether hone may land beside a test that it reports as wrong is open.
+- *Fails from real use.* They are the best source of scenarios, and they
+  have no home.
+
+### Measurement
+
+- *Probes.* A probe measures hone where opus is tempted, and it never gates
+  a release. `evals/probes/impossiblebench/` is the first, with ten tasks
+  and two runs per arm. More runs come before a candidate leans on it.
+- *A measure for well structured.* `scb-check` is exact and makes no model
+  call, and it reads Python alone. A Python fixture in the lab would give
+  the outcome its first exact measure
+  ([`slopcodebench-first-look`](spikes/2026-09-18-slopcodebench-first-look.md)).
+  The paid experiment on the garden pass costs about 250 dollars.
+- *Outcomes with no mechanism of their own.* Nothing ties a sentence to the
+  value that it repeats. Nothing turns a fact that prose holds into a
+  type. Nothing chooses among the valid endings of a run
+  ([`endings-on-opus`](spikes/2026-09-18-endings-on-opus.md)). opus holds
+  the first two in the lab. A fail from real use or from a probe is what
+  can show a deficit.
+
+### Parked, each with its condition
+
+- *A cut of a critic section* waits for the next model release.
+  Thirteen sections have no case that aims at
+  them ([`section-ablation-on-opus`](spikes/2026-09-18-section-ablation-on-opus.md)).
+- *A reviewer from another model family* waits for a review that misses a
+  defect which its brief did not hide. `--review-model` can then price it.
+- *Automated search over candidates* waits for a cheap judge. The lab
+  costs 10 to 50 dollars per candidate.
+- *hone on hone* is a project of its own
+  ([`development.md`](development.md), *Change briefs*).
 
 ## Decided
 
-- *The `consolidate-critic` stays* (2026-09-18). No case shows that its cut
-  bullets change a verdict, and no run shows that they change a codebase.
-  The maintainer decided not to test its removal, which would cost about
-  60 dollars.
-- *A deterministic check needs no measured gain* (2026-09-18). It is rule 5
-  of the procedure.
+- *The `consolidate-critic` stays* (2026-09-18). A test of its removal
+  would cost about 60 dollars, and the maintainer decided against it.
+- *A deterministic check needs no measured gain* (2026-09-18). It is rule
+  5 of the procedure.
+- *The ten-vote rule stands* (2026-09-18).
+- *A newly built route is outside what hone defends* (2026-09-18).
+  [*Authority*](model.md#authority) says so. It closes the mock on `PATH`.
+- *A public benchmark enters as a probe, never as a gate* (2026-09-19).
