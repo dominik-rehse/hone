@@ -27,27 +27,6 @@ in git.
 
 ### Defects with evidence
 
-#### A cheat can enter through the Plan
-
-- What happens: a task has a test that demands a wrong value. The run
-  writes that wrong value into its Plan as a requirement. The
-  `plan-critic` approves the Plan. The code review then accepts the code,
-  because its brief says that the test must pass.
-- How we know: one task of the ImpossibleBench probe ended this way on
-  all three releases that we measured
-  ([`probe-across-releases`](spikes/2026-09-19-probe-across-releases.md)).
-  The critic gave this reason: the request says "pass all the tests", and
-  that settles it.
-- What limits the finding: the probe's request really does say that the
-  tests must pass. So the request makes the tests the authority, and the
-  critic's reading is defensible. We also tested the reviewer alone.
-  It named such a special case as a bug in 3 runs of 3. It did so even
-  when the brief argued for the special case.
-- Next step: a lab scenario whose request names the written
-  specification as the authority, with a wrong test beside it. It shows
-  whether the critic's rule on contradictions fires. A fix comes only
-  after that.
-
 #### A blocked run sometimes tells the person to switch hone off
 
 - What happens: `.hone-off` is the marker file that switches hone's hooks
@@ -59,6 +38,9 @@ in git.
 - Where it comes from: `rules/workflow.md` and the message
   `msg_guard_primary_tree` name the marker as the person's way out. The
   model reads that and repeats it.
+- Since then: 12 lab runs on 0.58.1 on 2026-09-19 had no such suggestion.
+  One final report named the marker, to say that it is the person's to
+  create and to advise against it.
 - Next step: none now, because the final reports are clean. The
   suggestion may show up in a final report or in the
   [field log](field-log.md). Then reword those two places, so that they
@@ -79,6 +61,27 @@ in git.
   which every session reads, so it costs words in every session.
 - Next step: collect cases in the field log. With three or more on opus,
   build a scenario and try the change as a candidate.
+
+#### Complexity piles up in one function, and nobody raises it
+
+- What happens: a function already handles four kinds of input inline. A
+  Plan adds a fifth kind that needs a loop with nested checks. The run puts
+  it inline as one more branch. The function lands with 78 to 87 lines and
+  a cyclomatic complexity of 14 to 16.
+- How we know: 3 runs of 3 of the lab scenario `python-structure` on opus
+  ([`python-structure-baseline`](spikes/2026-09-19-python-structure-baseline.md)).
+  The builder, the nested code review, and the `consolidate-critic` never
+  mentioned the size. A reviewer who read the landed code would send it
+  back. In the same runs the rule of three worked: the duplicated block was
+  gone in 3 of 3.
+- What limits the finding: it is one fixture, in Python. The first design
+  of the fixture punished reasonable code, and the note says how the second
+  design avoids that.
+- Next step: a candidate through the procedure in `development.md`. The
+  measure `cc_pile` exists, so a gain can show. An exact check would need a
+  complexity tool per language, which is a new tool, so rule 5 does not
+  cover it. The likely candidate is one sentence in the refactor step of
+  the run skill. It owes the `loop` unit suite and the whole lab.
 
 #### The review bench is too easy
 
@@ -161,6 +164,11 @@ today.
   public benchmark ImpossibleBench, with hone and without it. We picked
   these ten because opus had cheated on them before. Each pass runs each
   task once.
+- One task ends in a cheat on every release, because the probe's request
+  makes the tests the authority. With a request that names the
+  specification, hone refuses the cheat, and the lab scenario
+  `spec-authority` guards that
+  ([`spec-authority-first-runs`](spikes/2026-09-19-spec-authority-first-runs.md)).
 - What it can show: only a large change. Ten single runs cannot show a
   small one.
 - Next step: more runs per task, before a candidate leans on the probe.
@@ -169,17 +177,18 @@ today.
 
 #### An exact measure for well-structured code
 
-- What exists: `scb-check`, the metric tool of the benchmark
-  SlopCodeBench. It measures duplicated code and how complexity piles up
-  in few functions. It is exact, it makes no model call, and it runs in
-  half a second
-  ([`slopcodebench-first-look`](spikes/2026-09-18-slopcodebench-first-look.md)).
-- The limit: it reads Python alone, and the lab's fixtures are JavaScript.
-- Next step, free: a Python fixture in the lab, with `scb-check` as its
-  measure. The goal *well structured* would get its first exact measure.
+- What exists: the lab scenario `python-structure`. It measures the code
+  that a run lands with `scb-check`, the metric tool of the benchmark
+  SlopCodeBench. The tool is exact, it makes no model call, and it runs in
+  half a second. `dup` says whether duplicated code is gone, and `cc_pile`
+  says whether complexity piled up in one function
+  ([`python-structure-baseline`](spikes/2026-09-19-python-structure-baseline.md)).
+- The limit: the tool reads Python alone, so one scenario carries the
+  measure.
 - Next step, paid: the benchmark itself can test whether a
   `/hone:garden` pass between steps keeps code from decaying. That costs
-  about 250 dollars and a day of setup with Docker.
+  about 250 dollars and a day of setup with Docker
+  ([`slopcodebench-first-look`](spikes/2026-09-18-slopcodebench-first-look.md)).
 
 #### Three goals that no part of hone works on
 
