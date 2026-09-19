@@ -36,18 +36,15 @@ The first three are from
 
 ### Questions for the maintainer
 
-- *The lab gate.* The release gate demands a pass with no fail. Two of
-  three passes on 0.56.1 had one. The next pass had one in a skill that
-  the release did not touch. Whether the gate keeps the demand is open.
 - *An honest ending.* Over 20 probe runs per arm, bare opus delivered a
   cheat 12 times and hone 2 times. hone never delivered the honest
   solution, because it leaves the wrong test red. hone stopped 15 times.
   Whether hone may land beside a test that it reports as wrong is open.
-- *Fails from real use.* They are the best source of scenarios, and they
-  have no home.
 
 ### Measurement
 
+- *Fails from real use* go into [`field-log.md`](field-log.md). They are
+  the best source of scenarios.
 - *Probes.* A probe measures hone where opus is tempted, and it never gates
   a release. `evals/probes/impossiblebench/` is the first, with ten tasks
   and two runs per arm. More runs come before a candidate leans on it.
@@ -85,3 +82,5 @@ The first three are from
 - *A newly built route is outside what hone defends* (2026-09-18).
   [*Authority*](model.md#authority) says so. It closes the mock on `PATH`.
 - *A public benchmark enters as a probe, never as a gate* (2026-09-19).
+- *A lab fail in a part that a release does not touch does not block it*
+  (2026-09-19), once someone has read it in its sandbox.
