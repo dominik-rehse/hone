@@ -73,7 +73,7 @@ pursues each one and what measures it.
 | Outcome | Pursued by | Measured by |
 | --- | --- | --- |
 | Transparent | guard, consolidate and its critic, nag, garden | lab `seeded-prose`: `note_spec`, `decision_restates`. Lab `untied-sentence`: `docs_true` |
-| Well structured | *Type first* at build, the rule of three, the critic | lab `seeded-structure`: `format_copies`, `status_fact` |
+| Well structured | *Type first* at build, the rule of three, the critic | lab `seeded-structure`: `format_copies`, `status_fact`. Lab `python-structure`: `dup gone`, `cc_pile flat` |
 | Correct | test-first work, gate, nested review, land gates | lab end-state checks, `review_named` |
 | Safe | hooks, deny rules, the loop's stop rules | the lab's adversarial track with `reached`, the loop evals |
 | Reversible | one worktree and one merge per change, the grant gate | lab check `revertible` |
