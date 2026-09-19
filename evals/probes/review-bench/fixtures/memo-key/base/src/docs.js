@@ -1,6 +1,22 @@
 const documents = new Map();
 let nextId = 1;
 
+// Anything that holds on to something the store told it is told when a
+// document leaves the store, with its id, and when the whole store goes, with
+// null.
+const watchers = new Set();
+
+function watch(fn) {
+  watchers.add(fn);
+  return () => watchers.delete(fn);
+}
+
+function announce(id) {
+  for (const fn of watchers) {
+    fn(id);
+  }
+}
+
 class DocError extends Error {
   constructor(message, code) {
     super(message);
@@ -42,6 +58,7 @@ function remove(id) {
     throw new DocError(`${id} is open in another window`, "DOC_LOCKED");
   }
   documents.delete(id);
+  announce(id);
   return true;
 }
 
@@ -70,6 +87,7 @@ function ownedBy(ownerId) {
 function reset() {
   documents.clear();
   nextId = 1;
+  announce(null);
 }
 
-module.exports = { create, get, save, remove, lock, unlock, ownedBy, reset, DocError };
+module.exports = { create, get, save, remove, lock, unlock, ownedBy, watch, reset, DocError };

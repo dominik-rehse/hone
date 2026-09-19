@@ -34,3 +34,8 @@ test("refuses a file whose first line is not the header", () => {
   assert.throws(() => parseCsv("PEN-01,3.00\n"), CsvError);
   assert.throws(() => parseCsv(""), (err) => err.code === "BAD_HEADER");
 });
+
+test("names the line the header should have been on", () => {
+  assert.throws(() => parseCsv("PEN-01,3.00\n"), (err) => err.lineNo === 1);
+  assert.throws(() => parseCsv("\n\ncode;amount\nPEN-01;3.00\n"), (err) => err.lineNo === 3);
+});

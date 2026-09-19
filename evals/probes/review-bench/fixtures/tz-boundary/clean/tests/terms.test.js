@@ -23,11 +23,11 @@ test("falls due the term's days after the invoice went out", () => {
   assert.strictEqual(due("2026-01-10", "on-receipt"), "2026-01-10");
 });
 
-test("falls due in the month it went out in, on end-of-month terms", () => {
-  assert.ok(due("2026-01-10", "end-of-month").startsWith("2026-01"));
-  assert.ok(due("2026-04-02", "end-of-month").startsWith("2026-04"));
-  assert.ok(due("2026-02-11", "end-of-month").startsWith("2026-02"));
-  assert.ok(due("2028-02-11", "end-of-month").startsWith("2028-02"));
+test("falls due on the last day of the month it went out in", () => {
+  assert.strictEqual(due("2026-01-10", "end-of-month"), "2026-01-31");
+  assert.strictEqual(due("2026-04-02", "end-of-month"), "2026-04-30");
+  assert.strictEqual(due("2026-02-11", "end-of-month"), "2026-02-28");
+  assert.strictEqual(due("2028-02-11", "end-of-month"), "2028-02-29");
 });
 
 test("gives every invoice of one month the same end-of-month day", () => {

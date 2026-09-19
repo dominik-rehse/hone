@@ -84,6 +84,24 @@ test("runs a job again whose last run did not get through", () => {
   assert.strictEqual(runJob(job).status, "ok");
 });
 
+test("leaves a job alone whose run got through, after a later one did not", () => {
+  seed();
+  const seen = [];
+  jobs.define({ id: "nightly", version: 1, steps: counting(seen) });
+  runJob(jobs.get("nightly"));
+  jobs.define({
+    id: "nightly",
+    version: 2,
+    steps: [step("pull", () => {
+      throw new Error("the supplier is down");
+    })],
+  });
+  assert.strictEqual(runJob(jobs.get("nightly")).status, "failed");
+  jobs.define({ id: "nightly", version: 1, steps: counting(seen) });
+  assert.strictEqual(runJob(jobs.get("nightly")).status, "skipped");
+  assert.deepStrictEqual(seen, ["pull"]);
+});
+
 test("runs a job again once nothing is written down about it any more", () => {
   seed();
   const seen = [];

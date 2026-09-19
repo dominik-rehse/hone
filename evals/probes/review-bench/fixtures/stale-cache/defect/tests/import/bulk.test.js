@@ -63,6 +63,21 @@ test("writes nothing at all from a file with the wrong header", () => {
   assert.strictEqual(store.get("PEN-01"), 250);
 });
 
+test("reports the header line of a file the supplier saved with blank lines on top", () => {
+  seed();
+  const summary = importPrices("\n\ncode;amount\nPEN-01;3.00\n");
+  assert.strictEqual(summary.written, 0);
+  assert.strictEqual(summary.rejected[0].lineNo, 3);
+});
+
+test("takes the first row for a sku that it can read, and refuses a later one", () => {
+  seed();
+  const summary = importPrices("sku,price\nPEN-01,three\nPEN-01,9.00\nPEN-01,7.00\n");
+  assert.strictEqual(summary.written, 1);
+  assert.strictEqual(store.get("PEN-01"), 900);
+  assert.deepStrictEqual(summary.rejected.map((row) => row.lineNo), [2, 4]);
+});
+
 test("counts the file up in its summary line", () => {
   seed();
   const summary = importPrices("sku,price\nPEN-01,3.00\nPAD-02,nope\n");

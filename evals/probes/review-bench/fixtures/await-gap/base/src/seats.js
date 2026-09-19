@@ -10,12 +10,12 @@ function seatId(row, number) {
 
 // The row and the number behind a seat id, or null when there is no such seat.
 function parseSeat(id) {
-  const m = /^([A-Z])-(\d{1,2})$/.exec(String(id));
+  const m = /^([A-Z])-([1-9]\d?)$/.exec(String(id));
   if (m === null) {
     return null;
   }
   const number = Number(m[2]);
-  if (!ROWS.includes(m[1]) || number < 1 || number > SEATS_PER_ROW) {
+  if (!ROWS.includes(m[1]) || number > SEATS_PER_ROW) {
     return null;
   }
   return { row: m[1], number };

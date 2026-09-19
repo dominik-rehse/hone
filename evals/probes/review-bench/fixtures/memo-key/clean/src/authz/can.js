@@ -1,3 +1,4 @@
+const docs = require("../docs.js");
 const key = require("./key.js");
 const rules = require("./rules.js");
 
@@ -39,5 +40,7 @@ function clear() {
 function size() {
   return memo.size;
 }
+
+docs.watch(clear);
 
 module.exports = { can, forget, clear, size };

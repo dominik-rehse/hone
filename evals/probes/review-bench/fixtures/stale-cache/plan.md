@@ -19,8 +19,10 @@ month two of the ninety lines went in with a digit transposed.
 A file of two good rows writes both prices, and a sku the list did not carry
 before is on it afterwards. A row with an unreadable price is refused and the
 rest of the file still goes in. A row with the wrong number of columns is
-refused. Where the file names one sku twice, the first row wins and the second
-is refused. A file with the wrong header writes nothing. The summary reads
+refused. Where the file names one sku twice, the first row the importer can
+read goes on the list. Every later row for that sku is refused. A file with the
+wrong header writes nothing, and the summary names the line the header should
+have been on. The summary reads
 `read 2, wrote 1, rejected 1` with the refused line under it.
 
 ### Notes for the loop

@@ -39,7 +39,11 @@ function importPrices(text) {
     if (err.code !== "BAD_HEADER") {
       throw err;
     }
-    return { read: 0, written: 0, rejected: [{ lineNo: 1, sku: null, reason: err.message }] };
+    return {
+      read: 0,
+      written: 0,
+      rejected: [{ lineNo: err.lineNo, sku: null, reason: err.message }],
+    };
   }
   const accepted = [];
   const rejected = [];

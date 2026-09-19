@@ -42,6 +42,17 @@ test("will not take a locked document off the shelf", () => {
   assert.strictEqual(docs.remove(doc.id), true);
 });
 
+test("tells a watcher about a document that leaves, and about the whole store", () => {
+  const heard = [];
+  const stop = docs.watch((id) => heard.push(id));
+  const doc = seed();
+  docs.remove(doc.id);
+  docs.reset();
+  stop();
+  docs.reset();
+  assert.deepStrictEqual(heard, [null, doc.id, null]);
+});
+
 test("lists what one person owns", () => {
   const doc = seed();
   docs.create({ title: "Budget", ownerId: "u-gus" });

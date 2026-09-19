@@ -7,6 +7,7 @@ const expiry = require("../src/expiry.js");
 const server = require("../src/server.js");
 
 const t0 = 1_700_000_000_000;
+const MINUTE = 60 * 1000;
 const HOUR = 60 * 60 * 1000;
 let at = t0;
 
@@ -42,6 +43,15 @@ test("a request carries its session past this moment", () => {
   expiry.touch(session);
   assert.strictEqual(expiry.isExpired(session, at), false);
   assert.strictEqual(session.seenAt, at);
+});
+
+test("a session runs the time the settings give it out from the request", () => {
+  seed({ sessionTtl: 30 * 60 });
+  const session = sessions.create("u-ada");
+  at = t0 + HOUR;
+  expiry.touch(session);
+  assert.strictEqual(expiry.isExpired(session, at + 29 * MINUTE), false);
+  assert.strictEqual(expiry.isExpired(session, at + 31 * MINUTE), true);
 });
 
 test("a session carried forward still ends where it would have ended", () => {

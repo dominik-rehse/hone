@@ -23,11 +23,26 @@ test("keeps the last word on a job", () => {
   assert.strictEqual(results.count(), 1);
 });
 
+test("keeps the last run that got through apart from the last word", () => {
+  results.reset();
+  results.record("nightly", result("nightly", "ok"));
+  results.record("nightly", result("nightly", "failed"));
+  assert.strictEqual(results.find("nightly").status, "failed");
+  assert.strictEqual(results.lastSuccess("nightly").status, "ok");
+});
+
+test("has no run that got through for a job that never did", () => {
+  results.reset();
+  results.record("nightly", result("nightly", "failed"));
+  assert.strictEqual(results.lastSuccess("nightly"), null);
+});
+
 test("forgets one job and leaves the rest", () => {
   results.reset();
   results.record("nightly", result("nightly", "ok"));
   results.record("weekly", result("weekly", "ok"));
   assert.strictEqual(results.forget("nightly"), true);
   assert.strictEqual(results.forget("nightly"), false);
+  assert.strictEqual(results.lastSuccess("nightly"), null);
   assert.deepStrictEqual(results.all().map((r) => r.jobId), ["weekly"]);
 });

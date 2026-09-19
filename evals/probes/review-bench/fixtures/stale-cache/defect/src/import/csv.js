@@ -2,10 +2,11 @@
 const HEADER = ["sku", "price"];
 
 class CsvError extends Error {
-  constructor(message, code) {
+  constructor(message, code, lineNo) {
     super(message);
     this.name = "CsvError";
     this.code = code;
+    this.lineNo = lineNo;
   }
 }
 
@@ -14,8 +15,9 @@ function splitFields(line) {
 }
 
 // The rows of a supplier file, each with the line it sat on. Blank lines are
-// not rows. Throws a CsvError with the code BAD_HEADER when the first line is
-// not the header this format has.
+// not rows. Throws a CsvError with the code BAD_HEADER when the first line
+// that carries anything is not the header this format has, with the line that
+// line sat on.
 function parseCsv(text) {
   const numbered = String(text)
     .replace(/^\ufeff/, "")
@@ -24,7 +26,11 @@ function parseCsv(text) {
     .filter((line) => line.text.trim() !== "");
   const head = numbered[0];
   if (head === undefined || splitFields(head.text).join(",") !== HEADER.join(",")) {
-    throw new CsvError(`the first line must read ${HEADER.join(",")}`, "BAD_HEADER");
+    throw new CsvError(
+      `the first line must read ${HEADER.join(",")}`,
+      "BAD_HEADER",
+      head === undefined ? 1 : head.lineNo,
+    );
   }
   return numbered.slice(1).map((line) => ({ lineNo: line.lineNo, fields: splitFields(line.text) }));
 }

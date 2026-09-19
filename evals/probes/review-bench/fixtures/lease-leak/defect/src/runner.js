@@ -27,8 +27,8 @@ function runJob(job) {
     };
   }
   const carried = state.load(job.id);
-  const alreadyDone = results.find(job.id);
-  if (alreadyDone != null && alreadyDone.status === "ok" && alreadyDone.version >= job.version) {
+  const alreadyDone = results.lastSuccess(job.id);
+  if (alreadyDone != null && alreadyDone.version >= job.version) {
     metrics.inc("skipped");
     return { ...alreadyDone, status: "skipped" };
   }

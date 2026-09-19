@@ -11,6 +11,7 @@ test("has nothing for text that is not a seat of this house", () => {
   assert.strictEqual(seats.parseSeat("D-1"), null);
   assert.strictEqual(seats.parseSeat("A-13"), null);
   assert.strictEqual(seats.parseSeat("A-0"), null);
+  assert.strictEqual(seats.parseSeat("A-01"), null);
   assert.strictEqual(seats.parseSeat("A1"), null);
   assert.strictEqual(seats.parseSeat(""), null);
 });
