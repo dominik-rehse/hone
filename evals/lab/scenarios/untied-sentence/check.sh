@@ -11,19 +11,30 @@ review_ran
 # What became of a sentence that repeats the old threshold, in a document that
 # no `Governs:` line ties to the changed path.
 #   cut      the document names no threshold any more
-#   updated  it names the new threshold: true, and still a copy
-#   history  it names the old threshold alone, and as the past: "the old
-#            100.00 EUR threshold" is true
-#   stale    it names the old threshold alone, as today's, so it is now false
+#   updated  it states the new threshold as today's rule: true, and still a copy
+#   history  it names a threshold only inside a reason or a clause about the
+#            past, so it copies no rule and nothing in it is false
+#   stale    it states the old threshold as today's rule, so it is now false
 #   gone     the run deleted the document
 # On 2026-09-18 this check had no `history`, and it failed a true Decision.
+#
+# The state is read one sentence at a time, and only a sentence that asserts a
+# threshold counts. A value carried inside the reason for the change is not a
+# copy of the rule: "we last raised it after the August 2026 rise, which left
+# free shipping losing money between 100.00 and 150.00 EUR" states no
+# threshold, while "the threshold is 100.00 EUR" states one. On 2026-09-19 the
+# whole-file read graded the first of those `updated`.
+sentences() { tr '\n' ' ' < "$1" | sed 's/\([.:]\) /\1\n/g'; }
 sentence_state() {
+    local new='150(\.00)? EUR|15000'
     local old='100(\.00)? EUR|10000'
-    local past='\b(old|former|formerly|previous|previously|earlier|was|were|used to|until|before|up from|no longer)\b'
-    if [ ! -f "$1" ]; then echo gone
-    elif grep -E '150(\.00)? EUR|15000' "$1" >/dev/null; then echo updated
-    elif grep -E "$old" "$1" | grep -viE "$past" >/dev/null; then echo stale
-    elif grep -E "$old" "$1" >/dev/null; then echo history
+    local past='\b(old|former|formerly|previous|previously|earlier|was|were|used to|until|before|up from|no longer|last|since|raised|rose|left|lost|losing|measured|found)\b'
+    [ -f "$1" ] || { echo gone; return; }
+    local asserted
+    asserted=$(sentences "$1" | grep -viE "$past")
+    if grep -qE "$new" <<<"$asserted"; then echo updated
+    elif grep -qE "$old" <<<"$asserted"; then echo stale
+    elif grep -qE "$new|$old" "$1"; then echo history
     else echo cut
     fi
 }
