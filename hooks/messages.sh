@@ -28,6 +28,17 @@
 # arguments. So a template that nobody registers never reaches the lint, and
 # the catalog alone never keeps an unprinted template alive.
 
+# The plugin's own absolute path, for a command a message tells someone to
+# run. A message lands in an agent's shell or in a person's terminal, and
+# ${CLAUDE_PLUGIN_ROOT} is set in neither. Two opus runs of 2026-09-19 read
+# that literal out of the bash-guard's refusal and searched the filesystem for
+# worktree.sh. The process that prints the message knows where it lives, so it
+# prints the real path. scripts/worktree.sh resolves HONE_WSH for the same
+# reason. The subshell keeps the caller's working directory.
+hone_msg_plugin_root() {
+    ( cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd )
+}
+
 # Indent a multi-line value as a paste block. Empty input prints nothing.
 hone_msg_block() {
     [ -n "$1" ] || return 0
@@ -138,9 +149,9 @@ EOF
 # It names no git command, because every spelling that would finish the job
 # here is the route this hook just stopped.
 msg_bashguard_branch_move() {
-    cat <<'EOF'
+    cat <<EOF
 hone bash-guard: this command moves the primary branch.
-Do: for a hone change, run 'bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" land <change>'. For a branch that did not come through the loop, stop, name the branch, and leave the move to the person.
+Do: for a hone change, run 'bash "$(hone_msg_plugin_root)/scripts/worktree.sh" land <change>'. For a branch that did not come through the loop, stop, name the branch, and leave the move to the person.
 Why: land holds the land lock and clears the shape, authority, and proof gates. It re-runs the whole suite after the merge, and rolls the merge back when it reds. A merge here skips the review and all of that.
 EOF
 }
@@ -337,7 +348,7 @@ msg_nag_stale_claim() {
     local change="$1"
     cat <<EOF
 This clone still holds a claim on $change (refs/hone/claim/$change), and the change has no worktree here.
-Do: release it with 'bash "\${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" release $change'.
+Do: release it with 'bash "$(hone_msg_plugin_root)/scripts/worktree.sh" release $change'.
 Why: a leftover claim blocks the change for the team.
 EOF
 }
@@ -362,9 +373,9 @@ EOF
 # --------------------------------------------------------- session-start
 
 msg_session_no_adapter() {
-    cat <<'EOF'
+    cat <<EOF
 hone: this project has no scripts/run-tests.sh, so the gate has no suite to run.
-Do: run bash "${CLAUDE_PLUGIN_ROOT}/scripts/setup.sh"
+Do: run bash "$(hone_msg_plugin_root)/scripts/setup.sh"
 Why: the gate runs the project's test adapter.
 EOF
 }

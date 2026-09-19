@@ -82,6 +82,17 @@ while IFS= read -r defined; do
         *) bad "$defined" "defined in messages.sh but missing from the catalog" ;;
     esac
 done < <(grep -oE '^msg_[A-Za-z0-9_]+\(\)' "$PLUGIN_ROOT/hooks/messages.sh" | sed 's/()$//' | sort -u)
+
+# No template hands out a shell variable to expand. A message reaches an
+# agent's shell or a person's terminal, and ${CLAUDE_PLUGIN_ROOT} is set in
+# neither. Two opus runs of 2026-09-19 read the literal out of the
+# bash-guard's refusal and went searching the filesystem for worktree.sh. The
+# hook process knows its own plugin root, so a message prints the real path.
+while IFS= read -r hit; do
+    bad "${hit%%:*}" "prints the literal ${hit#*:}, which no reader's shell expands"
+done < <(bash "$PLUGIN_ROOT/hooks/messages.sh" --raw \
+    | awk '/^=== /{fn=$2} /\$\{[A-Za-z_]/{ match($0, /\$\{[A-Za-z_][A-Za-z0-9_]*\}/); print fn ":" substr($0, RSTART, RLENGTH) }' \
+    | sort -u)
 printf '  %s %d templates checked, %d problem(s)\n' \
     "$([ "$fail" -eq 0 ] && echo ok  || echo FAIL)" "$checked" "$fail"
 [ "$fail" -eq 0 ]
