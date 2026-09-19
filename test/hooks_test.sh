@@ -639,13 +639,49 @@ git -C "$REPO" commit -q --allow-empty -m "Merge branch 'hone/ghost'"
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q ".plans/ghost.md survived its landing" && ok "Plan with landing merge commit flagged" || bad "should flag Plan whose merge commit is in history"
 
-# Evidence 2: a surviving fully-merged hone/<change> branch.
+# Evidence 2: a surviving hone/<change> branch that carried a commit of its
+# own into the primary branch. The fold-in message is not land's, so evidence
+# 1 cannot fire and this case tests evidence 2 alone.
 echo "# Plan" > "$REPO/.plans/ghost2.md"
-git -C "$REPO" branch hone/ghost2 HEAD
+git -C "$REPO" checkout -q -b hone/ghost2
+git -C "$REPO" commit -q --allow-empty -m "feat(ghost2): a commit of its own"
+git -C "$REPO" checkout -q -
+git -C "$REPO" merge -q --no-ff -m "chore: fold ghost2 in" hone/ghost2
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q ".plans/ghost2.md survived its landing" && ok "Plan with fully-merged surviving branch flagged" || bad "should flag Plan whose merged branch survives"
-git -C "$REPO" branch -d hone/ghost2 >/dev/null 2>&1
+echo "$out" | grep -q ".plans/ghost2.md survived its landing" && ok "Plan with a merged branch of its own flagged" || bad "should flag Plan whose merged branch survives"
+git -C "$REPO" branch -D hone/ghost2 >/dev/null 2>&1
 rm -f "$REPO/.plans/ghost2.md"
+
+# A hone/<change> branch that carried no commit of its own is no evidence of
+# a landing. git calls it merged, because it points at a commit the primary
+# branch already has, and a branch is always merged into itself. The nag read
+# that as a landing and told a run to delete the Plan it was still executing
+# (2026-09-19 probe). The worktree is where it hit, so test there first.
+# This fixture predates setup.sh's current .gitignore and still ignores
+# .plans/, so force the Plan into the commit. A linked worktree checks out
+# what is tracked, and the run reads its Plan there.
+echo "# Plan" > "$REPO/.plans/ghost3.md"
+(cd "$REPO" && git add -f .plans/ghost3.md && git commit -qm "chore(plan): ghost3")
+WT_G=$(cd "$REPO" && bash "$PLUGIN_ROOT/scripts/worktree.sh" add ghost3 2>&1 | tail -1)
+if [ -n "$WT_G" ] && [ -d "$WT_G" ]; then
+    out=$(cd "$WT_G" && echo '{}' | bash "$NAG" 2>&1)
+    echo "$out" | grep -q "ghost3.md survived its landing" && bad "a run's own branch is not evidence of its landing" || ok "the run's own branch is no evidence inside its worktree"
+    (cd "$REPO" && bash "$PLUGIN_ROOT/scripts/worktree.sh" remove "$WT_G" >/dev/null 2>&1)
+else
+    bad "could not make a worktree for the nag's branch-evidence test: $WT_G"
+fi
+(cd "$REPO" && git rm -q --cached .plans/ghost3.md && git commit -qm "chore: untrack ghost3 plan")
+rm -f "$REPO/.plans/ghost3.md"
+
+# The same branch with no worktree, seen from the primary tree. `remove`
+# retires a merged branch, so make this one directly.
+echo "# Plan" > "$REPO/.plans/ghost4.md"
+git -C "$REPO" branch hone/ghost4 HEAD
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q ".plans/ghost4.md survived its landing" && bad "a branch with no commit of its own is not a landing" || ok "a fresh branch is no evidence of a landing"
+echo "$out" | grep -q "Plan(s) pending run" && ok "such a Plan counts as pending" || bad "a Plan with no landing should count as pending"
+git -C "$REPO" branch -D hone/ghost4 >/dev/null 2>&1
+rm -f "$REPO/.plans/ghost4.md"
 
 # Nested slug (the plan skill derives <area>/<change> mirroring src/): the
 # recursive scan still finds it, evidence rules unchanged.

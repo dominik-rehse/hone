@@ -5,7 +5,8 @@
 #   1. Leftover Plan: a .plans/<change>.md whose change has LANDED: no
 #      worktree, plus positive evidence the change concluded. The merge commit
 #      land writes (its fixed -m format makes the grep exact) or a surviving
-#      fully-merged hone/<change> branch. Consolidate should have deleted it.
+#      hone/<change> branch that is fully merged AND once carried a commit of
+#      its own into the primary branch. Consolidate should have deleted it.
 #      "No worktree" alone is NOT evidence: that is the normal plan→run gap
 #      (hone authors Plans first and runs them later, often from another
 #      session). Flagging it nags every queued Plan into alarm fatigue.
@@ -105,6 +106,28 @@ add_finding() {
     findings+=$(printf '%s\n' "$1" | sed '1s/^/- /; 2,$s/^/  /')$'\n'
 }
 
+# A surviving branch is evidence of a landing only when it once carried a
+# commit of its own into the primary branch. `git branch --merged HEAD` alone
+# is not that: a branch is merged into itself, and a fresh hone/<change>
+# points at a commit the primary branch already had. So inside its own
+# worktree every run read its own branch as landed, and the nag told it to
+# delete the Plan it was executing (2026-09-19 probe). Finding 5 dodges this
+# by running in the primary tree only, and a Plan is readable from either.
+#
+# The test: the branch tip must sit OFF the primary branch's first-parent
+# line. land merges a change, so its commits are on no first-parent line. A
+# branch with nothing of its own has a primary-branch commit for a tip.
+nag_branch_carried_work() {
+    local branch="$1" tip common primary
+    tip=$(git rev-parse --verify -q "$branch") || return 1
+    common=$(git rev-parse --git-common-dir 2>/dev/null) || return 1
+    primary=$(git -C "$common/.." rev-parse --abbrev-ref HEAD 2>/dev/null)
+    [ -n "$primary" ] && [ "$primary" != HEAD ] || return 1
+    # No quiet reader in the pipeline: grep -q would quit early, and under
+    # pipefail the write end's SIGPIPE would read as no match.
+    [ -z "$(git rev-list --first-parent "$primary" 2>/dev/null | grep -xF "$tip")" ]
+}
+
 # 1. Leftover Plan. Recurse: slugs are nested (.plans/<area>/<change>.md).
 # Flag only on landed evidence (see the header). Otherwise count as pending.
 if [ -d ".plans" ]; then
@@ -122,7 +145,8 @@ if [ -d ".plans" ]; then
         if git rev-parse --git-dir >/dev/null 2>&1; then
             if [ -n "$(git log --fixed-strings --grep="Merge branch 'hone/${change}'" -n 1 --format=%H 2>/dev/null)" ]; then
                 landed="its landing merge commit is in history"
-            elif git branch --merged HEAD --format='%(refname:short)' 2>/dev/null | grep -qxF "hone/$change"; then
+            elif [ -n "$(git branch --merged HEAD --format='%(refname:short)' 2>/dev/null | grep -xF "hone/$change")" ] \
+                 && nag_branch_carried_work "hone/$change"; then
                 landed="branch hone/${change} is fully merged"
             fi
         fi
