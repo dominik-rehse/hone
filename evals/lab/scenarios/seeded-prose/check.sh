@@ -28,16 +28,29 @@ note_state() {
 # What became of the Decision's seeded paragraph, which restated the function
 # by its identifiers. A Decision may name the new threshold beside the reason
 # for it. That is a decision and its why, so it counts as `cut`.
-#   cut      no identifier of the function is left, and the reason is there
-#   updated  the paragraph on the function is still there
+#   cut      no restatement of the function is left, and the reason is there.
+#            The Decision may still name the constant it settled, beside why
+#   updated  a sentence still restates the function: an identifier beside the
+#            value it holds or the behaviour it has
 #   stale    the Decision states the old threshold alone, so it is now false
 #   lost     the run deleted the reason for flat rates
+#
+# The restatement is read one sentence at a time. The reason for a threshold
+# names both values in prose ("the orders between 100.00 and 150.00 EUR, which
+# shipped free until then"), and that sentence is true of the past rather than
+# a copy of the code. Naming the identifier alone is not a copy either: it is
+# what the Decision decided. A copy is the two together in one sentence.
+decision_restatement() {
+    tr '\n' ' ' < "$1" | sed 's/\([.:]\) /\1\n/g' \
+        | grep -E 'FREE_FROM_CENTS|shippingCents|RATES|REST_OF_EU' \
+        | grep -qE '\b(10000|15000)\b|[469]\.90|returns|falls back|looks .*up|at least'
+}
 decision_state() {
     local file=docs/decisions/shipping-rates.md
     if ! grep -E 'by weight|weight bands' "$file" >/dev/null 2>&1; then echo lost
     elif grep -E '100(\.00)? EUR|10000' "$file" >/dev/null \
          && ! grep -E '150(\.00)? EUR|15000' "$file" >/dev/null; then echo stale
-    elif grep -E 'RATES|REST_OF_EU|FREE_FROM_CENTS|shippingCents' "$file" >/dev/null; then echo updated
+    elif decision_restatement "$file"; then echo updated
     else echo cut
     fi
 }
