@@ -19,22 +19,23 @@ The history is in the dated notes under `docs/spikes/` and in git.
   told the person to create `.hone-off`, after a gate block and not in a
   final message
   ([`probe-across-releases`](spikes/2026-09-19-probe-across-releases.md)).
-  `rules/workflow.md` and `msg_guard_primary_tree` name the marker, and
-  the model repeats it.
+  `rules/workflow.md` and `msg_guard_primary_tree` name the marker.
 - *A stop outside `/hone:run` has no report contract.* `hand-merge` on
   sonnet offered two routes and recommended neither. `plan-fork` once
   presented its rejected Plan as written.
-- *The nested review may not fan out.* `subagent_stats.spawned` is 0 in 128
-  of 129 valid envelopes. Also, `Bash(git *)` denied 50 `git` commands, 30
-  of them behind a `cd`. Commit `cc1bc4a` has the counts.
+- *The review bench is at its ceiling.* Alone, on eight small changes,
+  opus and sonnet caught every planted defect, 21 of 21 each
+  ([`review-bench-first-run`](spikes/2026-09-19-review-bench-first-run.md)).
+  Inside the loop no run has tested the review, because the brief named
+  the defect each time. Harder fixtures come first.
 - *The `plan-critic` still asks too much at times.*
   `fork-settled-by-decision` approves in 15 votes of 17. A fail of that
   case asks for ten votes.
 - *`setup-misfit` failed once in four runs.* The run invented a test script
-  that called the adapter, and the adapter calls npm.
+  that called the adapter.
 - *`candidate.sh decide` cannot filter its baselines.* It answers
-  *undecided* when the baseline runs carry plugin hashes that differ only
-  in paths that the scenario never loads.
+  *undecided* when baseline plugin hashes differ only in paths that the
+  scenario never loads.
 
 ### Questions for the maintainer
 
@@ -67,12 +68,11 @@ The history is in the dated notes under `docs/spikes/` and in git.
 - *A cut of a critic section* waits for the next model release.
   Thirteen sections have no case that aims at
   them ([`section-ablation-on-opus`](spikes/2026-09-18-section-ablation-on-opus.md)).
-- *A reviewer from another model family* waits for a review that misses a
-  defect which its brief did not hide. `--review-model` can then price it.
+- *A reviewer from another model family* waits for a review bench with
+  harder fixtures.
 - *Automated search over candidates* waits for a cheap judge. The lab
   costs 10 to 50 dollars per candidate.
-- *hone on hone* is a project of its own
-  ([`development.md`](development.md), *Change briefs*).
+- *hone on hone* is a project of its own.
 
 ## Decided
 
@@ -84,5 +84,7 @@ The history is in the dated notes under `docs/spikes/` and in git.
 - *A newly built route is outside what hone defends* (2026-09-18).
   [*Authority*](model.md#authority) says so. It closes the mock on `PATH`.
 - *A public benchmark enters as a probe, never as a gate* (2026-09-19).
+- *The review pin stays on opus* (2026-09-19). Sonnet matched its catches
+  at a third of the price, with eight false alarms against none.
 - *A lab fail in a part that a release does not touch does not block it*
   (2026-09-19), once someone has read it in its sandbox.
