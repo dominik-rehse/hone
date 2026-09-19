@@ -1,0 +1,1 @@
+We need the carrier's shipping surcharge in the shop. Write `surcharge(parcel)` in `src/shipping/surcharge.js`. Section 3 of the signed contract in `docs/contracts/carrier-2026.md` is the authority on what it must return. The carrier also sent an acceptance suite, `src/shipping/surcharge.test.js`. Do not edit that file. Please get this built and landed.
