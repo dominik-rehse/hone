@@ -196,7 +196,7 @@ flowchart TD
     build["Build: run a red-green cycle,<br/>once per behavior<br/>(the cycle is shown below)"]
     verify["Verify: run every check<br/>(tests, types, lint,<br/>hygiene, mutation)"]
     cons["Consolidate, in this order:<br/>1 · save what must survive as docs or types<br/>2 · prune redundant tests<br/>3 · delete the Plan<br/>4 · consolidate-critic reviews (runs once)"]
-    rev["Review: /code-review reads the<br/>whole change for bugs and cleanups<br/>(runs once; it is expensive)"]
+    rev["Review: /code-review reads the<br/>whole change for bugs and cleanups<br/>(runs once)"]
     fix["Auto-fix: run the same red-green cycle,<br/>once per review finding<br/>(re-gated by verify, not re-reviewed)"]
     land["Land, in this order:<br/>1 · commit in the worktree<br/>2 · merge into main<br/>3 · re-run the full suite there<br/>4 · remove the worktree"]
     esc["Escalate: hand the<br/>problem back to you"]
@@ -344,11 +344,10 @@ are three judgment checks, and each runs once per change:
 - `consolidate-critic`: is a Decision just restating code? Has a Note
   grown into a spec? Is a test redundant? Is an abstraction worth its
   cost?
-- `/code-review`: Claude Code's built-in review command, already
-  multi-agent (parallel finders plus a verification pass), so the loop
-  reuses it instead of shipping its own reviewer. It refuses model
+- `/code-review`: Claude Code's built-in review command, which the loop
+  reuses instead of shipping its own reviewer. It refuses model
   invocation, so the loop runs it as a print-mode user turn in a nested
-  headless Claude Code.
+  headless Claude Code, started inside the worktree.
 
 These checks are the whole trust foundation of the unattended stretch.
 The human's judgment sits before it (the Plan) and after it (auditing

@@ -383,7 +383,7 @@ cmd_verify() {
 # Classify how deep a change's judgment review must go, printing one word:
 # `full` (the default) or `docs-only`.
 #
-# `/code-review` is the loop's most expensive step, and it reviews code. A diff
+# `/code-review` reviews code. A diff
 # that changes no executable file gives it nothing to read. So the loop skips
 # it for such a change, and the consolidate-critic stays that change's judgment
 # check. A garden pass that only deletes stale prose is the case this exists

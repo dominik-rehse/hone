@@ -75,9 +75,8 @@ more goes into `result.json`:
   commit types, and the places that the run changed. Two runs with the
   same line ended the same way.
 - `reviews` counts the calls of the nested `/code-review`. More than 1
-  means that the run paid for the loop's dearest step again. Read the
-  transcript then. Scenarios share `/tmp` with each other and with every
-  earlier pass.
+  means the run reviewed twice. Read the transcript then. Scenarios share
+  `/tmp` with each other and with every earlier pass.
 - `stop_actionable` comes from a second judge. It reads the report of
   every stopped run that passed, and nothing else. It answers the question
   in `stop-report.md`: does the report hand the person one concrete action?
