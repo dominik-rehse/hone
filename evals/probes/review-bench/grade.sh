@@ -5,20 +5,24 @@
 #   bash grade.sh <run-dir>     write <run-dir>/result.json
 #   bash grade.sh --self-check  fixed reviews over fixed metas: one that names
 #                               the defect and one that does not, the answer
-#                               shapes a reviewer uses, and the two variants of
-#                               a directory fixture, whose defect meta carries
-#                               the case regex and whose clean meta carries a
-#                               regex nothing matches. That last pair reads the
-#                               shipped regex of fixtures/live-array, so a
-#                               regex that stops naming its defect fails here.
-#                               No model call, no cost.
+#                               shapes a reviewer uses, the two variants of a
+#                               directory fixture, whose defect meta carries the
+#                               case regex and whose clean meta carries a regex
+#                               nothing matches, and a multi-defect meta read by
+#                               a review that names all three defects, one, and
+#                               none. The single pair reads the shipped regex of
+#                               fixtures/live-array, so a regex that stops
+#                               naming its defect fails here. No model call, no
+#                               cost.
 #
 # It reads <run-dir>/envelope.json (the `--output-format json` envelope of the
 # nested `claude -p`), <run-dir>/brief.md, and <run-dir>/run.json, and writes:
 #
 #   caught          the review's own text matches the case regex. The regex
 #                   holds words of a *finding*, never of the code, because the
-#                   brief carries the diff.
+#                   brief carries the diff. A multi-defect fixture is graded
+#                   defect by defect: `caught_a`, `caught_b`, ... read yes or
+#                   no, and `caught` is their tally, `2/3`.
 #   brief_named     the brief already matched it. A review that repeats its
 #                   brief caught nothing, so a catch counts only where this
 #                   reads `no`. This mirrors `review_named` in evals/lab.
@@ -41,7 +45,10 @@
 # A regex lies both ways, so every hit and every miss wants a person's eye.
 # Where a person has read one, they write <run-dir>/judged.json with any of
 # `caught`, `severity`, `false_alarms`, `false_alarms_list` or `note`, and
-# those fields win over the mechanical ones. result.json records `judged`.
+# those fields win over the mechanical ones. On a multi-defect fixture a
+# `caught_a` there overturns that one defect's verdict, and `caught` is tallied
+# again from the per-defect fields unless judged.json names `caught` itself.
+# result.json records `judged`.
 set -uo pipefail
 
 DIR=$(cd "$(dirname "$0")" && pwd)
@@ -93,10 +100,18 @@ spawned_count() {
 }
 
 grade_one() {
-    local rd=$1 env="$1/envelope.json" regex clean ind=false
+    local rd=$1 env="$1/envelope.json" regex clean ind=false multi=no
     [ -f "$rd/run.json" ] || { echo "grade: no run.json in $rd" >&2; return 1; }
-    regex=$(jq -r .meta.regex "$rd/run.json")
     clean=$(jq -r .meta.clean "$rd/run.json")
+    # A multi-defect fixture carries a regex per defect and no case regex. The
+    # alternation of them all is what `brief_named` and `severity` read, because
+    # either one is about the review as a whole.
+    jq -e '.meta | has("defects")' "$rd/run.json" >/dev/null 2>&1 && multi=yes
+    if [ "$multi" = yes ]; then
+        regex=$(jq -r '[.meta.defects[].regex] | join("|")' "$rd/run.json")
+    else
+        regex=$(jq -r .meta.regex "$rd/run.json")
+    fi
 
     local is_error subtype session cost result
     if [ ! -s "$env" ] || ! jq -e . "$env" >/dev/null 2>&1; then
@@ -114,11 +129,27 @@ grade_one() {
     fi
     [ -f "$rd/review.txt" ] || : > "$rd/review.txt"
 
-    local caught=no told=no sev="" n=0
+    local caught=no told=no sev="" n=0 per='{}'
     if [ "$ind" = false ]; then
-        grep -qiE "$regex" "$rd/review.txt" && caught=yes
         sev=$(severity_near "$rd/review.txt" "$regex")
         n=$(count_findings "$rd/review.txt"); n=${n:-0}
+    fi
+    if [ "$multi" = yes ]; then
+        # One review, graded against each defect on its own. A review that
+        # names only defect a counts for a and for nothing else.
+        local did dre hits=0 total=0 verdict
+        while read -r did; do
+            dre=$(jq -r --arg d "$did" '.meta.defects[] | select(.id == $d) | .regex' "$rd/run.json")
+            total=$((total + 1))
+            verdict=no
+            if [ "$ind" = false ] && grep -qiE "$dre" "$rd/review.txt"; then
+                verdict=yes; hits=$((hits + 1))
+            fi
+            per=$(jq --arg d "$did" --arg v "$verdict" '. + {("caught_" + $d): $v}' <<< "$per")
+        done < <(jq -r '.meta.defects[].id' "$rd/run.json")
+        caught="$hits/$total"
+    elif [ "$ind" = false ]; then
+        grep -qiE "$regex" "$rd/review.txt" && caught=yes
     fi
     grep -qiE "$regex" "$rd/brief.md" 2>/dev/null && told=yes
 
@@ -128,10 +159,10 @@ grade_one() {
     jq -n --slurpfile run "$rd/run.json" \
         --arg caught "$caught" --arg told "$told" --arg sev "$sev" \
         --argjson n "$n" --argjson fa "$fa" --argjson ind "$ind" \
-        --argjson cost "${cost:-0}" \
+        --argjson cost "${cost:-0}" --argjson per "$per" \
         --argjson spawned "$(spawned_count "$session")" \
         --arg session "$session" --arg is_error "$is_error" --arg subtype "$subtype" \
-        '$run[0] + {
+        '$run[0] + $per + {
             caught: $caught, brief_named: $told,
             severity: (if $sev == "" then null else $sev end),
             findings_count: $n, false_alarms: $fa, false_alarms_list: [],
@@ -146,6 +177,16 @@ grade_one() {
     if [ -f "$rd/judged.json" ]; then
         jq -s '.[0] + .[1] + {judged: true}' "$rd/result.json" "$rd/judged.json" > "$rd/result.json.t" \
             && mv "$rd/result.json.t" "$rd/result.json"
+        # A judged.json that overturns one defect's verdict leaves the tally
+        # stale, so tally it again. One that states `caught` itself is final.
+        if [ "$multi" = yes ] && ! jq -e 'has("caught")' "$rd/judged.json" >/dev/null 2>&1; then
+            jq '. as $r
+                | .caught = (([$r.meta.defects[].id | $r["caught_" + .]]
+                              | map(select(. == "yes")) | length | tostring)
+                             + "/" + ($r.meta.defects | length | tostring))' \
+                "$rd/result.json" > "$rd/result.json.t" \
+                && mv "$rd/result.json.t" "$rd/result.json"
+        fi
     fi
     jq -r '"grade: \(.target) \(.config) v\(.vote): caught=\(.caught) brief_named=\(.brief_named) findings=\(.findings_count) $\(.cost_usd) \(.seconds)s spawned=\(.spawned)\(if .indeterminate then " INDETERMINATE" else "" end)"' "$rd/result.json"
 }
@@ -267,6 +308,74 @@ src/queue.js no longer serves the ticket that has waited longest.'
             && echo "ok   a generic review over nested paths grades missed and counts two findings" \
             || { echo "FAIL a generic review graded $(jq -c '[.caught, .findings_count]' "$gen/result.json")"; rc=1; }
     fi
+    # A multi-defect fixture is graded defect by defect. These three regexes
+    # stand in for a fixture's own, so the check holds the grader and not a
+    # shipped fixture: whichever multi fixtures exist, this part still runs.
+    local ra='already refunded|earlier refund|prior refund'
+    local rb='idempot[a-z]*|(replay|retr)[a-z]* .{0,30}(twice|again|double)|event id'
+    local rc_re='round[a-z]*|penn(y|ies)|(do|does) not sum|allocat[a-z]*'
+    # mk_multi NAME REVIEW [CLEAN]: one run directory of a three-defect case.
+    mk_multi() {
+        local d="$tmp/$1"; mkdir -p "$d"
+        jq -n --arg a "$ra" --arg b "$rb" --arg c "$rc_re" --argjson cl "${3:-false}" \
+            '{target: "self-multi:defect", id: "self-multi", variant: "defect",
+            config: "X", model: "none", vote: 1, level: "high", seconds: 7,
+            meta: {id: "self-multi", kind: "multi", clean: $cl, defects: [
+                {id: "a", regex: (if $cl then "a^" else $a end), defect: "a"},
+                {id: "b", regex: (if $cl then "a^" else $b end), defect: "b"},
+                {id: "c", regex: (if $cl then "a^" else $c end), defect: "c"}]}}' > "$d/run.json"
+        printf 'The Plan adds partial refunds.\n' > "$d/brief.md"
+        jq -n --arg r "$2" '{is_error: false, subtype: "success", session_id: "s-0",
+            total_cost_usd: 0.25, result: $r}' > "$d/envelope.json"
+        echo "$d"
+    }
+    local all one none mclean
+    all=$(mk_multi multi-all '## Findings
+
+### 1. The amount check ignores what was already refunded
+**Severity:** high
+
+### 2. The new handler is not idempotent, so a replayed event refunds twice
+**Severity:** high
+
+### 3. The shares do not sum to the refund, because each is rounded on its own
+**Severity:** medium')
+    one=$(mk_multi multi-one '## Findings
+
+### 1. The amount check ignores an earlier refund of the same order
+**Severity:** high
+
+The store already holds what was refunded before, and the check never reads it.')
+    none=$(mk_multi multi-none '## Findings
+
+- src/refund.js: the new function has no JSDoc.
+- tests/refund.test.js: nothing asserts the error message.')
+    mclean=$(mk_multi multi-clean '## Findings
+
+- src/refund.js: the new function has no JSDoc.
+- tests/refund.test.js: nothing asserts the error message.' true)
+    grade_one "$all" >/dev/null
+    grade_one "$one" >/dev/null
+    grade_one "$none" >/dev/null
+    grade_one "$mclean" >/dev/null
+    [ "$(jq -r .caught "$all/result.json")" = 3/3 ] \
+        && echo "ok   a review that names all three defects tallies 3/3" \
+        || { echo "FAIL all three tallied $(jq -r .caught "$all/result.json")"; rc=1; }
+    [ "$(jq -r '[.caught, .caught_a, .caught_b, .caught_c] | join("/")' "$one/result.json")" = "1/3/yes/no/no" ] \
+        && echo "ok   a review that names defect a counts for a alone" \
+        || { echo "FAIL one defect graded $(jq -c '[.caught, .caught_a, .caught_b, .caught_c]' "$one/result.json")"; rc=1; }
+    [ "$(jq -r .caught "$none/result.json")" = 0/3 ] \
+        && echo "ok   a review that names none of them tallies 0/3" \
+        || { echo "FAIL no defect tallied $(jq -r .caught "$none/result.json")"; rc=1; }
+    [ "$(jq -r '.caught + "/" + (.false_alarms | tostring)' "$mclean/result.json")" = 0/3/2 ] \
+        && echo "ok   the clean variant of a multi case catches nothing and counts its findings" \
+        || { echo "FAIL the clean multi variant graded $(jq -c '[.caught, .false_alarms]' "$mclean/result.json")"; rc=1; }
+    # A person's reading overturns one defect's verdict, and the tally follows.
+    jq -n '{caught_b: "yes", note: "named in prose the regex misses"}' > "$one/judged.json"
+    grade_one "$one" >/dev/null
+    [ "$(jq -r '[.caught, .caught_b, (.judged | tostring)] | join("/")' "$one/result.json")" = "2/3/yes/true" ] \
+        && echo "ok   a judged.json overturns one defect and the tally follows" \
+        || { echo "FAIL the judged tally read $(jq -c '[.caught, .caught_b, .judged]' "$one/result.json")"; rc=1; }
     rm -rf "$tmp"
     [ "$rc" = 0 ] && echo "grade: self-check green" || echo "grade: self-check RED"
     return "$rc"
@@ -274,6 +383,6 @@ src/queue.js no longer serves the ticket that has waited longest.'
 
 case "${1:-}" in
     --self-check) self_check ;;
-    -h|--help|"") sed -n '2,44p' "$0" ;;
+    -h|--help|"") sed -n '2,51p' "$0" ;;
     *) grade_one "${1%/}" ;;
 esac

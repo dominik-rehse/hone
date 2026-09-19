@@ -23,6 +23,15 @@
 #   seeded repository as its working directory: it must pass on clean and fail
 #   on defect, which is what proves the planted defect real.
 #
+#   A multi-defect directory case is the same layout with several defects in
+#   one change. Its meta.json has no `regex` and no single prove.js. Instead
+#   `defects` lists one entry per defect: `id` ("a", "b", ...), `regex`,
+#   `defect`, and `prove`, the name of that defect's own prove script beside
+#   meta.json. Every prove script runs against both variants, so each one
+#   passes on clean and fails on defect. The per-variant meta carries the whole
+#   list, which is what lets grade.sh score one review against each defect on
+#   its own.
+#
 # Beside each repository the seed writes the brief that the run would hand to
 # `/code-review`: the Plan's What, Why and proof, then the diff, then the one
 # line that tells the reviewer it cannot run code. The brief is written as an
@@ -30,16 +39,17 @@
 # second brief that presents the carve-out as required by the test, as the
 # probe's own run presented it.
 #
-# meta.json per case carries the defect regex that grade.sh matches. The regex
-# holds words of a *finding* and no word of the code, because the brief carries
-# the diff, and a regex over code words would score the brief itself.
+# meta.json per case carries the defect regex that grade.sh matches, one for a
+# single-defect case and one per defect for a multi case. A regex holds words of
+# a *finding* and no word of the code, because the brief carries the diff, and a
+# regex over code words would score the brief itself.
 #
 # Usage: bash seed.sh [--out DIR]
 #   --out DIR  where the fixtures go (default /var/tmp/hone-probe/review-bench).
 #
 # The seed refuses to leave a repository whose suite is red, it refuses a brief
-# that its own case regex matches (that would be brief_named=yes by
-# construction), and it refuses a directory case whose prove.js reads either
+# that a case regex of its own matches (that would be brief_named=yes by
+# construction), and it refuses a directory case whose prove script reads either
 # variant the wrong way. All three are fatal.
 set -uo pipefail
 
@@ -48,7 +58,7 @@ OUT=${PROBE_OUT:-/var/tmp/hone-probe/review-bench}
 while [ $# -gt 0 ]; do
     case "$1" in
         --out) OUT=$2; shift 2 ;;
-        -h|--help) sed -n '2,43p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,53p' "$0"; exit 0 ;;
         *) echo "seed: unknown argument $1" >&2; exit 2 ;;
     esac
 done
@@ -146,40 +156,60 @@ check_brief() {
 
 # --- directory cases -------------------------------------------------------
 
+# build_variant ID VARIANT SUBJECT: one variant of a directory fixture as a
+# repository, base/ on main and the overlay as one commit on `change`, with the
+# suite checked on both. Sets $REPO.
+build_variant() {
+    local id=$1 variant=$2 subject=$3 src="$DIR/fixtures/$1"
+    REPO="$FIX/$id/repo-$variant"
+    mkdir -p "$REPO" || return 1
+    cp -a "$src/base/." "$REPO/" || return 1
+    write_manifest "$id"
+    init_repo
+    git -C "$REPO" add -A && git -C "$REPO" commit -qm "chore: the project as it stands"
+    run_suite || { echo "seed: $id: $variant: the suite is RED on main" >&2; rc=1; }
+    git -C "$REPO" checkout -q -b change
+    cp -a "$src/$variant/." "$REPO/" || return 1
+    git -C "$REPO" add -A && git -C "$REPO" commit -qm "$subject"
+    run_suite || { echo "seed: $id: $variant: the suite is RED on the change branch" >&2; rc=1; }
+}
+
+# check_prove ID VARIANT SCRIPT LABEL: run one prove script with $REPO as its
+# working directory. A prove script reads the change itself, and it must read
+# the two variants apart. A clean variant it fails has the defect too, and a
+# defect variant it passes has a defect that never bites.
+check_prove() {
+    local id=$1 variant=$2 script=$3 label=$4 p
+    (cd "$REPO" && node "$script" >/dev/null 2>&1)
+    p=$?
+    if [ "$variant" = clean ] && [ "$p" -ne 0 ]; then
+        echo "seed: $id: $label fails on the clean variant (exit $p)" >&2; rc=1
+    fi
+    if [ "$variant" = defect ] && [ "$p" -eq 0 ]; then
+        echo "seed: $id: $label passes on the defect variant, so the defect does not bite" >&2; rc=1
+    fi
+}
+
 # seed_dir_case ID: the fixture under fixtures/<ID>/, as two repositories. The
-# header of this script has the layout it expects.
+# header of this script has the layout it expects. A meta.json with a `defects`
+# array is a multi case and goes to seed_multi_case.
 seed_dir_case() {
-    local id=$1 src="$DIR/fixtures/$1" variant f kind regex subject clean re p
+    local id=$1 src="$DIR/fixtures/$1" variant f kind regex subject clean re
     CASE=$id
-    for f in base defect clean plan.md meta.json prove.js; do
+    for f in base defect clean plan.md meta.json; do
         [ -e "$src/$f" ] || { echo "seed: $id: no $f under fixtures/$id" >&2; rc=1; return 1; }
     done
     kind=$(jq -r .kind "$src/meta.json")
-    regex=$(jq -r .regex "$src/meta.json")
     subject=$(jq -r .subject "$src/meta.json")
+    if jq -e 'has("defects")' "$src/meta.json" >/dev/null 2>&1; then
+        seed_multi_case "$id" "$src" "$kind" "$subject"
+        return
+    fi
+    [ -e "$src/prove.js" ] || { echo "seed: $id: no prove.js under fixtures/$id" >&2; rc=1; return 1; }
+    regex=$(jq -r .regex "$src/meta.json")
     for variant in defect clean; do
-        REPO="$FIX/$id/repo-$variant"
-        mkdir -p "$REPO" || return 1
-        cp -a "$src/base/." "$REPO/" || return 1
-        write_manifest "$id"
-        init_repo
-        git -C "$REPO" add -A && git -C "$REPO" commit -qm "chore: the project as it stands"
-        run_suite || { echo "seed: $id: $variant: the suite is RED on main" >&2; rc=1; }
-        git -C "$REPO" checkout -q -b change
-        cp -a "$src/$variant/." "$REPO/" || return 1
-        git -C "$REPO" add -A && git -C "$REPO" commit -qm "$subject"
-        run_suite || { echo "seed: $id: $variant: the suite is RED on the change branch" >&2; rc=1; }
-        # prove.js reads the change itself, and it must read the two variants
-        # apart. A clean variant it fails has the defect too, and a defect
-        # variant it passes has a defect that never bites.
-        (cd "$REPO" && node "$src/prove.js" >/dev/null 2>&1)
-        p=$?
-        if [ "$variant" = clean ] && [ "$p" -ne 0 ]; then
-            echo "seed: $id: prove.js fails on the clean variant (exit $p)" >&2; rc=1
-        fi
-        if [ "$variant" = defect ] && [ "$p" -eq 0 ]; then
-            echo "seed: $id: prove.js passes on the defect variant, so the defect does not bite" >&2; rc=1
-        fi
+        build_variant "$id" "$variant" "$subject" || return 1
+        check_prove "$id" "$variant" "$src/prove.js" prove.js
         clean=false; re=$regex
         [ "$variant" = clean ] && { clean=true; re='a^'; }
         jq -n --arg id "$id" --arg kind "$kind" --arg regex "$re" \
@@ -194,6 +224,48 @@ seed_dir_case() {
     # Plan and all but one line of the same diff, so a hit there is the same
     # leak.
     check_briefs "$regex" "$FIX/$id"/brief-*.md
+}
+
+# seed_multi_case ID SRC KIND SUBJECT: a directory fixture whose one change
+# carries several defects. Every prove script runs against both variants, and
+# the per-variant meta carries every defect's id and regex, so grade.sh can
+# score one review against each defect on its own. The clean meta carries `a^`
+# per defect, which nothing matches.
+seed_multi_case() {
+    local id=$1 src=$2 kind=$3 subject=$4 variant did script clean n re
+    n=$(jq '.defects | length' "$src/meta.json")
+    if ! [ "${n:-0}" -ge 2 ] 2>/dev/null; then
+        echo "seed: $id: a multi case wants two defects or more, and lists ${n:-none}" >&2
+        rc=1; return 1
+    fi
+    while read -r did; do
+        [ -n "$did" ] && [ "$did" != null ] && continue
+        echo "seed: $id: a defect has no id" >&2; rc=1
+    done < <(jq -r '.defects[].id' "$src/meta.json")
+    while read -r script; do
+        [ -e "$src/$script" ] && continue
+        echo "seed: $id: no $script under fixtures/$id" >&2; rc=1
+    done < <(jq -r '.defects[].prove' "$src/meta.json")
+    for variant in defect clean; do
+        build_variant "$id" "$variant" "$subject" || return 1
+        while read -r did script; do
+            [ -e "$src/$script" ] || continue
+            check_prove "$id" "$variant" "$src/$script" "$script (defect $did)"
+        done < <(jq -r '.defects[] | .id + " " + .prove' "$src/meta.json")
+        clean=false
+        [ "$variant" = clean ] && clean=true
+        jq --arg id "$id" --arg kind "$kind" --argjson clean "$clean" \
+            '{id: $id, kind: $kind, clean: $clean,
+              defects: [.defects[]
+                        | {id: .id, regex: (if $clean then "a^" else .regex end), defect: .defect}]}' \
+            "$src/meta.json" > "$FIX/$id/meta-$variant.json"
+        write_brief "brief-$variant" < "$src/plan.md"
+        git -C "$REPO" checkout -q main
+    done
+    # A brief that names any one of the defects hands the review that finding.
+    while read -r re; do
+        check_briefs "$re" "$FIX/$id"/brief-*.md
+    done < <(jq -r '.defects[].regex' "$src/meta.json")
 }
 
 # --- 1. boundary: an off-by-one at a limit ---------------------------------

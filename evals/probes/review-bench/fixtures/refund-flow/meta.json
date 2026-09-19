@@ -1,0 +1,24 @@
+{
+  "kind": "multi",
+  "subject": "feat(refunds): give back an order line by line",
+  "defects": [
+    {
+      "id": "a",
+      "regex": "over.?refund|(alread|prior|previous|earlier|past|preceding|existing)[a-z]* refund|refunds? (alread|previously|in the past|made before)|refund(ed)? (history|so far|to date)|history of refunds|running total|cumulativ|(two|three|several|multiple|repeated|successive|separate|further) (partial )?refunds? .{0,70}(exceed|more than|over the|beyond|above|past the|add up|come to|together|combined|in total)|(refund|give|gives|given|giving)[a-z]* (back )?(the )?same line .{0,30}(twice|again|more than once)|same line .{0,40}(twice|more than once|again)|(twice|more than once) .{0,40}(same line|same order|whole order)|(does|do|did|would|will|can|could)[a-z]* not (subtract|deduct|account for|take into account|consider|count|include|look at|know about) .{0,50}refund|ignor[a-z]* .{0,50}refund|(remaining|outstanding|unrefunded) (refundable|amount|balance|value|total)|refundable (balance|remainder|amount|total)|(what|how much) (is )?left (of|to|on) the order|never fires|can never (fire|trigger|reject|catch)|dead (check|guard|code)|never (subtract|deduct|account)[a-z]*|(only|just) (this|one|a single|the current) (refund|call|request)|this (refund|call|request) (alone|on its own|in isolation|only)|(instead of|rather than) [^.]{0,60}(minus|less what|refunded|already|refund store|the store)|(order ?total|orderTotal)[^.]{0,30}(minus|less)|refundWhole (then|followed by|and then)|(guard|guards|check|checks|cap|caps|limit|limits) neither",
+      "defect": "The amount check in src/refund.js compares the refund with what the order is worth and never looks at what the order has had back before, which the untouched src/refund-store.js keeps. Let the provider settle 3000 cents of a 5000 cent order after a dispute and then give a 3000 cent line back: both go through, because each is under the order total on its own, and the shop pays out 6000 cents.",
+      "prove": "prove-a.js"
+    },
+    {
+      "id": "b",
+      "regex": "idempot|(replay|retri|retry|redeliver|re.?deliver|resend|resent|re.?send)[a-z]*|duplicate (event|webhook|delivery|refund|message|handling)|(same|one|a single) (event|webhook) .{0,40}(twice|again|more than once|two)|event .{0,25}(twice|again|more than once)|(twice|two times|second time) .{0,50}(event|webhook|delivery|handler)|at.?least.?once|exactly once|(no|without|lacks|missing) .{0,30}(event|id|de.?duplication|dedup)[a-z]* (check|guard|test|lookup)|unlike the payment handler|the payment handler (does|checks|guards|looks|reads|starts|first)|(does|do|did|is|are)[a-z]* not (check|record|note|look at|guard|track|mark|register) .{0,50}(event|id|delivery|handled)|handler .{0,40}(runs|run|ran|executed|called|invoked|fires) (again|twice|more than once|a second time)",
+      "defect": "src/handlers/refund.js does its work without asking src/seen.js whether the event has been through already, which the payment handler beside it does. src/webhook.js runs a handler that throws again, so a refund event whose mail goes out while the mailer is down lands on the books twice, 4000 cents for a 2000 cent event.",
+      "prove": "prove-b.js"
+    },
+    {
+      "id": "c",
+      "regex": "penn(y|ies)|(a|one|1) cent (short|over|more|less|too|extra|missing|out|unaccounted|adrift|astray)|cents? (short|adrift|missing|unaccounted|astray|of drift)|off by (a|one|1) (cent|penny)|(do|does|did|would|will|may|might|can|could)[a-z]* not (sum|add up|come to|total|equal)|(don.t|doesn.t|never|fail to|fails to|failing to) (sum|add up|come to|total)|sums? to (one |1 |a )?(less|more|99|cent)|floating.?point|float(s|ing)? (arithmetic|math|division|maths|point)|largest remainder|round[a-z]*.{0,12}(each|every|per|independ|separate|line|down|up|the)|(each|every|per|independen|separate|one by one)[a-z]*.{0,25}round[a-z]*|drift|reconcil[a-z]*|(do|does|don.t|doesn.t|never|fail[a-z]* to)[a-z]* (tally|agree|line up|square)|shorts? the customer|\\b2901\\b|(loses?|lost|losing|swallow[a-z]*|drops?) (a|one|1) (cent|penny)|(instead of|rather than|does not (use|reuse|call)|delegat[a-z]*|reuse|re.?implement|duplicat[a-z]*|by hand|hand.?rolled) .{0,40}(allocat|discountedLineTotals|the existing|money\\.js)",
+      "defect": "refundShares in src/refund-lines.js works out each line's part of the order discount in floating point and rounds each on its own, instead of the exact split src/money.js already has and src/orders.js already uses. A discount of 100 cents over three lines of 1000 cents each takes only 99 cents off, so giving the whole order back pays out a cent more than the order is worth.",
+      "prove": "prove-c.js"
+    }
+  ]
+}

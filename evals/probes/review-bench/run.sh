@@ -26,7 +26,12 @@
 # brief seed.sh wrote is one target: `boundary` for a fixture with one brief,
 # `carve-out:justified` for its second brief, and `live-array:defect` with
 # `live-array:clean` for a directory fixture's two repositories. seed.sh has
-# the two fixture shapes.
+# the fixture shapes.
+#
+# A directory fixture whose change carries several defects has one meta with a
+# `defects` list instead of a case regex. Its targets are the same two, and one
+# review of it is graded against each defect on its own, so `caught` reads as a
+# tally like `2/3` and the summary gets a table of catch rate per defect.
 #
 # Usage:
 #   bash evals/probes/review-bench/run.sh [--config A|B|C] [--case PATTERN]
@@ -83,7 +88,7 @@ while [ $# -gt 0 ]; do
         --grade-only) GRADE_ONLY=yes; shift ;;
         --summary) SUMMARY_ONLY=yes; shift ;;
         --dry-run) DRY=yes; shift ;;
-        -h|--help) sed -n '2,64p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,69p' "$0"; exit 0 ;;
         *) echo "run: unknown argument $1" >&2; exit 2 ;;
     esac
 done
@@ -166,9 +171,23 @@ write_summary() {
         echo
         echo "| kind | brief | config | reviews | caught | rate |"
         echo "|---|---|---|---|---|---|"
-        jq -rs '[.[] | select(.clean == false and .indeterminate == false)]
+        jq -rs '[.[] | select(.clean == false and .indeterminate == false
+                              and (.meta | has("defects") | not))]
                 | group_by(.kind + "/" + .variant + "/" + .config)[]
                 | "| \(.[0].kind) | \(.[0].variant) | \(.[0].config) | \(length) | \([.[] | select(.caught == "yes")] | length) | \(((([.[] | select(.caught == "yes")] | length) * 100 / length) | floor))% |"' \
+            "$RUNS"/*/result.json 2>/dev/null
+        echo
+        echo "## Catch rate per defect of a multi-defect fixture"
+        echo
+        echo "| target | defect | config | reviews | caught | rate |"
+        echo "|---|---|---|---|---|---|"
+        jq -rs '[.[] | select(.clean == false and .indeterminate == false
+                              and (.meta | has("defects")))]
+                | [.[] as $r | $r.meta.defects[]
+                   | {target: $r.target, config: $r.config, defect: .id,
+                      caught: ($r["caught_" + .id] // "no")}]
+                | group_by(.target + "/" + .defect + "/" + .config)[]
+                | "| \(.[0].target) | \(.[0].defect) | \(.[0].config) | \(length) | \([.[] | select(.caught == "yes")] | length) | \(((([.[] | select(.caught == "yes")] | length) * 100 / length) | floor))% |"' \
             "$RUNS"/*/result.json 2>/dev/null
         echo
         echo "## False alarms on the clean changes"
