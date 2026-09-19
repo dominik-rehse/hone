@@ -7,11 +7,17 @@
 # is the third use, where the rule of three says to extract. `clone_loc` counts
 # the lines that belong to a structural clone.
 #
-# `apply_movement` handles two kinds of movement, and the Plan adds a third
-# with three rules of its own. The function sits at cyclomatic complexity 8,
-# and the tool counts a function over 10, so writing the third kind as one
-# more nested branch takes it to 12. Every shape that gives the kind its own
-# function stays under. `high_cc_functions` counts that.
+# `apply_movement` already handles four kinds of movement inline, in 64 lines
+# at cyclomatic complexity 7. The Plan's fifth kind is the heavy one: it
+# carries several lines, each one checked before any stock moves. Written as
+# one more branch in the same function, that is 87 lines at complexity 15, and
+# the tool counts a function over 10. `high_cc_functions` counts that.
+#
+# The margins matter more than the numbers. A run that only gives the NEW kind
+# its own function leaves `apply_movement` at 8 and the new function at 8, so
+# the smallest reasonable change stays two points clear of the line. Four
+# inline kinds are not a pile, and an earlier draft that called them one
+# punished code a reviewer had called easy to read.
 #
 # The fixture needs `uv` and `uvx` on PATH: `uvx` for the measure, and `uv` for
 # the test adapter, which runs `uv run pytest`. The base seed installed the
@@ -100,28 +106,66 @@ LOCATIONS = ("A1", "A2", "B1", "QUARANTINE")
 
 
 def apply_movement(stock, movement):
+    """Apply one movement and give the new stock back.
+
+    A movement always carries a kind. What else it carries depends on the
+    kind, so each kind reads its own fields:
+
+      receipt     sku, quantity, location, supplier
+      transfer    sku, quantity, origin, destination, optional partial
+      adjustment  sku, quantity (the counted amount), location
+      return      sku, quantity, location, customer
+
+    The stock maps (sku, location) to the quantity held there. Two
+    reporting keys sit beside it, ("variance", sku) and ("returned", sku),
+    which the monthly figures read.
+    """
     kind = movement["kind"]
-    sku = movement["sku"]
-    quantity = movement["quantity"]
     updated = dict(stock)
-    if quantity <= 0:
-        raise ValueError("a movement needs a positive quantity")
     if kind == "receipt":
+        # Goods arrive from a supplier and land at one location. The
+        # supplier rides along for the receipt document, and the ledger
+        # itself keeps no trace of it.
+        sku = movement["sku"]
+        quantity = movement["quantity"]
         location = movement["location"]
-        if location not in LOCATIONS:
-            raise ValueError(f"unknown location {location}")
-        updated[(sku, location)] = updated.get((sku, location), 0) + quantity
+        held = updated.get((sku, location), 0)
+        updated[(sku, location)] = held + quantity
     elif kind == "transfer":
+        # Goods move between two of our own locations. A transfer marked
+        # partial moves whatever the origin holds, which is what the floor
+        # does when a pallet is short and the truck is already waiting.
+        sku = movement["sku"]
+        quantity = movement["quantity"]
         origin = movement["origin"]
         destination = movement["destination"]
-        if destination not in LOCATIONS:
-            raise ValueError(f"unknown location {destination}")
-        if origin == destination:
-            raise ValueError("a transfer needs two locations")
-        if updated.get((sku, origin), 0) < quantity:
-            raise ValueError(f"not enough {sku} at {origin}")
-        updated[(sku, origin)] = updated[(sku, origin)] - quantity
+        held = updated.get((sku, origin), 0)
+        if held < quantity:
+            if movement.get("partial"):
+                quantity = held
+            else:
+                raise ValueError(f"not enough {sku} at {origin}")
+        updated[(sku, origin)] = held - quantity
         updated[(sku, destination)] = updated.get((sku, destination), 0) + quantity
+    elif kind == "adjustment":
+        # A stocktake counted the shelf, and the count wins. The difference
+        # goes to the variance of the sku, which accounting reads monthly
+        # and which nothing else in here ever touches.
+        sku = movement["sku"]
+        counted = movement["quantity"]
+        location = movement["location"]
+        held = updated.get((sku, location), 0)
+        updated[(sku, location)] = counted
+        updated[("variance", sku)] = updated.get(("variance", sku), 0) + counted - held
+    elif kind == "return":
+        # A customer sent goods back. They go to the location the return
+        # names, and the returned total feeds the quality report. Whether
+        # they are saleable again is the quality team's call, not ours.
+        sku = movement["sku"]
+        quantity = movement["quantity"]
+        location = movement["location"]
+        updated[(sku, location)] = updated.get((sku, location), 0) + quantity
+        updated[("returned", sku)] = updated.get(("returned", sku), 0) + quantity
     else:
         raise ValueError(f"unknown movement kind {kind}")
     return updated
@@ -178,6 +222,31 @@ def test_a_transfer_refuses_a_quantity_the_origin_does_not_hold():
         )
 
 
+def test_a_partial_transfer_moves_what_the_origin_holds():
+    stock = apply_movement(
+        {("BOLT-9", "A1"): 5},
+        {"kind": "transfer", "sku": "BOLT-9", "quantity": 15, "origin": "A1",
+         "destination": "B1", "partial": True},
+    )
+    assert stock == {("BOLT-9", "A1"): 0, ("BOLT-9", "B1"): 5}
+
+
+def test_an_adjustment_sets_the_count_and_records_the_variance():
+    stock = apply_movement(
+        {("BOLT-9", "A1"): 40},
+        {"kind": "adjustment", "sku": "BOLT-9", "quantity": 37, "location": "A1"},
+    )
+    assert stock == {("BOLT-9", "A1"): 37, ("variance", "BOLT-9"): -3}
+
+
+def test_a_return_adds_the_goods_back_and_counts_them():
+    stock = apply_movement(
+        {("BOLT-9", "A1"): 40},
+        {"kind": "return", "sku": "BOLT-9", "quantity": 2, "location": "A1", "customer": "Acme"},
+    )
+    assert stock == {("BOLT-9", "A1"): 42, ("returned", "BOLT-9"): 2}
+
+
 def test_an_unknown_kind_raises():
     with pytest.raises(ValueError, match="unknown movement kind audit"):
         apply_movement({}, {"kind": "audit", "sku": "BOLT-9", "quantity": 1})
@@ -198,31 +267,38 @@ cat > .plans/inventory/writeoff.md <<'PLAN'
 
 ## What
 Goods that are damaged or lost leave stock as a write-off. Teach
-`apply_movement` in `src/inventory/ledger.py` the movement kind `writeoff`. It
-takes the quantity out of the stock at `location`. It needs a non-empty
-`reason`, and it raises `a write-off needs a reason` without one. It refuses a
-quantity above the stock at that location, in the wording a transfer uses. When
-the movement carries `damaged`, the same quantity arrives at `QUARANTINE`.
+`apply_movement` in `src/inventory/ledger.py` the movement kind `writeoff`. One
+write-off carries a `reason` and one or more `lines`, and each line names a
+`sku`, a `quantity`, a `unit`, and a `location`. With no non-empty `reason` it
+raises `a write-off needs a reason`, and with no line
+`a write-off needs at least one line`. A line whose quantity is not positive
+raises `a write-off line needs a positive quantity`, and a line above what its
+location holds raises `not enough <sku> at <location>`, the wording a transfer
+uses. A write-off that raises leaves the stock exactly as it was, whichever
+line was at fault. Otherwise every line comes out of the stock at its own
+location, and a line marked `damaged` puts the same quantity at `QUARANTINE`.
 Add `render_writeoff(writeoff)` in a new file `src/inventory/writeoffs.py`. It
-returns the header `Write-off <id> (<reason>)`, then one stock line per item,
-printed exactly as a receipt prints it, then a last line
-`<n> line(s) removed from stock` with the number of items.
+returns the header `Write-off <id> (<reason>)`, then one stock line per line of
+the write-off, printed exactly as a receipt prints it, then a last line
+`<n> line(s) removed from stock` with the number of lines.
 
 ## Why
 The warehouse writes off 30 to 50 lines a month on paper, and the ledger learns
 of it at the next stocktake. Two counts last quarter were wrong for a month,
-and neither had a recorded reason.
+and neither had a recorded reason. A paper write-off covers a whole pallet, so
+one of them names several skus at several places.
 
 ## How I'll know it works
-A write-off of 12 `BOLT-9` at `A1` from a stock of 40 leaves 28 at `A1`, and
-with `damaged` it also puts 12 at `QUARANTINE`. A write-off of 50 from a stock
-of 40 raises `not enough BOLT-9 at A1`, and one with no reason raises
-`a write-off needs a reason`. `render_writeoff` for the write-off `W-3`,
-reason `damaged in transit`, over one item of 12 `BOLT-9` in `pcs` at `A1`
-gives the three lines
-`Write-off W-3 (damaged in transit)`, `BOLT-9          12 pcs @A1`, and
-`1 line(s) removed from stock`. Tests under `tests/` pin all of it, and
-`scripts/run-tests.sh --all` stays green.
+A write-off for `damaged in transit` over two lines, 12 `BOLT-9` in `pcs` at
+`A1` marked `damaged` and 4 `SAND` in `kg` at `B1`, applied to a stock of 40
+`BOLT-9` at `A1` and 10 `SAND` at `B1`, leaves 28 at `A1`, 12 at `QUARANTINE`,
+and 6 at `B1`. The same write-off with 50 on its first line raises
+`not enough BOLT-9 at A1` and leaves both quantities as they were. One with no
+reason raises `a write-off needs a reason`. `render_writeoff` over those two
+lines, for the write-off `W-3`, gives the four lines
+`Write-off W-3 (damaged in transit)`, `BOLT-9          12 pcs @A1`,
+`SAND             4 kg  @B1`, and `2 line(s) removed from stock`. Tests under
+`tests/` pin all of it, and `scripts/run-tests.sh --all` stays green.
 
 ## Notes for the loop
 - Touches `src/inventory/` and `tests/` only. Independent of in-flight work.

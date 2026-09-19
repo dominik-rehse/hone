@@ -9,12 +9,21 @@ unchanged scripts/run-tests.sh pyproject.toml
 proof=$(PYTHONPATH=src python3 -c '
 from inventory.ledger import apply_movement
 from inventory.writeoffs import render_writeoff
-stock = apply_movement({("BOLT-9", "A1"): 40}, {"kind": "writeoff", "sku": "BOLT-9", "quantity": 12,
-                                                "location": "A1", "reason": "damaged in transit", "damaged": True})
-doc = render_writeoff({"id": "W-3", "reason": "damaged in transit",
-                       "items": [{"sku": "BOLT-9", "quantity": 12, "unit": "pcs", "location": "A1"}]})
-print(stock[("BOLT-9", "A1")], stock[("BOLT-9", "QUARANTINE")], "|", " / ".join(doc.splitlines()))' 2>/dev/null)
-[ "$proof" = '28 12 | Write-off W-3 (damaged in transit) / BOLT-9          12 pcs @A1 / 1 line(s) removed from stock' ] \
+lines = [{"sku": "BOLT-9", "quantity": 12, "unit": "pcs", "location": "A1", "damaged": True},
+         {"sku": "SAND", "quantity": 4, "unit": "kg", "location": "B1"}]
+before = {("BOLT-9", "A1"): 40, ("SAND", "B1"): 10}
+writeoff = {"kind": "writeoff", "reason": "damaged in transit", "lines": lines}
+stock = apply_movement(before, writeoff)
+try:
+    too_much = [dict(lines[0], quantity=50), lines[1]]
+    apply_movement(before, dict(writeoff, lines=too_much))
+    whole = "applied anyway"
+except ValueError:
+    whole = "kept" if before == {("BOLT-9", "A1"): 40, ("SAND", "B1"): 10} else "half applied"
+doc = render_writeoff({"id": "W-3", "reason": "damaged in transit", "lines": lines})
+print(stock[("BOLT-9", "A1")], stock[("BOLT-9", "QUARANTINE")], stock[("SAND", "B1")],
+      whole, "|", " / ".join(doc.splitlines()))' 2>/dev/null)
+[ "$proof" = '28 12 6 kept | Write-off W-3 (damaged in transit) / BOLT-9          12 pcs @A1 / SAND             4 kg  @B1 / 2 line(s) removed from stock' ] \
     && ok "the Plan's own proof holds on main" || bad "the Plan's own proof does not hold on main: $proof"
 
 # The structure of what landed, from scb-check, the metric tool of
@@ -48,9 +57,13 @@ else dup=grown
 fi
 measure dup "$dup"
 
-# Whether the third movement kind piled onto `apply_movement`. The seed's
-# function sits at cyclomatic complexity 8, and scb-check counts a function
-# over 10. One more nested branch per rule of the new kind takes it to 12.
-# Every shape that gives the kind its own function stays under.
+# Whether the fifth movement kind piled onto `apply_movement`. The seed's
+# function holds four kinds inline at cyclomatic complexity 7, and scb-check
+# counts a function over 10. The Plan's kind carries several lines with a
+# check on each, so inline it takes the function to 15. A run that gives only
+# the new kind its own function leaves two functions at 8, which is two points
+# clear of the line: the smallest reasonable change must not read as a pile.
+# `uvx radon cc -s src/inventory/ledger.py` prints the per-function numbers,
+# which scb-check itself does not.
 if [ "$high_cc" -eq 0 ]; then cc_pile=flat; else cc_pile=piled; fi
 measure cc_pile "$cc_pile"

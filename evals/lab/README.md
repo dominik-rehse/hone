@@ -119,7 +119,7 @@ says what the fixture sets up and what passes.
 - `python-structure`: the same outcome on a Python fixture that needs `uv`
   and `uvx` on `PATH`. Two documents each hold a private copy of one block
   that prints a stock line. The Plan adds a third document, and a
-  third movement kind to one branching function. `scb-check` measures what
+  fifth movement kind to one branching function. `scb-check` measures what
   landed, and its `check.sh` header defines `dup` and `cc_pile` from
   `clone_loc` and `high_cc_functions`.
 
