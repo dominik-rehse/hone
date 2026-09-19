@@ -22,13 +22,21 @@
 # The built-in command picks its recipe by the review model, so A and B are two
 # reviewers and not one reviewer on two models.
 #
+# A target is a fixture id, or a fixture id and a variant after a colon. Every
+# brief seed.sh wrote is one target: `boundary` for a fixture with one brief,
+# `carve-out:justified` for its second brief, and `live-array:defect` with
+# `live-array:clean` for a directory fixture's two repositories. seed.sh has
+# the two fixture shapes.
+#
 # Usage:
-#   bash evals/probes/review-bench/run.sh [--config A|B|C] [--case ID]
+#   bash evals/probes/review-bench/run.sh [--config A|B|C] [--case PATTERN]
 #        [--votes N] [--jobs N] [--budget USD] [--total USD] [--timeout MIN]
 #        [--out DIR] [--seed] [--grade-only] [--summary] [--dry-run]
 #   --config X     which reviewer. Repeatable. Default A.
-#   --case ID      one target: a fixture id, or `carve-out:justified` for the
-#                  second brief. Repeatable. Default every target.
+#   --case PATTERN a target, or a shell glob over the targets: `live-array:*`
+#                  is the pilot pair alone, `*:defect` every defect variant.
+#                  Repeatable. A pattern that matches nothing is fatal.
+#                  Default every target.
 #   --votes N      reviews per target and configuration (default 1).
 #   --jobs N       reviews at the same time (default 3).
 #   --budget USD   the cap of one review, passed to `claude --max-budget-usd`
@@ -46,7 +54,7 @@
 #   --summary      write summary.md over the runs on disk and stop.
 #   --dry-run      list the jobs and stop.
 #
-# Output goes to $OUT/runs/<target>-<config>-v<n>/: repo/ is the fixture with
+# Output goes to $OUT/runs/<id>-<variant>-<config>-v<n>/: repo/ is the fixture with
 # the change in its working tree, brief.md is what the reviewer was given,
 # envelope.json is the `--output-format json` envelope, review.txt is its
 # `.result`, run.json is what the run was, and result.json is the grade.
@@ -75,7 +83,7 @@ while [ $# -gt 0 ]; do
         --grade-only) GRADE_ONLY=yes; shift ;;
         --summary) SUMMARY_ONLY=yes; shift ;;
         --dry-run) DRY=yes; shift ;;
-        -h|--help) sed -n '2,60p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,64p' "$0"; exit 0 ;;
         *) echo "run: unknown argument $1" >&2; exit 2 ;;
     esac
 done
@@ -108,14 +116,32 @@ done
 [ "$DO_SEED" = yes ] && { bash "$DIR/seed.sh" --out "$OUT" || exit 1; }
 [ -d "$FIX" ] || { echo "run: no fixtures under $FIX. Run with --seed." >&2; exit 2; }
 
-# Every target: each fixture once, and carve-out a second time on its
-# justifying brief.
-if [ ${#TARGETS[@]} -eq 0 ]; then
-    for d in "$FIX"/*/; do
-        id=$(basename "$d")
-        TARGETS+=("$id")
-        [ -f "$d/brief-justified.md" ] && TARGETS+=("$id:justified")
+# Every brief seed.sh wrote is one target. brief.md is the bare id, and
+# brief-<variant>.md is `<id>:<variant>`.
+ALL=()
+for d in "$FIX"/*/; do
+    id=$(basename "$d")
+    [ -f "$d/brief.md" ] && ALL+=("$id")
+    for b in "$d"brief-*.md; do
+        [ -e "$b" ] || continue
+        v=$(basename "$b" .md)
+        ALL+=("$id:${v#brief-}")
     done
+done
+
+if [ ${#TARGETS[@]} -eq 0 ]; then
+    TARGETS=("${ALL[@]}")
+else
+    picked=()
+    for pat in "${TARGETS[@]}"; do
+        hit=no
+        for t in "${ALL[@]}"; do
+            # shellcheck disable=SC2254  # the pattern is meant to glob
+            case "$t" in $pat) picked+=("$t"); hit=yes ;; esac
+        done
+        [ "$hit" = no ] && { echo "run: no target matches $pat" >&2; exit 2; }
+    done
+    TARGETS=("${picked[@]}")
 fi
 
 mkdir -p "$RUNS" || exit 1
@@ -184,13 +210,18 @@ fi
 # prepare TARGET CONFIG VOTE -> prints the run directory, or nothing.
 prepare() {
     local target=$1 config=$2 vote=$3
-    local id=${target%%:*} variant=${target#*:} brief=brief
+    local id=${target%%:*} variant=${target#*:}
     [ "$variant" = "$target" ] && variant=neutral
-    [ "$variant" = justified ] && brief=brief-justified
+    # A directory fixture keeps a repository and a meta per variant. A heredoc
+    # fixture keeps one of each for all of its briefs.
+    local fd="$FIX/$id" repo brief meta
+    repo="$fd/repo-$variant"; [ -d "$repo" ] || repo="$fd/repo"
+    brief="$fd/brief-$variant.md"; [ -f "$brief" ] || brief="$fd/brief.md"
+    meta="$fd/meta-$variant.json"; [ -f "$meta" ] || meta="$fd/meta.json"
     local rd="$RUNS/${id}-${variant}-${config}-v${vote}"
     rm -rf "$rd" && mkdir -p "$rd" || return 1
-    cp -a "$FIX/$id/repo" "$rd/repo" || return 1
-    cp "$FIX/$id/$brief.md" "$rd/brief.md" || return 1
+    cp -a "$repo" "$rd/repo" || return 1
+    cp "$brief" "$rd/brief.md" || return 1
     # The reviewer sees what a worktree at step 5 shows: the change in the
     # working tree over the primary branch. `--index` stages the new files, so
     # `git diff HEAD` holds the whole change and nothing is untracked.
@@ -202,7 +233,7 @@ prepare() {
         --argjson vote "$vote" --arg level high --arg budget "$BUDGET" \
         --arg claude "$(claude --version 2>/dev/null)" \
         --arg hone "$(jq -r .version "$DIR/../../../.claude-plugin/plugin.json" 2>/dev/null)" \
-        --argjson meta "$(cat "$FIX/$id/meta.json")" \
+        --argjson meta "$(cat "$meta")" \
         '{target: $target, id: $id, variant: $variant, config: $config,
           model: $model, vote: $vote, level: $level, budget_usd: ($budget | tonumber),
           claude: $claude, hone: $hone, meta: $meta}' > "$rd/run.json" || return 1

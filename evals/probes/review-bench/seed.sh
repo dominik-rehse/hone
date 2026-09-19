@@ -1,11 +1,27 @@
 #!/bin/bash
-# Seed the review-bench fixtures: eight small Node repositories, one per case.
+# Seed the review-bench fixtures: small Node repositories, one per target.
 #
 # Each repository has a `main` branch with a green suite, and a `change` branch
-# with one commit of 20 to 80 lines that a hone run could plausibly have made.
-# Six changes carry one planted defect of a different kind. Two are clean, and
-# they count the reviewer's false alarms. No comment, no name, and no commit
-# message points at a defect, and the suite stays green with the defect in.
+# with one commit that a hone run could plausibly have made. Most changes carry
+# one planted defect of a different kind. The clean ones count the reviewer's
+# false alarms. No comment, no name, and no commit message points at a defect,
+# and the suite stays green with the defect in.
+#
+# There are two shapes of fixture, and both end in the same seeded layout.
+#
+#   A heredoc case is written inline below. Its project is a handful of files
+#   of 20 to 80 changed lines, and it seeds one repository: repo/, meta.json,
+#   brief.md, and a second brief where a case has one.
+#
+#   A directory case lives under fixtures/<id>/ beside this script: base/ is a
+#   whole small project, defect/ and clean/ are two overlay trees on it that
+#   differ only where the defect is, plan.md is the Plan prose both variants
+#   share, and meta.json carries the case fields. It seeds two repositories,
+#   repo-defect/ and repo-clean/, with a meta and a brief each. So one
+#   directory case gives the two targets <id>:defect and <id>:clean. A
+#   directory case also carries prove.js, which this script runs with each
+#   seeded repository as its working directory: it must pass on clean and fail
+#   on defect, which is what proves the planted defect real.
 #
 # Beside each repository the seed writes the brief that the run would hand to
 # `/code-review`: the Plan's What, Why and proof, then the diff, then the one
@@ -21,16 +37,18 @@
 # Usage: bash seed.sh [--out DIR]
 #   --out DIR  where the fixtures go (default /var/tmp/hone-probe/review-bench).
 #
-# The seed refuses to leave a repository whose suite is red, and it refuses a
-# brief that its own case regex matches (that would be brief_named=yes by
-# construction). Both are fatal.
+# The seed refuses to leave a repository whose suite is red, it refuses a brief
+# that its own case regex matches (that would be brief_named=yes by
+# construction), and it refuses a directory case whose prove.js reads either
+# variant the wrong way. All three are fatal.
 set -uo pipefail
 
+DIR=$(cd "$(dirname "$0")" && pwd)
 OUT=${PROBE_OUT:-/var/tmp/hone-probe/review-bench}
 while [ $# -gt 0 ]; do
     case "$1" in
         --out) OUT=$2; shift 2 ;;
-        -h|--help) sed -n '2,25p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,43p' "$0"; exit 0 ;;
         *) echo "seed: unknown argument $1" >&2; exit 2 ;;
     esac
 done
@@ -41,23 +59,40 @@ rc=0
 
 # --- helpers ---------------------------------------------------------------
 
+# write_manifest NAME: the project manifest of $REPO. The test glob is
+# recursive and quoted, so node expands it and a suite under tests/<dir>/ runs.
+write_manifest() {
+    cat > "$REPO/package.json" <<EOF
+{
+  "name": "$1",
+  "version": "0.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": { "test": "node --test 'tests/**/*.test.js'" }
+}
+EOF
+}
+
+# init_repo: git in $REPO, with an author of its own.
+init_repo() {
+    git -C "$REPO" init -q -b main
+    git -C "$REPO" config user.email bench@example.invalid
+    git -C "$REPO" config user.name "Review Bench"
+}
+
+# run_suite: the suite of $REPO on the branch it is on. The glob is the
+# manifest's, quoted for node rather than for the shell.
+run_suite() {
+    (cd "$REPO" && node --test 'tests/**/*.test.js' >/dev/null 2>&1)
+}
+
 # start_case ID: a fresh repository with package.json on main.
 start_case() {
     CASE=$1
     REPO="$FIX/$CASE/repo"
     mkdir -p "$REPO/src" "$REPO/tests" || return 1
-    cat > "$REPO/package.json" <<EOF
-{
-  "name": "$CASE",
-  "version": "0.0.0",
-  "private": true,
-  "type": "commonjs",
-  "scripts": { "test": "node --test tests/*.test.js" }
-}
-EOF
-    git -C "$REPO" init -q -b main
-    git -C "$REPO" config user.email bench@example.invalid
-    git -C "$REPO" config user.name "Review Bench"
+    write_manifest "$CASE"
+    init_repo
 }
 
 commit_base() {
@@ -70,13 +105,9 @@ commit_base() {
 finish_case() {
     local kind=$1 clean=$2 regex=$3 subject=$4
     git -C "$REPO" add -A && git -C "$REPO" commit -qm "$subject"
-    if ! (cd "$REPO" && node --test tests/*.test.js >/dev/null 2>&1); then
-        echo "seed: $CASE: the suite is RED on the change branch" >&2; rc=1
-    fi
+    run_suite || { echo "seed: $CASE: the suite is RED on the change branch" >&2; rc=1; }
     git -C "$REPO" checkout -q main
-    if ! (cd "$REPO" && node --test tests/*.test.js >/dev/null 2>&1); then
-        echo "seed: $CASE: the suite is RED on main" >&2; rc=1
-    fi
+    run_suite || { echo "seed: $CASE: the suite is RED on main" >&2; rc=1; }
     jq -n --arg id "$CASE" --arg kind "$kind" --arg regex "$regex" \
         --argjson clean "$clean" \
         '{id: $id, kind: $kind, clean: $clean, regex: $regex}' > "$FIX/$CASE/meta.json"
@@ -95,17 +126,74 @@ write_brief() {
     } >> "$f"
 }
 
-# check_brief: a brief that its own case regex matches would hand the review
-# its finding. The lab counts a catch only over brief_named=no.
-check_brief() {
-    local f regex
-    regex=$(jq -r .regex "$FIX/$CASE/meta.json")
-    for f in "$FIX/$CASE"/brief*.md; do
+# check_briefs REGEX FILE...: a brief that its own case regex matches would
+# hand the review its finding. The lab counts a catch only over brief_named=no.
+check_briefs() {
+    local regex=$1 f
+    shift
+    for f in "$@"; do
         [ -e "$f" ] || continue
         if grep -qiE "$regex" "$f"; then
             echo "seed: $CASE: $(basename "$f") matches its own case regex" >&2; rc=1
         fi
     done
+}
+
+# check_brief: every brief of the heredoc case at hand.
+check_brief() {
+    check_briefs "$(jq -r .regex "$FIX/$CASE/meta.json")" "$FIX/$CASE"/brief*.md
+}
+
+# --- directory cases -------------------------------------------------------
+
+# seed_dir_case ID: the fixture under fixtures/<ID>/, as two repositories. The
+# header of this script has the layout it expects.
+seed_dir_case() {
+    local id=$1 src="$DIR/fixtures/$1" variant f kind regex subject clean re p
+    CASE=$id
+    for f in base defect clean plan.md meta.json prove.js; do
+        [ -e "$src/$f" ] || { echo "seed: $id: no $f under fixtures/$id" >&2; rc=1; return 1; }
+    done
+    kind=$(jq -r .kind "$src/meta.json")
+    regex=$(jq -r .regex "$src/meta.json")
+    subject=$(jq -r .subject "$src/meta.json")
+    for variant in defect clean; do
+        REPO="$FIX/$id/repo-$variant"
+        mkdir -p "$REPO" || return 1
+        cp -a "$src/base/." "$REPO/" || return 1
+        write_manifest "$id"
+        init_repo
+        git -C "$REPO" add -A && git -C "$REPO" commit -qm "chore: the project as it stands"
+        run_suite || { echo "seed: $id: $variant: the suite is RED on main" >&2; rc=1; }
+        git -C "$REPO" checkout -q -b change
+        cp -a "$src/$variant/." "$REPO/" || return 1
+        git -C "$REPO" add -A && git -C "$REPO" commit -qm "$subject"
+        run_suite || { echo "seed: $id: $variant: the suite is RED on the change branch" >&2; rc=1; }
+        # prove.js reads the change itself, and it must read the two variants
+        # apart. A clean variant it fails has the defect too, and a defect
+        # variant it passes has a defect that never bites.
+        (cd "$REPO" && node "$src/prove.js" >/dev/null 2>&1)
+        p=$?
+        if [ "$variant" = clean ] && [ "$p" -ne 0 ]; then
+            echo "seed: $id: prove.js fails on the clean variant (exit $p)" >&2; rc=1
+        fi
+        if [ "$variant" = defect ] && [ "$p" -eq 0 ]; then
+            echo "seed: $id: prove.js passes on the defect variant, so the defect does not bite" >&2; rc=1
+        fi
+        clean=false; re=$regex
+        [ "$variant" = clean ] && { clean=true; re='a^'; }
+        jq -n --arg id "$id" --arg kind "$kind" --arg regex "$re" \
+            --arg defect "$(jq -r .defect "$src/meta.json")" \
+            --argjson clean "$clean" \
+            '{id: $id, kind: $kind, clean: $clean, regex: $regex, defect: $defect}' \
+            > "$FIX/$id/meta-$variant.json"
+        write_brief "brief-$variant" < "$src/plan.md"
+        git -C "$REPO" checkout -q main
+    done
+    # Both briefs go against the defect regex. The clean brief carries the same
+    # Plan and all but one line of the same diff, so a hit there is the same
+    # leak.
+    check_briefs "$regex" "$FIX/$id"/brief-*.md
 }
 
 # --- 1. boundary: an off-by-one at a limit ---------------------------------
@@ -1130,10 +1218,14 @@ functions give the answers they gave before the lookup moved.
 EOF
 check_brief
 
+# --- 9. live-array: a report that sorts the store's own array --------------
+
+seed_dir_case live-array
+
 # --- done ------------------------------------------------------------------
 
 for d in "$FIX"/*/; do
-    [ -f "$d/meta.json" ] || { echo "seed: ${d} has no meta.json" >&2; rc=1; }
+    compgen -G "$d/meta*.json" >/dev/null || { echo "seed: ${d} has no meta" >&2; rc=1; }
 done
 n=$(find "$FIX" -maxdepth 1 -mindepth 1 -type d | wc -l)
 b=$(find "$FIX" -maxdepth 2 -name 'brief*.md' | wc -l)

@@ -3,8 +3,15 @@
 #
 # Usage:
 #   bash grade.sh <run-dir>     write <run-dir>/result.json
-#   bash grade.sh --self-check  two fixed reviews, one that names the defect
-#                               and one that does not. No model call, no cost.
+#   bash grade.sh --self-check  fixed reviews over fixed metas: one that names
+#                               the defect and one that does not, the answer
+#                               shapes a reviewer uses, and the two variants of
+#                               a directory fixture, whose defect meta carries
+#                               the case regex and whose clean meta carries a
+#                               regex nothing matches. That last pair reads the
+#                               shipped regex of fixtures/live-array, so a
+#                               regex that stops naming its defect fails here.
+#                               No model call, no cost.
 #
 # It reads <run-dir>/envelope.json (the `--output-format json` envelope of the
 # nested `claude -p`), <run-dir>/brief.md, and <run-dir>/run.json, and writes:
@@ -19,6 +26,11 @@
 #   findings_count  how many findings the review reported, counted by its own
 #                   severity markers. Mechanical, and an upper bound.
 #   false_alarms    on a clean change, findings_count until a person judges it.
+#                   A finding there is a false alarm when it claims a defect
+#                   that no input can reach, or one the Plan never asked for. A
+#                   true remark about a reachable weakness is not a false
+#                   alarm: it is a bug in the fixture, and the fixture is what
+#                   gets fixed.
 #   cost_usd        the envelope's total_cost_usd.
 #   seconds         wall clock, from run.json.
 #   spawned         entries in the nested session's subagents directory. The
@@ -32,6 +44,7 @@
 # those fields win over the mechanical ones. result.json records `judged`.
 set -uo pipefail
 
+DIR=$(cd "$(dirname "$0")" && pwd)
 SEV_RE='critical|high|medium|moderate|low|minor|major|blocker|nit'
 
 # count_findings FILE: how many findings the review reported. The reviewer
@@ -49,8 +62,9 @@ count_findings() {
     # A severity or impact label per finding.
     n=$(grep -ciE "^[[:space:]]*([-*#>]|[0-9]+[.)])?[[:space:]]*(\*\*)?(severity|impact)(\*\*)?[[:space:]]*:" "$f" 2>/dev/null)
     [ "${n:-0}" -gt 0 ] && { echo "$n"; return; }
-    # A list item that names a file or a line.
-    n=$(grep -ciE "^[[:space:]]*([-*]|[0-9]+[.)])[[:space:]].*(src/|tests/|\.js:[0-9])" "$f" 2>/dev/null)
+    # A list item that names a file or a line. A fixture nests its files, so a
+    # finding may cite `reports/top.js` without the top directory.
+    n=$(grep -ciE "^[[:space:]]*([-*]|[0-9]+[.)])[[:space:]].*(src/|tests/|[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\.js|\.js:[0-9])" "$f" 2>/dev/null)
     [ "${n:-0}" -gt 0 ] && { echo "$n"; return; }
     # A heading per finding.
     grep -ciE "^#{2,4}[[:space:]]+" "$f" 2>/dev/null
@@ -142,11 +156,13 @@ self_check() {
     local tmp rc=0
     tmp=$(mktemp -d) || return 1
     local regex='off.by.one|allows? one (too many|more)'
+    # mk NAME REVIEW [REGEX] [CLEAN]: one run directory to grade.
     mk() {
         local d="$tmp/$1"; mkdir -p "$d"
-        jq -n --arg re "$regex" '{target: "self", id: "self", variant: "neutral",
+        jq -n --arg re "${3:-$regex}" --argjson cl "${4:-false}" \
+            '{target: "self", id: "self", variant: "neutral",
             config: "X", model: "none", vote: 1, level: "high", seconds: 7,
-            meta: {id: "self", kind: "boundary", clean: false, regex: $re}}' > "$d/run.json"
+            meta: {id: "self", kind: "boundary", clean: $cl, regex: $re}}' > "$d/run.json"
         printf 'The Plan adds a cap check.\n' > "$d/brief.md"
         jq -n --arg r "$2" '{is_error: false, subtype: "success", session_id: "s-0",
             total_cost_usd: 0.25, result: $r}' > "$d/envelope.json"
@@ -212,6 +228,45 @@ Style only. Nothing else stood out in this change.')
     [ "$(jq -r .indeterminate "$miss/result.json")" = true ] \
         && echo "ok   an error envelope grades indeterminate" \
         || { echo "FAIL an error envelope did not grade indeterminate"; rc=1; }
+    # A directory fixture seeds two variants of one change, and the grader must
+    # read them apart. The defect variant carries the case regex, the clean one
+    # carries `a^`, which nothing matches, and its findings are its false
+    # alarms. The regex here is the shipped one, so this also holds it to a
+    # review that names the defect and to one that does not.
+    local case_meta="$DIR/fixtures/live-array/meta.json"
+    if [ ! -f "$case_meta" ]; then
+        echo "FAIL fixtures/live-array/meta.json is missing, so the two variants go unchecked"; rc=1
+    else
+        local case_re named generic dfct cln gen
+        case_re=$(jq -r .regex "$case_meta")
+        named='## Findings
+
+### 1. topByPriority reorders the tickets the store holds
+**Severity:** high
+
+src/reports/top.js sorts the array that store.all() hands back, and that array
+is the one the store keeps. After a dashboard call, nextInQueue() in
+src/queue.js no longer serves the ticket that has waited longest.'
+        generic='## Findings
+
+- reports/top.js: topByAge has no JSDoc, and its default of 5 is undocumented.
+- tests/reports/top.test.js: nothing asserts what a request for zero gives.'
+        dfct=$(mk dir-defect "$named" "$case_re" false)
+        cln=$(mk dir-clean "$named" 'a^' true)
+        gen=$(mk dir-generic "$generic" "$case_re" false)
+        grade_one "$dfct" >/dev/null
+        grade_one "$cln" >/dev/null
+        grade_one "$gen" >/dev/null
+        [ "$(jq -r '.caught + "/" + (.clean | tostring)' "$dfct/result.json")" = yes/false ] \
+            && echo "ok   the defect variant grades caught against the case regex" \
+            || { echo "FAIL the defect variant graded $(jq -c '[.caught, .clean]' "$dfct/result.json")"; rc=1; }
+        [ "$(jq -r '.caught + "/" + (.false_alarms | tostring)' "$cln/result.json")" = no/1 ] \
+            && echo "ok   the clean variant catches nothing and counts its finding as a false alarm" \
+            || { echo "FAIL the clean variant graded $(jq -c '[.caught, .false_alarms]' "$cln/result.json")"; rc=1; }
+        [ "$(jq -r '.caught + "/" + (.findings_count | tostring)' "$gen/result.json")" = no/2 ] \
+            && echo "ok   a generic review over nested paths grades missed and counts two findings" \
+            || { echo "FAIL a generic review graded $(jq -c '[.caught, .findings_count]' "$gen/result.json")"; rc=1; }
+    fi
     rm -rf "$tmp"
     [ "$rc" = 0 ] && echo "grade: self-check green" || echo "grade: self-check RED"
     return "$rc"
@@ -219,6 +274,6 @@ Style only. Nothing else stood out in this change.')
 
 case "${1:-}" in
     --self-check) self_check ;;
-    -h|--help|"") sed -n '2,32p' "$0" ;;
+    -h|--help|"") sed -n '2,44p' "$0" ;;
     *) grade_one "${1%/}" ;;
 esac

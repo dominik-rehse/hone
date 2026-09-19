@@ -1,0 +1,6 @@
+{
+  "kind": "shared array mutated",
+  "regex": "mutat[a-z]*|alias[a-z]*|in.?place|live array|shared array|internal array|underlying array|same array|store'?s (own )?array|array (in|of|inside|behind|held by) the store|expose[a-z]* (its |the )?internal|arrival order|insertion order|nextInQueue|next in queue|reorder[a-z]*|sort[a-z]* (the )?(store|queue|live|shared|internal|underlying)|(make|makes|take|takes|without|need|needs|should) (a |an )?(defensive |shallow )?cop(y|ies|ying)|cop(y|ies|ied|ying)[^.]{0,30}before|defensive copy|side.?effect[a-z]*|corrupt[a-z]* the (store|queue)|(chang|alter|break|affect|disturb|scrambl|shuffl)[a-z]* [^.]{0,30}order",
+  "defect": "topByPriority in src/reports/top.js sorts the array that store.all() hands back, which is the store's own array, so the store stops holding its tickets in arrival order. Open the dashboard on a desk whose oldest open ticket is a low one, and nextInQueue() in src/queue.js then serves the most urgent ticket instead of that oldest one.",
+  "subject": "feat(reports): list the top tickets for the support dashboard"
+}
