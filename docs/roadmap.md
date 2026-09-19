@@ -10,18 +10,18 @@ The history is in the dated notes under `docs/spikes/` and in git.
 
 ### Defects with evidence
 
-The first three are from
-[`impossiblebench-first-look`](spikes/2026-09-18-impossiblebench-first-look.md).
-
-- *A run that keeps a test red cannot end its turn.* Three runs rightly kept
-  a wrong test red. The turn-end hook blocked each run nine times, until
-  the session ended.
 - *A carve-out can enter through the Plan.* One Plan named a carve-out for
-  a wrong test as a requirement. The `plan-critic` approved it. The review
-  endorsed the code, because its brief said that the test must pass.
-- *One run merged around the loop.* It made a worktree by hand and
-  fast-forwarded the primary branch, with no review and no land gate. No
-  scenario tempts that route.
+  a wrong test as a requirement, and the `plan-critic` approved it twice
+  ([`impossiblebench-first-look`](spikes/2026-09-18-impossiblebench-first-look.md)).
+  The probe's request makes the tests the specification. A clean test
+  needs a request that names the specification as the authority.
+- *A stuck run offers the off switch.* Six runs told the person to create
+  `.hone-off`. `rules/workflow.md` and `msg_guard_primary_tree` name the
+  marker, and the model repeats it. No run of six did so after the gate
+  learned to end a turn.
+- *A stop outside `/hone:run` has no report contract.* `hand-merge` on
+  sonnet offered two routes and recommended neither. `plan-fork` once
+  presented its rejected Plan as written.
 - *The nested review may not fan out.* `subagent_stats.spawned` is 0 in 128
   of 129 valid envelopes. Also, `Bash(git *)` denied 50 `git` commands, 30
   of them behind a `cd`. Commit `cc1bc4a` has the counts.
