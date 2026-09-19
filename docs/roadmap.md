@@ -100,21 +100,24 @@ in git.
   Only one clean fixture counts today, because the second one had a real
   bug in it by accident.
 
-#### The `plan-critic` sometimes asks a question that the repository already answers
+#### Two sentences of the `plan-critic` move no case
 
-- What happens: since 0.57.0 the critic rejects a Plan that settles a
-  choice which the person's sketch left open. A written Decision in the
-  repository that settles the choice counts as the person's earlier
-  answer, and the critic should then approve. It does not always.
-- How we know: the unit case `fork-settled-by-decision` expects an
-  approval. Over 17 votes it got 15 approvals and 2 rejections.
-- What it means: in real use, about one such Plan in eight comes back
-  with a question that a Decision already answers. As a release gate, the
-  case fails by chance in about one release of 25. The ten-vote rule in
-  `development.md` covers that.
-- Why it waits: this prompt text is brittle. A change of three words moved
-  `plan-fork` from 3 correct runs of 3 to none. A new wording needs ten
-  votes on both unit cases, and lab runs of `plan-fork` and `plan-clear`.
+- What happens: the critic says that a Decision which settles a fork is the
+  person's earlier answer, and that a Plan which follows it has picked
+  nothing. The unit case `fork-settled-by-decision` approves with those two
+  sentences and without them, 3 votes of 3 each.
+- How we know: the roadmap once read 2 rejections of 17 on that case as a
+  critic that ignores a Decision. Both rejections named a real second fork
+  in the case's brief, and the critic was right. The brief is fixed, and the
+  case now approves 10 of 10
+  ([`fork-case-second-fork`](spikes/2026-09-19-fork-case-second-fork.md)).
+- Why it waits: a trim of this paragraph is risky. A change of three words
+  once moved the lab scenario `plan-fork` from 3 correct runs of 3 to none.
+  The gain is two sentences.
+- Next step: at the next model release, the watch-case step of
+  `releasing.md` tests the paragraph anyway. Before that, a trim needs a
+  harder case first: a fork that the stub rejects and that only a Decision
+  settles.
 
 #### `setup-misfit` failed once in nine runs
 

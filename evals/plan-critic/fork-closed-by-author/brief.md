@@ -15,7 +15,8 @@
 `importRows` today validates a row, writes it, and throws `ImportError` on the
 first row that fails, so the rows after it are never read. Validate the whole
 file before writing anything instead. `importRows` collects a finding per bad
-row (`{ row, column, reason }`), and when the list is not empty it writes
+cell (`{ row, column, reason }`), so a row with two bad cells yields two
+findings. When the list is not empty it writes
 nothing and throws `ImportError` carrying the whole list. A file whose rows
 all validate imports exactly as it does today.
 
@@ -24,9 +25,10 @@ An operator fixing a 5,000-row file re-uploads once per bad row. One file took
 eleven rounds yesterday, and each round is a full re-upload and a re-read.
 
 ### How I'll know it works
-A file with bad rows at 12, 340, and 4,001 throws one `ImportError` whose
-findings name rows 12, 340, and 4,001, each with the offending column. Its
-`message` carries all three lines, so the upload page shows every one. The
+Take a file with two bad cells in row 12, and one bad cell in each of rows 340
+and 4,001. It throws one `ImportError` with four findings. They name both bad
+columns of row 12, and the bad column of 340 and of 4,001. Its
+`message` carries all four lines, so the upload page shows every one. The
 table holds the same count of rows as before the call. A file with no bad row
 imports all 5,000 rows, as the current tests already pin.
 
@@ -39,7 +41,7 @@ imports all 5,000 rows, as the current tests already pin.
   else, so the message has to carry every finding. `ImportError` keeps its
   name and its type, and the page needs no change.
 - Preserve: the finding shape reuses the field names that `validate.js`
-  already returns.
+  already returns, and `validate.js` already reports every bad cell of a row.
 
 # Context
 

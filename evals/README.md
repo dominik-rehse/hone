@@ -212,11 +212,10 @@ Re-measure a case before you lean on its entry.
   stub rejects too and never says the word, so the substring is the whole
   case. It pins the sketch in the brief, not any paragraph: the same brief
   with the sketch cut approves 2 of 3. No flag makes that baseline.
-- `fork-settled-by-decision`: APPROVE. The same brief, with a Decision that
-  settles the fork and a Plan that follows it. It guards the case above
-  against a critic that asks what the repository already answered. The stub
-  approves too, so its baseline is the prompt minus the two Decision
-  sentences.
+- `fork-settled-by-decision`: the twin above, with a Decision that settles the
+  fork and a Plan that follows it. It approves on the full prompt, the stub,
+  and the prompt minus the two Decision sentences, so it pins no prompt text.
+  It stays the approving twin: a wording that rejects every fork fails it.
 - `schema-split-column-holdout`: held out, a paraphrase of
   `schema-silent-on-data`.
 
