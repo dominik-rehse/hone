@@ -1,0 +1,6 @@
+{
+  "kind": "check and write split by an await, off the lock",
+  "regex": "race( condition)?|TOCTOU|time.of.check|check.?then.?(write|act|set|use|update|book|reserve)|(two|both|concurrent|simultaneous|parallel|competing) (callers|calls|requests|users|customers|reservations|people|bookings|browsers|tabs|clicks)|at the same time|concurrent|simultaneous|double.?(book|sell|reserv)|overwrit|clobber|serializ|mutual exclusion|interleav|atomic|lost update|last (write|writer) wins|(outside|without|not under|not inside|no|missing|never takes?|never holds?|does not take|does not hold|does not use|fails? to take|fails? to hold|fails? to use|is not) (the |a |any )?lock|lock(ing)? is (missing|absent|not)|should .{0,25}(lock|serializ|atomic)|window (between|in which|where)|gap between|both (succeed|win|get|are granted|end up|hold)",
+  "defect": "reserve in src/ops.js reads the seat's holder, then awaits the card gateway, then writes the seat, and it does none of that under the seat's key in src/lock.js, which every other write to a seat goes through. Two people who ask for seat A-1 while the gateway is answering both read it free, both get a hold on their card, and the second write puts the seat in the second person's name.",
+  "subject": "feat(booking): put the card in front of the seat a reservation writes"
+}

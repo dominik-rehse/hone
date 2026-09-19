@@ -1218,9 +1218,11 @@ functions give the answers they gave before the lookup moved.
 EOF
 check_brief
 
-# --- 9. live-array: a report that sorts the store's own array --------------
+# --- 9 and up: every directory under fixtures/ is one pair ----------------
 
-seed_dir_case live-array
+for d in "$DIR"/fixtures/*/; do
+    seed_dir_case "$(basename "$d")"
+done
 
 # --- done ------------------------------------------------------------------
 

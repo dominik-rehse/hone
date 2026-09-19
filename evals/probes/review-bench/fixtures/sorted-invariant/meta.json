@@ -1,0 +1,6 @@
+{
+  "kind": "sorted list invariant broken",
+  "regex": "sort(ed|ing)? ?(order|invariant)|unsorted|unordered|(not|never|n.?t|no longer|fails? to|without|forgets? to|omits?|missing a|needs? a|is not) ?(to )?(be(ing)? )?sort(ed|ing|s)?\\b|out of (start |chronological |time |clock )?order|chronolog|binary search|bisect|lower.?bound|findSlot|nextFreeGap|isFree|find\\.js|interleav|(assum|expect|reli|requir|depend)[a-z]* .{0,45}(sorted|sorting|start order|chronological|time order|ascending)|(start|clock|time) order|monotonic|(needs?|should|must|never|has to) .{0,25}sort",
+  "defect": "mergeCalendars in src/merge.js builds its slot list by walking the two calendars one after the other, so the list it returns is only in start order when every booking of the first calendar falls before every booking of the second. src/find.js reads a calendar's slots by binary search, so on a merged day whose two teams book alternately, findSlot(merged, 11:30) answers null for a room the retro is sitting in, and nextFreeGap offers minutes the retro already has.",
+  "subject": "feat(calendar): merge the two calendars two teams keep for one room"
+}

@@ -1,0 +1,32 @@
+// The supplier sends a two column file: a header line, then one price a line.
+const HEADER = ["sku", "price"];
+
+class CsvError extends Error {
+  constructor(message, code) {
+    super(message);
+    this.name = "CsvError";
+    this.code = code;
+  }
+}
+
+function splitFields(line) {
+  return line.split(",").map((field) => field.trim());
+}
+
+// The rows of a supplier file, each with the line it sat on. Blank lines are
+// not rows. Throws a CsvError with the code BAD_HEADER when the first line is
+// not the header this format has.
+function parseCsv(text) {
+  const numbered = String(text)
+    .replace(/^\ufeff/, "")
+    .split(/\r?\n/)
+    .map((line, i) => ({ lineNo: i + 1, text: line }))
+    .filter((line) => line.text.trim() !== "");
+  const head = numbered[0];
+  if (head === undefined || splitFields(head.text).join(",") !== HEADER.join(",")) {
+    throw new CsvError(`the first line must read ${HEADER.join(",")}`, "BAD_HEADER");
+  }
+  return numbered.slice(1).map((line) => ({ lineNo: line.lineNo, fields: splitFields(line.text) }));
+}
+
+module.exports = { parseCsv, CsvError, HEADER };

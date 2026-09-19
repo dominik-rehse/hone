@@ -1,0 +1,6 @@
+{
+  "kind": "a local-time date printed as a UTC day",
+  "regex": "time ?zone|timezone|local (time|midnight|date|day|zone|clock|constructor)|(server|machine|host|runner|process|system)'?s? (zone|time ?zone|clock|locale)|zone.?(dependent|sensitive|aware|specific)|depends on the .{0,25}zone|one day (early|earlier|off|out|before|too soon)|a day (early|earlier|off|before|too soon)|off.by.(one|a) day|day earlier|previous day|wrong day|(east|west) of|toISOString|offset|CES?T|Europe/|\\bTZ\\b|daylight saving|(built|constructed|created|made|interpreted|parsed) (it )?in (the )?local|(should|must|needs? to|ought to) use Date\\.UTC|midnight in",
+  "defect": "lastDayOfMonth in src/terms.js builds the due day with the local-time Date constructor, and src/invoice.js prints that day with toIsoDate from src/dates.js, which reads an instant as the UTC day it falls on. On a billing host anywhere east of Greenwich, an end-of-month invoice issued on 2026-01-08 prints a due day of 2026-01-30, and src/overdue.js calls it overdue on the 31st.",
+  "subject": "feat(invoicing): give the billing form end-of-month payment terms"
+}

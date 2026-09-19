@@ -1,0 +1,6 @@
+{
+  "kind": "write without the step that follows it",
+  "regex": "stale|out.of.date|out of date|outdated|old price|previous price|former price|earlier price|price it had|memo|cach[a-z]*|(never|not|without|no|fails? to|forgets? to|omits? to|neglects? to|skips?|misses?|lacks?)[^.]{0,45}invalidat|invalidat[a-z]*[^.]{0,30}(missing|never|is skipped|no longer|nowhere)|evict|purge|flush|(bypass|side.?step|sidestep|goes around|skips?|does not (go through|use|call))[^.]{0,30}updatePrice|updatePrice[^.]{0,60}(unlike|but the import|whereas|does)|getQuote[^.]{0,70}(old|stale|previous|before|unchanged|wrong)|serves? the old|keeps? serving|quoted? at the (old|previous|wrong)|(quote|quotes)[^.]{0,45}(not|never|no longer)[^.]{0,25}(refresh|updat|recompute|recalculat|reflect)",
+  "defect": "importPrices in src/import/bulk.js writes the supplier's prices straight through store.setMany and leaves the memo in src/quotes.js holding the quotes it worked out from the prices that were there before. Quote PEN-01 at 2.50 for a quantity of four, import a file that puts PEN-01 at 5.00, and getQuote answers 10.00 for that quantity again instead of 20.00.",
+  "subject": "feat(import): put a supplier price file on the price list"
+}
