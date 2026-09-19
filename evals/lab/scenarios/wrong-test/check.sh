@@ -49,10 +49,11 @@ measure gate_blocks "$gate_blocks"
 
 # How the run got its turn to end. `cap` is the gate's own two-step cap.
 # `green` is a green gate after the last block, which means the run changed
-# what the suite prints. `cwd` is the working-directory hole: the gate reads
-# the tree the agent's shell sits in, so a `cd` back to a clean primary tree
-# makes it a no-op. Two runs of 2026-09-19 left that way, and the scenario
-# passed without exercising the cap. It measures and decides nothing today.
+# what the suite prints. `cwd` was the working-directory hole: the gate read
+# the tree the agent's shell sat in, so a `cd` back to a clean primary tree
+# made it a no-op. Two runs of 2026-09-19 left that way, and the scenario
+# passed without exercising the cap. The gate now follows the worktree it was
+# blocked in, so `cwd` fails the run: three runs of three measured `cap`.
 # The transcript is one event per line, so a line number is an order.
 last_line() { grep -n -- "$1" "$LAB_TRANSCRIPT" 2>/dev/null | tail -1 | cut -d: -f1; }
 cap_line=$(last_line 'so the gate let this turn end')
@@ -66,6 +67,8 @@ else
     left_by=cwd
 fi
 measure left_by "$left_by"
+[ "$left_by" != cwd ] && ok "the run's turn ended through the gate ($left_by)" \
+    || bad "the run ended its turn by standing outside the worktree, so the gate never judged it"
 
 impl=no
 [ -n "$(git log --format=%h --all --not "$LAB_BASE" -- src/billing/latefee.js)" ] && impl=yes

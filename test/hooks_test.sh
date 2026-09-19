@@ -623,7 +623,83 @@ out=$(stop5)
 asked "$out" && ok "HONE_GATE_BLOCK_CAP=5 asks for the report on the fifth" || bad "a raised cap should ask on the fifth"
 out=$(stop5)
 capped "$out" && ok "HONE_GATE_BLOCK_CAP=5 caps on the sixth" || bad "a raised cap should fire after its report request"
-rm -f "$BLOCKS" "$CAPTAIL"
+rm -f "$BLOCKS"
+
+echo "== gate: a blocked session cannot end its turn by standing elsewhere =="
+# A Stop hook runs where the agent's shell sits, and the agent moves that
+# shell. A run blocked in its worktree used to end the turn from the primary
+# tree, which is clean and on the trunk. Two lab runs of 2026-09-19 left a red
+# suite that way. The counter is the session's memory of where it was blocked,
+# so the gate follows it.
+git -C "$REPO" checkout -q -- src/auth/login.ts
+git -C "$REPO" checkout -q main
+WT_BLOCKS="$REPO/.git/worktrees/auth-login/hone-gate-blocks"
+rm -f "$WT_BLOCKS" "$BLOCKS"
+# The worktree was cut before scripts/ held anything, and git tracks no empty
+# directory, so the adapter has to arrive here.
+mkdir -p "$WT/scripts"
+cat > "$WT/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+cat "$CAPTAIL"
+exit 1
+EOF
+printf 'not ok 1 the supplier case\n' > "$CAPTAIL"
+echo "// work" >> "$WT/src/auth/login.ts"
+stop_in() { (cd "$1" && printf '{"session_id":"%s"}' "$2" | bash "$GATE"); }
+
+# A session that never blocked sees the old behavior from the primary tree.
+out=$(stop_in "$REPO" s8)
+blocked "$out" && bad "a session that never blocked must not be redirected" || ok "a clean primary tree stays a no-op for a session that never blocked"
+
+# Blocked in the worktree, then the shell moves to the primary tree.
+out=$(stop_in "$WT" s8); blocked "$out" || bad "the worktree's red suite should block"
+[ -f "$WT_BLOCKS" ] && ok "the block counts in the worktree's own git dir" || bad "the counter should live in the worktree's git dir"
+out=$(stop_in "$REPO" s8)
+blocked "$out" && ok "a stop from the primary tree still blocks on the worktree's red suite" || bad "the gate should follow the session's blocked worktree"
+# And the sequence continues there: the third block asks for the report, the
+# fourth releases the turn, all from outside the worktree.
+out=$(stop_in "$REPO" s8)
+asked "$out" && ok "the report request arrives from outside the worktree" || bad "the count should continue in the redirected worktree"
+out=$(stop_in "$REPO" s8)
+capped "$out" && ok "the release arrives from outside the worktree" || bad "the cap should fire in the redirected worktree"
+
+# Another session's counter is not this session's memory.
+printf 'other-session 0 1\n' > "$WT_BLOCKS"
+out=$(stop_in "$REPO" s9)
+blocked "$out" && bad "another session's counter must not redirect this one" || ok "another session's counter does not redirect"
+
+# Work in flight where the shell stands wins: no run is dragged elsewhere.
+printf 's8 0 1\n' > "$WT_BLOCKS"
+echo "// primary work" >> "$REPO/src/auth/login.ts"
+cat > "$REPO/scripts/run-tests.sh" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+out=$(stop_in "$REPO" s8)
+blocked "$out" && bad "a tree with work in flight must be judged where it stands" || ok "in-flight work at the shell's tree is what runs"
+# Leave the primary tree clean again, or the redirect never comes up.
+git -C "$REPO" checkout -q -- src/auth/login.ts scripts/run-tests.sh
+
+# A green redirected run clears the counter and ends the turn.
+printf 's8 0 1\n' > "$WT_BLOCKS"
+printf '#!/bin/bash\nexit 0\n' > "$WT/scripts/run-tests.sh"
+out=$(stop_in "$REPO" s8)
+blocked "$out" && bad "a green redirected suite must not block" || ok "a green redirected suite lets the turn end"
+[ -f "$WT_BLOCKS" ] && bad "a green redirected run should clear the counter" || ok "a green redirected run clears the counter"
+
+# A counter of a worktree that is gone redirects nobody.
+git -C "$REPO" checkout -q -- src/auth/login.ts
+GONE=$(mktemp -d)/gone
+git -C "$REPO" worktree add -q -b hone/gone "$GONE" HEAD
+printf 's8 0 1\n' > "$(git -C "$GONE" rev-parse --absolute-git-dir)/hone-gate-blocks"
+git -C "$REPO" worktree remove --force "$GONE"
+out=$(stop_in "$REPO" s8)
+blocked "$out" && bad "a removed worktree's counter must not redirect" || ok "a removed worktree's counter is ignored"
+git -C "$REPO" branch -D hone/gone >/dev/null 2>&1
+
+git -C "$WT" checkout -q -- src/auth/login.ts 2>/dev/null
+git -C "$REPO" checkout -q hone/verify-tier
+rm -f "$WT_BLOCKS" "$BLOCKS" "$CAPTAIL"
 git -C "$REPO" checkout -q -- src/auth/login.ts
 
 echo "== nag: leftover Plan (landed evidence only), oversized Note, orphan Note =="

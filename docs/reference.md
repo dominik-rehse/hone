@@ -285,6 +285,11 @@ irreversible. When you want that record, route the edit through the loop.
     later Stop on that branch skips the run and says so, and a plugin
     upgrade invalidates the record.
 
+  - A Stop hook runs where the agent's shell stands, and the agent moves it.
+    So when this session was already blocked in a linked worktree of the
+    repository, the gate evaluates that worktree, wherever the shell stands.
+    It reads the counter below to find it. A session that was never blocked,
+    and a shell whose own tree has work in flight, see no such redirect.
   - It blocks the same failure `HONE_GATE_BLOCK_CAP` times at most (default
     3). Two failures are the same when the step, the exit code, and the
     output match, with every run of digits collapsed. The last of those

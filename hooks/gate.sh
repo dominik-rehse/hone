@@ -22,7 +22,12 @@
 #     under the land lock, after the merge: that one gates the trunk and rolls
 #     back on red. Keep the suite within the hook timeout to keep this backstop
 #     meaningful.
-#   - Clean tree on any other branch → nothing in flight, no-op.
+#   - Clean tree on any other branch → nothing in flight, no-op. With one
+#     exception: when this session was already blocked in a linked worktree of
+#     this repository, the gate evaluates THAT worktree instead, with the same
+#     tier rules. A Stop hook runs where the agent's shell sits, and the agent
+#     moves that shell, so standing in the primary tree was a way out of a red
+#     suite. See THE WORKING-DIRECTORY HOLE below.
 #   - No git → the unit tier (the gate cannot tell what is in flight, and
 #     adapter presence already scopes this to hone projects).
 #
@@ -64,6 +69,15 @@
 # asks for the final report in that turn. The next one does not block, and the
 # gate prints one line for the person. So the last turn holds a report, rather
 # than whatever the run happened to be saying when the gate let go.
+#
+# THE WORKING-DIRECTORY HOLE. The counter also gives the gate a memory of
+# where it blocked, which closes the way out that a `cd` used to offer. On the
+# clean-tree, non-change-branch branch alone, the gate looks for a linked
+# worktree whose counter carries this session's id. Where it finds one, it
+# changes directory there first, so the suite, the receipt, and the lock all
+# follow the tree under test. A session that was never blocked finds no
+# counter and takes the old path, and a shell with work in flight where it
+# stands never reaches the lookup.
 #
 # The cap loosens nothing. The gate is a Stop hook and gates no merge.
 # `worktree.sh land` re-runs --all under the land lock after the merge and
@@ -123,19 +137,58 @@ gate_durable_dirt() {
     done < <(git --no-optional-locks status --porcelain -z 2>/dev/null)
 }
 
-# Pick the tier by where the work sits (see the header). A bare Q&A turn on a
-# clean, non-change tree has nothing to verify and exits early.
+# Pick the tier by what is in flight in the tree at $PWD. It sets TIER and
+# BRANCH, and it returns 1 when this tree has nothing to verify.
+gate_pick_tier() {
+    BRANCH=""
+    if [ -n "$(gate_durable_dirt)" ]; then
+        TIER="--unit"                       # red-green in flight → fast tier
+        return 0
+    fi
+    BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
+    case "$BRANCH" in
+        hone/*) TIER="--all"; return 0 ;;   # committed on a change branch → full pre-land check
+    esac
+    return 1                                # clean, not a change branch
+}
+
+# The working-directory hole. A Stop hook runs where the agent's shell sits,
+# and the agent moves that shell. A run blocked in its worktree could end the
+# turn by standing in the primary tree, which is clean and on the trunk, so
+# the gate read it as nothing in flight and no-opped. Two lab runs of
+# 2026-09-19 left a red suite that way, and the cap never fired.
+#
+# The counter file is this session's memory of where it was blocked. So print
+# the linked worktree that holds it. Another session's counter never matches,
+# and a worktree that is gone is not in the list.
+gate_blocked_worktree() {
+    local wt dir mine line
+    mine=$(git rev-parse --absolute-git-dir 2>/dev/null)
+    while IFS= read -r wt; do
+        [ -n "$wt" ] || continue
+        dir=$(git -C "$wt" rev-parse --absolute-git-dir 2>/dev/null) || continue
+        [ "$dir" = "$mine" ] && continue
+        line=$(cat "$dir/hone-gate-blocks" 2>/dev/null) || continue
+        case "$line" in "$SESSION "*) printf '%s\n' "$wt"; return 0 ;; esac
+    done < <(git worktree list --porcelain 2>/dev/null | sed -n 's/^worktree //p')
+    return 1
+}
+
+# A bare Q&A turn on a clean, non-change tree has nothing to verify and exits
+# early. The redirect sits on that one branch alone, so a session that was
+# never blocked takes the path it always took. A shell that has work in flight
+# where it stands never reaches it either, so no run is dragged out of the
+# worktree it is working in.
 TIER="--unit"
 BRANCH=""
 if git rev-parse --git-dir >/dev/null 2>&1; then
-    if [ -n "$(gate_durable_dirt)" ]; then
-        TIER="--unit"                       # red-green in flight → fast tier
-    else
-        BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null)
-        case "$BRANCH" in
-            hone/*) TIER="--all" ;;         # committed on a change branch → full pre-land check
-            *) exit 0 ;;                    # clean, not a change branch → nothing to verify
-        esac
+    if ! gate_pick_tier; then
+        REDIRECT=$(gate_blocked_worktree) || exit 0
+        cd "$REDIRECT" || exit 0
+        PROJECT_ROOT="$REDIRECT"
+        [ -f ".hone-off" ] && exit 0
+        [ -f "$ADAPTER" ] || exit 0
+        gate_pick_tier || exit 0
     fi
 fi
 
