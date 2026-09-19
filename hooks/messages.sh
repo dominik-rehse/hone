@@ -210,6 +210,34 @@ Why: two full suites at once poison each other's signal. Do not run the suite co
 EOF
 }
 
+# The last block of a streak, and the only message that tells the agent what
+# comes next. It fires on the Nth identical failure, never earlier, so no run
+# can plan around it. It names no command, no marker, and no switch: the agent
+# is to write, not to act. It grants nothing either. The gate ends the next
+# turn whatever the agent does, and a failure that changes starts the count
+# over, so giving up sooner buys nothing.
+msg_gate_report_now() {
+    local label="$1" n="$2"
+    cat <<EOF
+hone gate: $label failed $n times in a row with the same output.
+Do: write your final report in this turn. Name what is red, why this change cannot make it green, what state the work is in, and the one action you recommend.
+Why: the gate lets the next turn end, and the person reads only that report.
+EOF
+}
+
+# For the person, and the turn then ends. Only msg_gate_report_now precedes
+# it, one block earlier, so the last turn carries a report by construction. It
+# offers no switch and no marker: a run that reads one offers it to the person
+# next.
+msg_gate_cap_reached() {
+    local label="$1" n="$2"
+    cat <<EOF
+hone gate: $label failed $n times in a row with the same output, so the gate let this turn end.
+Do: read the failing check below and decide what the change needs.
+Why: the suite stays red, and no change landed.
+EOF
+}
+
 msg_gate_green() {
     printf 'hone gate: green (%s)\n' "$1"
 }
@@ -1195,6 +1223,8 @@ bash-guard|agent|msg_bashguard_formatter
 dirty-guard|agent|msg_dirtyguard_primary_tree|src/<area>/<file>|git checkout HEAD -- 'src/<area>/<file>'
 gate|agent|msg_gate_step_failed|<check>|<code>|<output-tail>
 gate|agent|msg_gate_suite_lock
+gate|agent|msg_gate_report_now|<check>|<count>
+gate|human|msg_gate_cap_reached|<check>|<count>
 gate|plain|msg_gate_green|<checks that ran>
 gate|plain|msg_gate_green_cached|<tree-hash>
 nag|plain|msg_nag_header

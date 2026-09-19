@@ -181,6 +181,27 @@ git show-ref --verify --quiet refs/heads/hone/mathx-regress || die "branch shoul
 step "regression merged, rolled back, trunk green, evidence kept"
 bash "$WSH" remove "$WT_R" >/dev/null 2>&1; git branch -D hone/mathx-regress >/dev/null 2>&1
 
+echo "== 5b1. the gate's block cap does not loosen land =="
+# The Stop gate caps itself after N identical failures, so a run that cannot go
+# green still gets a turn in which to report. That cap is the turn's, never the
+# trunk's: land re-runs --all after the merge and rolls back on red, whatever
+# the counter holds. A counter already at the cap must change nothing here.
+WT_C=$(bash "$WSH" add mathx-capped) || die "worktree add mathx-capped"
+cat > "$WT_C/src/mathx/add.js" <<'EOF'
+exports.add = (a, b) => a + b + 1;
+EOF
+(cd "$WT_C" && git add -A && git commit -qm "feat(mathx): a change that breaks add" -m "Cut: nothing, a test change")
+printf 'capped-session 0 99\n' > "$(git -C "$WT_C" rev-parse --git-dir)/hone-gate-blocks"
+printf 'capped-session 0 99\n' > "$(git rev-parse --git-dir)/hone-gate-blocks"
+PRE=$(git rev-parse HEAD)
+bash "$WSH" land mathx-capped >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 6 ] || die "land should still exit 6 with the gate's counter at the cap (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a capped counter must not let a red merge stand"
+bash scripts/run-tests.sh >/dev/null 2>&1 || die "trunk left red after a rolled-back land"
+step "land refuses a red change with the gate's block counter at the cap"
+rm -f "$(git rev-parse --git-dir)/hone-gate-blocks"
+bash "$WSH" remove "$WT_C" >/dev/null 2>&1; git branch -D hone/mathx-capped >/dev/null 2>&1
+
 echo "== 5b2. land re-runs the optional adapters and rolls back a red one =="
 # The gate keeps every worktree lint-green, but a merge result is a third tree:
 # two lint-green parents can merge lint-red. land must run the same optional

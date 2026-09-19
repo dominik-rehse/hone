@@ -171,7 +171,10 @@ consolidate, and the entry goes.
 described in [`reference.md`](reference.md). In short: no production code
 without a failing test, and no direct edits to protected paths in the
 primary tree. Tests, type-check, and lint must be green before a turn
-ends, and the hooks report hygiene findings visibly.
+ends, and the hooks report hygiene findings visibly. After three identical
+failures the gate asks for a final report and then lets the turn end. So a
+run that cannot reach green still hands you the reason, and nothing red
+lands either way.
 
 ## The loop
 

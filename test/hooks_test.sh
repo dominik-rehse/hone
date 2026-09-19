@@ -522,6 +522,110 @@ printf '0.0.0-old %s\n' "$TREE" > "$RECEIPT"
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
 [ "$(wc -l < "$RUNS")" -eq $((RUNS_BEFORE + 1)) ] && ok "a receipt from another version runs the suite again" || bad "a version mismatch should re-run the suite"
 
+echo "== gate: the block cap lets a turn end after N identical failures =="
+# A suite that cannot go green (a test that contradicts its spec) used to block
+# every turn end until the harness cut the session, and the run then had no
+# turn in which to report. The gate now caps itself at HONE_GATE_BLOCK_CAP
+# identical failures. Identical means the same step, the same exit code, and
+# the same output once every run of digits is collapsed.
+CAPTAIL="$REPO/.git/cap-tail"
+cat > "$REPO/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+cat "$CAPTAIL"
+exit 1
+EOF
+(cd "$REPO" && git add -A && git commit -qm "red adapter with a fixed tail")
+BLOCKS="$REPO/.git/hone-gate-blocks"
+# Dirty src keeps every run on the unit tier, so no receipt and no lock apply.
+echo "// cap" >> "$REPO/src/auth/login.ts"
+# The cap ends in two steps: the Nth identical failure blocks once more and
+# asks for the final report, and only the next one lets the turn end. So the
+# last turn holds a report instead of whatever the run was saying.
+stop() { (cd "$REPO" && printf '{"session_id":"%s"}' "$1" | bash "$GATE"); }
+capped()  { echo "$1" | grep -q 'in a row with the same output, so the gate let this turn end'; }
+asked()   { echo "$1" | grep -q 'write your final report in this turn'; }
+
+printf 'not ok 1 fee inside the grace period\n  duration_ms 12.5\n' > "$CAPTAIL"
+rm -f "$BLOCKS"
+out=$(stop s1); blocked "$out" && ok "the first identical failure blocks" || bad "the first failure should block"
+asked "$out" && bad "the first block must not announce the cap" || ok "the first block says nothing of the cap"
+out=$(stop s1); blocked "$out" && ok "the second identical failure blocks" || bad "the second failure should block"
+asked "$out" && bad "the second block must not announce the cap" || ok "the second block says nothing of the cap"
+# Same failure, a different duration. A runner prints one on every line, and it
+# must not read as progress.
+printf 'not ok 1 fee inside the grace period\n  duration_ms 9.113\n' > "$CAPTAIL"
+out=$(stop s1)
+blocked "$out" && ok "the third identical failure still blocks" || bad "the report request should block"
+asked "$out" && ok "the third block asks for the final report in this turn" || bad "the third block should ask for the report"
+echo "$out" | grep -qE 'hone-off|--no-verify|hooksPath' && bad "the report request must name no way to switch hone off" || ok "the report request names no switch"
+# The turn after the report request ends, and the person gets the line.
+out=$(stop s1)
+blocked "$out" && bad "a changed duration should not reset the cap" || ok "a changed duration is the same failure, so the cap fires"
+capped "$out" && ok "the cap prints its line for the person" || bad "the cap should print a line naming the repeat"
+echo "$out" | grep -q 'tests (--unit)' && ok "the cap names the step that failed" || bad "the cap should name the step"
+echo "$out" | grep -q 'hone-off' && bad "the cap must not offer the off switch" || ok "the cap offers no switch and no marker"
+
+# A failure that differs in the name of the failing test is other work, so the
+# count starts over and the gate blocks again.
+rm -f "$BLOCKS"
+printf 'not ok 1 fee inside the grace period\n  duration_ms 12.5\n' > "$CAPTAIL"
+out=$(stop s2); blocked "$out" || bad "the first failure of a new session should block"
+printf 'not ok 1 fee after the grace period\n  duration_ms 12.5\n' > "$CAPTAIL"
+out=$(stop s2); blocked "$out" || bad "a different failure should block"
+out=$(stop s2)
+blocked "$out" && ok "a changed test name resets the count" || bad "a changed failing test should reset the count"
+asked "$out" && bad "a reset count must not reach the report request" || ok "a reset count starts the streak over"
+
+# Real work after the report request resets it too: the run that changes what
+# the suite prints gets its ordinary blocks back.
+rm -f "$BLOCKS"
+printf 'not ok 1 fee inside the grace period\n' > "$CAPTAIL"
+out=$(stop s7); out=$(stop s7); out=$(stop s7)
+asked "$out" || bad "the third identical failure should ask for the report"
+printf 'not ok 1 fee on the fourth day\n' > "$CAPTAIL"
+out=$(stop s7)
+blocked "$out" && ok "a failure that moved after the report request blocks again" || bad "moved work should block again"
+asked "$out" && bad "the request must not repeat on a new failure" || ok "the new streak starts at an ordinary block"
+
+# A green turn ends the streak, so the next red failure starts at one again.
+rm -f "$BLOCKS"
+printf 'not ok 1 fee inside the grace period\n' > "$CAPTAIL"
+out=$(stop s3); blocked "$out" || bad "the streak should start with a block"
+out=$(stop s3); blocked "$out" || bad "the streak should hold at two"
+cat > "$REPO/scripts/run-tests.sh" <<'EOF'
+#!/bin/bash
+exit 0
+EOF
+out=$(stop s3); blocked "$out" && bad "a green suite must not block" || ok "the green run passes"
+[ -f "$BLOCKS" ] && bad "a green run should clear the counter" || ok "a green run clears the counter"
+cat > "$REPO/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+cat "$CAPTAIL"
+exit 1
+EOF
+out=$(stop s3); blocked "$out" && ok "after a green run the same failure blocks again" || bad "the count should start over after green"
+
+# The count belongs to one session. Another session inherits nothing.
+rm -f "$BLOCKS"
+out=$(stop s4); blocked "$out" || bad "session s4 should block once"
+out=$(stop s4); blocked "$out" || bad "session s4 should block twice"
+out=$(stop s5)
+blocked "$out" || bad "session s5 should block"
+asked "$out" && bad "a new session should not inherit a count" || ok "another session starts its count at zero"
+
+# The tunable moves both steps.
+stop5() { (cd "$REPO" && printf '{"session_id":"s6"}' | HONE_GATE_BLOCK_CAP=5 bash "$GATE"); }
+rm -f "$BLOCKS"
+for _ in 1 2 3 4; do out=$(stop5); done
+blocked "$out" || bad "a raised cap should still block the fourth identical failure"
+asked "$out" && bad "HONE_GATE_BLOCK_CAP=5 should not ask on the fourth" || ok "HONE_GATE_BLOCK_CAP=5 holds its ordinary blocks to four"
+out=$(stop5)
+asked "$out" && ok "HONE_GATE_BLOCK_CAP=5 asks for the report on the fifth" || bad "a raised cap should ask on the fifth"
+out=$(stop5)
+capped "$out" && ok "HONE_GATE_BLOCK_CAP=5 caps on the sixth" || bad "a raised cap should fire after its report request"
+rm -f "$BLOCKS" "$CAPTAIL"
+git -C "$REPO" checkout -q -- src/auth/login.ts
+
 echo "== nag: leftover Plan (landed evidence only), oversized Note, orphan Note =="
 # No worktree and no landed evidence = the normal plan→run gap: pending, not
 # stale. No per-Plan finding; one aggregate advisory line instead.

@@ -187,8 +187,10 @@ gate's pre-land full run waits (default 30). `HONE_LAND_RETRIES` sets how
 many times a shared-mode land redoes merge and suite after the remote
 rejected its push (default 3).
 
-One more variable tunes a hook. `HONE_AREA_MAX_LINES` sets the size above
-which the nag names a `src/<area>/` (default 3000, see *Hooks* below).
+Two more variables tune a hook. `HONE_AREA_MAX_LINES` sets the size above
+which the nag names a `src/<area>/` (default 3000). `HONE_GATE_BLOCK_CAP`
+sets how many identical failures the gate blocks a turn end for before it
+lets the turn end (default 3). Both are under *Hooks* below.
 
 ## Hooks
 
@@ -283,9 +285,19 @@ irreversible. When you want that record, route the edit through the loop.
     later Stop on that branch skips the run and says so, and a plugin
     upgrade invalidates the record.
 
+  - It blocks the same failure `HONE_GATE_BLOCK_CAP` times at most (default
+    3). Two failures are the same when the step, the exit code, and the
+    output match, with every run of digits collapsed. The last of those
+    blocks asks the run for its final report in that turn. The next stop on
+    the same failure does not block, and the gate prints one line for you.
+    So the turn the person reads holds a report. The count lives in
+    `<git-dir>/hone-gate-blocks`, per session. A green run deletes it, and a
+    different failure starts it over.
+
   One early warning per change is what this backstop is for. `land` re-runs
   the full suite after the merge, so it still catches a regression that a
-  later commit introduces.
+  later commit introduces. The cap is the turn's and never the trunk's: a
+  red change still cannot land.
 - *nag* (Stop, advisory) reports hygiene findings as a visible message,
   never a block. The findings:
   - a Plan that survived its landing

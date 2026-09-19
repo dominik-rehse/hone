@@ -48,6 +48,28 @@
 # it returns {"systemMessage":...} naming the checks that ran, so the
 # transcript records that the gate fired (silence would be indistinguishable
 # from a skip).
+#
+# THE BLOCK CAP. Some suites cannot go green: a test can contradict the spec it
+# claims to check, and the right answer is then to stop and report, not to edit
+# the test. The gate used to block that turn end forever. The harness overrides
+# a Stop hook after 8 consecutive blocks and ends the session there, which
+# leaves the run no turn in which to report. Runs of the 2026-09-19 probe ended
+# exactly that way, and the person got a Plan and no report at all.
+#
+# So the gate caps itself first, at HONE_GATE_BLOCK_CAP (3). It counts only
+# IDENTICAL failures: same step, same exit code, same output. A run that moves
+# what the suite prints is working, and it keeps every block it earns.
+#
+# The cap ends in two steps. The Nth identical failure blocks once more and
+# asks for the final report in that turn. The next one does not block, and the
+# gate prints one line for the person. So the last turn holds a report, rather
+# than whatever the run happened to be saying when the gate let go.
+#
+# The cap loosens nothing. The gate is a Stop hook and gates no merge.
+# `worktree.sh land` re-runs --all under the land lock after the merge and
+# rolls the trunk back on red, so a red change still reaches no trunk. No
+# message the agent reads before the cap mentions it, because a message that
+# names a way past a gate is a way past the gate.
 
 set -uo pipefail
 
@@ -55,6 +77,14 @@ set -uo pipefail
 . "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
 # shellcheck source=hooks/messages.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/messages.sh"
+
+# The Stop payload, for the session id alone. The cap counts within one
+# session, so a new session starts at zero. A payload without one (a direct
+# call, an older harness) counts under a fixed name, which keeps the cap
+# working for a single session and merges two concurrent ones.
+STOP_INPUT=$(cat 2>/dev/null)
+SESSION=$(hone_extract_top_field "$STOP_INPUT" session_id)
+[ -n "$SESSION" ] || SESSION=no-session
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
 [ -n "$PROJECT_ROOT" ] || PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
@@ -112,6 +142,71 @@ fi
 # $1 = a template from messages.sh (already prefixed).
 block() { hone_stop_block "$1"; exit 0; }
 
+# The counter of the block cap: one line, "<session> <signature> <count>", in
+# <git-dir>/hone-gate-blocks, beside the green receipt. --git-dir resolves to
+# .git/worktrees/<name> in a linked worktree, so a run that stays in its own
+# worktree keeps a count of its own, and a second run in another worktree
+# cannot spend it. The file sits inside .git, so it never dirties the tree and
+# no project has to ignore it. Without a git dir the count goes under TMPDIR,
+# keyed by the project root.
+GATE_BLOCK_CAP="${HONE_GATE_BLOCK_CAP:-3}"
+gate_blocks_file() {
+    local dir
+    dir=$(git rev-parse --git-dir 2>/dev/null)
+    if [ -n "$dir" ]; then
+        printf '%s/hone-gate-blocks' "$dir"
+    else
+        printf '%s/hone-gate-blocks-%s' "${TMPDIR:-/tmp}" \
+            "$(printf '%s' "$PROJECT_ROOT" | cksum | tr -dc '0-9')"
+    fi
+}
+
+# What makes two failures the same failure: the step, its exit code, and its
+# output with every run of digits collapsed to '#'. A runner prints a duration,
+# a port, a timestamp, or a process id beside the failure, and those move on
+# every run while the failure does not. The price is that a change which moves
+# only a number reads as no change. A run that is getting somewhere moves a
+# test name or a line of prose too, and that resets the count.
+gate_signature() {
+    printf '%s|%s|%s' "$1" "$2" "$(printf '%s' "$3" | tr -s '0-9' '#')" | cksum | tr -dc '0-9'
+}
+
+# The cap ends in two steps, so that the last turn is a report by
+# construction. A turn the gate simply released caught the run with nothing
+# left to say: one lab run of 2026-09-19 signed off with "nothing new to add",
+# and that sentence was the whole of what the person read.
+#
+#   failure 1 .. N-1   block, msg_gate_step_failed, no word of the cap
+#   failure N          block, msg_gate_report_now: write the report in this
+#                      turn, because the gate lets the next turn end
+#   failure N+1        no block, msg_gate_cap_reached for the person
+#
+# The agent hears of the cap in the one turn where it can act on it, and never
+# before, so no run can plan around it. A green run or a failure that changes
+# clears the streak at any point, so a run that keeps working keeps every
+# block it earns, and giving up sooner buys a run nothing.
+gate_block_or_cap() {
+    local label="$1" rc="$2" tail="$3" file sig n=1 recorded
+    file=$(gate_blocks_file)
+    sig=$(gate_signature "$label" "$rc" "$tail")
+    recorded=$(cat "$file" 2>/dev/null)
+    case "$recorded" in
+        "$SESSION $sig "*) n=$(( ${recorded##* } + 1 )) ;;
+    esac
+    if [ "$n" -gt "$GATE_BLOCK_CAP" ]; then
+        rm -f "$file" 2>/dev/null
+        printf '{"systemMessage":"%s"}\n' \
+            "$(hone_json_escape "$(msg_gate_cap_reached "$label" "$n")")"
+        exit 0
+    fi
+    printf '%s %s %s\n' "$SESSION" "$sig" "$n" > "$file" 2>/dev/null || true
+    [ "$n" -eq "$GATE_BLOCK_CAP" ] && block "$(msg_gate_report_now "$label" "$n")"
+    block "$(msg_gate_step_failed "$label" "$rc" "$tail")"
+}
+
+# A green turn ends the streak. The next red failure starts at one.
+gate_clear_blocks() { rm -f "$(gate_blocks_file)" 2>/dev/null || true; }
+
 # The green receipt for the full tier: one line,
 # "<plugin version> <branch> <tree hash>", in <git-dir>/hone-gate-green. The
 # SKIP key is the first two fields. The tree records what the run verified, and
@@ -151,6 +246,7 @@ if [ "$TIER" = "--all" ] && gate_receipt_key; then
     # holds a space, so the remainder is exactly "<version> <branch>". A
     # two-field line from an older gate leaves the version alone, which misses.
     if [ -n "$recorded" ] && [ "${recorded% *}" = "$GATE_KEY" ]; then
+        gate_clear_blocks
         printf '{"systemMessage":"%s"}\n' \
             "$(hone_json_escape "$(msg_gate_green_cached "${recorded##* }")")"
         exit 0
@@ -168,7 +264,7 @@ run_step() {
     if [ "$rc" -ne 0 ]; then
         local tail
         tail=$(printf '%s\n' "$out" | tail -n 15)
-        block "$(msg_gate_step_failed "$label" "$rc" "$tail")"
+        gate_block_or_cap "$label" "$rc" "$tail"
     fi
     ran+="${ran:+, }$label"
 }
@@ -197,6 +293,9 @@ run_step "tests ($TIER)" bash "$ADAPTER" "$TIER"
 if [ "$TIER" = "--all" ] && [ -n "$GATE_LINE" ]; then
     printf '%s\n' "$GATE_LINE" > "$GATE_RECEIPT" 2>/dev/null || true
 fi
+
+# Every step went green, so no failure is repeating. The cap starts over.
+gate_clear_blocks
 
 # Green receipt: one visible line saying what actually ran, so a transcript can
 # confirm the gate fired rather than inferring it from silence.
