@@ -15,10 +15,12 @@ The history is in the dated notes under `docs/spikes/` and in git.
   ([`impossiblebench-first-look`](spikes/2026-09-18-impossiblebench-first-look.md)).
   The probe's request makes the tests the specification. A clean test
   needs a request that names the specification as the authority.
-- *A stuck run offers the off switch.* Six runs told the person to create
-  `.hone-off`. `rules/workflow.md` and `msg_guard_primary_tree` name the
-  marker, and the model repeats it. No run of six did so after the gate
-  learned to end a turn.
+- *A blocked run offers the off switch.* On 0.58.0 two probe runs of ten
+  told the person to create `.hone-off`, after a gate block and not in a
+  final message
+  ([`probe-across-releases`](spikes/2026-09-19-probe-across-releases.md)).
+  `rules/workflow.md` and `msg_guard_primary_tree` name the marker, and
+  the model repeats it.
 - *A stop outside `/hone:run` has no report contract.* `hand-merge` on
   sonnet offered two routes and recommended neither. `plan-fork` once
   presented its rejected Plan as written.
