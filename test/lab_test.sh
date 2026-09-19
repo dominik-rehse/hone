@@ -226,10 +226,15 @@ fresh; CRED="$W/cred.json" MODE=nologin lab toy >/dev/null; rc=$?
 [ "$rc" -eq 3 ] && [ "$(result toy .verdict)" = "indeterminate" ] && ok "a nested call that is not logged in makes the run indeterminate" || bad "a nested login failure should give indeterminate (exit $rc, $(result toy .verdict))"
 fresh; CRED="$W/cred.json" MODE=nologin-text lab toy >/dev/null
 [ "$(result toy .verdict)" = "indeterminate" ] && ok "a login failure in plain text is indeterminate too" || bad "a plain-text login failure should give indeterminate (got $(result toy .verdict))"
+# A token too short for a run is a reason to wait, not to fan out: every
+# scenario would refuse at the margin. The fake CLI here never renews, so the
+# wait runs out and the pass never starts.
 jq -n --argjson exp "$(( ($(date +%s) + 60) * 1000 ))" \
     '{claudeAiOauth: {accessToken: "tok-stale", refreshToken: "never-copy-me", expiresAt: $exp}}' > "$W/cred.json"
-fresh; CRED="$W/cred.json" MODE=land lab toy >/dev/null; rc=$?
-[ "$rc" -eq 3 ] && [ "$(result toy .verdict)" = "indeterminate" ] && ok "a token that is about to expire makes the run indeterminate" || bad "a stale token should give indeterminate (exit $rc)"
+fresh; out=$(CRED="$W/cred.json" MODE=land TOKEN_WAIT_STEP=1 TOKEN_WAIT_MAX=2 lab toy); rc=$?
+[ "$rc" -eq 2 ] && ok "a token that will not renew stops the run before the fan-out" || bad "a token that will not renew should exit 2 (got $rc: $out)"
+printf '%s' "$out" | grep -q 'Waiting for the CLI to renew it' && ok "the run says what it waits for" || bad "the run should name what it waits for (got: $out)"
+[ -z "$(ls -d "$W"/out/*/toy 2>/dev/null)" ] && ok "no scenario runs on a token that would expire under it" || bad "no scenario should run on a stale token"
 
 echo "== --review-model moves the pin of the review command, in the sandbox only =="
 fresh; MODE=nested lab toy --review-model claude-other-9 >/dev/null
@@ -270,6 +275,62 @@ lab toy --model opus >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an alias for --model exits 2" || bad "a model alias should exit 2 (got $rc)"
 lab no-such-scenario >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an unknown scenario exits 2" || bad "an unknown scenario should exit 2 (got $rc)"
+
+echo
+echo "== the token wait (evals/session-token.sh) =="
+# A fake CLI stands in for the renewal: it counts its calls, and on the call
+# that $T/renew_on names it writes a fresh expiresAt, which is what the real
+# CLI does in the last minutes of a token's life. No network, no credentials
+# of the user: $T/creds.json is the whole world here.
+T=$(mktemp -d); trap 'rm -rf "$W" "$T"' EXIT
+cat > "$T/fake-claude" <<'EOF'
+#!/bin/bash
+n=$(( $(cat "$T/calls" 2>/dev/null || echo 0) + 1 ))
+echo "$n" > "$T/calls"
+[ "$n" -ge "$(cat "$T/renew_on")" ] && jq '.claudeAiOauth.expiresAt = (now + 28800) * 1000' \
+    "$T/creds.json" > "$T/creds.tmp" && mv "$T/creds.tmp" "$T/creds.json"
+exit 0
+EOF
+chmod +x "$T/fake-claude"
+
+# minutes_left: the token expires that many minutes from now. renew_on: the
+# call that renews it, or a number past the cap for a CLI that never does.
+token_case() {
+    local minutes_left="$1" renew_on="$2"
+    rm -f "$T/calls"; echo "$renew_on" > "$T/renew_on"
+    jq -n --argjson m "$minutes_left" '{claudeAiOauth: {accessToken: "tok", expiresAt: ((now + $m * 60) * 1000 | floor)}}' \
+        > "$T/creds.json"
+    ( export T CREDENTIALS="$T/creds.json" REAL_CLAUDE="$T/fake-claude"
+      export TOKEN_WAIT_STEP=1 TOKEN_WAIT_MAX=4
+      . "$PLUGIN_ROOT/evals/session-token.sh"
+      refresh_session_token > "$T/out" 2> "$T/err"; echo "$?" > "$T/rc" )
+}
+calls_made() { cat "$T/calls" 2>/dev/null || echo 0; }
+
+token_case 120 99
+[ "$(cat "$T/rc")" = 0 ] && [ "$(calls_made)" = 0 ] \
+    && ok "a token that outlives the margin needs no call" \
+    || bad "a fresh token should return 0 with no call (rc $(cat "$T/rc"), $(calls_made) call(s))"
+
+token_case 10 2
+[ "$(cat "$T/rc")" = 0 ] && ok "a stale token that renews on a later call returns 0" \
+    || bad "a renewed token should return 0 (rc $(cat "$T/rc"))"
+[ "$(calls_made)" -ge 2 ] && ok "the wait calls again until expiresAt moves" \
+    || bad "the wait should call more than once (got $(calls_made))"
+grep -q 'Waiting for the CLI to renew it' "$T/out" \
+    && ok "the wait says on the terminal what it waits for" \
+    || bad "the wait should name what it waits for (got: $(head -1 "$T/out"))"
+grep -q 'renewed' "$T/out" && ok "the wait says that the token was renewed" \
+    || bad "the wait should report the renewal (got: $(tail -1 "$T/out"))"
+
+token_case 10 999
+[ "$(cat "$T/rc")" = 1 ] && ok "a token that never renews fails the run" \
+    || bad "a token that never renews should return 1 (rc $(cat "$T/rc"))"
+[ -s "$T/err" ] && ok "the give-up line goes to stderr" \
+    || bad "giving up should write to stderr"
+# The old code refused here instead of waiting, and every scenario was lost.
+[ "$(calls_made)" -ge 2 ] && ok "the wait retries before it gives up" \
+    || bad "the wait should retry before giving up (got $(calls_made))"
 
 echo
 echo "-------------------------------------"

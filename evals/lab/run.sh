@@ -171,23 +171,10 @@ elif jq -e '.claudeAiOauth.accessToken' "$CREDENTIALS" >/dev/null 2>&1; then
     AUTH="session"; HOME_MODE="isolated"
 fi
 
-# The access token of the user's OAuth session, when it has 30 minutes left.
-# That margin covers the longest run the noise floor saw. Prints nothing for a
-# stale token.
-session_token() {
-    # shellcheck disable=SC2016  # $now is a jq variable
-    jq -r --argjson now "$(date +%s)" \
-        '.claudeAiOauth | select((.expiresAt // 0) / 1000 > $now + 1800) | .accessToken // empty' \
-        "$CREDENTIALS" 2>/dev/null
-}
-
-# The CLI renews a token that is about to expire, so one cheap call in the real
-# HOME is the refresh. A renewal revokes the old token at once. So this runs
-# once, before the fan-out, and never while a scenario holds a token.
-refresh_session_token() {
-    [ -n "$(session_token)" ] && return 0
-    "$REAL_CLAUDE" -p "Reply with exactly: OK" --model claude-haiku-4-5-20251001 --safe-mode >/dev/null 2>&1
-}
+# session_token and refresh_session_token. The margin of 30 minutes covers the
+# longest run the noise floor saw.
+# shellcheck source=../session-token.sh
+. "$ROOT/evals/session-token.sh"
 
 # A new run must not start below an instruction file (see the header).
 if [ -z "$REGRADE" ]; then
@@ -561,7 +548,11 @@ else
     echo "$(date -Iseconds) | model=$MODEL${REVIEW_MODEL:+ | review=$REVIEW_MODEL} | judge=$JUDGE_MODEL | home=$HOME_MODE auth=$AUTH${WITHOUT:+ | WITHOUT: $WITHOUT} | claude $("$REAL_CLAUDE" --version 2>/dev/null | head -1)"
     echo "running ${#NAMES[@]} scenario(s), up to $JOBS at a time, into $RUN_DIR"
 fi
-[ -z "$REGRADE" ] && [ "$AUTH" = session ] && refresh_session_token
+# A pass that starts on a stale token loses every scenario to the margin, so
+# it waits here rather than fanning out.
+if [ -z "$REGRADE" ] && [ "$AUTH" = session ] && ! refresh_session_token; then
+    exit 2
+fi
 running=0
 for n in "${NAMES[@]}"; do
     if [ -n "$REGRADE" ]; then grade_scenario "$n" & else run_scenario "$n" & fi

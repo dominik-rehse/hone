@@ -128,17 +128,9 @@ elif jq -e '.claudeAiOauth.accessToken' "$CREDENTIALS" >/dev/null 2>&1; then
     AUTH="session"; HOME_MODE="isolated"
 fi
 
-session_token() {
-    # shellcheck disable=SC2016  # $now is a jq variable
-    jq -r --argjson now "$(date +%s)" \
-        '.claudeAiOauth | select((.expiresAt // 0) / 1000 > $now + 1800) | .accessToken // empty' \
-        "$CREDENTIALS" 2>/dev/null
-}
-
-refresh_session_token() {
-    [ -n "$(session_token)" ] && return 0
-    "$REAL_CLAUDE" -p "Reply with exactly: OK" --model claude-haiku-4-5-20251001 --safe-mode >/dev/null 2>&1
-}
+# session_token and refresh_session_token.
+# shellcheck source=../../session-token.sh
+. "$ROOT/evals/session-token.sh"
 
 # A run must not start below an instruction file.
 [ -d "$OUT_ROOT" ] || { mkdir -p "$OUT_ROOT" && chmod 700 "$OUT_ROOT"; } || { echo "cannot create $OUT_ROOT" >&2; exit 2; }
@@ -339,7 +331,11 @@ spent() {
     jq -s 'map(.cost_usd // 0) | add // 0' "$RUN_DIR"/*/result.json 2>/dev/null || echo 0
 }
 
-[ "$AUTH" = session ] && [ "$SEED_ONLY" -eq 0 ] && refresh_session_token
+# A run that starts on a stale token loses every task to the margin, so it
+# waits here rather than fanning out.
+if [ "$AUTH" = session ] && [ "$SEED_ONLY" -eq 0 ] && ! refresh_session_token; then
+    exit 2
+fi
 printf 'arm %s, layout %s, model %s, %d tasks, home %s, out %s\n' \
     "$ARM" "$LAYOUT" "$MODEL" "${#TASK_IDS[@]}" "$HOME_MODE" "$RUN_DIR"
 
