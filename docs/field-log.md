@@ -5,7 +5,8 @@ incident is one line, and the newest line is first. A line names no
 repository, because this repository is public. It has the date or the date
 range, the hone version, the hook or the critic, and what happened. Identical
 incidents share one line with a count. When an incident becomes a lab
-scenario or a probe, its line names that scenario.
+scenario, a probe, or an eval case, its line names it. A case path is below
+`evals/`.
 
 The counts and the method are in
 [the 2026-09-20 field-data note](spikes/2026-09-20-field-data-from-real-sessions.md).
@@ -50,8 +51,10 @@ The counts and the method are in
   Right, and the session went green later.
 - 2026-08-28 · 0.40.1 · `plan-critic` · approve on a Plan whose negative
   claim about a third-party tool rested on a proxy signal in a config file.
+  Case: `plan-critic/tool-negative-from-config`.
 - 2026-08-28 · 0.40.1 · `plan-critic` · reject whose only finding was a
   number in motivating prose that no build step reads. One extra round.
+  Case: `optimize/cases/plan-critic/stale-count-in-motive`.
 - 2026-08-24 to 2026-08-28 · mixed · `bash-guard` · 10 asks on a formatter
   run scoped to the plan directory, which the perimeter exempts.
 - 2026-08-21 to 2026-08-28 · mixed · `bash-guard` · 11 asks on a command that
@@ -71,9 +74,12 @@ The counts and the method are in
 - 2026-08-26 · 0.40.1 · `consolidate-critic` · proposed deleting a spike
   because its forward pointer dangled. hone's own lifecycle guarantees that
   pointer will dangle.
+  Case:
+  `optimize/cases/consolidate-critic/spike-pointer-to-deleted-plan`.
 - 2026-08-26 · not recorded · `consolidate-critic` · proposed cutting a
   browser-level test as redundant with a server-level one. Two layers, one
   proposition.
+  Case: `consolidate-critic/same-claim-two-layers`.
 - 2026-08-24 to 2026-08-26 · mixed · `guard` · 4 denies of a new module with
   no test. All right, and the agent wrote the test first each time.
 - 2026-08-25 · not recorded · `guard` · denied a durable docs edit in the
@@ -81,6 +87,7 @@ The counts and the method are in
 - 2026-08-25 · 0.40.1 · `plan-critic` · approve on a Plan whose citations all
   checked out. The rule it derived from them was too general, and it landed
   in a durable document.
+  Case: `plan-critic/invariant-overgeneralised`.
 - 2026-08-25 · 0.40.1 · run loop · hone's own recommended deny rules blocked
   a Plan-sanctioned edit to a project config file, with no sanctioned route.
   The person patched by hand after three failed attempts.
@@ -92,6 +99,7 @@ The counts and the method are in
   on a temporary directory that a mutation-testing run had left behind.
 - 2026-08-25 · not recorded · `consolidate-critic` · a clean verdict claimed
   a worktree was gone. It read the diff and the Plan, never the filesystem.
+  Case: `consolidate-critic/ordered-deletion-not-in-diff`.
 - 2026-08-25 · 0.40.1 · `bash-guard` · the agent reached for the flag that
   skips git hooks inside a land retry loop. Denied, and it re-ran without it.
 - 2026-08-24 · 0.40.1 · `bash-guard` · a command put a hooks-path override in
@@ -102,3 +110,4 @@ The counts and the method are in
 - 2026-08-20 · not recorded · `plan-critic` · approve on a Plan that stripped
   a metadata block from every input. For one producer that block held the
   only copy of the data.
+  Case: `plan-critic/indexer-strips-only-copy`.

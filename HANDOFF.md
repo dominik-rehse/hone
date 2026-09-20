@@ -28,9 +28,14 @@ As of 2026-09-20:
 - Step 2 is in work. Done: the field log, and the hook table that step 5
   needs (`docs/spikes/2026-09-20-field-data-from-real-sessions.md`). The
   raw findings stay under `/var/tmp/hone-fieldlog/`. Ambig-SWE is measured
-  and dropped, because it matches hone's notion of a fork poorly. In work:
-  data for the `plan-critic` from real briefs and from generated defects,
-  and cases from the critics' misjudgments in the field.
+  and dropped, because it matches hone's notion of a fork poorly. Eleven
+  misjudgments of the critics became ten redacted cases
+  (`docs/spikes/2026-09-20-cases-from-field-misjudgments.md`). Five went
+  into the suites. Two that the shipped prompts fail are under
+  `evals/optimize/cases/` as training signal. Three pinned nothing and
+  went. All eleven misjudgments happened on claude-sonnet-5, and five of
+  the ten shapes do not reproduce on claude-opus-5. In work: data for the
+  `plan-critic` from real briefs and from generated defects.
 - Step 3 is done. `evals/optimize/sections.py` is the splitter, and its
   header has the rules and the usage. `--fine` gives the finer split for
   the critics. `test/optimize_test.sh` proves the round trip in both modes.

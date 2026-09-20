@@ -46,20 +46,16 @@ call must not be able to reach that prose. `run.sh` runs every call from an
 empty directory, under `--safe-mode`, with every file, shell, and network tool
 denied. `call_one` carries the detail.
 
-Before 2026-08-27 the call ran from the repository root with tools on, and
-a stub could read the prompts and every `expected` file. The contamination
-moved answers in both directions. So every measurement dated before
-2026-08-27 is unsound, and that covers the 44-case cut of 2026-08-18.
+Every measurement dated before 2026-08-27 is unsound, because the call could
+read this repository until then. The case history has the detail.
 
 `run.sh` proves that isolation on every run rather than trusting it. Before the
-fan-out it writes a token to a file outside the sandbox and asks the model to
-read it back by absolute path. The token is never in the prompt, so echoing it
-can only mean a real read. A leak aborts the run, because a suite that cannot
-isolate reports nothing worth having. The pass condition is the literal CANNOT
-READ. An unexpected reply, or two silent probes, warns and continues instead,
-since neither is evidence either way. The probe covers the tool channel only.
-`--safe-mode` closes the CLAUDE.md, hooks, plugins, and settings channel, and
-nothing checks that.
+fan-out it asks the model to read back a token file outside the sandbox. The
+token is never in the prompt, so an echo can only mean a real read. A leak
+aborts the run, because a suite that cannot isolate reports nothing worth
+having. An unexpected reply warns and continues, because it is no evidence
+either way. The probe covers the tool channel only. `--safe-mode` closes the
+CLAUDE.md, hooks, plugins, and settings channel, and nothing checks that.
 
 ### The second baseline: the prompt minus the paragraph
 
@@ -131,20 +127,12 @@ bash evals/run.sh plan-critic --votes 3 --json /tmp/run.jsonl
 bash evals/run.sh plan-critic --votes 3 --cache
 ```
 
-- `--cases A,B` runs only the named cases. An unknown name stops the run. A
-  held-out case still needs `--holdout`.
-- `--prompt-file FILE` puts FILE in the system slot in place of the target's
-  checked-in prose, with any frontmatter stripped. It needs one target.
-- `--json FILE` writes one JSON line per case × vote. Each record has
-  `target`, `case`, `vote`, `model`, `expected`, `token`, `verdict`, `pass`,
-  `cached`, `cost_usd`, and `reply`. `token` is that vote's answer. `verdict`
-  and `pass` are the plurality result of the case, repeated on each record.
-  `reply` is the full text, which the terminal output discards.
-- `--cache` reuses a stored reply when the model ID, the CLI version, the
-  system prompt, the user turn, and the vote number all match. The vote number
-  is in the key so that three votes stay three samples. The store is
-  `evals/.cache`, or `$HONE_EVAL_CACHE`. A cached call costs `0`. The cache is
-  opt-in, because a release gate and a noise-floor run must measure afresh.
+The header of `run.sh` says what each flag does. Two things it does not say.
+A `--json` record carries `target`, `case`, `vote`, `model`, `expected`,
+`token`, `verdict`, `pass`, `cached`, `cost_usd`, and `reply`. `token` is that
+vote's answer, `verdict` and `pass` repeat the case's plurality result on every
+record, and `reply` is the full text the terminal discards. The vote number is
+part of the cache key, so three votes stay three samples.
 
 ### Section ablation
 
@@ -158,25 +146,17 @@ Read the result under one rule. An unchanged suite is evidence only for a
 section that a case aims at. If no case aims at the section, the run reports
 nothing about it, and the section stays. Cut a section only when a case aims
 at it and `bash evals/candidate.sh decide` accepts the cut. It reads the
-`--json` files of both prompts. A flipped plurality rejects. A tally that
-moved by one vote of three is inside the noise floor below. The script
-then asks for that case at ten votes on both prompts. At ten votes a fall of two
-or more rejects. [`docs/development.md`](../docs/development.md) has the
-rules. The cut then enters the repo as an ordinary prompt edit, through
-the release gate.
+`--json` files of both prompts, and
+[`docs/development.md`](../docs/development.md) has its rules. The cut then
+enters the repo as an ordinary prompt edit, through the release gate.
 
-The first campaign ran on 2026-09-17 over both critics, on claude-sonnet-5.
-[`docs/spikes/2026-09-17-first-section-ablation.md`](../docs/spikes/2026-09-17-first-section-ablation.md)
-has every tally. It found no section to cut. It found one section whose
-case no longer needs it. `dep-refresh-no-red-test` approves 3/3 on the
-prompt minus the *Dependency and toolchain refreshes* bullet. It flips on
-the prompt minus *Calibration*.
-
-The second campaign ran on 2026-09-18 on claude-opus-5, and
-[`docs/spikes/2026-09-18-section-ablation-on-opus.md`](../docs/spikes/2026-09-18-section-ablation-on-opus.md)
-has it. It found no section to cut either. One rule came out of it. Delete
-the category word of a bullet from the *Output* list together with the
-bullet, because the word alone carries the bullet on opus.
+Two campaigns have run, and neither found a section to cut. The first was on
+2026-09-17 over both critics, on claude-sonnet-5
+([note](../docs/spikes/2026-09-17-first-section-ablation.md)). The second was
+on 2026-09-18 on claude-opus-5
+([note](../docs/spikes/2026-09-18-section-ablation-on-opus.md)). One rule came
+out of the second. Delete the category word of a bullet from the *Output* list
+together with the bullet, because the word alone carries the bullet on opus.
 
 ## Targets and cases
 
@@ -216,8 +196,20 @@ Re-measure a case before you lean on its entry.
   fork and a Plan that follows it. It approves on the full prompt, the stub,
   and the prompt minus the two Decision sentences, so it pins no prompt text.
   It stays the approving twin: a wording that rejects every fork fails it.
+- `indexer-strips-only-copy`: REJECT with `contradiction`. Every claim the
+  Plan makes is true, and the mechanism still destroys data for one of the
+  inputs it runs over. From a real misjudgment.
+- `invariant-overgeneralised`: REJECT with `contradiction`. Every citation
+  checks out, and the rule drawn from them is false. From a real
+  misjudgment.
+- `tool-negative-from-config`: REJECT with `contradiction`. A negative claim
+  about a third-party tool, backed only by a proxy signal in a config file.
+  From a real misjudgment.
 - `schema-split-column-holdout`: held out, a paraphrase of
   `schema-silent-on-data`.
+
+The stub rejects all three new cases and never says `contradiction`, so the
+substring is the whole case in each.
 
 The next cut of no-op cases decides the three that the opus stub approves.
 
@@ -232,6 +224,12 @@ The next cut of no-op cases decides the three that the opus stub approves.
 - `spike-conclusion-only`: CUTS with `spike-drift`. The prompt minus the
   two sentences on a conclusion-only note answers CLEAN 3/3.
 - `spike-verdict-only-holdout`: held out, a paraphrase of the case above.
+- `same-claim-two-layers`: CLEAN. Two tests assert one proposition at two
+  layers, so neither is redundant. The stub answers CLEAN too, and the
+  prompt minus *Calibration* answers CUTS 3/3. From a real misjudgment.
+- `ordered-deletion-not-in-diff`: CUTS with `leftover`. The Plan ordered a
+  deletion that the diff does not show. The stub cuts too and never says the
+  word, so the substring is the whole case. From a real misjudgment.
 - `spike-note-contradicted-watch`: a watch case for the converse rule on
   spike notes (see *Watch cases*).
 
@@ -286,17 +284,15 @@ rules.
   model is already reluctant to delete instructions. The landing mechanics
   stay ungated, as the loop's do.
 
-Four lessons from the drafts that died:
+Four rules from the drafts that died. The case history has the tallies.
 
-- A brief that names the thing under test measures agreement. Bury it, and
-  ask only for the next action. `consolidate-forecast-unprompted` is the
-  template.
-- A brief for a CUTS case leaves the critic exactly one thing to cut.
-- Pick a required substring that the prose mandates, not one that the topic
+- Bury the thing under test in the brief, and ask only for the next action.
+  A brief that names it measures agreement.
+- Leave the critic exactly one thing to cut in a CUTS case.
+- Pick a required substring that the prose mandates, not one the topic
   suggests. The scoring pools the votes, so one stray word passes.
-- Another cut target on the `consolidate-critic` raises what it cuts
-  everywhere in a brief. Three shapes of a `decision-forecasts` target each
-  flipped `spike-note-may-age`.
+- Add no second cut target to a `consolidate-critic` brief. It raises what
+  the critic cuts everywhere.
 
 ## Held-out cases
 
@@ -384,3 +380,6 @@ required substring that is merely on-topic can pass on one lucky vote, and a
 per-vote check misses that. `schema-silent-on-data` had one such miss. A
 case that the stub answers correctly is not a regression net, however real
 the misjudgment that prompted it.
+
+A case the shipped prompt fails goes to `evals/optimize/cases/` instead of
+into a suite. Its README says why.
