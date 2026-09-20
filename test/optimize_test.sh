@@ -13,6 +13,8 @@ set -uo pipefail
 
 PLUGIN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 SCRIPT="$PLUGIN_ROOT/evals/optimize/sections.py"
+# The module import below must leave no __pycache__ in the repository.
+export PYTHONDONTWRITEBYTECODE=1
 
 pass=0; fail=0
 ok()  { pass=$((pass+1)); printf '  ok   %s\n' "$1"; }
