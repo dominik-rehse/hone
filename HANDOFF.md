@@ -19,7 +19,12 @@ that holds its result.
 
 As of 2026-09-20:
 
-- Step 1 is in work. No result yet.
+- Step 1 is done (`docs/spikes/2026-09-20-plugin-eval-spike.md`).
+  `claude plugin eval` runs hone with every hook on, and
+  `context.history_file` resumes a recorded session. The nested
+  `/code-review` cannot finish there, because no nested `claude -p`
+  reaches the API from the runner's sandbox. The note lists three
+  conditions of this machine that refuse a run before any model call.
 - Step 2 is in work. Done: the field log, and the hook table that step 5
   needs (`docs/spikes/2026-09-20-field-data-from-real-sessions.md`). The
   raw findings stay under `/var/tmp/hone-fieldlog/`. Ambig-SWE is measured
@@ -221,7 +226,8 @@ A guard with false alarms must show a reach that it stopped.
 
 ### Three tiers of evaluator
 
-1. *Single calls*, about 2 cents each. Right for the critics, because a
+1. *Single calls*, estimated at 2 cents each. On 2026-09-20 a call of the
+   `plan-critic` on claude-opus-5 measured about 13 cents. Right for the critics, because a
    critic really is a system prompt plus one brief. `evals/run.sh` with
    `--prompt-file --json --cache --cases` already does this.
 2. *Decision points*, an estimated 10 to 30 cents each. A recorded session
@@ -415,9 +421,12 @@ why no front came out. A pilot that fails cheaply is a good result too.
 
 Depends on step 1. Turn recorded lab sessions into decision-point cases,
 about 30 to start. Lab sandboxes under `/var/tmp/hone-lab/` may be gone,
-so run the lab again where needed. If step 1 showed that `history_file`
-does not work with hone, stop and write down what a home-made resume would
-cost.
+so run the lab again where needed. Step 1 showed that `history_file` works
+with hone: one resumed case took 7 seconds and 6 cents. It set three
+limits. A decision point must lie before the review step, because the
+nested review cannot reach the API under the runner. A grader that looks
+for a commit must match `git -C <path> commit` too. A `check.sh` must
+grade a copy of the kept workspace, never the workspace itself.
 
 ### 8. GEPA on the run skill
 
