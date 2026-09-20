@@ -1,0 +1,5 @@
+# The search writes its environment and its runs outside git.
+.venv/
+__pycache__/
+*.pyc
+runs/

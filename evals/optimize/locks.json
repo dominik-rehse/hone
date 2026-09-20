@@ -1,0 +1,32 @@
+{
+  "_comment": [
+    "Which sections of a prompt the search may rewrite. A section is FREE only",
+    "where cases aim at it. Everything else is LOCKED, because a cut that no",
+    "case can contradict looks free and proves nothing. HANDOFF.md, step 6.",
+    "The evidence is the discrimination table of",
+    "docs/spikes/2026-09-20-critic-data.md and the section ablation of",
+    "docs/spikes/2026-09-18-section-ablation-on-opus.md. The bar for a flip",
+    "count is 3. To free a section later, move it from `locked` to `free` and",
+    "give the case that now aims at it."
+  ],
+  "plan-critic": {
+    "free": {
+      "what-to-hunt/slug-collision": "8 flips of 11, the highest in the table. The case nested-slug-open-plan aims at it.",
+      "what-to-hunt/missing-baseline": "5 flips of 11. The bullet moves the answer, and it is right on only 4 of 11 either way.",
+      "what-to-hunt/prose-doing-an-artifacts-job": "3 flips of 10. The case outcome-table-in-prose aims at it.",
+      "what-to-hunt/contract-churn": "2 flips of 11, and the case schema-silent-on-data aims at the bullet's data question.",
+      "output/calibration": "Held by hone's own cases on 2026-09-18: thin-proof-right-level, named-references, dep-refresh-no-red-test."
+    },
+    "locked": {
+      "plan-critic": "The preamble that sets the critic's role. No case aims at it.",
+      "what-to-hunt": "The heading line alone. Nothing to rewrite.",
+      "what-to-hunt/placeholders": "2 flips of 10, below the bar. Both flips went the wrong way, so the evidence says nothing about a rewrite.",
+      "what-to-hunt/contradictions": "1 flip of 10, below the bar. The three contradiction cases pin the category word, not the bullet's judgment.",
+      "what-to-hunt/ambiguity": "2 flips of 10, below the bar. fork-closed-by-author pins the sketch in the brief, not this bullet.",
+      "what-to-hunt/scope": "0 flips of 10. No case aims at it.",
+      "what-to-hunt/dependency-and-toolchain-refreshes": "0 flips of 10. dep-refresh-no-red-test pins Calibration, not this bullet.",
+      "what-to-hunt/collision-with-an-open-change": "0 flips of 8. No case aims at it.",
+      "output": "The category list. Cutting a bullet must cut its word here too, and that coupled edit is out of scope for the pilot."
+    }
+  }
+}
