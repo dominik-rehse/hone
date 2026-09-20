@@ -14,62 +14,131 @@ repository. Delete this file when the last step is done or dropped.
 ## Status
 
 Keep this section true. Update it in the commit that finishes or drops a
-step. A finished step keeps one line here, with the note or the script
-that holds its result.
+step. Work stopped on 2026-09-20 at a natural point, because the
+maintainer's weekly plan limit stood at 50 percent. Nothing runs. Every
+result below is committed on `main`, and nothing is pushed.
 
-As of 2026-09-20:
+To continue, read this section, then [*Continue here*](#continue-here),
+then the [rules](#rules-for-whoever-works-on-this). Every note that this
+section names is under `docs/spikes/`, with the date 2026-09-20 in front.
 
-- Step 1 is done (`docs/spikes/2026-09-20-plugin-eval-spike.md`).
-  `claude plugin eval` runs hone with every hook on, and
-  `context.history_file` resumes a recorded session. The nested
-  `/code-review` cannot finish there, because no nested `claude -p`
-  reaches the API from the runner's sandbox. The note lists three
-  conditions of this machine that refuse a run before any model call.
-- Step 2 is done. The step itself says what changed against the first
-  plan. Three notes hold the results:
-  `docs/spikes/2026-09-20-field-data-from-real-sessions.md` has the hook
-  table that step 5 needs, `docs/spikes/2026-09-20-critic-data.md` has the
-  data for the `plan-critic`, and
-  `docs/spikes/2026-09-20-cases-from-field-misjudgments.md` has the cases.
-  Two cases that the shipped prompts fail are under `evals/optimize/cases/`.
-- Step 3 is done. `evals/optimize/sections.py` is the splitter, and its
-  header has the rules and the usage. `--fine` gives the finer split for
-  the critics. `test/optimize_test.sh` proves the round trip in both modes.
-- Step 4 is done for a first round. `evals/lab/run.sh --bare` runs a
-  scenario with no hone, and 17 of 21 scenarios can run bare. The three
-  families, each with its note under `docs/spikes/`:
-  - *Generated families* found room. `evals/lab/generators/transparent.py`
-    writes scenarios from a seed number. Only the format `derived` gives
-    room: the code says 91 days, and a sentence elsewhere says 13 weeks.
-    There the bare arm left the false sentence in 8 of 10 runs, and hone
-    passed 9 of 10. A second round of 10 seeds confirmed it: hone held the
-    outcome in 30 runs of 30, and the bare arm failed on 8 seeds of 10.
-    `evals/lab/generators/transparent-room-set.json` has the ten seeds that
-    step 5 uses.
-  - *Real bases* found no room in three attempts, on claude-opus-5 and on
-    claude-sonnet-5. The scenario `real-base-click` stays, by name only,
-    because step 5 needs a true price per part on a real base.
-  - *The sequence scenario* `one-sequence` found no room on the outcomes in
-    two attempts. The bare arm kept seven changes clean at one seventh of
-    the price. hone differed in one measure: it pinned a document to the
-    code with a test (`doc_pinned`). The third attempt belongs on the real
-    base with derived repeats, and it is not started.
-- Step 5 is in work. The variant mechanism is done: `evals/lab/variant.py`
-  builds a copy of the plugin with any part off, `evals/lab/parts.json`
-  maps each part to its sections and anchors, and `run.sh` takes
-  `--variant`, `--without`, and `--set`. Two campaigns run: the parts that
-  call a model, mainly on the transparent room set, and the guards on the
-  models below the floor. Each saves its progress under
-  `/var/tmp/hone-lab/campaign-5b/` and `campaign-5c/`.
-- Step 6 is in work.
-- Step 7 is done (`docs/spikes/2026-09-20-decision-point-cases.md`).
-  `evals/decision-points/` holds 26 cases over 16 lab scenarios, and
-  `run.sh` there runs them against a plugin directory. A resumed session
-  reads the skill from the recorded history, so each history is a template
-  that the scaffold fills from the plugin under test. 21 cases
-  discriminate, and the shipped skill fails 5 more in 3 runs of 3. One run
-  costs about 50 cents on claude-opus-5 and 20 cents on claude-sonnet-5.
-- Steps 8 and 9 are not started.
+Done:
+
+- Step 1, note `plugin-eval-spike`. `claude plugin eval` runs hone with
+  every hook on, and `context.history_file` resumes a recorded session.
+  The nested `/code-review` cannot finish there.
+- Step 2, notes `field-data-from-real-sessions`, `critic-data`, and
+  `cases-from-field-misjudgments`. `docs/field-log.md` is filled. The hook
+  table for step 5 exists. The data for the `plan-critic` has 252 items
+  and stays under `/var/tmp/hone-optimize/data/plan-critic/`. Five new
+  cases joined the suites, and two that the shipped prompts fail are under
+  `evals/optimize/cases/`.
+- Step 3. `evals/optimize/sections.py` is the splitter. `--fine` splits
+  the named bullets of a critic.
+- Step 4, first round, notes `generated-transparent-scenarios`,
+  `real-base-scenario`, and `sequence-scenario`. `evals/lab/run.sh --bare`
+  is the arm with no hone. One family found room: the *transparent room
+  set*, ten seeds in `evals/lab/generators/transparent-room-set.json`.
+- Step 7, note `decision-point-cases`. `evals/decision-points/` has 26
+  cases, and `run.sh` there runs them against any plugin directory.
+
+Partly done:
+
+- Step 5, note `structure-what-each-part-buys`. The variant mechanism is
+  done (`evals/lab/variant.py`, `evals/lab/parts.json`, and `--variant`,
+  `--without`, `--set` of `run.sh`). The price per part is measured. Three
+  arms ran on the room set at one run per seed. The guard campaign has a
+  brief at `.plans/optenv-5c-guards.md` and made no run.
+- Step 6, note `gepa-pilot-plan-critic`. The adapter, the lock list, the
+  search, and the scoring script are built and tested. One search of 900
+  calls gave a front of three versions under
+  `evals/optimize/candidates/plan-critic/`. The scores on the held-out
+  part and on the suite are left.
+
+Not started: step 8, step 9, and the third attempt of the sequence
+scenario.
+
+### What the results say so far
+
+Read this before you plan. It changed what is worth doing.
+
+- On one well-specified change, claude-opus-5 holds every outcome that the
+  lab measures, with hone and without it. That held on fixtures, on a real
+  base of 12,000 lines, and over a sequence of seven changes. There hone
+  adds price: 4 to 7 times the dollars and the minutes.
+- hone makes one measured difference on opus. When a document repeats a
+  value in a derived form, the bare arm leaves the false sentence on 8
+  seeds of 10. hone held the outcome in 30 runs of 30, and in 2 of 3 on
+  seed 6.
+- The consolidate step does that catching: `docs_true` is 10 of 10 with
+  everything on, 9 of 10 without the `consolidate-critic`, 3 of 10 without
+  consolidate, and 2 of 10 bare. Every cell has one run per seed, so a
+  difference of one run is nothing.
+- The nested review is the dearest part, at 39 percent of a run. The room
+  set cannot judge it, because its trap is prose. `defect-in-hunk` and the
+  review bench can.
+- In about 220 real sessions the `dirty-guard` gave 41 false alarms of 45
+  fires, and the `bash-guard` 28 of 50. Both also made real catches. The
+  roadmap lists the false-alarm shapes as a defect.
+- All eleven misjudgments of the critics in real use happened on
+  claude-sonnet-5. Five of ten shapes do not reproduce on claude-opus-5.
+- The `plan-critic` on opus over-rejects real briefs. It is right on 72
+  percent of the approvals. Four readers checked 36 disputed labels, and
+  34 labels were right.
+- The GEPA pilot raised the approvals from 0.72 to 0.88 on its validation
+  subset, at one vote. Every rewrite made the prompt longer. On the full
+  validation set the gain was 0.759 to 0.776, which is inside the noise.
+- The measured prices are above the first estimates. A critic call on opus
+  costs 13 to 19 cents. A decision-point run costs 50 cents on opus and 20
+  cents on sonnet. A room-set run with hone costs 2.04 dollars.
+
+### Continue here
+
+Do these in order. Each note has the exact commands and the estimates.
+All estimates are equivalents in plan usage.
+
+1. *Score the front of step 6*, about 40 dollars. The note
+   `gepa-pilot-plan-critic` has the commands under *The work left*. Score
+   the three candidates and the shipped prompt on the held-out part, once,
+   and run the suite at three votes with and without `--holdout`. Do not
+   extend the search before you have these numbers. If no candidate beats
+   the shipped prompt outside the noise, write that down and close step 6.
+   A candidate that does goes through `bash evals/candidate.sh`.
+2. *Finish the room-set arms of step 5*, about 60 dollars. The note
+   `structure-what-each-part-buys` has the queues under *Work that is
+   left*. The state is under `/var/tmp/hone-lab/campaign-5b/`. If `/var/tmp`
+   was cleared, the note says how to build the seeds again, and the runs
+   that are in the note stay valid.
+3. *Judge the review*, about 40 dollars. Run `review` off against the full
+   arm on `defect-in-hunk`, three runs per arm, and read
+   `evals/probes/review-bench/`. The review is the dearest part, so this
+   cell decides the most money.
+4. *Run the guard campaign*, about 80 dollars, mostly on claude-sonnet-5
+   and claude-haiku-4-5. Its brief is `.plans/optenv-5c-guards.md`. It
+   applies the three-part rule of [*The structure layer*](#the-structure-layer).
+5. *Define the lean variant* from the table, as
+   `evals/lab/variants/lean.json`. Run it on the room set, then on the
+   whole lab, about 65 dollars. Then write the front over the structures
+   into the note, and close step 5.
+6. *Step 8*, 350 to 500 dollars. Decide first whether it is worth it. Ask
+   the maintainer with the results of items 1 to 5 in hand. The cheap form
+   searches on claude-sonnet-5 with 500 calls, and scores the two best
+   versions again on opus.
+7. The third attempt of the sequence scenario, on the real base with
+   derived repeats, 65 to 130 dollars. It tests hone's main claim, and it
+   is the most useful run that nobody has made.
+
+### How the work was run, and what to keep
+
+- One session led. It gave each step to a worker on claude-opus-5, with a
+  brief that named the files that the worker owned. Workers made no commit.
+  The lead read each result, checked it, and committed it.
+- Before a commit, the lead scanned every new file for private names from
+  the consumer repos. Keep that scan. This repository is public.
+- Several workers edited `evals/lab/run.sh` and `test/lab_test.sh` in the
+  same tree. It worked, because each kept to one new block. Do not edit
+  either file while a lab run is active, because bash reads a script as it
+  runs.
 
 ## What
 
@@ -97,6 +166,9 @@ Structure comes first. There is no point in tuning the words of a step
 that the structure layer then removes.
 
 ## Why
+
+This section has the state before the program started.
+[*Status*](#status) has the state of today.
 
 The work of 2026-09-17 to 2026-09-20 built a release gate: unit suites, the
 lab, two probes, and `evals/candidate.sh`. A gate says whether one change
@@ -378,6 +450,9 @@ that split and join give back every shipped prompt file byte for byte.
 
 ### 4. Harder scenarios of our own
 
+A first round is done. [*Status*](#status) has the result. The text below
+is the plan as it was.
+
 The aim is room on the outcomes where opus is at the ceiling today:
 *transparent*, *correct*, and *well structured* apart from `cc_pile`. Do
 not build a second scenario for the pile of complexity before the first
@@ -406,6 +481,9 @@ either, write a note under `docs/spikes/` and go to the next family.
 
 ### 5. Structure: what each part buys
 
+Partly done. The first bullet is done, and the bare pass has run once.
+[*Continue here*](#continue-here) has what is left, in order.
+
 [*The structure layer*](#the-structure-layer) has the method. In order:
 
 - Extend `--without` of `evals/lab/run.sh` from hooks to agents, loop
@@ -426,6 +504,12 @@ goals and costs, and names the variants on the front. Removing a part from
 the shipped plugin is then an ordinary candidate, with its upgrade path.
 
 ### 6. Pilot: GEPA on the `plan-critic`
+
+Partly done. Everything below is built, and one search has run. The last
+bullet is left. One finding against the plan below: with `words` as an
+objective, every rewrite still grew the prompt. The rewriting model adds
+rules, and it does not cut. A later search needs a rewrite step that may
+only shorten, as its own move.
 
 - A Python project under `evals/optimize/`, run with `uv` only. Never use
   `pip`.
@@ -487,10 +571,29 @@ main claim. Only on the maintainer's word.
 
 - Build no new probe, fixture, or harness feature outside these steps.
 - Every run uses the maintainer's Max plan, not API money. A dollar figure
-  in this file is the equivalent in plan usage. The maintainer said on
-  2026-09-20 that a lot of plan usage is fine. So print the estimate before
-  a run, and do not wait for an answer. Stop when the plan's limit blocks a
-  run, and go on when the limit resets.
+  in this file is the equivalent in plan usage. The plan has a limit per
+  session window of five hours, and a limit per week. On 2026-09-20 one
+  day of this program used about half of a week, and one window held about
+  130 to 150 dollars.
+- Ask the maintainer at the start for the two meters and for a cap. No
+  agent can read the meters. Without a cap, use at most 25 percent of a
+  week, and then stop and report.
+- Print the estimate before a run, and do not wait for an answer.
+- Run at most two workers with model calls at the same time.
+- Put a chain of runs into one background script that records each result
+  in a progress file. The script waits and tries the same run again when
+  the limit blocks it. A run that the limit kills is lost usage. On
+  2026-09-20 more than 80 lab runs died that way.
+- Use `--jobs 2` in the lab, so that a limit kills few runs in flight.
+- Poll a background script every 25 to 30 minutes, and read only its
+  progress file. The turns of a worker cost usage too.
+- Start with one run per cell. Complete a cell to three runs only where
+  the first run shows a difference, or where a decision hangs on it.
+- To cut a budget, stop the background process yourself. A message to a
+  worker arrives only at its next tool round. On 2026-09-20 a search ran
+  900 calls after its budget had been cut to 400.
+- Count only a run with a complete `result.json`. A run that the limit cut
+  short counts for nothing, and it is never a fail.
 - Commit each finished step to `main` without asking. Do not push. A push
   needs the maintainer's word.
 - You may read anything in the four consumer repos and in their session
@@ -515,15 +618,33 @@ main claim. Only on the maintainer's word.
 
 ## What the maintainer must decide
 
-None of these blocks steps 1 to 4 or the pilot of step 6.
+None of these blocks items 1 to 5 of [*Continue here*](#continue-here).
 
+- *How much plan usage may the program take per week?* See the rules on
+  usage above. An API key or paid extra usage for the bulk runs is the
+  other option, and it needs the maintainer's word.
+- *May the lead push?* Today every commit stays local.
+- *Is step 8 worth its price?* See item 6 of *Continue here*. On opus, one
+  change at a time, the run skill has little room on the outcomes. Its
+  room is the price, and the structure layer moves the price more than a
+  rewording can.
+- *Should the critics run on claude-sonnet-5 again, with a better prompt?*
+  All field misjudgments happened on sonnet, and the pin moved to opus
+  since. A search that lets sonnet hold a critic's slot would lower the
+  price. Nobody has measured it.
+- *Do the two scenarios without room stay?* `real-base-click` and
+  `one-sequence` found no room on the outcomes. They stay by name only, as
+  price measures on a real base and over a sequence. The rule of step 4
+  says that a scenario without room goes.
 - *May hone land honest code beside a test that it reports as wrong?* It
   is open in `docs/roadmap.md`. Only the land gate can change the 0 honest
   landings of 20 on ImpossibleBench, and prose cannot. Widening that probe
   to the full LiveCodeBench half waits for this answer.
 - *May a section with no case and no field-log incident be cut?* Today it
-  stays, and the search holds it locked (step 6). Ask this again after
-  step 2, with the list of sections that still have neither.
+  stays, and the search holds it locked. `evals/optimize/locks.json` has
+  the list for the `plan-critic`, with the reason per section. Nine
+  sections are locked there. Three of them have generated cases that flip
+  nothing, which the data note reads as cases that are too easy.
 - *Which parts are not up for removal*, whatever the numbers say. A
   likely list: the guard on the primary tree, the grant gate, and the
   proof gate. Step 5 measures them all the same, and it proposes to
