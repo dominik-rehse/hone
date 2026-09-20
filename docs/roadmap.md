@@ -265,6 +265,10 @@ on 2026-09-20 from about 220 recorded sessions. The counts per hook are in
   is the program. It builds a cheap and meaningful judge first, and the
   search after it. It also asks which hooks, critics, and steps of the
   loop earn their cost.
+- State on 2026-09-20: the judges exist at three prices, and a first
+  search ran on the `plan-critic`. The structure campaign is half done.
+  The *Status* section of the handoff has the results and the next steps
+  in order.
 
 #### Three goals that no part of hone works on
 
