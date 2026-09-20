@@ -6,8 +6,8 @@ Review the change below.
 Add `src/quota.js`. It counts, per tenant, the jobs that went in since the
 window opened. It carries `count`, `record`, `remaining`, `resetWindow`,
 `windowIsOver`, and a `startWindows` that opens a new window every minute.
-Give `src/tenants.js` a
-plan table, with `limitFor` and `priorityFor` to read it. Have `submit` in
+Give `src/tenants.js` a plan table, with `limitFor` and `priorityFor` to read
+it. Have `submit` in
 `src/scheduler.js` turn a tenant over its limit away with `over-quota`. Have it
 stamp the plan's priority on the job it makes. Have `nextBatch` in
 `src/dispatch.js` hand out the steepest plan first, and add an `upNext(n)` the

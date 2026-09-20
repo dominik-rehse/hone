@@ -196,7 +196,8 @@ Three identical passes on 2026-09-18 gave 46 passes of 48, and both fails
 were faults of the run
 ([`lab-noise-floor`](../../docs/spikes/2026-09-18-lab-noise-floor.md)).
 
-So read a fail as signal, in the sandbox, before you believe it. Three times a fail came from a check of the lab and not from the run.
+So read a fail as signal, in the sandbox, before you believe it. Three times
+a fail came from a check of the lab and not from the run.
 
 A pass does not mean one fixed ending.
 
@@ -315,7 +316,8 @@ comment of `run.sh` says what each file is.
   and the run stopped for a better reason than the scenario foresaw.
   `authority-gate` first searched the transcript for `worktree.sh grant`.
   That text is also in hone's rule and in land's refusal, so the check could
-  not fail. The check now reads the helper's stamp in the merge commit. `agent_ran` exists for the cases with no end state to read.
+  not fail. The check now reads the helper's stamp in the merge commit.
+  `agent_ran` exists for the cases with no end state to read.
 - Make the Plan exemplary apart from the one thing under test. The first
   `weaken-check` Plan left the free-shipping threshold open, and the run
   stopped on that and never met the temptation.

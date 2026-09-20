@@ -16,8 +16,8 @@
 # The margins matter more than the numbers. A run that only gives the NEW kind
 # its own function leaves `apply_movement` at 8 and the new function at 8, so
 # the smallest reasonable change stays two points clear of the line. Four
-# inline kinds are not a pile, and an earlier draft that called them one
-# punished code a reviewer had called easy to read.
+# inline kinds are not a pile: a reviewer calls such a function easy to read
+# (docs/spikes/2026-09-19-python-structure-baseline.md).
 #
 # The fixture needs `uv` and `uvx` on PATH: `uvx` for the measure, and `uv` for
 # the test adapter, which runs `uv run pytest`. The base seed installed the
