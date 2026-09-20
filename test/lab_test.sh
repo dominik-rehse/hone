@@ -469,6 +469,132 @@ lab no-such-scenario >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an unknown scenario exits 2" || bad "an unknown scenario should exit 2 (got $rc)"
 
 echo
+echo "== the variant builder (evals/lab/variant.py) =="
+# One part at a time, off in a copy of the plugin. No model call: the builder
+# reads evals/lab/parts.json and writes the copy that a run would load.
+VB="$PLUGIN_ROOT/evals/lab/variant.py"
+VW="$W/variant"; mkdir -p "$VW"
+SHIPPED_DIRS=".claude-plugin agents hooks rules scripts skills templates"
+shipped_hash() { ( cd "$1" && find $SHIPPED_DIRS -type f -print0 | sort -z \
+    | xargs -0 sha256sum | sha256sum | cut -c1-16 ); }
+plugin_copy() { mkdir -p "$2"; for d in $SHIPPED_DIRS; do cp -r "$1/$d" "$2/"; done; }
+# Every file that differs between two copies, or that one of them lacks.
+changed_files() {
+    python3 - "$1" "$2" <<'PY'
+import filecmp, os, sys
+a, b = sys.argv[1], sys.argv[2]
+out = []
+for root, _, files in os.walk(a):
+    for f in files:
+        rel = os.path.relpath(os.path.join(root, f), a)
+        pb = os.path.join(b, rel)
+        if not os.path.exists(pb) or not filecmp.cmp(os.path.join(root, f), pb, shallow=False):
+            out.append(rel)
+print("\n".join(sorted(out)))
+PY
+}
+
+repo_before=$(shipped_hash "$PLUGIN_ROOT")
+python3 "$VB" --check >/dev/null 2>&1 \
+    && ok "every anchor of parts.json still matches this repository" \
+    || bad "an anchor of parts.json is stale: $(python3 "$VB" --check 2>&1 | tail -1)"
+
+plugin_copy "$PLUGIN_ROOT" "$VW/base"
+# What must be gone from the built copy, per part: a file, then a literal string.
+part_gone() {
+    case "$1" in
+        guard|bash-guard|dirty-guard|gate|nag|session-start)
+                             printf '%s\n' "hooks/hooks.json|/$1.sh" ;;
+        plan-critic)         printf '%s\n' "skills/plan/SKILL.md|subagent_type: plan-critic" ;;
+        consolidate-critic)  printf '%s\n' "skills/run/SKILL.md|subagent_type: consolidate-critic" ;;
+        test-first)          printf '%s\n' "skills/run/SKILL.md|**Red.**" ;;
+        verify)              printf '%s\n' "skills/run/SKILL.md|### 3. Verify" ;;
+        consolidate)         printf '%s\n' "skills/run/SKILL.md|sort the leftovers" ;;
+        review)              printf '%s\n' "skills/run/SKILL.md|/code-review" ;;
+        land)                printf '%s\n' 'skills/run/SKILL.md|worktree.sh" land' ;;
+        shape-gate)          printf '%s\n' "scripts/worktree.sh|grep -E '^(Cut|Repair): " ;;
+        grant-gate)          printf '%s\n' 'scripts/worktree.sh|reasons=$(land_irreversible' ;;
+        proof-gate)          printf '%s\n' 'scripts/worktree.sh|land_proof_required "$main_root"' ;;
+    esac
+}
+for p in $(python3 "$VB" --parts | awk '$2 != "setting" && $2 != "fixture" {print $1}'); do
+    sel="$p"; [ "$p" = test-first ] && sel="test-first,guard"
+    plugin_copy "$PLUGIN_ROOT" "$VW/$p"
+    if ! python3 "$VB" --plugin "$VW/$p" --without "$sel" 2> "$VW/$p.err"; then
+        bad "the builder failed on '$p' ($(tail -1 "$VW/$p.err"))"; continue
+    fi
+    want=$(python3 "$VB" --touches --without "$sel")
+    [ "$(changed_files "$VW/base" "$VW/$p")" = "$want" ] \
+        && ok "'$p' off changes the files parts.json declares, and no other byte" \
+        || bad "'$p' off changed $(changed_files "$VW/base" "$VW/$p" | tr '\n' ' '), declared: $(echo "$want" | tr '\n' ' ')"
+    gone="$(part_gone "$p")"
+    grep -qF -- "${gone#*|}" "$VW/$p/${gone%%|*}" \
+        && bad "'$p' off still carries '${gone#*|}' in ${gone%%|*}" \
+        || ok "'$p' off leaves no '${gone#*|}' in ${gone%%|*}"
+done
+bash -n "$VW/shape-gate/scripts/worktree.sh" && bash -n "$VW/proof-gate/scripts/worktree.sh" \
+    && ok "a gate patch leaves a script bash can parse" || bad "a gate patch broke worktree.sh"
+[ "$(shipped_hash "$PLUGIN_ROOT")" = "$repo_before" ] \
+    && ok "no build touched a shipped file of this repository" || bad "the builder wrote into the repo"
+
+echo "== a setting moves a model or a level, in the copy only =="
+plugin_copy "$PLUGIN_ROOT" "$VW/set"
+python3 "$VB" --plugin "$VW/set" --set review.level=low --set consolidate-critic.model=claude-fake-7
+grep -q '/code-review low ' "$VW/set/skills/run/SKILL.md" && grep -q -- '--effort low' "$VW/set/skills/run/SKILL.md" \
+    && ok "review.level moves the level in the prompt and in --effort" || bad "review.level should move both"
+grep -q '^model: claude-fake-7$' "$VW/set/agents/consolidate-critic.md" \
+    && ok "a critic's model is the frontmatter line of its agent" || bad "consolidate-critic.model should move the frontmatter"
+
+echo "== the builder refuses what it cannot build honestly =="
+vfail() { python3 "$VB" --check "$@" >/dev/null 2>&1; [ "$?" -eq 2 ]; }
+vfail --without no-such-part && ok "an unknown part name exits 2" || bad "an unknown part should exit 2"
+vfail --without test-first && ok "test-first off without guard off exits 2" || bad "test-first needs guard off"
+vfail --without land,proof-gate && ok "a gate off inside a land that is off exits 2" || bad "land excludes its gates"
+vfail --without review --set review.model=claude-x-1 && ok "a setting on a part that is off exits 2" || bad "a setting on an off part should exit 2"
+vfail --set review.model=opus && ok "an alias for a model setting exits 2" || bad "a model alias should exit 2"
+vfail --set review.level=deep && ok "an unknown review level exits 2" || bad "an unknown level should exit 2"
+# A stale part map: a section name the skill no longer has, and an anchor the
+# skill no longer carries. Both must fail before any copy is built.
+python3 - "$PLUGIN_ROOT/evals/lab/parts.json" "$VW/stale-section.json" "$VW/stale-anchor.json" <<'PY'
+import json, sys
+doc = json.load(open(sys.argv[1], encoding="utf-8"))
+doc["parts"]["review"]["drop"][0]["sections"] = ["5-review-that-no-skill-has"]
+json.dump(doc, open(sys.argv[2], "w", encoding="utf-8"))
+doc = json.load(open(sys.argv[1], encoding="utf-8"))
+doc["parts"]["review"]["sub"][0]["from"] = ["a sentence the run skill never carried"]
+json.dump(doc, open(sys.argv[3], "w", encoding="utf-8"))
+PY
+env LAB_PARTS="$VW/stale-section.json" python3 "$VB" --check --without review >/dev/null 2>&1
+[ "$?" -eq 2 ] && ok "a section name the skill no longer has exits 2" || bad "a stale section name should exit 2"
+env LAB_PARTS="$VW/stale-anchor.json" python3 "$VB" --check --without review >/dev/null 2>&1
+[ "$?" -eq 2 ] && ok "an anchor the skill no longer carries exits 2" || bad "a stale anchor should exit 2"
+
+echo "== a named variant file, and the variant in result.json =="
+mkdir -p "$VW/files"
+jq -n '{description: "the two dearest steps", off: ["review"], settings: {"consolidate-critic.model": "claude-fake-7"}}' \
+    > "$VW/files/lean.json"
+[ "$(env LAB_VARIANTS="$VW/files" python3 "$VB" --json --variant lean)" \
+    = '{"off": ["review"], "settings": {"consolidate-critic.model": "claude-fake-7"}}' ] \
+    && ok "a variant file resolves to its parts and its settings" || bad "the variant file did not resolve"
+[ "$(python3 "$VB" --json --variant full)" = '{"off": [], "settings": {}}' ] \
+    && ok "the shipped 'full' variant switches nothing off" || bad "variants/full.json should be empty"
+env LAB_VARIANTS="$VW/files" python3 "$VB" --check --variant no-such-file >/dev/null 2>&1
+[ "$?" -eq 2 ] && ok "an unknown variant file exits 2" || bad "an unknown variant file should exit 2"
+
+fresh; MODE=land lab toy --without consolidate-critic >/dev/null
+[ "$(result toy '.variant.off | join(",")')" = "consolidate-critic" ] \
+    && ok "result.json records the parts that were off" || bad "the result should carry the variant (got $(result toy -c .variant))"
+[ ! -e "$(echo "$W"/out/*/toy)/plugin/agents/consolidate-critic.md" ] \
+    && ok "the agent of a part that is off is gone from the sandboxed copy" || bad "the critic file survived in the sandbox"
+[ -f "$PLUGIN_ROOT/agents/consolidate-critic.md" ] && ok "the repo's own agent is untouched" || bad "the repo's agent must not be removed"
+fresh; MODE=land lab toy >/dev/null
+[ "$(result toy '[(.variant.off | length), (.variant.settings | length)] | join(" ")')" = "0 0" ] \
+    && ok "a run with nothing off records an empty variant" || bad "the full arm should record an empty variant"
+fresh; MODE=nested lab toy --review-model claude-other-9 >/dev/null
+[ "$(result toy '.variant.settings["review.model"]')" = "claude-other-9" ] \
+    && ok "--review-model reaches the variant as a setting" || bad "--review-model should be a setting of the variant"
+
+echo
 echo "== the token wait (evals/session-token.sh) =="
 # A fake CLI stands in for the renewal: it counts its calls, and on the call
 # that $T/renew_on names it writes a fresh expiresAt, which is what the real

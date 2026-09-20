@@ -73,23 +73,33 @@
 # Usage:
 #   bash evals/lab/run.sh [SCENARIO...] [--track behavioral|adversarial]
 #                         [--model ID] [--judge-model ID] [--review-model ID]
-#                         [--without HOOK[,HOOK]] [--bare]
+#                         [--without PART[,PART]] [--variant NAME] [--set K=V]
+#                         [--bare]
 #                         [--budget USD] [--timeout MIN] [--jobs N] [--dry-run]
 #   bash evals/lab/run.sh --regrade /var/tmp/hone-lab/<time> [SCENARIO...]
 #   --model ID     the full model ID that drives the run (default claude-opus-5,
 #                  the floor of the loop). An alias floats, so the lab refuses one.
 #   --review-model ID  the model of the nested /code-review, in place of the ID
-#                  that the run skill pins. The switch edits the review command
-#                  in the sandboxed copy of skills/run/SKILL.md, as --without
-#                  edits hooks.json. result.json records the model that the
+#                  that the run skill pins. It is the setting review.model, and
+#                  it edits the review command in the sandboxed copy of
+#                  skills/run/SKILL.md. result.json records the model that the
 #                  nested calls named, with the switch or without it.
-#   --without H    switch hooks off for this run, by file name without .sh
-#                  (guard, bash-guard, dirty-guard, gate, nag, session-start).
-#                  The switch edits hooks.json in the sandboxed plugin copy, so
-#                  the product needs no feature for it. One more name is
-#                  `deny-rules`: it seeds the fixture with no deny rule in
-#                  .claude/settings.json, which is hone's other mechanical
-#                  defense of the adapters and the settings.
+#   --without P    switch parts off for this run: a hook, a critic, a step of
+#                  the loop, or a gate inside land. `python3
+#                  evals/lab/variant.py --parts` lists them, and
+#                  evals/lab/parts.json says what each part is and what the
+#                  loop does without it. The header of variant.py says how a
+#                  part goes off. Every edit lands in the sandboxed plugin
+#                  copy, never in this repository, so the product needs no
+#                  feature for it. One name is no part of the plugin:
+#                  `deny-rules` seeds the fixture with no deny rule in
+#                  .claude/settings.json, hone's other mechanical defense of
+#                  the adapters and the settings.
+#   --variant V    a named variant file, evals/lab/variants/V.json, or a path
+#                  to one: {"off": [...], "settings": {...}}. --without and
+#                  --set add to it.
+#   --set K=V      one setting: plan-critic.model, consolidate-critic.model,
+#                  review.model, or review.level.
 #   --bare         run with no hone at all: no plugin, and so no hook, no
 #                  injected rule, no skill, no critic, no worktree script. It
 #                  is the zero point of every goal, and result.json carries
@@ -144,7 +154,8 @@ SCENARIOS="${LAB_SCENARIOS:-$LAB/scenarios}"
 OUT_ROOT="${LAB_OUT:-/var/tmp/hone-lab}"
 
 MODEL="claude-opus-5"; JUDGE_MODEL="claude-sonnet-5"; REVIEW_MODEL=""; TRACK=""; WITHOUT=""
-BUDGET=25; TIMEOUT_MIN=60; JOBS=2; DRY=0; REGRADE=""; BARE=0
+BUDGET=25; TIMEOUT_MIN=60; JOBS=2; DRY=0; REGRADE=""; BARE=0; VARIANT_SPEC=""
+SETS=()
 NAMES=()
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -153,6 +164,8 @@ while [ $# -gt 0 ]; do
         --review-model) shift; REVIEW_MODEL="$1" ;;
         --track) shift; TRACK="$1" ;;
         --without) shift; WITHOUT="$1" ;;
+        --variant) shift; VARIANT_SPEC="$1" ;;
+        --set) shift; SETS+=("$1") ;;
         --bare) BARE=1 ;;
         --budget) shift; BUDGET="$1" ;;
         --timeout) shift; TIMEOUT_MIN="$1" ;;
@@ -173,31 +186,40 @@ case "$TRACK" in ""|behavioral|adversarial) ;; *) echo "--track takes behavioral
 # command to re-pin. Either switch beside --bare describes an arm that nobody
 # ran, so refuse it here rather than write a result that reads as an ablation.
 if [ "$BARE" -eq 1 ]; then
-    [ -z "$WITHOUT" ] || { echo "--bare loads no plugin, so --without has no hook to switch off. Use one or the other." >&2; exit 2; }
+    [ -z "$WITHOUT" ] || { echo "--bare loads no plugin, so --without has no part to switch off. Use one or the other." >&2; exit 2; }
+    [ -z "$VARIANT_SPEC" ] || { echo "--bare loads no plugin, so a variant describes nothing. Use one or the other." >&2; exit 2; }
+    [ "${#SETS[@]}" -eq 0 ] || { echo "--bare loads no plugin, so --set has nothing to set. Use one or the other." >&2; exit 2; }
     [ -z "$REVIEW_MODEL" ] || { echo "--bare loads no plugin, so --review-model has no review command to re-pin. Use one or the other." >&2; exit 2; }
 fi
 ARM=full; [ "$BARE" -eq 0 ] || ARM=bare
 command -v jq >/dev/null || { echo "the lab needs jq" >&2; exit 2; }
+command -v python3 >/dev/null || { echo "the lab needs python3 for the variant builder" >&2; exit 2; }
 REAL_CLAUDE=$(command -v claude) || { echo "the lab needs the claude CLI on PATH" >&2; exit 2; }
 
-# A misspelled hook must not run the full plugin and call it an ablation.
-IFS=, read -ra OFF <<<"$WITHOUT"
+# The variant: which parts are off, and which settings moved. variant.py
+# resolves the three sources into one record, refuses a part it does not know
+# and a combination that describes no arm, and proves every anchor against this
+# repository. A misspelled part must not run the full plugin and call it an
+# ablation, and neither must a reworded skill.
+VARIANT_ARGS=()
+[ -z "$WITHOUT" ] || VARIANT_ARGS+=(--without "$WITHOUT")
+[ -z "$VARIANT_SPEC" ] || VARIANT_ARGS+=(--variant "$VARIANT_SPEC")
+[ -z "$REVIEW_MODEL" ] || VARIANT_ARGS+=(--set "review.model=$REVIEW_MODEL")
+for s in ${SETS[@]+"${SETS[@]}"}; do VARIANT_ARGS+=(--set "$s"); done
+VARIANT_JSON='{"off": [], "settings": {}}'
+if [ "$BARE" -eq 0 ]; then
+    VARIANT_JSON=$(python3 "$LAB/variant.py" --json ${VARIANT_ARGS[@]+"${VARIANT_ARGS[@]}"}) || exit 2
+fi
+# The off list drives the fixture's deny rules, and it is what result.json and
+# the terminal line name.
+IFS=, read -ra OFF <<<"$(jq -r '.off | join(",")' <<<"$VARIANT_JSON")"
+WITHOUT=$(jq -r '.off | join(",")' <<<"$VARIANT_JSON")
 DENY_RULES=on
 # The deny rules are hone's, and a repository that never met hone has none.
 [ "$BARE" -eq 0 ] || DENY_RULES=off
-for h in "${OFF[@]}"; do
-    [ "$h" = deny-rules ] && { DENY_RULES=off; continue; }
-    grep -qF "/hooks/$h.sh" "$ROOT/hooks/hooks.json" \
-        || { echo "--without: hooks.json wires no hook named '$h'" >&2; exit 2; }
+for h in ${OFF[@]+"${OFF[@]}"}; do
+    [ "$h" = deny-rules ] && DENY_RULES=off
 done
-
-# The review command pins one model, and --review-model replaces that pin. A
-# command with no pin, or with two, must not run as if the switch had worked.
-REVIEW_PIN_RE='--model claude-[A-Za-z0-9.-]+'
-if [ -n "$REVIEW_MODEL" ]; then
-    pins=$(grep -A6 -F 'claude -p "/code-review' "$ROOT/skills/run/SKILL.md" | grep -cE -- "$REVIEW_PIN_RE")
-    [ "$pins" -eq 1 ] || { echo "--review-model: the review command in skills/run/SKILL.md pins $pins models, not 1" >&2; exit 2; }
-fi
 
 if [ -n "$REGRADE" ]; then
     [ -d "$REGRADE" ] || { echo "--regrade: no such run directory: $REGRADE" >&2; exit 2; }
@@ -262,19 +284,13 @@ RUN_DIR="${REGRADE:-$OUT_ROOT/$(date +%Y%m%d-%H%M%S)}"
 mkdir -p "$RUN_DIR"
 
 # The shipped plugin, copied, so a run and an ablation never touch this repo.
+# variant.py then switches the variant's parts off inside the copy. Its header
+# says how each kind of part goes off.
 copy_plugin() {
     local d
     mkdir -p "$1"
     for d in .claude-plugin agents hooks rules scripts skills templates; do cp -r "$ROOT/$d" "$1/"; done
-    for d in "${OFF[@]}"; do
-        jq --arg h "/hooks/$d.sh" '
-            .hooks |= with_entries(.value |= (map(.hooks |= map(select(.command | contains($h) | not)))
-                                              | map(select(.hooks | length > 0))))
-            | .hooks |= with_entries(select(.value | length > 0))' \
-            "$1/hooks/hooks.json" > "$1/hooks/hooks.json.tmp" && mv "$1/hooks/hooks.json.tmp" "$1/hooks/hooks.json"
-    done
-    [ -z "$REVIEW_MODEL" ] || sed -i -E "/claude -p \"\/code-review/,/--output-format/ s/$REVIEW_PIN_RE/--model $REVIEW_MODEL/" \
-        "$1/skills/run/SKILL.md"
+    python3 "$LAB/variant.py" --plugin "$1" ${VARIANT_ARGS[@]+"${VARIANT_ARGS[@]}"}
 }
 
 # One short hash over the plugin copy that a run loaded, switches included.
@@ -496,7 +512,8 @@ write_skipped() {
     jq -n --arg scenario "$name" --arg track "$(tr -d '[:space:]' < "$SCENARIOS/$1/track")" \
         --arg reason "$reason" --arg model "$MODEL" --arg arm "$ARM" \
         '{scenario: $scenario, track: $track, verdict: "skipped", reason: $reason, model: $model,
-          review_model: "", without: "", arm: $arm, home: "none", cost_usd: 0, nested_cost_usd: 0,
+          review_model: "", without: "", variant: {off: [], settings: {}},
+          arm: $arm, home: "none", cost_usd: 0, nested_cost_usd: 0,
           judge_cost_usd: 0, seconds: 0, turns: 0, plugin: "none", plugin_files: {},
           ending: "", measures: {}}' > "$sb/result.json"
 }
@@ -599,12 +616,18 @@ run_scenario() {
     fi
     mkdir -p "$sb"
     : > "$sb/nested.jsonl"
-    copy_plugin "$sb/plugin"
+    # A copy that did not build is no arm. It must not run as the full plugin.
+    copy_plugin "$sb/plugin" 2> "$sb/variant.log" || seeded=failed
     phash=$(plugin_hash "$sb/plugin"); pfiles=$(plugin_files "$sb/plugin")
     printf '[user]\n\tname = lab\n\temail = lab@example.invalid\n' > "$sb/gitconfig"
     export GIT_CONFIG_GLOBAL="$sb/gitconfig" GIT_CONFIG_SYSTEM=/dev/null
 
-    (seed_repo "$sb/repo" "$sb/plugin" "$scenario") > "$sb/seed.log" 2>&1 || seeded=false
+    if [ "$seeded" != true ]; then
+        cp "$sb/variant.log" "$sb/seed.log"          # the builder's own message
+        seeded=false
+    elif ! (seed_repo "$sb/repo" "$sb/plugin" "$scenario") > "$sb/seed.log" 2>&1; then
+        seeded=false
+    fi
 
     prompt=$(cat "$scenario/prompt")
     if [ "$BARE" -eq 1 ] && [ "$seeded" = true ]; then
@@ -638,10 +661,11 @@ run_scenario() {
         fi
     fi
     jq -n --arg model "$MODEL" --arg without "$WITHOUT" --arg home "$HOME_MODE" --arg plugin "$phash" \
-        --arg arm "$ARM" --argjson files "$pfiles" \
+        --arg arm "$ARM" --argjson files "$pfiles" --argjson variant "$VARIANT_JSON" \
         --argjson seeded "$seeded" --argjson auth_ok "$auth_ok" --argjson timed_out "$([ "$rc" -eq 124 ] && echo true || echo false)" \
         --argjson seconds "$(( $(date +%s) - start ))" \
-        '{model: $model, without: $without, arm: $arm, home: $home, plugin: $plugin, plugin_files: $files,
+        '{model: $model, without: $without, variant: $variant, arm: $arm, home: $home, plugin: $plugin,
+          plugin_files: $files,
           seeded: $seeded, auth_ok: $auth_ok, timed_out: $timed_out, seconds: $seconds}' > "$sb/run.json"
     grade_scenario "$name"
 }
@@ -794,7 +818,9 @@ grade_scenario() {
         --argjson turns "${turns:-0}" --arg review_model "$review_model" \
         --arg ending "$ending" --argjson measures "${measures:-{\}}" \
         '{scenario: $scenario, track: $track, verdict: $verdict, reason: $reason, model: .model,
-          review_model: $review_model, without: .without, arm: (.arm // "full"), home: .home, cost_usd: $cost, nested_cost_usd: $nested,
+          review_model: $review_model, without: .without,
+          variant: (.variant // {off: [], settings: {}}), arm: (.arm // "full"), home: .home,
+          cost_usd: $cost, nested_cost_usd: $nested,
           judge_cost_usd: $judge, seconds: .seconds, turns: $turns, plugin: .plugin, plugin_files: .plugin_files,
           ending: $ending, measures: $measures}' \
         "$sb/run.json" > "$sb/result.json"

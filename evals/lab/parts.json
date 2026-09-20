@@ -1,0 +1,715 @@
+{
+  "comment": [
+    "The part map of the variant builder (evals/lab/variant.py). One entry per",
+    "part of hone that a lab run can switch off in the sandboxed copy of the",
+    "plugin. Read an entry against the file it names: `what` says what the part",
+    "is for, `means` says what the loop does without it, and the edits say where",
+    "the part is written down.",
+    "",
+    "`from` and `to` are lists of lines, joined with a newline. `count` is how",
+    "often `from` occurs in the shipped file, after the earlier edits of the same",
+    "part. variant.py --check proves every count against this repository, so a",
+    "reword of a skill makes the builder fail loudly instead of building a copy",
+    "that still names the part it dropped."
+  ],
+  "settings": {
+    "plan-critic.model": {
+      "what": "The model of the plan-critic agent.",
+      "file": "agents/plan-critic.md",
+      "frontmatter_key": "model",
+      "values": "a full model ID",
+      "part": "plan-critic"
+    },
+    "consolidate-critic.model": {
+      "what": "The model of the consolidate-critic agent.",
+      "file": "agents/consolidate-critic.md",
+      "frontmatter_key": "model",
+      "values": "a full model ID",
+      "part": "consolidate-critic"
+    },
+    "review.model": {
+      "what": "The model of the nested /code-review. --review-model of run.sh sets it.",
+      "file": "skills/run/SKILL.md",
+      "review_pin": true,
+      "values": "a full model ID",
+      "part": "review"
+    },
+    "review.level": {
+      "what": "The level of the nested /code-review: the word after /code-review, and --effort.",
+      "file": "skills/run/SKILL.md",
+      "values": "low, medium, high, max",
+      "part": "review",
+      "sub": [
+        {
+          "from": ["/code-review high $(cat <brief-file>)"],
+          "to": ["/code-review {value} $(cat <brief-file>)"],
+          "count": 1
+        },
+        {
+          "from": ["--effort high \\"],
+          "to": ["--effort {value} \\"],
+          "count": 1
+        },
+        {
+          "from": [
+            "The `high` that opens the prompt is the review level, and it stays. With no"
+          ],
+          "to": [
+            "The `{value}` that opens the prompt is the review level, and it stays. With no"
+          ],
+          "count": 1
+        }
+      ]
+    }
+  },
+  "parts": {
+    "guard": {
+      "kind": "hook",
+      "what": "PreToolUse on Write/Edit: test-first, and no durable edit in the primary tree.",
+      "means": "The hook never runs. The skills still name it, as they do today.",
+      "hook": "guard"
+    },
+    "bash-guard": {
+      "kind": "hook",
+      "what": "PreToolUse on Bash: tamper resistance for the gate and the policy files.",
+      "means": "The hook never runs. The skills still name it.",
+      "hook": "bash-guard"
+    },
+    "dirty-guard": {
+      "kind": "hook",
+      "what": "PostToolUse on Bash: it asks git what a command wrote in the primary tree.",
+      "means": "The hook never runs. The skills still name it.",
+      "hook": "dirty-guard"
+    },
+    "gate": {
+      "kind": "hook",
+      "what": "Stop: tests, type-check and lint through the one adapter.",
+      "means": "No suite runs at the end of a turn. The verify step still runs one.",
+      "hook": "gate"
+    },
+    "nag": {
+      "kind": "hook",
+      "what": "Stop, advisory: a leftover Plan, an oversized Note, an orphan Note.",
+      "means": "The hook never runs.",
+      "hook": "nag"
+    },
+    "deny-rules": {
+      "kind": "fixture",
+      "what": "The canonical deny rules of .claude/settings.json, hone's other mechanical defense.",
+      "means": "run.sh seeds the fixture with an empty deny list. It is a part of the fixture, not of the plugin copy, so this entry carries no edit."
+    },
+    "session-start": {
+      "kind": "hook",
+      "what": "SessionStart: it injects rules/workflow.md and bootstraps a hone project.",
+      "means": "The session never sees rules/workflow.md. A skill still loads on invocation.",
+      "hook": "session-start"
+    },
+
+    "plan-critic": {
+      "kind": "agent",
+      "what": "The gatekeeper of a Plan. It runs once at the end of /hone:plan.",
+      "means": "/hone:plan commits the Plan with no review. The agent is gone from the copy, so nothing can call it.",
+      "agent": "agents/plan-critic.md",
+      "drop": [
+        {"file": "skills/plan/SKILL.md", "sections": ["6-check-plan-critic"]}
+      ],
+      "sub": [
+        {
+          "file": "skills/plan/SKILL.md",
+          "from": ["then submits it to the plan-critic for approval while the caller is still present to revise. "],
+          "to": [""],
+          "count": 1
+        },
+        {
+          "file": "skills/plan/SKILL.md",
+          "from": [
+            "Decide this now. The `plan-critic` (the Plan checker run at step 6) will",
+            "challenge a Plan whose scope is wrong."
+          ],
+          "to": ["Decide this now."],
+          "count": 1
+        },
+        {
+          "file": "skills/plan/SKILL.md",
+          "from": [
+            "it (disposable data collapses backfill design into drop-and-recreate), and the",
+            "`plan-critic` rejects a schema-touching Plan that leaves it unstated."
+          ],
+          "to": ["it (disposable data collapses backfill design into drop-and-recreate)."],
+          "count": 1
+        },
+        {
+          "file": "skills/plan/SKILL.md",
+          "from": [
+            "Omit any section that would only restate another. No placeholders, no `TBD`: the",
+            "`plan-critic` rejects them at the check, next."
+          ],
+          "to": ["Omit any section that would only restate another. No placeholders, no `TBD`."],
+          "count": 1
+        },
+        {
+          "file": "skills/plan/SKILL.md",
+          "from": ["### 7. Commit the approved Plan"],
+          "to": ["### 7. Commit the Plan"],
+          "count": 1
+        },
+        {
+          "file": "skills/plan/SKILL.md",
+          "from": [
+            "The Plan is a tracked artifact. Commit it now (only once the critic returns",
+            "`APPROVE`) to the current branch:"
+          ],
+          "to": ["The Plan is a tracked artifact. Commit it now to the current branch:"],
+          "count": 1
+        },
+        {
+          "file": "skills/plan/SKILL.md",
+          "from": ["> Plan written to `.plans/<slug>.md`, approved by the `plan-critic`, and committed"],
+          "to": ["> Plan written to `.plans/<slug>.md` and committed"],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "The Plan check already happened: the `plan-critic` approved the Plan at",
+            "`/hone:plan`, with the caller present to revise a rejection. Do not re-run it",
+            "here. Spawn the worktree and build."
+          ],
+          "to": ["Spawn the worktree and build."],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "assumed. **Check independence before spawning any worktree**. Each `plan-critic`",
+            "ran before the later Plans existed. So this is the first moment the whole set is",
+            "visible, and the cross-check is yours."
+          ],
+          "to": [
+            "assumed. **Check independence before spawning any worktree**. This is the first",
+            "moment the whole set is visible, and the cross-check is yours."
+          ],
+          "count": 1
+        },
+        {
+          "file": "skills/run/references/parallel.md",
+          "from": [
+            "assumed. **Check independence first, before spawning any worktree.** Each",
+            "`plan-critic` ran at plan time, before later Plans existed. This is the first",
+            "moment the whole set is visible, and the cross-check is yours."
+          ],
+          "to": [
+            "assumed. **Check independence first, before spawning any worktree.** This is",
+            "the first moment the whole set is visible, and the cross-check is yours."
+          ],
+          "count": 1
+        },
+        {
+          "file": "rules/workflow.md",
+          "from": [
+            "agent may invoke it too. The command ends with the `plan-critic` check while",
+            "its caller can still revise the Plan. `/hone:run` then"
+          ],
+          "to": ["agent may invoke it too. `/hone:run` then"],
+          "count": 1
+        }
+      ]
+    },
+
+    "consolidate-critic": {
+      "kind": "agent",
+      "what": "The critic of the consolidate step. It argues for deletion over the finished change.",
+      "means": "The consolidate step runs without its critic: the loop sorts the leftovers and prunes by itself. The agent is gone from the copy, so nothing can call it.",
+      "agent": "agents/consolidate-critic.md",
+      "drop": [
+        {
+          "file": "skills/run/SKILL.md",
+          "fine": true,
+          "sections": ["4-consolidate-sort-the-leftovers-prune-delete-the-plan/_tail"]
+        },
+        {
+          "file": "skills/garden/SKILL.md",
+          "sections": ["4-judgment-the-consolidate-critic-repo-wide"]
+        }
+      ],
+      "sub": [
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "**Quoted subagent output.** Findings from the `consolidate-critic` or from",
+            "`/code-review` are someone else's claims until you triage them. Frame them.",
+            "Open with one line that names the source (\"consolidate-critic findings, before",
+            "triage:\"). Close with your own verdict (\"Triage: applied 2. Declined 1, recorded",
+            "in the commit body.\"). Never let a quoted finding stand as if it were the run's",
+            "own conclusion."
+          ],
+          "to": [
+            "**Quoted subagent output.** Findings from `/code-review` are someone else's",
+            "claims until you triage them. Frame them. Open with one line that names the",
+            "source (\"/code-review findings, before triage:\"). Close with your own verdict",
+            "(\"Triage: applied 2. Declined 1, recorded in the commit body.\"). Never let a",
+            "quoted finding stand as if it were the run's own conclusion."
+          ],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "  (\"review ✓ (skipped, review-scope: docs-only)\"). The `consolidate-critic`",
+            "  judged this change at step 4, and prose is what it judges."
+          ],
+          "to": ["  (\"review ✓ (skipped, review-scope: docs-only)\"). Step 4 judged the prose."],
+          "count": 1
+        },
+        {
+          "file": "skills/garden/SKILL.md",
+          "from": [
+            "  this Note's invariant still hold? These go to the `consolidate-critic`, never",
+            "  auto-applied. Durable *rationale* is never cut by machine on a hunch."
+          ],
+          "to": [
+            "  this Note's invariant still hold? Escalate these, and never auto-apply one.",
+            "  Durable *rationale* is never cut by machine on a hunch."
+          ],
+          "count": 1
+        },
+        {
+          "file": "skills/run/references/parallel.md",
+          "from": [
+            "- After all merges, run one **global consolidate pass** (a `consolidate-critic`",
+            "  over the combined result) to catch cross-change duplication no single worktree",
+            "  could see."
+          ],
+          "to": [
+            "- After all merges, run one **global consolidate pass** over the combined",
+            "  result, to catch cross-change duplication no single worktree could see."
+          ],
+          "count": 1
+        },
+        {
+          "file": "skills/run/references/herdr.md",
+          "from": [
+            "   `parallel.md`: a `consolidate-critic` over the combined result. It lands"
+          ],
+          "to": ["   `parallel.md`, over the combined result. It lands"],
+          "count": 1
+        }
+      ]
+    },
+
+    "test-first": {
+      "kind": "step",
+      "what": "The red-green rule of the build step: a failing test before the code that passes it.",
+      "means": "Build still implements the Plan and still writes tests, in no prescribed order. The guard must be off too, because it enforces the order mechanically.",
+      "requires": ["guard"],
+      "drop": [
+        {
+          "file": "skills/run/SKILL.md",
+          "fine": true,
+          "sections": [
+            "2-build-red-green-serial/red",
+            "2-build-red-green-serial/green"
+          ]
+        }
+      ],
+      "replace": [
+        {
+          "file": "skills/run/SKILL.md",
+          "fine": true,
+          "section": "2-build-red-green-serial/refactor",
+          "with": [""],
+          "why": "The blank line between the bullets and the paragraph below them."
+        }
+      ],
+      "sub": [
+        {
+          "file": "skills/run/SKILL.md",
+          "from": ["description: \"Execute one or more Plans unattended through the hone loop: worktree, build (test-first), verify,"],
+          "to": ["description: \"Execute one or more Plans unattended through the hone loop: worktree, build, verify,"],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": ["Move it into place beside that test as part of the same red-green cycle"],
+          "to": ["Move it into place beside that test"],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "Implement the Plan test-first, one behaviour at a time. The `guard` enforces the",
+            "order, so work with it:"
+          ],
+          "to": ["Implement the Plan one behaviour at a time, and cover each behaviour with tests:"],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "A bug fix is the same loop: the first red test *reproduces the defect*, then you",
+            "fix the root cause. Never fix first and add a confirming test after."
+          ],
+          "to": ["A bug fix is the same: fix the root cause, and cover it with a test."],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "Plan never mentioned) does not ride inside the change's commit. Fix it with its",
+            "own red-green cycle and its **own commit on the branch**, honestly typed. If it"
+          ],
+          "to": [
+            "Plan never mentioned) does not ride inside the change's commit. Fix it in its",
+            "**own commit on the branch**, honestly typed. If it"
+          ],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "  a test catches each one. Run it **diff-scoped and budget-capped**, isolated so",
+            "  it never touches the tree. It audits the *tests*, not the code. A planted bug",
+            "  no test catches means a test that checks too little. Close the gap with",
+            "  another red-green cycle. Skip it"
+          ],
+          "to": [
+            "  a test catches each one. Run it **diff-scoped and budget-capped**, isolated so",
+            "  it never touches the tree. It audits the *tests*, not the code. A planted bug",
+            "  no test catches means a test that checks too little. Close the gap with",
+            "  another test. Skip it"
+          ],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "- **Apply** every confirmed finding inside the Plan's scope, with red-green",
+            "  cycles (never a fix without a test). `verify` re-gates those fixes, not a",
+            "  second review."
+          ],
+          "to": [
+            "- **Apply** every confirmed finding inside the Plan's scope. `verify` re-gates",
+            "  those fixes, not a second review."
+          ],
+          "count": 1
+        },
+        {
+          "file": "rules/workflow.md",
+          "from": ["executes the Plan unattended in a git worktree. The loop is build (test-first)"],
+          "to": ["executes the Plan unattended in a git worktree. The loop is build"],
+          "count": 1
+        },
+        {
+          "file": "rules/workflow.md",
+          "from": [
+            "workspace (`guard`). No production code without a failing test (`guard`).",
+            "Tests, type-check, and lint stay green (`gate`)."
+          ],
+          "to": [
+            "workspace (`guard`).",
+            "Tests, type-check, and lint stay green (`gate`)."
+          ],
+          "count": 1
+        }
+      ]
+    },
+
+    "verify": {
+      "kind": "step",
+      "what": "Step 3 of the loop: the full suite, the type-check, the lint, and a mutation check on a critical path.",
+      "means": "The loop runs no suite of its own. The Stop gate hook and land still run one, unless those are off too.",
+      "drop": [
+        {"file": "skills/run/SKILL.md", "sections": ["3-verify"]}
+      ],
+      "sub": [
+        {
+          "file": "skills/run/SKILL.md",
+          "from": ["hone loop: worktree, build (test-first), verify, consolidate,"],
+          "to": ["hone loop: worktree, build (test-first), consolidate,"],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            " > verify ✓ (suite 212/212, typecheck ✓,",
+            "lint ✓, mutation: skipped, no critical path named)"
+          ],
+          "to": [""],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [" > `verify ...`"],
+          "to": [""],
+          "count": 1
+        },
+        {"file": "skills/run/SKILL.md", "from": [" > verify ✓"], "to": [""], "count": 1},
+        {"file": "skills/run/SKILL.md", "from": [" > verify"], "to": [""], "count": 2},
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "- **Apply** every confirmed finding inside the Plan's scope, with red-green",
+            "  cycles (never a fix without a test). `verify` re-gates those fixes, not a",
+            "  second review."
+          ],
+          "to": [
+            "- **Apply** every confirmed finding inside the Plan's scope, with red-green",
+            "  cycles (never a fix without a test)."
+          ],
+          "count": 1
+        },
+        {
+          "file": "rules/workflow.md",
+          "from": ["description: \"hone: a human writes a short Plan, then an automated loop builds, verifies, consolidates,"],
+          "to": ["description: \"hone: a human writes a short Plan, then an automated loop builds, consolidates,"],
+          "count": 1
+        },
+        {
+          "file": "rules/workflow.md",
+          "from": ["→ verify → consolidate → `/code-review` → land (merge into the primary tree,"],
+          "to": ["→ consolidate → `/code-review` → land (merge into the primary tree,"],
+          "count": 1
+        }
+      ]
+    },
+
+    "consolidate": {
+      "kind": "step",
+      "what": "Step 4 of the loop: sort the leftovers into docs, prune tests, delete the Plan, and call the consolidate-critic.",
+      "means": "The step keeps the Plan deletion and nothing else. The loop writes no Decision and no Note, prunes no test, and calls no critic. The Plan deletion stays, because without it every check about the end state would fail for a second reason.",
+      "replace": [
+        {
+          "file": "skills/run/SKILL.md",
+          "section": "4-consolidate-sort-the-leftovers-prune-delete-the-plan",
+          "with": [
+            "### 4. Consolidate: delete the Plan",
+            "",
+            "**Delete `.plans/<change>.md` with `git rm`, here in the worktree.** The Plan",
+            "is tracked and committed on the trunk, so the worktree checked it out. Remove",
+            "it as part of this change (`git rm .plans/<change>.md` from `$WT`). The",
+            "landing merge carries the deletion back to the primary tree. git history keeps",
+            "the Plan, and the working tree does not. `git rm` whatever is left under",
+            "`.plans/<change>/` as well. (Already gone, because you git-rm'd it earlier?",
+            "Fine, do not re-add it.)",
+            "",
+            "Write no Decision and no Note here, and prune nothing.",
+            ""
+          ]
+        }
+      ],
+      "sub": [
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "**Quoted subagent output.** Findings from the `consolidate-critic` or from",
+            "`/code-review` are someone else's claims until you triage them. Frame them.",
+            "Open with one line that names the source (\"consolidate-critic findings, before",
+            "triage:\"). Close with your own verdict (\"Triage: applied 2. Declined 1, recorded",
+            "in the commit body.\"). Never let a quoted finding stand as if it were the run's",
+            "own conclusion."
+          ],
+          "to": [
+            "**Quoted subagent output.** Findings from `/code-review` are someone else's",
+            "claims until you triage them. Frame them. Open with one line that names the",
+            "source (\"/code-review findings, before triage:\"). Close with your own verdict",
+            "(\"Triage: applied 2. Declined 1, recorded in the commit body.\"). Never let a",
+            "quoted finding stand as if it were the run's own conclusion."
+          ],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "  (\"review ✓ (skipped, review-scope: docs-only)\"). The `consolidate-critic`",
+            "  judged this change at step 4, and prose is what it judges."
+          ],
+          "to": ["  (\"review ✓ (skipped, review-scope: docs-only)\")."],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "   what consolidate removed (pruned tests, dead code, deleted doc lines, a spent",
+            "   reference). Where there genuinely was nothing, it reads `Cut: nothing` with"
+          ],
+          "to": [
+            "   what the change removed (the Plan, dead code, a spent reference). Where",
+            "   there genuinely was nothing, it reads `Cut: nothing` with"
+          ],
+          "count": 1
+        }
+      ]
+    },
+
+    "review": {
+      "kind": "step",
+      "what": "Step 5 of the loop: the nested, native /code-review on the finished change.",
+      "means": "The loop lands with no review. It is the dearest step of the loop, at about 12 percent of a run. A check on the review's own artifact, such as review_ran of happy-path, then fails by construction, as on the bare arm.",
+      "drop": [
+        {"file": "skills/run/SKILL.md", "sections": ["5-review-native-code-review"]}
+      ],
+      "sub": [
+        {
+          "file": "skills/run/SKILL.md",
+          "from": ["verify, consolidate, /code-review, land. Confirms each step by its artifacts"],
+          "to": ["verify, consolidate, land. Confirms each step by its artifacts"],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "**Quoted subagent output.** Findings from the `consolidate-critic` or from",
+            "`/code-review` are someone else's claims until you triage them. Frame them."
+          ],
+          "to": [
+            "**Quoted subagent output.** Findings from the `consolidate-critic` are someone",
+            "else's claims until you triage them. Frame them."
+          ],
+          "count": 1
+        },
+        {
+          "file": "skills/run/SKILL.md",
+          "from": ["- Declined: <review findings declined + where recorded, or \"none\">", ""],
+          "to": [""],
+          "count": 1
+        },
+        {"file": "skills/run/SKILL.md", "from": [" > review ✓"], "to": [""], "count": 1},
+        {"file": "skills/run/SKILL.md", "from": [" > review"], "to": [""], "count": 4},
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "2. **genuinely ambiguous**: the Plan or the review leaves a real fork only the",
+            "   human can pick."
+          ],
+          "to": ["2. **genuinely ambiguous**: the Plan leaves a real fork only the human can pick."],
+          "count": 1
+        },
+        {
+          "file": "rules/workflow.md",
+          "from": ["description: \"hone: a human writes a short Plan, then an automated loop builds, verifies, consolidates, reviews, and lands"],
+          "to": ["description: \"hone: a human writes a short Plan, then an automated loop builds, verifies, consolidates, and lands"],
+          "count": 1
+        },
+        {
+          "file": "rules/workflow.md",
+          "from": ["→ verify → consolidate → `/code-review` → land (merge into the primary tree,"],
+          "to": ["→ verify → consolidate → land (merge into the primary tree,"],
+          "count": 1
+        }
+      ]
+    },
+
+    "land": {
+      "kind": "step",
+      "what": "Step 6 of the loop: the commit, and the merge through scripts/worktree.sh land.",
+      "means": "The loop merges the branch itself with git merge --no-ff and runs the suite in the primary tree. The change still lands, so a check on the end state still reads. Every gate inside land is then unreachable, and so is the land lock.",
+      "caution": "The land script carries the lock, the gates, and the rollback. Read a fail of this variant in its sandbox before you believe it.",
+      "excludes": ["proof-gate", "grant-gate", "shape-gate"],
+      "replace": [
+        {
+          "file": "skills/run/SKILL.md",
+          "section": "6-land",
+          "with": [
+            "### 6. Land",
+            "",
+            "Commit in the worktree, then merge the branch into the primary tree yourself:",
+            "",
+            "1. In `$WT`: `git add -A && git commit` with a Conventional Commits message. The",
+            "   Decision(s) this change makes land in **this same commit** as the code. Pick",
+            "   the **commit type from what the change does**, not from what rode along. A",
+            "   change that alters the behaviour of `deploy/` or `scripts/` is never `docs:`,",
+            "   however much prose it also touched.",
+            "2. From the primary tree, merge the branch and prove the trunk:",
+            "",
+            "   ```bash",
+            "   git merge --no-ff hone/<change>",
+            "   bash scripts/run-tests.sh --all",
+            "   ```",
+            "",
+            "   On green, remove the worktree (`git worktree remove .worktrees/<change>`)",
+            "   and delete the branch. On red, revert the merge, keep the worktree as",
+            "   evidence, and stop. Never leave the primary tree red.",
+            "",
+            "Confirm to the user with the final report block from *Reporting*. It names",
+            "what landed, the Decisions/Notes written, what the change deleted (the Plan,",
+            "and any pruned tests), and what is next. Every cycle removes something.",
+            ""
+          ]
+        }
+      ],
+      "drop": [
+        {
+          "file": "skills/run/SKILL.md",
+          "fine": true,
+          "sections": [
+            "the-three-ways-to-stop/exit-8-the-authority-gate",
+            "the-three-ways-to-stop/exit-7-the-proof-gate",
+            "the-three-ways-to-stop/_tail"
+          ]
+        }
+      ],
+      "sub": [
+        {
+          "file": "skills/run/SKILL.md",
+          "from": [
+            "The land gates are not a fourth way to stop. Both ask you for something the",
+            "suite cannot supply, and you supply it and land again:",
+            ""
+          ],
+          "to": [""],
+          "count": 1
+        }
+      ]
+    },
+
+    "shape-gate": {
+      "kind": "gate",
+      "what": "Inside land: the branch must carry a `Cut:` or `Repair:` line in a commit body.",
+      "means": "land merges a branch with no such line. The run skill still asks for the line.",
+      "sub": [
+        {
+          "file": "scripts/worktree.sh",
+          "from": [
+            "    if [ -n \"$(git -C \"$main_root\" rev-list \"$base..$branch\" 2>/dev/null)\" ] \\",
+            "       && ! git -C \"$main_root\" log --format=%B \"$base..$branch\" \\",
+            "            | grep -E '^(Cut|Repair): +[^[:space:]<]' \\",
+            "            | grep -viE '^Cut: +nothing[[:space:][:punct:]]*$' >/dev/null; then"
+          ],
+          "to": ["    if false; then   # variant.py: the shape gate is off in this copy"],
+          "count": 1
+        }
+      ]
+    },
+
+    "grant-gate": {
+      "kind": "gate",
+      "what": "Inside land: an irreversible change needs a scoped grant at .hone-grant/<change>.",
+      "means": "land merges an irreversible change with no grant, and writes no grant note into the merge body. The run skill still names exit 8.",
+      "sub": [
+        {
+          "file": "scripts/worktree.sh",
+          "from": ["    reasons=$(land_irreversible \"$main_root\" \"$base\" \"$branch\")"],
+          "to": ["    reasons=\"\"   # variant.py: the authority gate is off in this copy"],
+          "count": 1
+        }
+      ]
+    },
+
+    "proof-gate": {
+      "kind": "gate",
+      "what": "Inside land: a change that declared real-environment proof needs the adapter or a human sign-off.",
+      "means": "land merges such a change on the suite alone. The run skill still names exit 7.",
+      "sub": [
+        {
+          "file": "scripts/worktree.sh",
+          "from": [
+            "    if [ -n \"$proof_always\" ] || [ -n \"$bootstrap\" ] \\",
+            "       || [ -n \"$(land_proof_required \"$main_root\" \"$base\" \"$branch\")\" ]; then"
+          ],
+          "to": ["    if false; then   # variant.py: the proof gate is off in this copy"],
+          "count": 1
+        }
+      ]
+    }
+  }
+}

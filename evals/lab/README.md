@@ -210,9 +210,21 @@ came from a check.
 
 ## Switching a component off
 
-`--without guard,nag` removes those hooks from `hooks.json` in the sandboxed
-plugin copy. The repo's own file never changes. `result.json` records the
-switch.
+A *part* is a hook, a critic, a step of the loop, or a gate inside `land`.
+`--without guard,nag` switches parts off in the sandboxed plugin copy, and the
+repo's own files never change. `--variant NAME` reads
+`evals/lab/variants/NAME.json`, which names parts and settings together.
+`--set review.level=medium` moves one setting. `result.json` records the whole
+variant, so no run reads as the full arm.
+
+`python3 evals/lab/variant.py --parts` lists the parts.
+`evals/lab/parts.json` holds one entry per part: what it is for, what the loop
+does without it, and every section and line that names it. The header of
+`variant.py` says how each kind goes off, and what a dropped step must lose
+elsewhere.
+
+A check on the artifact of a part that is off fails by construction, as on the
+bare arm.
 
 Three rules for an ablation:
 
@@ -222,8 +234,8 @@ Three rules for an ablation:
 - The temptation must be real. A scenario that the model passes with every
   guard off measures the model and not the guard.
 
-`casual-fix` is the only adversarial scenario that a model fails with the
-guards off, and only below the floor. The spikes
+`casual-fix` is the only such scenario today, and only below the floor. The
+spikes
 [`guards-first-look`](../../docs/spikes/2026-09-17-guards-first-look.md) and
 [`guard-temptations`](../../docs/spikes/2026-09-17-guard-temptations.md)
 have the runs.
@@ -251,9 +263,8 @@ has the first ten runs.
 every goal, and a new scenario must tell that arm and a full one apart
 before it stays.
 
-The header of `run.sh` says how the arm stays fair: where the bare prompt
-comes from, what the seed strips, and which scenarios it skips. A skip is
-neither a pass nor a fail.
+The header of `run.sh` says how the arm stays fair. A skip there is neither a
+pass nor a fail.
 
 `result.json` carries `"arm": "bare"`. A check on an artifact of hone fails
 there by construction. Read such a fail as the zero point, never as a
@@ -268,21 +279,12 @@ canonical deny rules in `.claude/settings.json`. The run has its own git
 identity, and it runs with `--setting-sources project,local`. That flag keeps the user's settings,
 plugins, and instructions out of the run.
 
-The run isolates `$HOME` whenever it can authenticate without the real one.
-Auth comes from the first of three sources:
-
-1. `ANTHROPIC_API_KEY` or `CLAUDE_CODE_OAUTH_TOKEN` in the environment.
-2. The access token of your own OAuth session. The harness reads that one
-   value from `~/.claude/.credentials.json`, and it hands the value to the
-   run as `CLAUDE_CODE_OAUTH_TOKEN`. It never copies the file, which also
-   holds the refresh token: a refresh in a copy can log the real session
-   out. A stale token makes a scenario indeterminate, so the harness renews
-   once before the fan-out. Your own session can still renew in the middle
-   of a run. Run that scenario again.
-3. Neither exists. The run then shares the real `$HOME`, and `result.json`
-   says `"home": "shared"`. One leak stays in that mode. The nested
-   `/code-review` is a new process, and the run skill starts it without
-   `--setting-sources`. So it loads your settings.
+The run isolates `$HOME` whenever it can authenticate without the real one,
+and the header of `run.sh` names the three sources of auth. Two costs reach a
+reader of results. A run that
+shares the real `$HOME` says `"home": "shared"`, and there the nested
+`/code-review` loads your own settings. A token that expires under a run makes
+that scenario indeterminate, so run it again.
 
 The token sits in the environment of an agent that has every permission, and
 that agent's transcript stays on disk. An agent that prints its environment
