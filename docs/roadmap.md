@@ -192,6 +192,26 @@ change with a test in `test/hooks_test.sh` that replays the shape.
 
 ### Measurement
 
+#### A real base gives the lab no room, for now
+
+Step 4 of the handoff asked for a lab scenario that seeds a pinned
+open-source repository in place of a fixture of a hundred lines. The aim was
+room on *correct* and on the duplicate measure `dup`, where opus passes
+nearly every scenario of today. The base is pallets/click at the tag 8.5.0,
+12,674 lines of source, BSD-3-Clause.
+
+I tried three tasks, each one harder than the last, and each one hiding
+facts that only the wider code holds. Opus got every hidden fact right on
+every run, with hone and without it. Sonnet held the hardest task in three
+runs per arm, so the base gives no room below the floor either. The scenario
+`evals/lab/scenarios/real-base-click` holds the first task and runs by name
+only. The runs, the measures, and the two tasks that live in no file are in
+[the real-base note](spikes/2026-09-20-real-base-scenario.md).
+
+What is open: the note names two ways to reopen this. Cut the Plan back to
+what a user asks for, or take a base whose own suite catches less. Until
+then, a real base buys the lab a price comparison and no outcome room.
+
 #### Fails from real use
 
 [`field-log.md`](field-log.md) collects what hone does wrong in the

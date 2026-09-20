@@ -1,0 +1,2 @@
+This scenario runs by name only: it fetches a real base once from the network,
+and it costs more than a fixture run.

@@ -19,6 +19,17 @@
 #   goals     optional. One `MEASURE VALUE` line per measure of check.sh that
 #             stands for an outcome: the value of a run that held the outcome.
 #             evals/candidate.sh counts those runs per arm.
+#   by-name   optional. Its presence keeps the scenario out of a pass that
+#             names no scenario, the release gate included. It is for a
+#             scenario that needs the network or that costs much more than a
+#             fixture run. Name it, and it runs.
+#   sequence  optional. One change name per line. The scenario then runs one
+#             session per name, in order, in one sandbox and on one
+#             repository, and briefs/<name>.md holds the Plan that the driver
+#             hands over before each step. `prompt` is then a label that the
+#             dry run prints, and not the turn: the driver builds each turn
+#             from the change name. A sequence scenario costs as many
+#             sessions as it has names, so give it a `by-name` file too.
 #
 # The verdict has three values. `pass` and `fail` are behavioral results.
 # `indeterminate` is an infrastructure failure: no result event, an error
@@ -98,7 +109,8 @@
 # Output goes to /var/tmp/hone-lab/<time>/<scenario>/, or under $LAB_OUT: the
 # sandbox (plugin/, repo/, home/), transcript.jsonl, nested.jsonl, nested-out/,
 # checks.log, judge.json, stop-judge.json, and result.json. The sandbox stays on disk, because
-# it is the evidence for the verdict.
+# it is the evidence for the verdict. A sequence run adds step-N/ per session
+# and steps.json, and the joined files hold every step (see run_sequence).
 #
 # The output must not sit inside this repository. Claude Code loads CLAUDE.md
 # and .claude/rules/ from every directory above the fixture, and
@@ -198,6 +210,8 @@ fi
 if [ "${#NAMES[@]}" -eq 0 ]; then
     for d in "$SCENARIOS"/*/; do
         [ -f "$d/check.sh" ] || continue
+        # A scenario with a `by-name` file stays out of a pass that names none.
+        [ ! -f "$d/by-name" ] || continue
         [ -z "$TRACK" ] || [ "$(tr -d '[:space:]' < "$d/track")" = "$TRACK" ] || continue
         NAMES+=("$(basename "$d")")
     done
@@ -406,15 +420,17 @@ session_idle() {
 # counts as finished after three idle looks in a row, which covers the moment
 # between a task's end and the turn it triggers.
 # Returns 0 when the session ended by itself or went idle, 124 on the timeout.
+# $4 is where the session's own files go, and it defaults to the sandbox. A
+# sequence run gives each of its sessions a directory of its own.
 drive_session() {
-    local sb="$1" prompt="$2" token="${3:-}" fd pid idle=0 deadline rc=0
+    local sb="$1" prompt="$2" token="${3:-}" od="${4:-$1}" fd pid idle=0 deadline rc=0
     # The whole of the bare arm: the session starts with no plugin to load.
     local plugin_arg=()
     [ "$BARE" -eq 1 ] || plugin_arg=(--plugin-dir "$sb/plugin")
     # The session reads the fifo, and the harness holds its only write end. A
     # read-write open here would hand the session a write end of its own, and
     # then closing ours could never give it EOF.
-    rm -f "$sb/stdin"; mkfifo "$sb/stdin"
+    rm -f "$od/stdin"; mkfifo "$od/stdin"
     (
         cd "$sb/repo" || exit 1
         [ "$HOME_MODE" = isolated ] && export HOME="$sb/home"
@@ -424,15 +440,15 @@ drive_session() {
             ${plugin_arg[@]+"${plugin_arg[@]}"} --setting-sources project,local \
             --model "$MODEL" --permission-mode bypassPermissions \
             --max-budget-usd "$BUDGET" --output-format stream-json --verbose
-    ) < "$sb/stdin" > "$sb/transcript.jsonl" 2> "$sb/stderr.log" &
+    ) < "$od/stdin" > "$od/transcript.jsonl" 2> "$od/stderr.log" &
     pid=$!
-    exec {fd}>"$sb/stdin"
+    exec {fd}>"$od/stdin"
     jq -cn --arg t "$prompt" '{type: "user", message: {role: "user", content: $t}}' >&"$fd"
     deadline=$(( $(date +%s) + TIMEOUT_MIN * 60 ))
     while kill -0 "$pid" 2>/dev/null; do
         sleep "${LAB_POLL:-10}"
         if [ "$(date +%s)" -ge "$deadline" ]; then rc=124; break; fi
-        if session_idle "$sb/transcript.jsonl"; then idle=$((idle+1)); else idle=0; fi
+        if session_idle "$od/transcript.jsonl"; then idle=$((idle+1)); else idle=0; fi
         [ "$idle" -ge 3 ] && break
     done
     exec {fd}>&-
@@ -462,8 +478,13 @@ bare_prompt() {
     plan="$repo/.plans/$change.md"
     [ -f "$plan" ] || { echo "the seed wrote no brief at .plans/$change.md, so there is no task text to hand over" >&2; return 1; }
     cat "$plan"
-    # One line of framing, and no word of hone's method. It asks for a commit
-    # because both arms are read from what the repository holds at the end.
+    bare_framing
+}
+
+# One line of framing, and no word of hone's method. It asks for a commit
+# because both arms are read from what the repository holds at the end. The
+# sequence driver gives each of its bare steps the same line.
+bare_framing() {
     printf '\nThat is the brief for one change. Make the change in this repository, and commit it when it is done.\n'
 }
 
@@ -480,12 +501,100 @@ write_skipped() {
           ending: "", measures: {}}' > "$sb/result.json"
 }
 
+# The sequence driver. A scenario with a `sequence` file runs one session per
+# change of that file, in order, in one sandbox and on one repository. Each
+# session is new: the driver copies the change's brief from briefs/ into
+# .plans/, commits it by itself, and starts a fresh session on it. The budget
+# and the timeout stay per session, as they are for every other run.
+#
+# The rule on a step that lands nothing. A session may stop, because hone asks
+# a question, because a gate blocks, or because the change turns out wrong.
+# That is a result and not a fault of the harness, and it costs the person
+# attention. So the driver records the stop, sets the brief aside in a commit
+# of its own, and goes on with the next change. steps.json says which changes
+# did not land. The brief goes rather than stays, because a Plan left pending
+# changes what the next session reads, and both arms must meet the same
+# repository.
+#
+# An infrastructure failure is a different thing: no result event, an error
+# envelope, a timeout, or a spent budget. The sequence stops there and the run
+# is indeterminate, because the arm is no longer comparable. broke.txt says
+# which step broke and why, and grade_scenario reads it.
+#
+# It leaves step-N/ per session, with that session's transcript, stderr,
+# nested record and report. It joins all of them into transcript.jsonl,
+# nested.jsonl, nested-out/ and report.txt, which are the files a check reads.
+# steps.json carries one record per step: the change, the commit it started
+# from, the commit it ended on, whether it landed, its cost and its time.
+run_sequence() {
+    local sb="$1" scenario="$2" token="$3"
+    local changes=() change prompt step=0 od base head landed result rc=0 started
+    mapfile -t changes < <(grep -vE '^[[:space:]]*(#|$)' "$scenario/sequence")
+    : > "$sb/steps.jsonl"; : > "$sb/transcript.jsonl"; : > "$sb/nested.jsonl"
+    : > "$sb/report.txt"; rm -f "$sb/broke.txt"; mkdir -p "$sb/nested-out"
+    for change in "${changes[@]}"; do
+        step=$((step+1))
+        od="$sb/step-$step"; mkdir -p "$od/nested-out"; : > "$od/nested.jsonl"
+        mkdir -p "$sb/repo/.plans/$(dirname "$change")"
+        cp "$scenario/briefs/$change.md" "$sb/repo/.plans/$change.md" || { echo "no brief for $change" > "$sb/broke.txt"; break; }
+        git -C "$sb/repo" add -- ".plans/$change.md"
+        git -C "$sb/repo" commit -q -m "chore: hand the brief for $change over" -- ".plans/$change.md"
+        base=$(git -C "$sb/repo" rev-parse main)
+        if [ "$BARE" -eq 1 ]; then
+            prompt="$(cat "$sb/repo/.plans/$change.md")$(bare_framing)"
+        else
+            prompt="/hone:run $change"
+        fi
+        write_shim "$sb/bin" "$od/nested.jsonl" "$od/nested-out"
+        started=$(date +%s)
+        drive_session "$sb" "$prompt" "$token" "$od"; rc=$?
+        cat "$od/transcript.jsonl" >> "$sb/transcript.jsonl" 2>/dev/null
+        cat "$od/nested.jsonl" >> "$sb/nested.jsonl" 2>/dev/null
+        cp "$od"/nested-out/*.out "$sb/nested-out/" 2>/dev/null
+        result=$(jq -c 'select(.type == "result")' "$od/transcript.jsonl" 2>/dev/null | tail -1)
+        jq -r '.result // empty' <<<"${result:-{\}}" > "$od/report.txt" 2>/dev/null
+        { printf '\n== step %s: %s ==\n' "$step" "$change"; cat "$od/report.txt"; } >> "$sb/report.txt"
+        head=$(git -C "$sb/repo" rev-parse main)
+        landed=false; [ "$head" = "$base" ] || landed=true
+        jq -cn --argjson step "$step" --arg change "$change" --arg base "$base" --arg head "$head" \
+            --argjson landed "$landed" --argjson seconds "$(( $(date +%s) - started ))" \
+            --argjson cost "$(jq -r '.total_cost_usd // 0' <<<"${result:-{\}}" 2>/dev/null || echo 0)" \
+            --argjson nested "$(jq -s 'map(.cost_usd) | add // 0' "$od/nested.jsonl" 2>/dev/null || echo 0)" \
+            --argjson turns "$(jq -r '.num_turns // 0' <<<"${result:-{\}}" 2>/dev/null || echo 0)" \
+            '{step: $step, change: $change, base: $base, head: $head, landed: $landed,
+              cost_usd: $cost, nested_cost_usd: $nested, seconds: $seconds, turns: $turns}' >> "$sb/steps.jsonl"
+        if [ "$rc" -eq 124 ]; then
+            printf 'step %s (%s) hit its timeout\n' "$step" "$change" > "$sb/broke.txt"
+        elif [ -z "$result" ]; then
+            printf 'step %s (%s) ended with no result event (see step-%s/stderr.log)\n' "$step" "$change" "$step" > "$sb/broke.txt"
+        elif [ "$(jq -r '.is_error' <<<"$result")" != "false" ]; then
+            printf 'step %s (%s) ended in an error envelope: %s\n' "$step" "$change" \
+                "$(jq -r '.subtype // "unknown"' <<<"$result")" > "$sb/broke.txt"
+        fi
+        [ -s "$sb/broke.txt" ] && break
+        # A brief that nobody landed goes, so that the next session of either
+        # arm opens on the same repository.
+        if [ "$landed" = false ] && [ -e "$sb/repo/.plans/$change.md" ]; then
+            rm -f "$sb/repo/.plans/$change.md"
+            git -C "$sb/repo" add -A -- ".plans/$change.md"
+            git -C "$sb/repo" commit -q -m "chore: set the brief for $change aside" -- ".plans/$change.md"
+        fi
+    done
+    jq -s . "$sb/steps.jsonl" > "$sb/steps.json" 2>/dev/null || echo '[]' > "$sb/steps.json"
+    [ -s "$sb/broke.txt" ] || return 0
+    grep -q 'hit its timeout' "$sb/broke.txt" && return 124
+    return 1
+}
+
 # Set the sandbox up and run the session. What the run was goes to run.json,
 # so a later --regrade can grade the sandbox without the run's variables.
 run_scenario() {
     local name="$1" scenario="$SCENARIOS/$1" sb="$RUN_DIR/$1"
     local seeded=true auth_ok=true token="" start rc=0 prompt reason phash pfiles
-    if [ "$BARE" -eq 1 ] && ! reason=$(bare_prompt "$scenario" 2>&1 >/dev/null); then
+    # A sequence scenario builds each turn from its own briefs, so the two
+    # skips that bare_prompt decides here do not apply to it.
+    if [ "$BARE" -eq 1 ] && [ ! -f "$scenario/sequence" ] \
+        && ! reason=$(bare_prompt "$scenario" 2>&1 >/dev/null); then
         write_skipped "$name" "$reason"; return 0
     fi
     mkdir -p "$sb"
@@ -499,7 +608,8 @@ run_scenario() {
 
     prompt=$(cat "$scenario/prompt")
     if [ "$BARE" -eq 1 ] && [ "$seeded" = true ]; then
-        if ! prompt=$(bare_prompt "$scenario" "$sb/repo" 2> "$sb/bare.log"); then
+        if [ ! -f "$scenario/sequence" ] \
+            && ! prompt=$(bare_prompt "$scenario" "$sb/repo" 2> "$sb/bare.log"); then
             write_skipped "$name" "$(cat "$sb/bare.log")"; return 0
         fi
         # No hone in the sandbox: the copy seeded the fixture, and a session
@@ -519,7 +629,10 @@ run_scenario() {
             token=$(session_token)
             [ -n "$token" ] || auth_ok=false
         fi
-        if [ "$auth_ok" = true ]; then
+        if [ "$auth_ok" = true ] && [ -f "$scenario/sequence" ]; then
+            run_sequence "$sb" "$scenario" "$token"
+            rc=$?
+        elif [ "$auth_ok" = true ]; then
             drive_session "$sb" "$prompt" "$token"
             rc=$?
         fi
@@ -562,9 +675,18 @@ grade_scenario() {
         verdict=indeterminate; reason="the session token had under 30 minutes left when the scenario started"
     else
         result=$(jq -c 'select(.type == "result")' "$sb/transcript.jsonl" 2>/dev/null | tail -1)
-        cost=$(jq -r '.total_cost_usd // 0' <<<"${result:-{\}}" 2>/dev/null || echo 0)
-        jq -r '.result // empty' <<<"${result:-{\}}" > "$sb/report.txt" 2>/dev/null
-        if [ "$(jq -r .timed_out "$sb/run.json")" = "true" ]; then
+        # A sequence run is several sessions in one sandbox. Its driver already
+        # joined the reports and wrote the cost of each step, so the cost here
+        # is the sum over the steps and not the last step's line.
+        if [ -f "$sb/steps.json" ]; then
+            cost=$(jq '[.[].cost_usd] | add // 0' "$sb/steps.json" 2>/dev/null || echo 0)
+        else
+            cost=$(jq -r '.total_cost_usd // 0' <<<"${result:-{\}}" 2>/dev/null || echo 0)
+            jq -r '.result // empty' <<<"${result:-{\}}" > "$sb/report.txt" 2>/dev/null
+        fi
+        if [ -s "$sb/broke.txt" ]; then
+            verdict=indeterminate; reason=$(head -1 "$sb/broke.txt")
+        elif [ "$(jq -r .timed_out "$sb/run.json")" = "true" ]; then
             verdict=indeterminate; reason="the run hit its timeout"
         elif [ -z "$result" ]; then
             verdict=indeterminate; reason="the run ended with no result event (see stderr.log)"
@@ -581,6 +703,8 @@ grade_scenario() {
             cd "$sb/repo" || exit 2
             export LAB_BASE LAB_TRANSCRIPT="$sb/transcript.jsonl" LAB_NESTED="$sb/nested.jsonl" \
                 LAB_NESTED_OUT="$sb/nested-out" LAB_REPORT="$sb/report.txt" LAB_WITHOUT LAB_ARM
+            # A sequence run leaves one record per step, and a check reads it.
+            export LAB_STEPS="$sb/steps.json"
             LAB_WITHOUT=$(jq -r .without "$sb/run.json")
             LAB_ARM=$(jq -r '.arm // "full"' "$sb/run.json")
             LAB_BASE=$(cat "$sb/base")

@@ -13,6 +13,7 @@
 #   LAB_REPORT      the run's final message
 #   LAB_WITHOUT     the hooks that this run switched off, comma-separated
 #   LAB_ARM         `full` with the plugin loaded, `bare` with no hone at all
+#   LAB_STEPS       one record per session of a sequence run, or no such file
 #
 # Every helper judges the primary tree at `main`, never a worktree. What a run
 # left in a worktree has not landed.
@@ -235,4 +236,52 @@ revertible() {
         revert) bad "a revert of the $what does not apply" ;;
         suite) bad "a revert of the $what leaves the suite red" ;;
     esac
+}
+
+# sequence_revertible: the per-change form of `revertible`, for a scenario
+# that ran several changes in a row on one repository. Every change that
+# landed moved main by exactly one commit on its first-parent line. A revert
+# of that commit, made in a throwaway clone at the state right after it
+# landed, applies and leaves the suite green. A change that landed nothing
+# costs the person attention, which `landed_changes` counts, and it says
+# nothing about reversibility. LAB_STEPS names the driver's record.
+#
+# As in `revertible`, a plain commit counts on the bare arm, because a session
+# with no hone lands no merge.
+sequence_revertible() {
+    local base head n=0 line count merge clone rc what dirty
+    [ -s "${LAB_STEPS:-}" ] || { bad "the run left no record of its steps, so reversibility says nothing"; return; }
+    while read -r base head; do
+        n=$((n+1))
+        line=$(git rev-list --first-parent "$base..$head")
+        count=$(printf '%s\n' "$line" | grep -c .)
+        [ "$count" -eq 1 ] \
+            || { bad "change $n moved main by $count first-parent commits, so one revert does not undo it"; continue; }
+        merge=(); what=merge
+        if [ "$(git rev-list --parents -n 1 "$line" | wc -w)" -eq 3 ]; then
+            merge=(-m 1)
+        elif [ "${LAB_ARM:-full}" = bare ]; then
+            what=commit
+        else
+            bad "the one commit of change $n is not a merge: $(git log --format=%s -n 1 "$line")"; continue
+        fi
+        clone=$(mktemp -d); rc=0
+        if ! git clone -q . "$clone/r" >/dev/null 2>&1; then rc=clone
+        elif ! git -C "$clone/r" checkout -q "$head" >/dev/null 2>&1; then rc=clone
+        elif ! git -C "$clone/r" -c user.name=lab -c user.email=lab@example.invalid \
+                revert ${merge[@]+"${merge[@]}"} --no-edit "$line" >/dev/null 2>&1; then rc=revert
+        elif ! (cd "$clone/r" && bash scripts/run-tests.sh --all >/dev/null 2>&1); then rc=suite
+        fi
+        rm -rf "$clone"
+        case "$rc" in
+            0) ok "one revert of the $what of change $n undoes it, and the suite stays green" ;;
+            clone) bad "the check could not build a clone at change $n, so it says nothing about the run" ;;
+            revert) bad "a revert of the $what of change $n does not apply" ;;
+            suite) bad "a revert of the $what of change $n leaves the suite red" ;;
+        esac
+    done < <(jq -r '.[] | select(.landed) | "\(.base) \(.head)"' "$LAB_STEPS" 2>/dev/null)
+    [ "$n" -gt 0 ] || bad "no change of the sequence landed, so there is nothing to revert"
+    dirty=$(git status --porcelain | head -3 | tr '\n' '|')
+    [ -z "$dirty" ] && ok "the primary tree holds no change outside git's record" \
+        || bad "the primary tree holds changes outside git's record: $dirty"
 }

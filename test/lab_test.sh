@@ -61,6 +61,20 @@ case "$FAKE_MODE" in
               && git rm -q .plans/toy.md && git add -A && git commit -qm "feat: add x" \
               && git checkout -q main && git merge -q --no-ff -m "Merge branch 'hone/toy'" hone/toy \
               && git branch -q -D hone/toy ;;
+    # The sequence modes. Each call is one step, counted in seq-n. Step 2
+    # lands nothing, which is the stop the driver has to carry. `seq-dead`
+    # makes step 2 an infrastructure failure instead.
+    seq|seq-dead)
+        n=$(( $(cat "$FAKE_DIR/seq-n" 2>/dev/null || echo 0) + 1 ))
+        echo "$n" > "$FAKE_DIR/seq-n"
+        [ "$FAKE_MODE" = seq-dead ] && [ "$n" = 2 ] && exit 1
+        if [ "$n" != 2 ]; then
+            git checkout -q -b "hone/step-$n" && mkdir -p src && echo "exports.s = $n" > "src/s$n.js" \
+                && git rm -q -r --ignore-unmatch .plans && git add -A && git commit -qm "feat: add s$n" \
+                && git checkout -q main \
+                && git merge -q --no-ff -m "Merge branch 'hone/step-$n'" "hone/step-$n" \
+                && git branch -q -D "hone/step-$n"
+        fi ;;
 esac
 echo '{"type":"system","subtype":"init"}'
 jq -cn '{type: "assistant", message: {content: [{type: "tool_use", name: "Bash", input: {command: "bash \"/p/scripts/worktree.sh\" land toy"}}]}}'
@@ -359,6 +373,96 @@ tool_use /x/repo/src/a.js > "$W/t.jsonl"
 { tool_use /x/repo/.worktrees/a/src/a.js; echo '{"type":"user","text":"hone bash-guard: this command writes to the primary tree"}'; } > "$W/t.jsonl"
 [ "$(reached_of)" = "measurereached=yes" ] && ok "a guard's denial that names the primary tree is a reach" || bad "a denial should measure yes (got $(reached_of))"
 
+echo "== a scenario with a by-name file stays out of a pass that names none =="
+mkdir -p "$W/scenarios/toy-byname"
+for f in track prompt seed.sh check.sh; do cp "$W/scenarios/toy/$f" "$W/scenarios/toy-byname/$f"; done
+echo "it needs the network" > "$W/scenarios/toy-byname/by-name"
+lab --dry-run | grep -q toy-byname && bad "a by-name scenario must not run in a pass that names none" || ok "a pass that names no scenario leaves it out"
+lab --track behavioral --dry-run | grep -q toy-byname && bad "a track pass must not pick a by-name scenario" || ok "a track pass leaves it out too"
+lab toy-byname --dry-run | grep -q toy-byname && ok "naming it runs it" || bad "a named by-name scenario should run"
+rm -rf "$W/scenarios/toy-byname"
+
+echo "== real-base-click: the seed's message, and the check's two end states =="
+# The scenario fetches pallets/click at a pin. This test makes no model call and
+# reaches no network: it uses the cached mirror when one is there, and it skips
+# when there is none. The pin comes from the seed, so it is stated once.
+RB="$PLUGIN_ROOT/evals/lab/scenarios/real-base-click"
+PIN=$(sed -n 's/^PIN=\([0-9a-f]\{40\}\).*/\1/p' "$RB/seed.sh")
+MIRROR="${LAB_BASE_CACHE:-/var/tmp/hone-lab-bases}/click.git"
+bash -n "$RB/seed.sh" && ok "the seed of real-base-click parses" || bad "the seed of real-base-click has a syntax error"
+bash -n "$RB/check.sh" && ok "the check of real-base-click parses" || bad "the check of real-base-click has a syntax error"
+[ -f "$RB/by-name" ] && ok "real-base-click runs by name only" || bad "real-base-click should carry a by-name file"
+# With an empty cache and no way out, the seed says what it needs and stops.
+# The harness turns that into an indeterminate verdict, never into a fail.
+mkdir -p "$W/rb/repo"
+out=$( cd "$W/rb/repo" && LAB_BASE_CACHE="$W/rb/cache" LAB_PLUGIN="$PLUGIN_ROOT" \
+       http_proxy=http://127.0.0.1:1 https_proxy=http://127.0.0.1:1 GIT_TERMINAL_PROMPT=0 \
+       bash "$RB/seed.sh" 2>&1 ); rc=$?
+[ "$rc" -ne 0 ] && ok "with no cache and no network the seed stops" || bad "the seed should stop without a base (got $rc)"
+printf '%s' "$out" | grep -q 'needs the network once' && ok "and it says what it needs" || bad "the seed should name what it needs (got: $(printf '%s' "$out" | tail -1))"
+
+if [ -n "$PIN" ] && git -C "$MIRROR" cat-file -e "$PIN^{commit}" 2>/dev/null && command -v python3 >/dev/null; then
+    sed -n "/^cat > \"\$probe\" <<'PY'$/,/^PY$/p" "$RB/check.sh" | sed '1d;$d' > "$W/rb/probe.py"
+    # Two end states by hand. The good one hands the values to the default map
+    # of the context and asks the base where the per-user directory is. The
+    # copied one places the values on the parameters itself and joins the path.
+    cat > "$W/rb/impl.py" <<'PY'
+
+
+def config_option(*param_decls, app_name, filename="config.json", **kwargs):
+    import json
+    import os
+
+    from .exceptions import UsageError
+    from .types import Path as PathType
+    from .utils import get_app_dir
+
+    def callback(ctx, param, value):
+        if ctx.resilient_parsing:
+            return
+        if value is None:
+            path = os.path.join(APPDIR, filename)
+            if not os.path.isfile(path):
+                return
+        else:
+            path = value
+        try:
+            with open(path, encoding="utf-8") as f:
+                data = json.load(f)
+        except (OSError, ValueError) as e:
+            raise UsageError(f"Could not read {path}: {e}", ctx=ctx) from e
+        if not isinstance(data, dict):
+            raise UsageError(f"{path} holds no object", ctx=ctx)
+        PLACE
+
+    if not param_decls:
+        param_decls = ("--config",)
+    kwargs.setdefault("type", PathType(exists=True, dir_okay=False))
+    kwargs.setdefault("expose_value", False)
+    kwargs.setdefault("is_eager", True)
+    kwargs["callback"] = callback
+    return option(*param_decls, **kwargs)
+PY
+    end_state() {   # $1 the tree, $2 the app-dir expression, $3 the placement
+        mkdir -p "$W/rb/$1" && git -C "$MIRROR" archive "$PIN" src | tar -x -C "$W/rb/$1"
+        sed -e "s#APPDIR#$2#" -e "s#PLACE#$3#" "$W/rb/impl.py" >> "$W/rb/$1/src/click/decorators.py"
+        echo 'from .decorators import config_option as config_option' >> "$W/rb/$1/src/click/__init__.py"
+        ( cd "$W/rb/$1" && PYTHONPATH=src python3 -W ignore "$W/rb/probe.py" 2>&1 | tr '\n' '|' )
+    }
+    place_by_hand='[setattr(p, "default", v[p.name]) for k, v in data.items() if isinstance(v, dict) for p in getattr(ctx.command, "commands", {}).get(k, ctx.command).params if p.name in v]'
+    good=$(end_state good 'get_app_dir(app_name)' 'ctx.default_map = dict(ctx.default_map or {}, **data)')
+    copied=$(end_state copied 'os.path.join(os.path.expanduser("~/.config"), app_name)' "$place_by_hand")
+    [ "$good" = "PROOF 5000 1234 7000 5000 5000 exit2 exit2 8000|SOURCE DEFAULT_MAP|APPDIR 4242|" ] \
+        && ok "the proof and both measures read a good end state" || bad "the good end state should pass the proof (got $good)"
+    case "$copied" in
+        "PROOF 5000 1234 7000 5000 5000 exit2 exit2 8000|"*) bad "a copied end state should not pass the whole proof (got $copied)" ;;
+        *"|SOURCE DEFAULT|APPDIR 3131|") ok "a copied end state fails the proof, and both measures say where it went" ;;
+        *) bad "the copied end state should measure SOURCE DEFAULT and APPDIR 3131 (got $copied)" ;;
+    esac
+else
+    echo "  SKIP: no cached click mirror at $MIRROR, so the end states are not built"
+fi
+
 lab toy --model opus >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an alias for --model exits 2" || bad "a model alias should exit 2 (got $rc)"
 lab no-such-scenario >/dev/null; rc=$?
@@ -419,6 +523,114 @@ token_case 10 999
 # The old code refused here instead of waiting, and every scenario was lost.
 [ "$(calls_made)" -ge 2 ] && ok "the wait retries before it gives up" \
     || bad "the wait should retry before giving up (got $(calls_made))"
+
+echo
+echo "== the generator of the transparent family =="
+# evals/lab/generators/transparent.py writes scenarios from a seed number.
+# Three claims, and no model call: one seed gives one scenario, two seeds give
+# two, and what it writes is a scenario that run.sh accepts.
+GEN="$PLUGIN_ROOT/evals/lab/generators/transparent.py"
+G="$W/generated"
+PYTHONDONTWRITEBYTECODE=1 python3 "$GEN" --range 0 3 --out "$G/a" >/dev/null 2>&1 \
+    && ok "the generator writes four seeds" || bad "the generator failed on seeds 0 to 3"
+PYTHONDONTWRITEBYTECODE=1 python3 "$GEN" --range 0 3 --out "$G/b" >/dev/null 2>&1
+diff -r "$G/a" "$G/b" >/dev/null 2>&1 && ok "one seed gives the same scenario twice" \
+    || bad "the generator is not deterministic"
+first=$(ls "$G/a" | head -1); second=$(ls "$G/a" | sed -n 2p)
+[ -n "$second" ] && ! diff -r "$G/a/$first" "$G/a/$second" >/dev/null 2>&1 \
+    && ok "two seeds give two different scenarios" \
+    || bad "seed 0 and seed 1 wrote the same scenario"
+[ "$(PYTHONDONTWRITEBYTECODE=1 python3 "$GEN" --list --range 0 49 | awk '{print $2}' | sort -u | wc -l)" -eq 50 ] \
+    && ok "the first fifty seeds give fifty scenarios" \
+    || bad "the first fifty seeds repeat a scenario"
+gen_missing=""
+for f in track prompt seed.sh check.sh goals; do
+    [ -s "$G/a/$first/$f" ] || gen_missing="$gen_missing $f"
+done
+[ -z "$gen_missing" ] && ok "a generated scenario has every file the lab needs" \
+    || bad "a generated scenario is missing:$gen_missing"
+bash -n "$G/a/$first/seed.sh" && bash -n "$G/a/$first/check.sh" \
+    && ok "its seed.sh and its check.sh parse" || bad "a generated script has a syntax error"
+LAB_SCENARIOS="$G/a" bash "$LAB" --dry-run > "$G/dry.log" 2>&1
+[ "$(grep -c "$first" "$G/dry.log")" -eq 1 ] && ok "run.sh lists it through LAB_SCENARIOS" \
+    || bad "run.sh did not list the generated scenario (see $G/dry.log)"
+[ "$(ls "$PLUGIN_ROOT/evals/lab/scenarios" | grep -c '^gen')" -eq 0 ] \
+    && ok "no generated scenario sits in the default pass" \
+    || bad "a generated scenario is in evals/lab/scenarios, and the release gate would run it"
+
+echo "== a sequence scenario runs one session per change, in one sandbox =="
+mkdir -p "$W/scenarios/toy-seq/briefs"
+echo behavioral > "$W/scenarios/toy-seq/track"
+echo "/hone:run a, and one session per further line of sequence" > "$W/scenarios/toy-seq/prompt"
+printf 'a\nb\nc\n' > "$W/scenarios/toy-seq/sequence"
+touch "$W/scenarios/toy-seq/by-name"
+for c in a b c; do
+    printf '# Brief: %s\n\nDo the %s change.\n' "$c" "$c" > "$W/scenarios/toy-seq/briefs/$c.md"
+done
+# The seed writes no Plan: the driver hands each brief over in turn.
+echo "echo 'config/' > .hone-irreversible-paths" > "$W/scenarios/toy-seq/seed.sh"
+cat > "$W/scenarios/toy-seq/check.sh" <<'EOF'
+unchanged scripts/run-tests.sh
+measure steps "$(jq length "$LAB_STEPS")"
+measure landed_changes "$(jq '[.[] | select(.landed)] | length' "$LAB_STEPS")/$(jq length "$LAB_STEPS")"
+EOF
+
+fresh; rm -f "$W/seq-n"; MODE=seq lab toy-seq >/dev/null; rc=$?
+seq_sb=$(echo "$W"/out/*/toy-seq)
+[ "$rc" -eq 0 ] && [ "$(result toy-seq .verdict)" = "pass" ] && ok "a sequence run grades as any other" \
+    || bad "a sequence run should pass (exit $rc, $(result toy-seq .verdict): $(result toy-seq .reason))"
+[ "$(result toy-seq .measures.steps)" = "3" ] && ok "the check reads one record per change" \
+    || bad "LAB_STEPS should hold 3 records (got $(result toy-seq -c .measures))"
+[ "$(result toy-seq .cost_usd)" = "4.5" ] && ok "the cost is the sum over the three sessions" \
+    || bad "the cost of three sessions at 1.5 should be 4.5 (got $(result toy-seq .cost_usd))"
+[ "$(result toy-seq .turns)" = "9" ] && ok "the turns are the sum over the sessions" \
+    || bad "three sessions of 3 turns should be 9 (got $(result toy-seq .turns))"
+[ -s "$seq_sb/step-1/transcript.jsonl" ] && [ -s "$seq_sb/step-3/transcript.jsonl" ] \
+    && ok "each session keeps a transcript of its own" || bad "step-1/ and step-3/ should each hold a transcript"
+[ "$(jq -s 'length' "$seq_sb/transcript.jsonl")" -gt 9 ] && ok "the joined transcript holds every step" \
+    || bad "the joined transcript should hold all three sessions"
+[ "$(jq -r '[.[].change] | join(",")' "$seq_sb/steps.json")" = "a,b,c" ] \
+    && ok "the steps run in the order of the sequence file" || bad "the steps should run a, b, c"
+
+echo "== a step that lands nothing is human attention, and the sequence goes on =="
+[ "$(jq -r '[.[].landed] | join(",")' "$seq_sb/steps.json")" = "true,false,true" ] \
+    && ok "the record says which change landed" || bad "step 2 should be the one that did not land"
+[ "$(result toy-seq .measures.landed_changes)" = "2/3" ] && ok "a check can count what landed" \
+    || bad "landed_changes should be 2/3 (got $(result toy-seq -c .measures))"
+seq_log=$(git -C "$seq_sb/repo" log --format=%s 2>&1)
+case "$seq_log" in
+    *"set the brief for b aside"*) ok "the driver sets the brief of a step that landed nothing aside" ;;
+    *) bad "an unlanded brief should be set aside in a commit of its own (log: $(tr '\n' '|' <<<"$seq_log"))" ;;
+esac
+[ ! -e "$seq_sb/repo/.plans/b.md" ] && ok "no pending Plan is left for the next session" \
+    || bad ".plans/b.md should not survive the step that did not land"
+
+echo "== the turn of each step, on both arms =="
+[ "$(prompt_sent | head -1)" = "/hone:run c" ] && ok "the full arm sends /hone:run for each change" \
+    || bad "the last turn should be /hone:run c (got $(prompt_sent | head -1))"
+fresh; rm -f "$W/seq-n"; MODE=seq lab toy-seq --bare >/dev/null
+[ "$(result toy-seq .verdict)" != "skipped" ] && ok "a sequence scenario is not skipped on the bare arm" \
+    || bad "the bare arm should run a sequence scenario (got $(result toy-seq .reason))"
+[ "$(prompt_sent | head -1)" = "# Brief: c" ] && ok "the bare turn of a step is that change's brief" \
+    || bad "the bare turn should open with the brief (got $(prompt_sent | head -1))"
+prompt_sent | grep -q 'Make the change in this repository' && ok "the bare turn of a step asks for the change" \
+    || bad "the bare turn of a step should ask for the change"
+
+echo "== a session that breaks mid-sequence is indeterminate, never a result =="
+fresh; rm -f "$W/seq-n"; MODE=seq-dead lab toy-seq >/dev/null; rc=$?
+seq_sb=$(echo "$W"/out/*/toy-seq)
+[ "$rc" -eq 3 ] && [ "$(result toy-seq .verdict)" = "indeterminate" ] \
+    && ok "a step with no result event makes the run indeterminate" \
+    || bad "a broken step should be indeterminate (exit $rc, $(result toy-seq .verdict))"
+result toy-seq .reason | grep -q 'step 2' && ok "the reason names the step that broke" \
+    || bad "the reason should name step 2 (got $(result toy-seq .reason))"
+[ "$(jq length "$seq_sb/steps.json")" = "2" ] && ok "the sequence stops at the step that broke" \
+    || bad "steps.json should stop after step 2 (got $(jq length "$seq_sb/steps.json"))"
+
+echo "== a sequence scenario stays out of a pass that names none =="
+fresh; MODE=land lab --dry-run > "$W/seq-dry.log" 2>&1
+grep -q 'toy-seq' "$W/seq-dry.log" && bad "a by-name scenario must not enter a pass that names none" \
+    || ok "the dry run lists no sequence scenario of its own accord"
 
 echo
 echo "-------------------------------------"

@@ -35,9 +35,23 @@ As of 2026-09-20:
 - Step 3 is done. `evals/optimize/sections.py` is the splitter, and its
   header has the rules and the usage. `--fine` gives the finer split for
   the critics. `test/optimize_test.sh` proves the round trip in both modes.
-- Step 4: the bare arm is done. `evals/lab/run.sh --bare` runs a scenario
-  with no hone, and `evals/lab/README.md` explains it. 17 of 21 scenarios
-  can run bare. The harder scenarios are not started.
+- Step 4 is done for a first round. `evals/lab/run.sh --bare` runs a
+  scenario with no hone, and 17 of 21 scenarios can run bare. The three
+  families, each with its note under `docs/spikes/`:
+  - *Generated families* found room. `evals/lab/generators/transparent.py`
+    writes scenarios from a seed number. Only the format `derived` gives
+    room: the code says 91 days, and a sentence elsewhere says 13 weeks.
+    There the bare arm left the false sentence in 8 of 10 runs, and hone
+    passed 9 of 10. A second round runs 10 more seeds, and it ends with the
+    fixed list of seeds that step 5 uses.
+  - *Real bases* found no room in three attempts, on claude-opus-5 and on
+    claude-sonnet-5. The scenario `real-base-click` stays, by name only,
+    because step 5 needs a true price per part on a real base.
+  - *The sequence scenario* `one-sequence` found no room on the outcomes in
+    two attempts. The bare arm kept seven changes clean at one seventh of
+    the price. hone differed in one measure: it pinned a document to the
+    code with a test (`doc_pinned`). The third attempt belongs on the real
+    base with derived repeats, and it is not started.
 - Steps 5 to 9 are not started.
 
 ## What
