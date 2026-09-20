@@ -1,8 +1,8 @@
 # Handoff: an environment that optimizes hone
 
 This file hands a program of work to the next agent. You can read it cold.
-It assumes no earlier conversation. It was written on 2026-09-20, and
-nothing in it has been started.
+It assumes no earlier conversation. It was written on 2026-09-20.
+[*Status*](#status) says what is done and what runs.
 
 It is a program of several changes, not one change. Before you start a
 step, write its brief at `.plans/optenv-<step>.md`, in the shape that
@@ -10,6 +10,24 @@ step, write its brief at `.plans/optenv-<step>.md`, in the shape that
 briefs*. Read `.claude/rules/working-here.md` and
 `.claude/rules/releasing.md` first. They hold the standing rules of this
 repository. Delete this file when the last step is done or dropped.
+
+## Status
+
+Keep this section true. Update it in the commit that finishes or drops a
+step. A finished step keeps one line here, with the note or the script
+that holds its result.
+
+As of 2026-09-20:
+
+- Step 1 is in work. No result yet.
+- Step 2 is in work, in two halves: the Ambig-SWE data, and the field log.
+  The raw findings from the real sessions stay under
+  `/var/tmp/hone-fieldlog/`.
+- Step 3 is in work. `evals/optimize/sections.py` splits at headings, and
+  `test/optimize_test.sh` proves the round trip. A finer split for the
+  critics is in work. See *Components are sections, not files*.
+- Step 4 is in work on its first part, the bare arm of the lab.
+- Steps 5 to 9 are not started.
 
 ## What
 
@@ -85,6 +103,11 @@ One component is one section of a skill or a critic, split at its headings.
 A script splits a file into sections and joins them again. So each rewrite
 touches one section, and a deleted section is visible as such. A whole
 skill of 4,700 words is too large to rewrite in one step.
+
+A critic needs a finer split. The `plan-critic` has two headings, and its
+named units are the bullets under *What to hunt* and the *Calibration*
+paragraph. The locks of step 6 name those units. So the splitter has a
+fine mode for the critics, and the skills keep the split at headings.
 
 ### The goals, and how the search treats each
 
