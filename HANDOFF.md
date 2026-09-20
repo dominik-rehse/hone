@@ -25,17 +25,13 @@ As of 2026-09-20:
   `/code-review` cannot finish there, because no nested `claude -p`
   reaches the API from the runner's sandbox. The note lists three
   conditions of this machine that refuse a run before any model call.
-- Step 2 is in work. Done: the field log, and the hook table that step 5
-  needs (`docs/spikes/2026-09-20-field-data-from-real-sessions.md`). The
-  raw findings stay under `/var/tmp/hone-fieldlog/`. Ambig-SWE is measured
-  and dropped, because it matches hone's notion of a fork poorly. Eleven
-  misjudgments of the critics became ten redacted cases
-  (`docs/spikes/2026-09-20-cases-from-field-misjudgments.md`). Five went
-  into the suites. Two that the shipped prompts fail are under
-  `evals/optimize/cases/` as training signal. Three pinned nothing and
-  went. All eleven misjudgments happened on claude-sonnet-5, and five of
-  the ten shapes do not reproduce on claude-opus-5. In work: data for the
-  `plan-critic` from real briefs and from generated defects.
+- Step 2 is done. The step itself says what changed against the first
+  plan. Three notes hold the results:
+  `docs/spikes/2026-09-20-field-data-from-real-sessions.md` has the hook
+  table that step 5 needs, `docs/spikes/2026-09-20-critic-data.md` has the
+  data for the `plan-critic`, and
+  `docs/spikes/2026-09-20-cases-from-field-misjudgments.md` has the cases.
+  Two cases that the shipped prompts fail are under `evals/optimize/cases/`.
 - Step 3 is done. `evals/optimize/sections.py` is the splitter, and its
   header has the rules and the usage. `--fine` gives the finer split for
   the critics. `test/optimize_test.sh` proves the round trip in both modes.
@@ -312,31 +308,36 @@ Done when a dated note under `docs/spikes/` has the seven answers.
 
 ### 2. Get labeled data for the `plan-critic`
 
-- Check the release and the license of Ambig-SWE (arXiv 2502.13069). It
-  pairs each issue of SWE-bench Verified with a twin that lacks needed
-  information. So each issue has a label: the critic should ask, or it
-  should not. Missing information is near to hone's "fork that the sketch
-  left open", and it is not the same thing. Say in the note how well the
-  two match on twenty pairs that you read yourself.
-- If the license allows it, write a fetch script with a pinned revision.
-  Do not commit the dataset.
-- Fill `docs/field-log.md` from the 220 real sessions. Look for gate
-  blocks, stops, a mention of `.hone-off`, and a correction by the person.
-  Each real misjudgment of a critic becomes a case. Count per hook how
-  often it fired, and judge each block as right or as a false alarm. Step
-  5 needs that table.
-- Redact what you write into this repository. An entry names the hook, the
-  block, and your judgment. It names no consumer repo and quotes no file
-  content. A case that comes from a real session gets new names and new
-  content that keep only the shape of the misjudgment.
-- Split the data into train, validation, and held-out. hone's own
-  `plan-critic` cases go into validation. The model that rewrites never
-  sees the held-out part.
-- Measure the seed first: the shipped `plan-critic` on 50 pairs. If it is
-  right on more than 90 percent of both labels, there is no headroom. Then
-  stop, write that down, and ask the maintainer before you go on.
+Done on 2026-09-20, and not as first planned. The first plan was the
+public dataset Ambig-SWE (arXiv 2502.13069). Its license allows the use,
+and its data does not fit: of twenty pairs read by hand, twelve match
+hone's notion of an open fork poorly. It is dropped.
+`docs/spikes/2026-09-20-critic-data.md` has the numbers.
 
-Done when the split exists and a note has the seed's numbers.
+The data comes from real use and from generated defects:
+
+- 140 real briefs that the `plan-critic` judged in the consumer repos. The
+  label is the production verdict, corrected by what happened afterwards.
+  Every production verdict came from claude-sonnet-5, so a field label is
+  weaker than a generated one. Step 6 must treat it so.
+- 101 generated rejections, 8 to 11 per bullet of *What to hunt*. A script
+  injects one named defect into a clean brief. 11 harmless edits carry the
+  label `APPROVE`.
+- A discrimination test per bullet: the cases of a bullet run on the full
+  prompt and on the prompt minus that bullet. The note has the table.
+- The split is train 143, validation 58, and held-out 51. The model that
+  rewrites never sees the held-out part.
+- The data stays under `/var/tmp/hone-optimize/data/plan-critic/`, because
+  it holds private material. The scripts under `evals/optimize/data/`
+  rebuild it from the session transcripts.
+- The seed on one vote: claude-opus-5 is right on 72 percent of the
+  approvals and on 77 percent of the rejections. The stop rule of 90
+  percent does not fire.
+
+The field log is filled, with the redaction rule that follows. An entry
+names the hook, the block, and the judgment. It names no consumer repo and
+quotes no file content. A case that comes from a real session gets new
+names and new content that keep only the shape of the misjudgment.
 
 ### 3. The section splitter
 
