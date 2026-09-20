@@ -150,6 +150,28 @@ in git.
   adds neither `.venv/` nor `__pycache__/` to `.gitignore`. No run has
   committed one so far. The seed of `python-structure` adds them itself.
 
+#### Two guards and the nag give many false alarms in real use
+
+The field data of 2026-09-20 counts each block in about 220 real sessions
+([note](spikes/2026-09-20-field-data-from-real-sessions.md)). A false alarm
+is a block on a command that did nothing the hook exists to stop.
+
+- The `dirty-guard` fired 45 times, and 41 were false alarms. It reports
+  every uncommitted path of the primary tree, not the paths that the command
+  writes. One old uncommitted file blocked 30 read-only commands. Its
+  suggested remedy would once have destroyed a person's uncommitted work.
+- The `bash-guard` fired 50 times, and 28 were false alarms. The note lists
+  the shapes. Some are fixed since 0.40.1. Others are still in the code: a
+  change of directory to a place outside every repository, a protected file
+  as the source of a copy, a token inside a quoted string, and a read of
+  the hooks-path key.
+- The `nag` printed 342 wrong lines, and two causes made 340 of them. Two
+  true findings repeated on every stop for weeks, and nobody acted.
+
+Both guards also made real catches that no other part could make. So the
+next step is to fix the shapes, not to remove a guard. Each fix is a hook
+change with a test in `test/hooks_test.sh` that replays the shape.
+
 ### A question for the maintainer
 
 #### May hone land a correct solution beside a test that it reports as wrong?
@@ -174,8 +196,9 @@ in git.
 
 [`field-log.md`](field-log.md) collects what hone does wrong in the
 repositories that use it, one dated line per incident. These fails are the
-best source of new scenarios, because they are real. The log is empty
-today.
+best source of new scenarios, because they are real. The first entries came
+on 2026-09-20 from about 220 recorded sessions. The counts per hook are in
+[the field-data note](spikes/2026-09-20-field-data-from-real-sessions.md).
 
 #### Probes
 

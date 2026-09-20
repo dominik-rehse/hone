@@ -20,13 +20,18 @@ that holds its result.
 As of 2026-09-20:
 
 - Step 1 is in work. No result yet.
-- Step 2 is in work, in two halves: the Ambig-SWE data, and the field log.
-  The raw findings from the real sessions stay under
-  `/var/tmp/hone-fieldlog/`.
+- Step 2 is in work. Done: the field log, and the hook table that step 5
+  needs (`docs/spikes/2026-09-20-field-data-from-real-sessions.md`). The
+  raw findings stay under `/var/tmp/hone-fieldlog/`. Ambig-SWE is measured
+  and dropped, because it matches hone's notion of a fork poorly. In work:
+  data for the `plan-critic` from real briefs and from generated defects,
+  and cases from the critics' misjudgments in the field.
 - Step 3 is done. `evals/optimize/sections.py` is the splitter, and its
   header has the rules and the usage. `--fine` gives the finer split for
   the critics. `test/optimize_test.sh` proves the round trip in both modes.
-- Step 4 is in work on its first part, the bare arm of the lab.
+- Step 4: the bare arm is done. `evals/lab/run.sh --bare` runs a scenario
+  with no hone, and `evals/lab/README.md` explains it. 17 of 21 scenarios
+  can run bare. The harder scenarios are not started.
 - Steps 5 to 9 are not started.
 
 ## What
