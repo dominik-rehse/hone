@@ -1,0 +1,24 @@
+{
+  "kind": "multi",
+  "subject": "feat(flags): put a percentage rollout on a flag",
+  "defects": [
+    {
+      "id": "a",
+      "regex": "(negativ[a-z]*|below zero|less than zero|signed (32|int)|int32|unsigned|absolute value|two.s complement)[^.]{0,70}(bucket|hash|modul|remainder|rollout)|(bucket|hash32|hashes|modulo|remainder)[^.]{0,70}(negativ[a-z]*|below zero|less than zero|signed|unsigned|absolute value|two.s complement)|(about|roughly|nearly|around) half|half of (all|the|every)|(bucket|bucketFor)[^.]{0,60}(-99|minus 99|range of -)",
+      "defect": "bucketFor in src/rollout.js takes the remainder of src/hash.js's hash32 without putting it on the positive side, so a caller whose hash comes out under zero gets a bucket under zero and clears every `bucket < percent` test. Enable checkout-v2, set its rollout to 1, and `evaluator.isOn(\"checkout-v2\", { userId: \"ada\" })` reads true, as it does for about half of any list of callers.",
+      "prove": "prove-a.js"
+    },
+    {
+      "id": "b",
+      "regex": "(rollout|percentage)[^.]{0,60}((is|are|gets?|will be) (not|never)? ?(saved|persisted|serialised|serialized|written|kept|stored)|lost|dropped|gone|disappear|thrown away|does not survive|will not survive|missing from)|(save|saved|saving|persist[a-z]*|serialis[a-z]*|serializ[a-z]*|restore[a-z]*|round.?trip|backup)[^.]{0,60}(drops?|loses?|lost|strips?|omits?|forgets?|leaves out|does not (keep|carry|include|record)|without the rollout|silently)|FIELDS[^.]{0,45}(missing|never|does not|lacks|without|untouched|unchanged|not updated|no rollout)|(reverts?|falls? back|back to)[^.]{0,50}(boolean|on for everyone|all callers|hundred per cent|100)",
+      "defect": "The change puts a new `rollout` field on a flag but never adds it to the FIELDS list in the untouched src/serializer.js, so save and restore keep everything but the rollout. Put checkout-v2 at ten per cent, run persist.save() and persist.restore() on it, and the flag is on for every caller again, dennis included.",
+      "prove": "prove-b.js"
+    },
+    {
+      "id": "c",
+      "regex": "alias[a-z]*|same object|same reference|shares? (the same|a|its) [`'\\\"]?(object|reference|rollout)|points? to the same|shallow (cop|clone|spread)|Object\\.assign[^.]{0,70}(mutat|in place|target|same object|first argument|existing)|(mutat|chang|updat|writ)[a-z]*[^.]{0,35}in place|(before|old)[^.]{0,60}(after|new)[^.]{0,40}(the same|identical|both read|both show|point)|(before|old value|old percentage)[^.]{0,70}(reads?|shows?|carries|records?|reports?|ends? up with|will be)[^.]{0,35}(the new|the same|updated|current) (percent|percentage|value|rollout)|audit[^.]{0,70}(both|same on both|identical|new percentage as the old|useless)",
+      "defect": "setRollout in src/admin.js takes its before snapshot with flags.view, which src/flag.js spreads one level deep, and then hands the flag's own rollout object to Object.assign as the target, so the snapshot moves with it. Set checkout-v2 to ten per cent and then to forty, and the last audit entry reads forty in `before` as well as in `after`.",
+      "prove": "prove-c.js"
+    }
+  ]
+}

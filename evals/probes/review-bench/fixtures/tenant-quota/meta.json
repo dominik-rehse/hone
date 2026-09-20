@@ -1,0 +1,24 @@
+{
+  "kind": "multi",
+  "subject": "feat(scheduler): hold every tenant to a quota per window",
+  "defects": [
+    {
+      "id": "a",
+      "regex": "(quota|counter|count|usage|window)[^.]{0,70}(even (though|when|if)|although|despite|still (counts|counted|charged)|anyway|not (rolled back|undone|refunded|released|reverted|given back)|never (rolled back|undone|refunded|released|given back))|(reject|refus[a-z]*|queue.full|full queue|dropp?ed|not (queued|accepted|enqueued|run)|never (ran|queued|enqueued|accepted))[^.]{0,80}(quota|counter|counted|charged|consum[a-z]*|burn[a-z]*|lose|loses|lost|deduct[a-z]*|increment[a-z]*|against (its|their|the) (limit|window))|(quota|counter|counted|charged|consum[a-z]*|burn[a-z]*|deduct[a-z]*|increment[a-z]*)[^.]{0,80}(a job that|jobs that)? ?(reject|refus[a-z]*|queue.full|full queue|never ran|never queued|not queued|did not run|was dropped|were dropped)|(increment|record|count|charg)[a-z]*[^.]{0,55}(before|ahead of|prior to)[^.]{0,45}(push|queue|enqueu)|(before|ahead of|prior to)[^.]{0,45}(push|enqueu)[^.]{0,55}(increment|record|count|charg)|leak[a-z]*[^.]{0,45}quota|quota[^.]{0,45}leak",
+      "defect": "submit in src/scheduler.js calls quota.record before queue.push, and the untouched src/queue.js answers false rather than throwing when the queue is full, so a job the queue had no room for costs the tenant a slot all the same. Set the capacity to one, submit six jobs for the free tenant acme, take one off the queue, and the seventh comes back over-quota although only one job ever went in.",
+      "prove": "prove-a.js"
+    },
+    {
+      "id": "b",
+      "regex": "(never|not|without|fails? to|forgets? to|omits? to|neglects? to|does not|is not|isn.t|was not|wasn.t)[^.]{0,65}(register|registered|registering|handed to (the )?[`'\\\"]?timers|tracked by (the )?timers)|(register|registered|registration)[^.]{0,55}(missing|never|is skipped|nowhere|omitted|left out|forgotten)|(shutdown|shut down|shutting down)[^.]{0,75}(will not|won.t|cannot|can.t|does not|doesn.t|never|leaves|misses|fails|has no)|(timer|interval|setInterval)[^.]{0,75}(leak[a-z]*|keeps? running|keeps? ticking|stays? (alive|running|on)|outliv[a-z]*|never cleared|not cleared|uncleared|orphan[a-z]*|goes on)|(process|node|service)[^.]{0,65}(will not|won.t|does not|doesn.t|never|cannot|can.t)[^.]{0,35}(exit|shut down|stop|terminate|come down)|hang[a-z]*[^.]{0,45}(process|exit|shutdown|shut down)",
+      "defect": "startWindows in src/quota.js calls setInterval straight, where every other timer in the base is handed to timers.register, so the untouched timers.shutdown() cannot put it out. Start the window timer, call timers.shutdown(), and the timer goes on opening new windows and the process goes on running.",
+      "prove": "prove-b.js"
+    },
+    {
+      "id": "c",
+      "regex": "(^|[^a-z])nan([^a-z]|$)|(undefined|missing|absent|lacks?|lacking|without|no) [`'\\\"]?priorit|priority[^.]{0,55}(is |are |was )?(undefined|missing|not set|absent|never set|nowhere)|(comparator|compare|comparison|sort[a-z]*)[^.]{0,70}(NaN|undefined|inconsistent|unstable|unpredictable|meaningless|garbage|nonsense|breaks down)|(intake|webhook|older (api|path|route)|legacy|first version)[^.]{0,80}(priorit[a-z]*|sort[a-z]*|order[a-z]*|comparator|batch)|(jobs?|some jobs?)[^.]{0,55}(carry no|have no|do not carry|don.t carry|do not have|don.t have|never carry|never get)[^.]{0,25}priorit",
+      "defect": "byPriority in src/dispatch.js subtracts one priority from another, and the untouched src/intake.js puts jobs on the same queue with no priority field at all, so the comparator answers NaN and the batch keeps the order it was in. Post two jobs through acceptWebhook, submit one for a paid tenant, and nextBatch(1) hands out the first webhook job instead of the paid one.",
+      "prove": "prove-c.js"
+    }
+  ]
+}
