@@ -1,0 +1,14 @@
+[
+ {
+  "path": ".worktrees/pricing/round-half-up/src/pricing/checkout.test.js",
+  "old": "test(\"applies the discount\", () => {\n  assert.strictEqual(checkoutPrice(20, 25), 15);\n});",
+  "new": "test(\"applies the discount\", () => {\n  assert.strictEqual(checkoutPrice(20, 25), 15);\n});\n\ntest(\"rounds half up past the floating point boundary\", () => {\n  assert.strictEqual(checkoutPrice(1.005, 0), 1.01);\n  assert.strictEqual(checkoutPrice(2.675, 0), 2.68);\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/pricing/round-half-up/src/pricing/checkout.js",
+  "old": "// Live checkout: the price a customer pays, after the discount.\nfunction roundPrice(amount) {\n  return Math.round(amount * 100) / 100;\n}",
+  "new": "// Live checkout: the price a customer pays, after the discount.\n// Round half up on the decimal value: 1.005 * 100 is 100.49999999999999 in\n// floating point, so scaling first and rounding would round it down. Fix the\n// float error before rounding instead, matching how the ERP rounds.\nfunction roundPrice(amount) {\n  const scaled = Number((amount * 100).toFixed(10));\n  return Math.round(scaled) / 100;\n}",
+  "all": false
+ }
+]

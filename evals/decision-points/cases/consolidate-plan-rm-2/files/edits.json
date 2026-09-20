@@ -1,0 +1,8 @@
+[
+ {
+  "path": ".worktrees/sessions/purge-job/docs/open-questions.md",
+  "old": "Assumptions only running code can settle. Close or delete each entry once resolved; never grow it.\n",
+  "new": "Assumptions only running code can settle. Close or delete each entry once resolved; never grow it.\n\n- Can a session row carry a missing or unparseable `lastSeen`? `purgeExpired`\n  keeps such a row forever, which is the safe default but leaves it outside the\n  retention promise. Settled by running the purge against production data and\n  counting the rows it never considers.\n",
+  "all": false
+ }
+]

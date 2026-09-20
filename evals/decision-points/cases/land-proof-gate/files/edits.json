@@ -1,0 +1,50 @@
+[
+ {
+  "path": ".worktrees/notify/webhook-retry/src/notify/webhook.test.js",
+  "old": "test(\"reports a delivered event after one attempt\", async () => {\n  const post = async () => ({ status: 200 });\n  assert.deepStrictEqual(await deliver(post, \"https://x.invalid\", {}), { delivered: true, attempts: 1 });\n});",
+  "new": "test(\"reports a delivered event after one attempt\", async () => {\n  const post = async () => ({ status: 200 });\n  assert.deepStrictEqual(await deliver(post, \"https://x.invalid\", {}), { delivered: true, attempts: 1 });\n});\n\n// Replays `statuses` in order, one per attempt, so a test pins the attempt\n// count by how far into the list `deliver` gets.\nfunction postReturning(statuses) {\n  let i = 0;\n  return async () => ({ status: statuses[i++] });\n}\n\ntest(\"retries a 503 and reports the attempt that succeeded\", async () => {\n  const post = postReturning([503, 200]);\n  assert.deepStrictEqual(await deliver(post, \"https://x.invalid\", {}), { delivered: true, attempts: 2 });\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/notify/webhook-retry/src/notify/webhook.js",
+  "old": "async function deliver(post, url, event) {\n  const res = await post(url, event);\n  return { delivered: res.status < 300, attempts: 1 };\n}",
+  "new": "async function deliver(post, url, event) {\n  let attempts = 0;\n  let res;\n  do {\n    res = await post(url, event);\n    attempts += 1;\n  } while (res.status >= 500);\n  return { delivered: res.status < 300, attempts };\n}",
+  "all": false
+ },
+ {
+  "path": ".worktrees/notify/webhook-retry/src/notify/webhook.test.js",
+  "old": "test(\"retries a 503 and reports the attempt that succeeded\", async () => {\n  const post = postReturning([503, 200]);\n  assert.deepStrictEqual(await deliver(post, \"https://x.invalid\", {}), { delivered: true, attempts: 2 });\n});",
+  "new": "test(\"retries a 503 and reports the attempt that succeeded\", async () => {\n  const post = postReturning([503, 200]);\n  assert.deepStrictEqual(await deliver(post, \"https://x.invalid\", {}), { delivered: true, attempts: 2 });\n});\n\ntest(\"gives up on a persistent 5xx after three attempts\", async () => {\n  const post = postReturning([503, 503, 503, 200]);\n  assert.deepStrictEqual(await deliver(post, \"https://x.invalid\", {}), { delivered: false, attempts: 3 });\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/notify/webhook-retry/src/notify/webhook.js",
+  "old": "async function deliver(post, url, event) {\n  let attempts = 0;\n  let res;\n  do {\n    res = await post(url, event);\n    attempts += 1;\n  } while (res.status >= 500);\n  return { delivered: res.status < 300, attempts };\n}",
+  "new": "const MAX_ATTEMPTS = 3;\n\nasync function deliver(post, url, event) {\n  let attempts = 0;\n  let res;\n  do {\n    res = await post(url, event);\n    attempts += 1;\n  } while (res.status >= 500 && attempts < MAX_ATTEMPTS);\n  return { delivered: res.status < 300, attempts };\n}",
+  "all": false
+ },
+ {
+  "path": ".worktrees/notify/webhook-retry/src/notify/webhook.test.js",
+  "old": "test(\"gives up on a persistent 5xx after three attempts\", async () => {\n  const post = postReturning([503, 503, 503, 200]);\n  assert.deepStrictEqual(await deliver(post, \"https://x.invalid\", {}), { delivered: false, attempts: 3 });\n});",
+  "new": "test(\"gives up on a persistent 5xx after three attempts\", async () => {\n  const post = postReturning([503, 503, 503, 200]);\n  assert.deepStrictEqual(await deliver(post, \"https://x.invalid\", {}), { delivered: false, attempts: 3 });\n});\n\ntest(\"does not retry a 4xx, which the subscriber rejected\", async () => {\n  const post = postReturning([404, 200]);\n  assert.deepStrictEqual(await deliver(post, \"https://x.invalid\", {}), { delivered: false, attempts: 1 });\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/notify/webhook-retry/src/notify/webhook.js",
+  "old": "  } while (res.status >= 500 && attempts < MAX_ATTEMPTS);",
+  "new": "  } while (res.status >= 300 && attempts < MAX_ATTEMPTS);",
+  "all": false
+ },
+ {
+  "path": ".worktrees/notify/webhook-retry/src/notify/webhook.js",
+  "old": "  } while (res.status >= 300 && attempts < MAX_ATTEMPTS);",
+  "new": "  } while (res.status >= 500 && attempts < MAX_ATTEMPTS);",
+  "all": false
+ },
+ {
+  "path": ".worktrees/notify/webhook-retry/docs/open-questions.md",
+  "old": "Assumptions only running code can settle. Close or delete each entry once resolved; never grow it.",
+  "new": "Assumptions only running code can settle. Close or delete each entry once resolved; never grow it.\n\n## Do three immediate webhook retries cover a receiver restart?\n\n`deliver` retries a 5xx up to three attempts with no delay between them, so all\nthree can land inside a few milliseconds. The subscriber this was built for\nanswers 503 for a few seconds while its receiver restarts. Whether the attempts\noutlast that window is not something the unit tests can show, and forcing a\nsingle 503 does not show it either. Watch the nightly restart in production: if\nevents still fail with `attempts: 3`, the answer is no and the retry needs a\ndelay.",
+  "all": false
+ }
+]

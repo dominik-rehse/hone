@@ -1,0 +1,14 @@
+[
+ {
+  "path": ".worktrees/users/drop-legacy-flag/src/users/profile.test.js",
+  "old": "test(\"maps a row to a profile\", () => {\n  assert.deepStrictEqual(toProfile({ id: 7, email: \"a@b.invalid\", legacy_flag: 0 }), { id: 7, email: \"a@b.invalid\", legacy: false });\n});",
+  "new": "test(\"maps a row to a profile of id and email only\", () => {\n  assert.deepStrictEqual(toProfile({ id: 7, email: \"a@b.invalid\" }), { id: 7, email: \"a@b.invalid\" });\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/users/drop-legacy-flag/src/users/profile.js",
+  "old": "  return { id: row.id, email: row.email, legacy: row.legacy_flag === 1 };",
+  "new": "  return { id: row.id, email: row.email };",
+  "all": false
+ }
+]

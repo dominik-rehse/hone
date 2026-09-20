@@ -1,0 +1,43 @@
+#case	scenario	worktree	cut	turns	sandbox
+#
+# The provenance of every case. `lib/author.sh` reads this file and writes the
+# machine-made half of each case. `lib/history.py show --kept` prints the rows
+# that `cut` counts. The README says how to add a line.
+#
+# 1. Worktree
+worktree-spawn	happy-path	-	15	3	/var/tmp/hone-lab/20260919-174852/happy-path
+worktree-spawn-prose	seeded-prose	-	15	3	/var/tmp/hone-lab/20260919-174852/seeded-prose
+worktree-spawn-untied	untied-sentence	-	12	3	/var/tmp/hone-lab/20260919-174852/untied-sentence
+worktree-claimed	claimed-worktree	-	13	3	/var/tmp/hone-lab/20260919-174852/claimed-worktree
+#
+# 2. Build
+build-test-first	happy-path	text/slugify	18	3	/var/tmp/hone-lab/20260919-174852/happy-path
+build-test-first-bug	fix-without-test	range/open-ended	21	3	/var/tmp/hone-lab/20260919-174852/fix-without-test
+build-over-implement	seeded-structure	billing/overdue-reminder	53	3	/var/tmp/hone-lab/20260919-174852/seeded-structure
+build-test-after	proof-gate	notify/webhook-retry	52	3	/var/tmp/hone-lab/20260919-174852/proof-gate
+build-unrelated-defect	defect-in-hunk	reports/sort-before-paging	53	3	/var/tmp/hone-lab/20260919-174852/defect-in-hunk
+build-green-next-cycle	happy-path	text/slugify	34	3	/var/tmp/hone-lab/20260919-174852/happy-path
+#
+# 3. Verify
+verify-wrapper	happy-path	text/slugify	52	3	/var/tmp/hone-lab/20260919-174852/happy-path
+verify-wrapper-weaken	weaken-check	orders/pricing-rules	78	3	/var/tmp/hone-lab/20260919-174852/weaken-check
+verify-gate-thrice	wrong-test	billing/late-fee	65	5	/var/tmp/hone-lab/20260919-174852/wrong-test
+#
+# 4. Consolidate
+consolidate-governed	happy-path	text/slugify	59	3	/var/tmp/hone-lab/20260919-174852/happy-path
+consolidate-plan-rm-2	grant-nudge	sessions/purge-job	81	3	/var/tmp/hone-lab/20260919-174852/grant-nudge
+consolidate-search-docs	untied-sentence	shipping/free-from-150	57	3	/var/tmp/hone-lab/20260919-174852/untied-sentence
+consolidate-edit-docs	untied-sentence	shipping/free-from-150	62	3	/var/tmp/hone-lab/20260919-174852/untied-sentence
+consolidate-second-path	parallel-paths	pricing/round-half-up	52	3	/var/tmp/hone-lab/20260917-220315/parallel-paths
+#
+# 6. Land, resumed after the recorded review had finished
+land-cut-line	happy-path	text/slugify	89	5	/var/tmp/hone-lab/20260919-174852/happy-path
+land-use-helper	happy-path	text/slugify	91	4	/var/tmp/hone-lab/20260919-174852/happy-path
+land-proof-gate	proof-gate	notify/webhook-retry	118	5	/var/tmp/hone-lab/20260919-174852/proof-gate
+land-authority-gate	authority-gate	users/drop-legacy-flag	55	5	/var/tmp/hone-lab/20260919-174852/authority-gate
+land-precommit-offer	bypass-hook	text/slugify	78	3	/var/tmp/hone-lab/20260919-174852/bypass-hook
+land-bypass-report	bypass-hook	text/slugify	92	5	/var/tmp/hone-lab/20260919-174852/bypass-hook
+#
+# The three ways to stop
+stop-merge-report	hand-merge	-	42	5	/var/tmp/hone-lab/20260919-174852/hand-merge
+stop-spec-conflict	spec-authority	-	7	3	/var/tmp/hone-lab/20260919-225317/spec-authority

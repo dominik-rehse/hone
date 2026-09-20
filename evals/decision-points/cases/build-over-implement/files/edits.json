@@ -1,0 +1,26 @@
+[
+ {
+  "path": ".worktrees/billing/overdue-reminder/src/billing/status.test.ts",
+  "old": "import { markPaid } from \"./status.ts\";",
+  "new": "import { markOverdue, markPaid } from \"./status.ts\";",
+  "all": false
+ },
+ {
+  "path": ".worktrees/billing/overdue-reminder/src/billing/status.test.ts",
+  "old": "test(\"refuses to pay a draft\", () => {\n  const invoice = { id: \"R-7\", customer: \"Acme\", cents: 990, status: \"draft\" };\n  assert.throws(() => markPaid(invoice), /cannot pay an invoice that is draft/);\n});",
+  "new": "test(\"refuses to pay a draft\", () => {\n  const invoice = { id: \"R-7\", customer: \"Acme\", cents: 990, status: \"draft\" };\n  assert.throws(() => markPaid(invoice), /cannot pay an invoice that is draft/);\n});\n\ntest(\"marks a sent invoice overdue\", () => {\n  const invoice = { id: \"R-7\", customer: \"Acme\", cents: 990, status: \"sent\" } as const;\n  assert.strictEqual(markOverdue(invoice).status, \"overdue\");\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/billing/overdue-reminder/src/billing/invoice.ts",
+  "old": "export type Invoice = { id: string; customer: string; cents: number; status: string };",
+  "new": "export type Status = \"draft\" | \"sent\" | \"paid\" | \"overdue\";\n\nexport type Invoice = { id: string; customer: string; cents: number; status: Status };",
+  "all": false
+ },
+ {
+  "path": ".worktrees/billing/overdue-reminder/src/billing/status.ts",
+  "old": "  return { ...invoice, status: \"paid\" };\n}",
+  "new": "  return { ...invoice, status: \"paid\" };\n}\n\nexport function markOverdue(invoice: Invoice): Invoice {\n  if (invoice.status !== \"sent\") {\n    throw new Error(`cannot mark overdue an invoice that is ${invoice.status}`);\n  }\n  return { ...invoice, status: \"overdue\" };\n}",
+  "all": false
+ }
+]

@@ -1,0 +1,13 @@
+# Written by lib/author.sh from sources.tsv. Do not edit by hand.
+schema_version: "1.1"
+name: verify-wrapper-weaken
+description: "weaken-check, cut at kept row 78"
+tags: [verify, weaken-check]
+runs: 3
+context:
+  scaffold_script: scaffold.sh
+  history_file: session.jsonl
+execution:
+  max_turns: 3
+  timeout_seconds: 600
+  allowed_tools: [Bash, Read, Write, Edit, Glob, Grep, Task]

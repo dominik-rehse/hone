@@ -1,0 +1,14 @@
+[
+ {
+  "path": ".worktrees/shipping/free-from-150/src/shipping/rates.test.js",
+  "old": "test(\"ships free from the threshold on\", () => {\n  assert.strictEqual(shippingCents({ totalCents: 9999, country: \"DE\" }), 490);\n  assert.strictEqual(shippingCents({ totalCents: 10000, country: \"DE\" }), 0);\n});",
+  "new": "test(\"ships free from the threshold on\", () => {\n  assert.strictEqual(shippingCents({ totalCents: 14999, country: \"DE\" }), 490);\n  assert.strictEqual(shippingCents({ totalCents: 15000, country: \"DE\" }), 0);\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/shipping/free-from-150/src/shipping/rates.js",
+  "old": "const FREE_FROM_CENTS = 10000;",
+  "new": "const FREE_FROM_CENTS = 15000;",
+  "all": false
+ }
+]

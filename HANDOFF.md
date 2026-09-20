@@ -52,7 +52,15 @@ As of 2026-09-20:
     the price. hone differed in one measure: it pinned a document to the
     code with a test (`doc_pinned`). The third attempt belongs on the real
     base with derived repeats, and it is not started.
-- Steps 5 to 9 are not started.
+- Step 6 is in work.
+- Step 7 is done (`docs/spikes/2026-09-20-decision-point-cases.md`).
+  `evals/decision-points/` holds 26 cases over 16 lab scenarios, and
+  `run.sh` there runs them against a plugin directory. A resumed session
+  reads the skill from the recorded history, so each history is a template
+  that the scaffold fills from the plugin under test. 21 cases
+  discriminate, and the shipped skill fails 5 more in 3 runs of 3. One run
+  costs about 50 cents on claude-opus-5 and 20 cents on claude-sonnet-5.
+- Steps 5, 8, and 9 are not started.
 
 ## What
 
@@ -245,7 +253,7 @@ A guard with false alarms must show a reach that it stopped.
    `plan-critic` on claude-opus-5 measured about 13 cents. Right for the critics, because a
    critic really is a system prompt plus one brief. `evals/run.sh` with
    `--prompt-file --json --cache --cases` already does this.
-2. *Decision points*, an estimated 10 to 30 cents each. A recorded session
+2. *Decision points*, measured at 50 cents each on claude-opus-5. A recorded session
    resumes just before a decision, and the case grades the next action.
    `claude plugin eval` offers this through `context.history_file`. The
    transcripts of lab runs supply the sessions.

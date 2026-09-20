@@ -1,0 +1,38 @@
+[
+ {
+  "path": ".worktrees/reports/sort-before-paging/src/reports/paginate.test.js",
+  "old": "test(\"counts two pages for ten rows of five\", () => {\n  assert.strictEqual(paginate(rows, 1, 5).pages, 2);\n});",
+  "new": "test(\"counts two pages for ten rows of five\", () => {\n  assert.strictEqual(paginate(rows, 1, 5).pages, 2);\n});\n\nconst amounts = [{ amount: 5 }, { amount: 1 }, { amount: 9 }, { amount: 3 }];\n\ntest(\"sorts the whole report by the column before cutting the page\", () => {\n  assert.deepStrictEqual(\n    paginate(amounts, 1, 2, \"amount\").rows.map((r) => r.amount),\n    [1, 3],\n  );\n  assert.deepStrictEqual(\n    paginate(amounts, 2, 2, \"amount\").rows.map((r) => r.amount),\n    [5, 9],\n  );\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/reports/sort-before-paging/src/reports/paginate.js",
+  "old": "// One page of the report table. Pages count from 1.\nfunction paginate(rows, page, pageSize) {\n  const start = (page - 1) * pageSize;\n  return {\n    rows: rows.slice(start, start + pageSize),",
+  "new": "// One page of the report table. Pages count from 1. A `sortBy` column sorts\n// the whole report before the page is cut, so page 1 holds the report's\n// smallest values and not the page's.\nfunction paginate(rows, page, pageSize, sortBy) {\n  const ordered = sortBy\n    ? [...rows].sort((a, b) => (a[sortBy] < b[sortBy] ? -1 : a[sortBy] > b[sortBy] ? 1 : 0))\n    : rows;\n  const start = (page - 1) * pageSize;\n  return {\n    rows: ordered.slice(start, start + pageSize),",
+  "all": false
+ },
+ {
+  "path": ".worktrees/reports/sort-before-paging/src/reports/paginate.js",
+  "old": "  const ordered = sortBy\n    ? [...rows].sort((a, b) => (a[sortBy] < b[sortBy] ? -1 : a[sortBy] > b[sortBy] ? 1 : 0))\n    : rows;",
+  "new": "  const ordered = sortBy\n    ? rows.sort((a, b) => (a[sortBy] < b[sortBy] ? -1 : a[sortBy] > b[sortBy] ? 1 : 0))\n    : rows;",
+  "all": false
+ },
+ {
+  "path": ".worktrees/reports/sort-before-paging/src/reports/paginate.test.js",
+  "old": "const amounts = [{ amount: 5 }, { amount: 1 }, { amount: 9 }, { amount: 3 }];",
+  "new": "const amounts = () => [{ amount: 5 }, { amount: 1 }, { amount: 9 }, { amount: 3 }];",
+  "all": false
+ },
+ {
+  "path": ".worktrees/reports/sort-before-paging/src/reports/paginate.test.js",
+  "old": "test(\"sorts the whole report by the column before cutting the page\", () => {\n  assert.deepStrictEqual(\n    paginate(amounts, 1, 2, \"amount\").rows.map((r) => r.amount),\n    [1, 3],\n  );\n  assert.deepStrictEqual(\n    paginate(amounts, 2, 2, \"amount\").rows.map((r) => r.amount),\n    [5, 9],\n  );\n});",
+  "new": "test(\"sorts the whole report by the column before cutting the page\", () => {\n  assert.deepStrictEqual(\n    paginate(amounts(), 1, 2, \"amount\").rows.map((r) => r.amount),\n    [1, 3],\n  );\n  assert.deepStrictEqual(\n    paginate(amounts(), 2, 2, \"amount\").rows.map((r) => r.amount),\n    [5, 9],\n  );\n});\n\ntest(\"leaves the caller's array in the order it was given\", () => {\n  const given = amounts();\n  paginate(given, 1, 2, \"amount\");\n  assert.deepStrictEqual(given.map((r) => r.amount), [5, 1, 9, 3]);\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/reports/sort-before-paging/src/reports/paginate.js",
+  "old": "    ? rows.sort(",
+  "new": "    ? [...rows].sort(",
+  "all": false
+ }
+]

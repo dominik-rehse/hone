@@ -1,0 +1,62 @@
+[
+ {
+  "path": ".worktrees/orders/pricing-rules/src/orders/total.test.js",
+  "old": "test(\"express shipping always costs 15.00\", () => {\n  assert.strictEqual(orderTotal({ lines: [{ unitCents: 2500, quantity: 2 }], shipping: \"express\" }), 6500);\n});",
+  "new": "test(\"express shipping always costs 15.00\", () => {\n  assert.strictEqual(orderTotal({ lines: [{ unitCents: 2500, quantity: 2 }], shipping: \"express\" }), 6500);\n});\n\ntest(\"takes 10% off a line of 10 or more units\", () => {\n  const order = { lines: [{ unitCents: 1000, quantity: 10 }], taxExempt: true };\n  assert.strictEqual(orderTotal(order), 9000);\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/orders/pricing-rules/src/orders/total.js",
+  "old": "// The total of one order, in cents.\nfunction orderTotal(order) {\n  let total = 0;\n  for (const line of order.lines) {\n    total += line.unitCents * line.quantity;\n  }",
+  "new": "// One line's goods, in cents: 10 units or more take 10% off that line.\nfunction lineCents(line) {\n  const gross = line.unitCents * line.quantity;\n  if (line.quantity < 10) return gross;\n  return Math.floor((gross * 9) / 10);\n}\n\n// The total of one order, in cents.\nfunction orderTotal(order) {\n  let total = 0;\n  for (const line of order.lines) {\n    total += lineCents(line);\n  }",
+  "all": false
+ },
+ {
+  "path": ".worktrees/orders/pricing-rules/src/orders/total.test.js",
+  "old": "test(\"takes 10% off a line of 10 or more units\", () => {\n  const order = { lines: [{ unitCents: 1000, quantity: 10 }], taxExempt: true };\n  assert.strictEqual(orderTotal(order), 9000);\n});",
+  "new": "test(\"takes 10% off a line of 10 or more units\", () => {\n  const order = { lines: [{ unitCents: 1000, quantity: 10 }], taxExempt: true };\n  assert.strictEqual(orderTotal(order), 9000);\n});\n\ntest(\"takes the coupon percentage off the goods\", () => {\n  const order = {\n    lines: [{ unitCents: 2500, quantity: 2 }],\n    coupon: { percent: 20 },\n    taxExempt: true,\n  };\n  assert.strictEqual(orderTotal(order), 4000);\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/orders/pricing-rules/src/orders/total.js",
+  "old": "// The total of one order, in cents.\nfunction orderTotal(order) {\n  let total = 0;\n  for (const line of order.lines) {\n    total += lineCents(line);\n  }\n  if (order.shipping === \"express\") {\n    total += 1500;\n  } else if (total < 5000) {\n    total += 500;\n  }\n  return total;\n}",
+  "new": "// The goods after the coupon, in cents, rounded down.\nfunction couponed(goods, coupon) {\n  if (!coupon) return goods;\n  return Math.floor((goods * (100 - coupon.percent)) / 100);\n}\n\n// Shipping for one order, in cents. Never discounted, and the free-shipping\n// threshold reads the plain sum of the lines, before any discount and tax.\nfunction shippingCents(order, plainGoods) {\n  if (order.shipping === \"express\") return 1500;\n  return plainGoods < 5000 ? 500 : 0;\n}\n\n// The total of one order, in cents.\nfunction orderTotal(order) {\n  const plainGoods = sum(order.lines, (line) => line.unitCents * line.quantity);\n  let goods = sum(order.lines, lineCents);\n  goods = couponed(goods, order.coupon);\n  return goods + shippingCents(order, plainGoods);\n}",
+  "all": false
+ },
+ {
+  "path": ".worktrees/orders/pricing-rules/src/orders/total.js",
+  "old": "// One line's goods, in cents: 10 units or more take 10% off that line.",
+  "new": "function sum(lines, of) {\n  let total = 0;\n  for (const line of lines) total += of(line);\n  return total;\n}\n\n// One line's goods, in cents: 10 units or more take 10% off that line.",
+  "all": false
+ },
+ {
+  "path": ".worktrees/orders/pricing-rules/src/orders/total.test.js",
+  "old": "  assert.strictEqual(orderTotal(order), 4000);\n});",
+  "new": "  assert.strictEqual(orderTotal(order), 4000);\n});\n\ntest(\"adds 19% tax on the discounted goods unless the order is tax exempt\", () => {\n  const order = { lines: [{ unitCents: 2500, quantity: 2 }] };\n  assert.strictEqual(orderTotal(order), 5950);\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/orders/pricing-rules/src/orders/total.js",
+  "old": "// Shipping for one order, in cents.",
+  "new": "// The goods after tax, in cents, rounded down.\nfunction taxed(goods, taxExempt) {\n  if (taxExempt) return goods;\n  return Math.floor((goods * 119) / 100);\n}\n\n// Shipping for one order, in cents.",
+  "all": false
+ },
+ {
+  "path": ".worktrees/orders/pricing-rules/src/orders/total.js",
+  "old": "  goods = couponed(goods, order.coupon);\n  return goods + shippingCents(order, plainGoods);",
+  "new": "  goods = couponed(goods, order.coupon);\n  goods = taxed(goods, order.taxExempt);\n  return goods + shippingCents(order, plainGoods);",
+  "all": false
+ },
+ {
+  "path": ".worktrees/orders/pricing-rules/src/orders/total.test.js",
+  "old": "test(\"sums the lines and adds standard shipping under 50.00\", () => {\n  assert.strictEqual(orderTotal({ lines: [{ unitCents: 1000, quantity: 2 }] }), 2500);\n});\ntest(\"ships free from 50.00\", () => {\n  assert.strictEqual(orderTotal({ lines: [{ unitCents: 2500, quantity: 2 }] }), 5000);\n});\ntest(\"express shipping always costs 15.00\", () => {\n  assert.strictEqual(orderTotal({ lines: [{ unitCents: 2500, quantity: 2 }], shipping: \"express\" }), 6500);\n});",
+  "new": "test(\"sums the lines and adds standard shipping under 50.00\", () => {\n  assert.strictEqual(orderTotal({ lines: [{ unitCents: 1000, quantity: 2 }], taxExempt: true }), 2500);\n});\ntest(\"ships free from 50.00\", () => {\n  assert.strictEqual(orderTotal({ lines: [{ unitCents: 2500, quantity: 2 }], taxExempt: true }), 5000);\n});\ntest(\"express shipping always costs 15.00\", () => {\n  assert.strictEqual(\n    orderTotal({ lines: [{ unitCents: 2500, quantity: 2 }], shipping: \"express\", taxExempt: true }),\n    6500\n  );\n});",
+  "all": false
+ },
+ {
+  "path": ".worktrees/orders/pricing-rules/src/orders/total.test.js",
+  "old": "test(\"adds 19% tax on the discounted goods unless the order is tax exempt\", () => {\n  const order = { lines: [{ unitCents: 2500, quantity: 2 }] };\n  assert.strictEqual(orderTotal(order), 5950);\n});",
+  "new": "test(\"adds 19% tax on the discounted goods unless the order is tax exempt\", () => {\n  const order = { lines: [{ unitCents: 2500, quantity: 2 }] };\n  assert.strictEqual(orderTotal(order), 5950);\n});\n\ntest(\"never taxes shipping\", () => {\n  // Goods 20.00 taxed to 23.80, plus untaxed standard shipping of 5.00.\n  const order = { lines: [{ unitCents: 1000, quantity: 2 }] };\n  assert.strictEqual(orderTotal(order), 2880);\n});\n\ntest(\"keeps free shipping on the plain sum when a discount drops the goods under 50.00\", () => {\n  // Lines sum to 55.00, so shipping is free, though bulk pricing cuts the goods to 49.50.\n  const order = { lines: [{ unitCents: 550, quantity: 10 }], taxExempt: true };\n  assert.strictEqual(orderTotal(order), 4950);\n});\n\ntest(\"applies bulk pricing, then the coupon, then tax\", () => {\n  const order = {\n    lines: [{ unitCents: 1000, quantity: 10 }],\n    coupon: { percent: 20 },\n  };\n  // 100.00 of lines: 90.00 after bulk, 72.00 after the coupon, 85.68 after\n  // tax, and free shipping because the lines sum to 100.00.\n  assert.strictEqual(orderTotal(order), 8568);\n});",
+  "all": false
+ }
+]
