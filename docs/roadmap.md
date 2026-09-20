@@ -211,6 +211,18 @@ today.
   about 250 dollars and a day of setup with Docker
   ([`slopcodebench-first-look`](spikes/2026-09-18-slopcodebench-first-look.md)).
 
+#### Automated search over candidates
+
+- What it is: a tool that tries many variants of a prompt and reports the
+  trade-offs between hone's goals.
+- Why it was parked: the lab costs 10 to 50 dollars per variant, and the
+  unit suites test little.
+- Next step: the maintainer reopened it on 2026-09-20.
+  [`HANDOFF.md`](../HANDOFF.md)
+  is the program. It builds a cheap and meaningful judge first, and the
+  search after it. It also asks which hooks, critics, and steps of the
+  loop earn their cost.
+
 #### Three goals that no part of hone works on
 
 - Nothing keeps a sentence in the docs in step with a value in the code
@@ -238,9 +250,6 @@ probe shows a gap.
   sonnet from opus, but opus misses nothing on it, so a second reviewer
   could not show a benefit there. Reopen when the bench has a fixture that
   opus misses.
-- *Automated search over candidates.* A tool could try many variants of a
-  prompt. The lab costs 10 to 50 dollars per variant, and the unit suites
-  test little. Reopen when a cheap and meaningful judge exists.
 - *hone on hone.* This repository does not use hone for its own work
   ([`development.md`](development.md), *Change briefs*). Setting that up
   is a project of its own, and nothing above depends on it.
