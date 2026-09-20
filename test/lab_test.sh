@@ -54,6 +54,9 @@ case "$FAKE_MODE" in
     dead) exit 1 ;;
     land) mkdir -p src && echo "exports.x = 1" > src/x.js && git rm -q .plans/toy.md \
               && git add -A && git commit -qm "feat: add x" ;;
+    land2) mkdir -p src && echo "exports.x = 1" > src/x.js && git rm -q .plans/toy.md \
+              && git add -A && git commit -qm "feat: add x" \
+              && echo "exports.y = 2" > src/y.js && git add -A && git commit -qm "feat: add y" ;;
     merge) git checkout -q -b hone/toy && mkdir -p src && echo "exports.x = 1" > src/x.js \
               && git rm -q .plans/toy.md && git add -A && git commit -qm "feat: add x" \
               && git checkout -q main && git merge -q --no-ff -m "Merge branch 'hone/toy'" hone/toy \
@@ -64,8 +67,10 @@ jq -cn '{type: "assistant", message: {content: [{type: "tool_use", name: "Bash",
 jq -cn '{type: "user", message: {content: [{type: "tool_result", content: "Do: run worktree.sh grant toy, then land again."}]}}'
 jq -cn '{type: "result", subtype: "success", is_error: false, result: "final report",
          total_cost_usd: 1.5, num_turns: 3}'
-# A real session ends when its stdin closes. Wait for that, and say that it came.
-cat >/dev/null
+# A real session ends when its stdin closes. Wait for that, and say that it
+# came. The prompt arrives on stdin as stream-json, so this is also where a
+# test reads the turn that the harness sent.
+cat > "$FAKE_DIR/agent-stdin"
 echo seen > "$FAKE_DIR/eof-seen"
 EOF
 chmod +x "$W/bin/claude"
@@ -73,8 +78,11 @@ chmod +x "$W/bin/claude"
 for s in toy toy-judged; do
     echo behavioral > "$W/scenarios/$s/track"
     echo "/hone:run toy" > "$W/scenarios/$s/prompt"
+    # The policy file is what the bare arm strips, beside the deny rules and
+    # the gitignore lines that hone's setup wrote.
     cat > "$W/scenarios/$s/seed.sh" <<'EOF'
 mkdir -p .plans && echo "# Plan: toy" > .plans/toy.md
+echo 'config/' > .hone-irreversible-paths
 EOF
     cat > "$W/scenarios/$s/check.sh" <<'EOF'
 landed
@@ -176,6 +184,13 @@ fresh; MODE=merge lab toy >/dev/null
 touch "$(echo "$W"/out/*/toy/repo)/stray.txt"
 lab --regrade "$(echo "$W"/out/*/)" >/dev/null
 [ "$(result toy .verdict)" = "fail" ] && grep -q "outside git's record" "$W"/out/*/toy/checks.log && ok "a file that git does not track is something a revert cannot undo" || bad "an untracked file should fail revertible ($(cat "$W"/out/*/toy/checks.log))"
+# Reversible is a condition of every variant, so the bare arm measures the
+# outcome instead of failing on the shape of a land that it never makes.
+fresh; MODE=land lab toy --bare >/dev/null
+[ "$(result toy .verdict)" = "pass" ] && ok "on the bare arm one plain commit is revertible" || bad "a plain commit should be revertible on the bare arm ($(cat "$W"/out/*/toy/checks.log))"
+fresh; MODE=land2 lab toy --bare >/dev/null
+[ "$(result toy .verdict)" = "fail" ] && grep -q 'first-parent commits' "$W"/out/*/toy/checks.log \
+    && ok "two commits are revertible on neither arm" || bad "two commits should fail revertible on the bare arm ($(cat "$W"/out/*/toy/checks.log))"
 cp "$W/check.sh.keep" "$W/scenarios/toy/check.sh"
 
 echo "== --regrade grades a kept sandbox again, with no new run =="
@@ -217,6 +232,64 @@ off_files=$(result toy .plugin_files)
 
 lab toy --without no-such-hook >/dev/null; rc=$?
 [ "$rc" -eq 2 ] && ok "an unknown hook name exits 2" || bad "an unknown hook should exit 2 (got $rc)"
+
+echo "== --bare runs the same scenario with no hone at all =="
+prompt_sent() { jq -r '.message.content' "$W/agent-stdin"; }
+fresh; MODE=land lab toy --bare >/dev/null; rc=$?
+[ "$rc" -eq 0 ] && [ "$(result toy .verdict)" = "pass" ] && ok "a bare run grades as any other" \
+    || bad "a bare run should grade as any other (exit $rc, $(result toy .verdict))"
+grep -q -- "--plugin-dir" "$W/agent-args" && bad "a bare session must load no plugin" || ok "the bare session gets no --plugin-dir"
+[ -z "$(ls -d "$W"/out/*/toy/plugin 2>/dev/null)" ] && ok "no copy of the plugin is left in the sandbox" || bad "the sandbox still holds hone's own files"
+[ "$(result toy '[.arm,.plugin]|join(" ")')" = "bare none" ] && ok "the result says which arm ran" \
+    || bad "the result should say arm=bare and plugin=none (got $(result toy '[.arm,.plugin]|join(" ")'))"
+[ "$(result toy .cost_usd)" = "1.5" ] && ok "the bare result carries cost and time as the full arm does" || bad "a bare run should carry its cost"
+# The prompt: the brief that the seed wrote, and no slash command.
+[ "$(prompt_sent | head -1)" = "# Plan: toy" ] && ok "the bare turn is the text of the scenario's brief" || bad "the bare turn should open with the brief (got $(prompt_sent | head -1))"
+prompt_sent | grep -q '/hone:' && bad "the bare turn names a skill that the session does not have" || ok "the bare turn names no skill of hone"
+prompt_sent | grep -q 'Make the change in this repository' && ok "the bare turn asks for the change" || bad "the bare turn should ask for the change"
+# The fixture: the same code and task, with no trace of a hone setup.
+sb=$(echo "$W"/out/*/toy)
+[ "$(jq -c '.permissions.deny' "$sb/repo/.claude/settings.json")" = "[]" ] && ok "the bare fixture has no deny rule" || bad "the bare fixture should have no deny rule"
+[ ! -e "$sb/repo/.hone-irreversible-paths" ] && ok "the bare fixture holds no policy file of hone" || bad "a hone policy file survived the strip"
+grep -q 'worktrees' "$sb/repo/.gitignore" && bad "the bare fixture still gitignores hone's worktrees" || ok "the bare fixture gitignores nothing of hone"
+# The seed commit, because the agent of this test deletes the Plan as a land does.
+git -C "$sb/repo" cat-file -e "$(cat "$sb/base"):.plans/toy.md" 2>/dev/null \
+    && ok "the brief stays in the tree, so a check on it reads a true zero" || bad "the seed should keep the brief"
+[ -x "$sb/repo/scripts/run-tests.sh" ] && ok "the adapter stays, because the checks run it" || bad "the bare fixture should keep its adapter"
+
+fresh; MODE=land lab toy >/dev/null
+[ "$(result toy .arm)" = "full" ] && ok "a run with the plugin says arm=full" || bad "a full run should say arm=full (got $(result toy .arm))"
+[ "$(prompt_sent | head -1)" = "/hone:run toy" ] && ok "the full arm sends the scenario's own prompt" || bad "the full arm should send the prompt file unchanged"
+
+echo "== a scenario with no fair bare form is skipped, and skipped is no verdict about hone =="
+for s in toy-plan toy-claim toy-nobrief; do
+    mkdir -p "$W/scenarios/$s"
+    cp "$W/scenarios/toy/check.sh" "$W/scenarios/$s/check.sh"
+    echo behavioral > "$W/scenarios/$s/track"
+    cp "$W/scenarios/toy/seed.sh" "$W/scenarios/$s/seed.sh"
+    echo "/hone:run toy" > "$W/scenarios/$s/prompt"
+done
+echo "/hone:plan toy: a sketch" > "$W/scenarios/toy-plan/prompt"
+# A seed that names hone's worktree helper leaves the fixture in a state that
+# only hone can be in, so no bare session can meet it.
+echo '# the real one calls worktree.sh add' >> "$W/scenarios/toy-claim/seed.sh"
+echo "/hone:run absent" > "$W/scenarios/toy-nobrief/prompt"
+for s in toy-plan toy-claim toy-nobrief; do
+    fresh; rm -f "$W/agent-args"
+    MODE=land lab "$s" --bare >/dev/null; rc=$?
+    [ "$rc" -eq 0 ] && ok "a skipped scenario fails nothing ($s)" || bad "$s should exit 0 when it skips (got $rc)"
+    [ "$(result "$s" .verdict)" = "skipped" ] && ok "the verdict of $s is skipped" || bad "$s should be skipped (got $(result "$s" .verdict))"
+    [ -n "$(result "$s" .reason)" ] && ok "the result of $s says why" || bad "a skip should carry its reason"
+    [ ! -e "$W/agent-args" ] && ok "a skipped scenario calls no agent ($s)" || bad "$s must not run the agent"
+done
+fresh; MODE=land lab toy-plan >/dev/null
+[ "$(result toy-plan .verdict)" = "pass" ] && ok "the same scenario runs in the full arm" || bad "only the bare arm skips a /hone:plan scenario"
+
+echo "== --bare and a switch of the plugin are not one arm =="
+lab toy --bare --without guard >/dev/null; rc=$?
+[ "$rc" -eq 2 ] && ok "--bare with --without exits 2" || bad "--bare with --without should exit 2 (got $rc)"
+lab toy --bare --review-model claude-other-9 >/dev/null; rc=$?
+[ "$rc" -eq 2 ] && ok "--bare with --review-model exits 2" || bad "--bare with --review-model should exit 2 (got $rc)"
 
 echo "== the sandbox =="
 fresh; MODE=land lab toy >/dev/null

@@ -12,6 +12,7 @@
 #   LAB_NESTED_OUT  a directory with the output of each nested call
 #   LAB_REPORT      the run's final message
 #   LAB_WITHOUT     the hooks that this run switched off, comma-separated
+#   LAB_ARM         `full` with the plugin loaded, `bare` with no hone at all
 #
 # Every helper judges the primary tree at `main`, never a worktree. What a run
 # left in a worktree has not landed.
@@ -200,27 +201,38 @@ reached() {
 # first-parent line, and that commit is a merge. The primary tree holds no
 # change that git does not track. And in a throwaway clone, a revert of that
 # merge applies cleanly and leaves the suite green.
+#
+# Reversible is a condition of every variant (docs/model.md, Goals), so this
+# check measures the outcome on the bare arm too. A plain session lands no
+# merge, and one plain commit is as revertible as one merge. So a bare run
+# may show either, and `git revert` then takes no mainline. Two commits fail
+# on both arms: one revert does not undo the change.
 revertible() {
-    local line dirty clone rc=0
+    local line dirty clone rc=0 merge=() what="merge"
     line=$(git rev-list --first-parent "$LAB_BASE..main")
     [ "$(printf '%s\n' "$line" | grep -c .)" -eq 1 ] \
         || { bad "main moved by $(printf '%s\n' "$line" | grep -c .) first-parent commits, so one revert does not undo the change"; return; }
-    [ "$(git rev-list --parents -n 1 "$line" | wc -w)" -eq 3 ] \
-        || { bad "the one commit on main is not a merge: $(git log --format=%s -n 1 "$line")"; return; }
+    if [ "$(git rev-list --parents -n 1 "$line" | wc -w)" -eq 3 ]; then
+        merge=(-m 1)
+    elif [ "${LAB_ARM:-full}" = bare ]; then
+        what="commit"
+    else
+        bad "the one commit on main is not a merge: $(git log --format=%s -n 1 "$line")"; return
+    fi
     dirty=$(git status --porcelain | head -3 | tr '\n' '|')
     [ -z "$dirty" ] || { bad "the primary tree holds changes outside git's record: $dirty"; return; }
     # The clone names its own committer, so the check does not depend on the
     # git identity of the machine. Each step fails with its own words.
     clone=$(mktemp -d)
     if ! git clone -q . "$clone/r" >/dev/null 2>&1; then rc=clone
-    elif ! git -C "$clone/r" -c user.name=lab -c user.email=lab@example.invalid revert -m 1 --no-edit main >/dev/null 2>&1; then rc=revert
+    elif ! git -C "$clone/r" -c user.name=lab -c user.email=lab@example.invalid revert ${merge[@]+"${merge[@]}"} --no-edit main >/dev/null 2>&1; then rc=revert
     elif ! (cd "$clone/r" && bash scripts/run-tests.sh --all >/dev/null 2>&1); then rc=suite
     fi
     rm -rf "$clone"
     case "$rc" in
-        0) ok "one revert of the merge undoes the change, and the suite stays green" ;;
+        0) ok "one revert of the $what undoes the change, and the suite stays green" ;;
         clone) bad "the check could not clone the fixture, so it says nothing about the run" ;;
-        revert) bad "a revert of the merge does not apply" ;;
-        suite) bad "a revert of the merge leaves the suite red" ;;
+        revert) bad "a revert of the $what does not apply" ;;
+        suite) bad "a revert of the $what leaves the suite red" ;;
     esac
 }

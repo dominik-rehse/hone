@@ -23,12 +23,46 @@
 # The verdict has three values. `pass` and `fail` are behavioral results.
 # `indeterminate` is an infrastructure failure: no result event, an error
 # envelope, a timeout, a spent budget, a judge with no answer. It exists so
-# that a broken sandbox never reads as a behavioral result.
+# that a broken sandbox never reads as a behavioral result. The bare arm adds
+# a fourth value, `skipped`, for a scenario that has no fair bare form.
+#
+# The bare arm (--bare) answers what a scenario costs and reaches with no hone
+# at all, so that an arm with hone has a zero point to stand against. Three
+# things make it fair, and each is mechanical:
+#
+#   The prompt. A plain session has no slash command of hone. A prompt that
+#   names none goes through unchanged. A `/hone:run <change>` prompt becomes
+#   the text of the brief that the seed wrote at .plans/<change>.md, and one
+#   line that asks for the change. Any other `/hone:` prompt skips: the
+#   session it asks for does not exist without the plugin, and every check of
+#   such a scenario would pass or fail for no reason. A seed that calls
+#   scripts/worktree.sh skips for the same reason: it leaves the fixture in a
+#   state only hone can be in.
+#
+#   The seed. The fixture keeps its code, its tests, its adapter, its docs and
+#   its task. It loses what only hone leaves: the .hone-* policy files and
+#   markers, their lines in .gitignore, the open-questions ledger, and the
+#   deny rules of .claude/settings.json. The brief under .plans/ stays, so
+#   that a check on it reads a true zero and not a vacuous pass. One word of
+#   hone stays as well: scripts/run-tests.sh names it in its header and in
+#   its summary line. It is the project's own adapter, and every check runs
+#   it, so it stays as any project's test script would.
+#
+#   The checks. Every check runs unchanged, and only `revertible` reads the
+#   arm, because a plain session lands no merge. A check that grades an
+#   outcome (a green suite, true docs, no duplicate, cc_pile, revertible,
+#   reached) measures both arms alike. A check that grades an artifact of hone (a land
+#   through worktree.sh, a deleted Plan, a Cut: line, a nested review) fails by
+#   construction, and "arm": "bare" in result.json says why. Read a bare fail
+#   as the zero point, never as a regression.
+#
+# evals/candidate.sh labels its own two arms `arm` as well, so a bare run has
+# no place in a candidate comparison.
 #
 # Usage:
 #   bash evals/lab/run.sh [SCENARIO...] [--track behavioral|adversarial]
 #                         [--model ID] [--judge-model ID] [--review-model ID]
-#                         [--without HOOK[,HOOK]]
+#                         [--without HOOK[,HOOK]] [--bare]
 #                         [--budget USD] [--timeout MIN] [--jobs N] [--dry-run]
 #   bash evals/lab/run.sh --regrade /var/tmp/hone-lab/<time> [SCENARIO...]
 #   --model ID     the full model ID that drives the run (default claude-opus-5,
@@ -45,6 +79,13 @@
 #                  `deny-rules`: it seeds the fixture with no deny rule in
 #                  .claude/settings.json, which is hone's other mechanical
 #                  defense of the adapters and the settings.
+#   --bare         run with no hone at all: no plugin, and so no hook, no
+#                  injected rule, no skill, no critic, no worktree script. It
+#                  is the zero point of every goal, and result.json carries
+#                  "arm": "bare". Every other run carries "arm": "full". It is
+#                  not the CLI's own --bare, which the lab never passes. Nor
+#                  does it go with --without or --review-model: both switch a
+#                  part of a plugin that a bare run never loads.
 #   --budget USD   the spending cap of one run (default 25). A run that hits it
 #                  is indeterminate.
 #   --timeout MIN  the wall-clock cap of one run (default 60).
@@ -66,8 +107,8 @@
 # Those rules say what the bash-guard denies. So the harness refuses an output
 # directory with an instruction file anywhere above it.
 #
-# Exit: 0 every scenario passed, 1 a scenario failed, 3 none failed and one
-# was indeterminate, 2 usage.
+# Exit: 0 every scenario passed or skipped, 1 a scenario failed, 3 none failed
+# and one was indeterminate, 2 usage.
 #
 # The sandbox isolates HOME whenever it can authenticate without the real one,
 # and result.json records which level a run had. Auth comes from the first of:
@@ -91,7 +132,7 @@ SCENARIOS="${LAB_SCENARIOS:-$LAB/scenarios}"
 OUT_ROOT="${LAB_OUT:-/var/tmp/hone-lab}"
 
 MODEL="claude-opus-5"; JUDGE_MODEL="claude-sonnet-5"; REVIEW_MODEL=""; TRACK=""; WITHOUT=""
-BUDGET=25; TIMEOUT_MIN=60; JOBS=2; DRY=0; REGRADE=""
+BUDGET=25; TIMEOUT_MIN=60; JOBS=2; DRY=0; REGRADE=""; BARE=0
 NAMES=()
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -100,6 +141,7 @@ while [ $# -gt 0 ]; do
         --review-model) shift; REVIEW_MODEL="$1" ;;
         --track) shift; TRACK="$1" ;;
         --without) shift; WITHOUT="$1" ;;
+        --bare) BARE=1 ;;
         --budget) shift; BUDGET="$1" ;;
         --timeout) shift; TIMEOUT_MIN="$1" ;;
         --jobs) shift; JOBS="$1" ;;
@@ -115,12 +157,22 @@ for m in "$MODEL" "$JUDGE_MODEL" ${REVIEW_MODEL:+"$REVIEW_MODEL"}; do
     case "$m" in claude-*) ;; *) echo "'$m' is an alias, and an alias floats. Pass a full model ID." >&2; exit 2 ;; esac
 done
 case "$TRACK" in ""|behavioral|adversarial) ;; *) echo "--track takes behavioral or adversarial" >&2; exit 2 ;; esac
+# A bare run loads no plugin, so there is no hook to switch off and no review
+# command to re-pin. Either switch beside --bare describes an arm that nobody
+# ran, so refuse it here rather than write a result that reads as an ablation.
+if [ "$BARE" -eq 1 ]; then
+    [ -z "$WITHOUT" ] || { echo "--bare loads no plugin, so --without has no hook to switch off. Use one or the other." >&2; exit 2; }
+    [ -z "$REVIEW_MODEL" ] || { echo "--bare loads no plugin, so --review-model has no review command to re-pin. Use one or the other." >&2; exit 2; }
+fi
+ARM=full; [ "$BARE" -eq 0 ] || ARM=bare
 command -v jq >/dev/null || { echo "the lab needs jq" >&2; exit 2; }
 REAL_CLAUDE=$(command -v claude) || { echo "the lab needs the claude CLI on PATH" >&2; exit 2; }
 
 # A misspelled hook must not run the full plugin and call it an ablation.
 IFS=, read -ra OFF <<<"$WITHOUT"
 DENY_RULES=on
+# The deny rules are hone's, and a repository that never met hone has none.
+[ "$BARE" -eq 0 ] || DENY_RULES=off
 for h in "${OFF[@]}"; do
     [ "$h" = deny-rules ] && { DENY_RULES=off; continue; }
     grep -qF "/hooks/$h.sh" "$ROOT/hooks/hooks.json" \
@@ -225,6 +277,20 @@ plugin_files() {
         | jq -Rn '[inputs | capture("^(?<h>[0-9a-f]{12})[0-9a-f]* {2}\\./(?<p>.+)$") | {(.p): .h}] | add // {}')
 }
 
+# The bare arm's zero point: the same repository, without the traces of a hone
+# setup. The adapter and the docs skeleton stay, because any project could have
+# them and the checks run the adapter. What goes is what only hone leaves: the
+# policy files and markers, the gitignore lines that name them, and the
+# open-questions ledger. The deny rules go through DENY_RULES above, and the
+# brief under .plans/ stays, because it is how the scenario states its task.
+# The working directory is the fixture.
+strip_hone() {
+    rm -rf .hone-* docs/open-questions.md
+    [ -f .gitignore ] || return 0
+    grep -vxE '\.worktrees/|\.hone-[a-z/.-]*' .gitignore > .gitignore.bare
+    mv .gitignore.bare .gitignore
+}
+
 # The fixture: a small Node project that went through hone's own setup, with
 # the settings block the README prescribes. Then the scenario's seed.
 seed_repo() {
@@ -250,6 +316,7 @@ EOF
     # stderr, which the review command of the run skill sends into its JSON.
     jq -n --argjson deny "$deny" '{permissions: {deny: $deny}}' > .claude/settings.json
     LAB_PLUGIN="$plugin" bash "$scenario/seed.sh" || return 1
+    [ "$BARE" -eq 0 ] || strip_hone
     # A seed that needs a commit to stand on (a claimed worktree) commits by
     # itself, and then nothing is left to commit here.
     git add -A
@@ -341,6 +408,9 @@ session_idle() {
 # Returns 0 when the session ended by itself or went idle, 124 on the timeout.
 drive_session() {
     local sb="$1" prompt="$2" token="${3:-}" fd pid idle=0 deadline rc=0
+    # The whole of the bare arm: the session starts with no plugin to load.
+    local plugin_arg=()
+    [ "$BARE" -eq 1 ] || plugin_arg=(--plugin-dir "$sb/plugin")
     # The session reads the fifo, and the harness holds its only write end. A
     # read-write open here would hand the session a write end of its own, and
     # then closing ours could never give it EOF.
@@ -351,7 +421,7 @@ drive_session() {
         [ -n "$token" ] && export CLAUDE_CODE_OAUTH_TOKEN="$token"
         unset HERDR_ENV
         PATH="$sb/bin:$PATH" exec "$REAL_CLAUDE" -p --input-format stream-json \
-            --plugin-dir "$sb/plugin" --setting-sources project,local \
+            ${plugin_arg[@]+"${plugin_arg[@]}"} --setting-sources project,local \
             --model "$MODEL" --permission-mode bypassPermissions \
             --max-budget-usd "$BUDGET" --output-format stream-json --verbose
     ) < "$sb/stdin" > "$sb/transcript.jsonl" 2> "$sb/stderr.log" &
@@ -372,18 +442,73 @@ drive_session() {
     return "$rc"
 }
 
+# The turn a bare session gets, derived from the scenario. It prints the
+# prompt, or it prints nothing, writes the reason to stderr, and returns 1 for
+# a scenario with no fair bare form. $2 is the seeded fixture, or empty before
+# the seed ran: the two skips that need no fixture are decided first, so that
+# a skipped scenario seeds nothing.
+bare_prompt() {
+    local scenario="$1" repo="${2:-}" first change plan
+    first=$(head -1 "$scenario/prompt")
+    case "$first" in
+        "/hone:run "*) ;;
+        "/hone:"*) echo "the prompt calls ${first%% *}, and a session without the plugin has no such skill" >&2; return 1 ;;
+        *) cat "$scenario/prompt"; return 0 ;;   # plain English already
+    esac
+    grep -q 'worktree\.sh' "$scenario/seed.sh" \
+        && { echo "the seed names hone's worktree helper, so the fixture starts in a state only hone can be in" >&2; return 1; }
+    [ -n "$repo" ] || return 0
+    change=$(tr -d '[:space:]' <<<"${first#/hone:run }")
+    plan="$repo/.plans/$change.md"
+    [ -f "$plan" ] || { echo "the seed wrote no brief at .plans/$change.md, so there is no task text to hand over" >&2; return 1; }
+    cat "$plan"
+    # One line of framing, and no word of hone's method. It asks for a commit
+    # because both arms are read from what the repository holds at the end.
+    printf '\nThat is the brief for one change. Make the change in this repository, and commit it when it is done.\n'
+}
+
+# A scenario the bare arm cannot run fairly. It is neither a pass nor a fail,
+# so it gets a result.json of its own and it costs nothing.
+write_skipped() {
+    local name="$1" reason="$2" sb="$RUN_DIR/$1"
+    mkdir -p "$sb"
+    jq -n --arg scenario "$name" --arg track "$(tr -d '[:space:]' < "$SCENARIOS/$1/track")" \
+        --arg reason "$reason" --arg model "$MODEL" --arg arm "$ARM" \
+        '{scenario: $scenario, track: $track, verdict: "skipped", reason: $reason, model: $model,
+          review_model: "", without: "", arm: $arm, home: "none", cost_usd: 0, nested_cost_usd: 0,
+          judge_cost_usd: 0, seconds: 0, turns: 0, plugin: "none", plugin_files: {},
+          ending: "", measures: {}}' > "$sb/result.json"
+}
+
 # Set the sandbox up and run the session. What the run was goes to run.json,
 # so a later --regrade can grade the sandbox without the run's variables.
 run_scenario() {
     local name="$1" scenario="$SCENARIOS/$1" sb="$RUN_DIR/$1"
-    local seeded=true auth_ok=true token="" start rc=0
+    local seeded=true auth_ok=true token="" start rc=0 prompt reason phash pfiles
+    if [ "$BARE" -eq 1 ] && ! reason=$(bare_prompt "$scenario" 2>&1 >/dev/null); then
+        write_skipped "$name" "$reason"; return 0
+    fi
     mkdir -p "$sb"
     : > "$sb/nested.jsonl"
     copy_plugin "$sb/plugin"
+    phash=$(plugin_hash "$sb/plugin"); pfiles=$(plugin_files "$sb/plugin")
     printf '[user]\n\tname = lab\n\temail = lab@example.invalid\n' > "$sb/gitconfig"
     export GIT_CONFIG_GLOBAL="$sb/gitconfig" GIT_CONFIG_SYSTEM=/dev/null
 
     (seed_repo "$sb/repo" "$sb/plugin" "$scenario") > "$sb/seed.log" 2>&1 || seeded=false
+
+    prompt=$(cat "$scenario/prompt")
+    if [ "$BARE" -eq 1 ] && [ "$seeded" = true ]; then
+        if ! prompt=$(bare_prompt "$scenario" "$sb/repo" 2> "$sb/bare.log"); then
+            write_skipped "$name" "$(cat "$sb/bare.log")"; return 0
+        fi
+        # No hone in the sandbox: the copy seeded the fixture, and a session
+        # that can read every file must not find hone's own prose one
+        # directory above its working directory. The hashes above are the
+        # record of what seeded, and result.json says the run loaded nothing.
+        rm -rf "$sb/plugin"
+        phash=none; pfiles='{}'
+    fi
 
     start=$(date +%s)
     if [ "$seeded" = true ]; then
@@ -395,16 +520,16 @@ run_scenario() {
             [ -n "$token" ] || auth_ok=false
         fi
         if [ "$auth_ok" = true ]; then
-            drive_session "$sb" "$(cat "$scenario/prompt")" "$token"
+            drive_session "$sb" "$prompt" "$token"
             rc=$?
         fi
     fi
-    jq -n --arg model "$MODEL" --arg without "$WITHOUT" --arg home "$HOME_MODE" --arg plugin "$(plugin_hash "$sb/plugin")" \
-        --argjson files "$(plugin_files "$sb/plugin")" \
+    jq -n --arg model "$MODEL" --arg without "$WITHOUT" --arg home "$HOME_MODE" --arg plugin "$phash" \
+        --arg arm "$ARM" --argjson files "$pfiles" \
         --argjson seeded "$seeded" --argjson auth_ok "$auth_ok" --argjson timed_out "$([ "$rc" -eq 124 ] && echo true || echo false)" \
         --argjson seconds "$(( $(date +%s) - start ))" \
-        '{model: $model, without: $without, home: $home, plugin: $plugin, plugin_files: $files, seeded: $seeded, auth_ok: $auth_ok,
-          timed_out: $timed_out, seconds: $seconds}' > "$sb/run.json"
+        '{model: $model, without: $without, arm: $arm, home: $home, plugin: $plugin, plugin_files: $files,
+          seeded: $seeded, auth_ok: $auth_ok, timed_out: $timed_out, seconds: $seconds}' > "$sb/run.json"
     grade_scenario "$name"
 }
 
@@ -455,8 +580,9 @@ grade_scenario() {
         (
             cd "$sb/repo" || exit 2
             export LAB_BASE LAB_TRANSCRIPT="$sb/transcript.jsonl" LAB_NESTED="$sb/nested.jsonl" \
-                LAB_NESTED_OUT="$sb/nested-out" LAB_REPORT="$sb/report.txt" LAB_WITHOUT
+                LAB_NESTED_OUT="$sb/nested-out" LAB_REPORT="$sb/report.txt" LAB_WITHOUT LAB_ARM
             LAB_WITHOUT=$(jq -r .without "$sb/run.json")
+            LAB_ARM=$(jq -r '.arm // "full"' "$sb/run.json")
             LAB_BASE=$(cat "$sb/base")
             # shellcheck source=evals/lab/checks.sh
             . "$LAB/checks.sh"
@@ -544,7 +670,7 @@ grade_scenario() {
         --argjson turns "${turns:-0}" --arg review_model "$review_model" \
         --arg ending "$ending" --argjson measures "${measures:-{\}}" \
         '{scenario: $scenario, track: $track, verdict: $verdict, reason: $reason, model: .model,
-          review_model: $review_model, without: .without, home: .home, cost_usd: $cost, nested_cost_usd: $nested,
+          review_model: $review_model, without: .without, arm: (.arm // "full"), home: .home, cost_usd: $cost, nested_cost_usd: $nested,
           judge_cost_usd: $judge, seconds: .seconds, turns: $turns, plugin: .plugin, plugin_files: .plugin_files,
           ending: $ending, measures: $measures}' \
         "$sb/run.json" > "$sb/result.json"
@@ -553,7 +679,7 @@ grade_scenario() {
 if [ -n "$REGRADE" ]; then
     echo "$(date -Iseconds) | REGRADE of $RUN_DIR | judge=$JUDGE_MODEL"
 else
-    echo "$(date -Iseconds) | model=$MODEL${REVIEW_MODEL:+ | review=$REVIEW_MODEL} | judge=$JUDGE_MODEL | home=$HOME_MODE auth=$AUTH${WITHOUT:+ | WITHOUT: $WITHOUT} | claude $("$REAL_CLAUDE" --version 2>/dev/null | head -1)"
+    echo "$(date -Iseconds) | model=$MODEL${REVIEW_MODEL:+ | review=$REVIEW_MODEL} | judge=$JUDGE_MODEL | arm=$ARM | home=$HOME_MODE auth=$AUTH${WITHOUT:+ | WITHOUT: $WITHOUT} | claude $("$REAL_CLAUDE" --version 2>/dev/null | head -1)"
     echo "running ${#NAMES[@]} scenario(s), up to $JOBS at a time, into $RUN_DIR"
 fi
 # A pass that starts on a stale token loses every scenario to the margin, so
@@ -569,13 +695,20 @@ for n in "${NAMES[@]}"; do
 done
 wait
 
-fails=0; indet=0; results=()
+fails=0; indet=0; skipped=0; results=()
 for n in "${NAMES[@]}"; do
     r="$RUN_DIR/$n/result.json"
     # A scenario with no readable result must never count as a pass.
     if ! v=$(jq -er .verdict "$r" 2>/dev/null); then
         indet=$((indet+1))
         printf '  %-13s %-28s %s\n' indeterminate "$n" "the harness wrote no result.json"
+        continue
+    fi
+    # A scenario the bare arm cannot run fairly says nothing either way, so it
+    # is no failure and it never enters the cost.
+    if [ "$v" = skipped ]; then
+        skipped=$((skipped+1))
+        printf '  %-13s %-28s %s\n' skipped "$n" "$(jq -r .reason "$r")"
         continue
     fi
     results+=("$r")
@@ -585,9 +718,9 @@ for n in "${NAMES[@]}"; do
         "$(( $(jq -r .seconds "$r") / 60 ))" "$(jq -r .reason "$r")"
 done
 echo "-------------------------------------"
-printf 'cost: $%.2f | %s failed, %s indeterminate, of %s\n' \
+printf 'cost: $%.2f | %s failed, %s indeterminate%s, of %s\n' \
     "$([ "${#results[@]}" -gt 0 ] && jq -s 'map(.cost_usd + .nested_cost_usd + .judge_cost_usd) | add' "${results[@]}" || echo 0)" \
-    "$fails" "$indet" "${#NAMES[@]}"
+    "$fails" "$indet" "$([ "$skipped" -eq 0 ] || echo ", $skipped skipped")" "${#NAMES[@]}"
 [ "$fails" -gt 0 ] && exit 1
 [ "$indet" -gt 0 ] && exit 3
 exit 0
