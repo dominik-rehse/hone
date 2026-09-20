@@ -54,6 +54,13 @@ As of 2026-09-20:
     the price. hone differed in one measure: it pinned a document to the
     code with a test (`doc_pinned`). The third attempt belongs on the real
     base with derived repeats, and it is not started.
+- Step 5 is in work. The variant mechanism is done: `evals/lab/variant.py`
+  builds a copy of the plugin with any part off, `evals/lab/parts.json`
+  maps each part to its sections and anchors, and `run.sh` takes
+  `--variant`, `--without`, and `--set`. Two campaigns run: the parts that
+  call a model, mainly on the transparent room set, and the guards on the
+  models below the floor. Each saves its progress under
+  `/var/tmp/hone-lab/campaign-5b/` and `campaign-5c/`.
 - Step 6 is in work.
 - Step 7 is done (`docs/spikes/2026-09-20-decision-point-cases.md`).
   `evals/decision-points/` holds 26 cases over 16 lab scenarios, and
@@ -62,7 +69,7 @@ As of 2026-09-20:
   that the scaffold fills from the plugin under test. 21 cases
   discriminate, and the shipped skill fails 5 more in 3 runs of 3. One run
   costs about 50 cents on claude-opus-5 and 20 cents on claude-sonnet-5.
-- Steps 5, 8, and 9 are not started.
+- Steps 8 and 9 are not started.
 
 ## What
 
