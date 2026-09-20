@@ -48,6 +48,8 @@
 #                  (default 1.5).
 #   --total USD    the cap of the whole pass (default 20). A wave starts only
 #                  when the spend so far plus its worst case stays under it.
+#                  The spend so far counts every review already under
+#                  --out, and the worst case is --budget per review.
 #   --timeout MIN  the wall-clock cap of one review (default 15).
 #   --out DIR      the output root (default /var/tmp/hone-probe/review-bench,
 #                  or $PROBE_OUT). It must sit outside every project: Claude
@@ -88,7 +90,7 @@ while [ $# -gt 0 ]; do
         --grade-only) GRADE_ONLY=yes; shift ;;
         --summary) SUMMARY_ONLY=yes; shift ;;
         --dry-run) DRY=yes; shift ;;
-        -h|--help) sed -n '2,69p' "$0"; exit 0 ;;
+        -h|--help) sed -n '2,71p' "$0"; exit 0 ;;
         *) echo "run: unknown argument $1" >&2; exit 2 ;;
     esac
 done

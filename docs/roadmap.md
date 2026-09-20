@@ -83,22 +83,35 @@ in git.
   cover it. The likely candidate is one sentence in the refactor step of
   the run skill. It owes the `loop` unit suite and the whole lab.
 
-#### The review bench is too easy
+#### The review bench has no headroom on opus, and its false-alarm count is not stable
 
 - What it is: `evals/probes/review-bench/` tests the nested code review
-  alone. It hands the reviewer eight small changes. Six carry one planted
-  defect each, and the brief never names the defect.
-- What happens: opus and sonnet each caught all 21 planted defects. So
-  the bench cannot compare two reviewers, and it cannot judge a change to
-  the review step
-  ([`review-bench-first-run`](spikes/2026-09-19-review-bench-first-run.md)).
+  alone. Since 2026-09-20 it has eleven harder fixtures. Each is a small
+  project with a change that carries one or three planted defects, and a
+  clean twin of the same change that counts false alarms
+  ([`review-bench-harder-fixtures`](spikes/2026-09-20-review-bench-harder-fixtures.md)).
+- What it can do now: it tells opus from sonnet. sonnet missed one defect
+  in 3 reviews of 3, an omission in a file that the change does not touch.
+- What it cannot do: opus caught 51 of 51, so the bench cannot show that a
+  change makes the opus review catch more.
+- What is not stable: an agent judges the false alarms on the clean twins,
+  and two passes had two judges. The opus review itself also changed
+  between 2026-09-19 and 2026-09-20. It took four times as long and cost
+  2.7 times as much, on the same twins with the same command. We do not
+  know why.
 - A related gap: inside the loop, no lab run has ever tested the review.
   Either the run's brief already named the defect, or the builder fixed
   the defect before the review ran.
-- Next step: harder fixtures. That means larger changes over several
-  files, subtler defects, and more clean changes to count false alarms.
-  Only one clean fixture counts today, because the second one had a real
-  bug in it by accident.
+- Next step, cheap: run two untouched twins on opus once a day for a week,
+  and record time, cost, and tokens. That shows whether the review moves
+  with the day. The cost of the nested review in a run rests on the same
+  number.
+- Next step for the false alarms: write the judge's rule as a prompt with
+  worked examples, keep it under `evals/probes/review-bench/`, and run it at
+  five votes per twin.
+- Next step for headroom: a base that a reviewer cannot read whole, of
+  5,000 lines or more. The note says why 500 lines are too few. Six known
+  weaknesses in the clean twins are listed in the note's judged files.
 
 #### Two sentences of the `plan-critic` move no case
 
@@ -216,9 +229,10 @@ probe shows a gap.
   ([`section-ablation-on-opus`](spikes/2026-09-18-section-ablation-on-opus.md)).
   Reopen at the next model release. `releasing.md` has the step.
 - *A reviewer from another model family.* The author and the reviewer are
-  both Claude, so they may miss the same things. On the review bench,
-  sonnet matched opus, so the bench cannot show a benefit yet. Reopen
-  when the bench has harder fixtures.
+  both Claude, so they may miss the same things. The review bench now tells
+  sonnet from opus, but opus misses nothing on it, so a second reviewer
+  could not show a benefit there. Reopen when the bench has a fixture that
+  opus misses.
 - *Automated search over candidates.* A tool could try many variants of a
   prompt. The lab costs 10 to 50 dollars per variant, and the unit suites
   test little. Reopen when a cheap and meaningful judge exists.
