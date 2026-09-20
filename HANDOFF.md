@@ -23,9 +23,9 @@ As of 2026-09-20:
 - Step 2 is in work, in two halves: the Ambig-SWE data, and the field log.
   The raw findings from the real sessions stay under
   `/var/tmp/hone-fieldlog/`.
-- Step 3 is in work. `evals/optimize/sections.py` splits at headings, and
-  `test/optimize_test.sh` proves the round trip. A finer split for the
-  critics is in work. See *Components are sections, not files*.
+- Step 3 is done. `evals/optimize/sections.py` is the splitter, and its
+  header has the rules and the usage. `--fine` gives the finer split for
+  the critics. `test/optimize_test.sh` proves the round trip in both modes.
 - Step 4 is in work on its first part, the bare arm of the lab.
 - Steps 5 to 9 are not started.
 
