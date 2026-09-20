@@ -96,6 +96,41 @@ did not resolve its test dependency. So the first call of the adapter wrote
 `uv.lock` into the primary tree, and `revertible` read that as a dirty tree.
 The seed now runs `uv sync`, as the seed of `python-structure` does.
 
+## The sweep: ten more seeds of the derived format
+
+Ten seeds cover the five places in both languages. Each one ran once bare and
+three times with hone. Three seeds held `docs_true` on their first bare run,
+so those got two more bare runs.
+
+| seed | place | language | hone holds | bare holds |
+| --- | --- | --- | --- | --- |
+| 15 | README row | python | 3 of 3 | 0 of 1 |
+| 23 | untied Decision | python | 3 of 3 | 1 of 3 |
+| 30 | neighbour Note | javascript | 3 of 3 | 0 of 1 |
+| 38 | governed Note | javascript | 3 of 3 | 3 of 3 |
+| 39 | neighbour Note | python | 3 of 3 | 0 of 1 |
+| 62 | header comment | javascript | 3 of 3 | 0 of 1 |
+| 71 | governed Note | python | 3 of 3 | 0 of 1 |
+| 86 | README row | javascript | 3 of 3 | 0 of 1 |
+| 94 | untied Decision | javascript | 3 of 3 | 0 of 1 |
+| 95 | header comment | python | 3 of 3 | 2 of 3 |
+
+The hone arm held the outcome in all 30 runs. So seed 6 stays the only
+instance with headroom inside hone, at 2 of 3. Its run cut the Behaviour list
+and fixed both distractors. It even edited the very Decision that holds the
+false sentence. It still left "The digest covers 13 weeks at most" standing.
+The consolidate step is the part that should have caught it, because that step
+reads what the change made false. The `consolidate-critic` is the part that
+should have sent the run back.
+
+Seed 38 separates nothing. The bare arm held the outcome there in 3 of 3. Its
+sentence sits in the Note that governs the changed path, and a plain session
+reads that Note anyway.
+
+The sweep cost 80 dollars over 46 complete runs. Two passes died on the plan
+limit and left 24 indeterminate runs, which count for nothing. Four runs of one
+pass died together at `--jobs 4`, so the sweep went back to 3.
+
 ## Finding
 
 The transparent outcome has room where the false sentence carries no form of
@@ -114,8 +149,17 @@ Attempt 1 ran before the `derived` format and the noise Decisions existed. Its
 seeds now map to a slightly different format, so read its rows by the
 parameters in this table and not by the seed number.
 
+## The transparent room set
+
+Ten seeds make the set. The bare arm fails the outcome there, and hone holds
+it at least sometimes. The seeds are 6, 14, 15, 23, 30, 39, 62, 71, 86, and
+94. They cover all five places and both languages. `evals/lab/generators/transparent-room-set.json`
+holds the list with the rate per arm. It also names the three seeds that the
+set rejects. Step 5 switches one part of hone off at a time on exactly these.
+
 ## Where it landed
 
-`evals/lab/generators/transparent.py`, with the parameters in its header.
-`test/lab_test.sh` proves the plumbing. HANDOFF step 4 carries the family, and
-step 5 can use these instances as an axis for *transparent*.
+`evals/lab/generators/transparent.py`, with the parameters in its header, and
+`transparent-room-set.json` beside it. `test/lab_test.sh` proves the plumbing.
+HANDOFF step 4 carries the family, and step 5 uses the room set as the axis
+for *transparent*.

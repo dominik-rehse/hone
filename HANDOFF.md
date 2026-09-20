@@ -42,8 +42,10 @@ As of 2026-09-20:
     writes scenarios from a seed number. Only the format `derived` gives
     room: the code says 91 days, and a sentence elsewhere says 13 weeks.
     There the bare arm left the false sentence in 8 of 10 runs, and hone
-    passed 9 of 10. A second round runs 10 more seeds, and it ends with the
-    fixed list of seeds that step 5 uses.
+    passed 9 of 10. A second round of 10 seeds confirmed it: hone held the
+    outcome in 30 runs of 30, and the bare arm failed on 8 seeds of 10.
+    `evals/lab/generators/transparent-room-set.json` has the ten seeds that
+    step 5 uses.
   - *Real bases* found no room in three attempts, on claude-opus-5 and on
     claude-sonnet-5. The scenario `real-base-click` stays, by name only,
     because step 5 needs a true price per part on a real base.
