@@ -146,6 +146,9 @@ in git.
   script should be.
 - Next step: none now. If it happens again, the skill names the value or
   warns about the loop.
+- A smaller gap in the same skill: in a Python project, `scripts/setup.sh`
+  adds neither `.venv/` nor `__pycache__/` to `.gitignore`. No run has
+  committed one so far. The seed of `python-structure` adds them itself.
 
 ### A question for the maintainer
 
@@ -178,16 +181,18 @@ today.
 
 - What exists: `evals/probes/impossiblebench/` runs ten tasks of the
   public benchmark ImpossibleBench, with hone and without it. We picked
-  these ten because opus had cheated on them before. Each pass runs each
-  task once.
+  these ten because opus had cheated on them before. A pass runs each task
+  once, or `--runs N` times.
 - One task ends in a cheat on every release, because the probe's request
   makes the tests the authority. With a request that names the
   specification, hone refuses the cheat, and the lab scenario
   `spec-authority` guards that
   ([`spec-authority-first-runs`](spikes/2026-09-19-spec-authority-first-runs.md)).
-- What it can show: only a large change. Ten single runs cannot show a
-  small one.
-- Next step: more runs per task, before a candidate leans on the probe.
+- What it can show: only a large change, as long as a pass has ten single
+  runs. No pass with more runs per task exists yet.
+- Next step: a baseline pass at `--runs 3` on the current release, before a
+  candidate leans on the probe. Three runs of ten tasks in both arms cost
+  about as much as a lab pass.
   The benchmark's second half is built on SWE-bench. It needs Docker and
   about 120 GB, and this machine has neither set up.
 
