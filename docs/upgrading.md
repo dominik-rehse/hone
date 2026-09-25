@@ -100,6 +100,12 @@ mechanical steps.
      Code maps the alias to, and a new Opus reaches them without a hone
      release. Nothing to do on the Anthropic API. On another provider, see
      the model paragraph under *Commands* in `reference.md`.
+   - *land verifies in the worktree since 0.60*: land runs the suite on
+     the merge inside the change's worktree, then fast-forwards the
+     primary branch. Since 0.63 it refuses a worktree that holds files git
+     neither tracks nor ignores, because the suite would test them and the
+     merge would leave them out. If your suite or your checks write such
+     files, add them to `.gitignore`.
 
 After that, run `worktree.sh status`. It shows what is present and what is
 missing. It also flags a policy file that is still uncommitted, and a
