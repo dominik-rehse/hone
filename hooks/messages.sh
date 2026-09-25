@@ -823,11 +823,34 @@ EOF
 }
 
 msg_wt_land_conflict() {
-    local branch="$1"
+    local branch="$1" paths="$2"
     cat <<EOF
 hone worktree: merging $branch conflicted, so land restored the primary tree.
 Do: fold this change in serially, then land it again.
 Why: the independence check missed an overlap.
+Conflicting paths:
+$(hone_msg_block "$paths")
+EOF
+}
+
+msg_wt_land_hook_refused() {
+    local branch="$1" log="$2" tail="$3"
+    cat <<EOF
+hone worktree: a git hook refused the merge commit of $branch, so land restored the primary tree.
+Do: read the hook output below, fix what it reports, then land again.
+Why: the merge had no conflict, and the hook's check failed.
+Last lines of $log:
+$(hone_msg_block "$tail")
+EOF
+}
+
+msg_wt_land_merge_failed() {
+    local branch="$1" log="$2" tail="$3"
+    cat <<EOF
+hone worktree: git could not merge $branch, so land left the primary tree as it was.
+Do: read the git output below, fix the repo state, then land again.
+Last lines of $log:
+$(hone_msg_block "$tail")
 EOF
 }
 
@@ -1296,7 +1319,9 @@ worktree|human|msg_wt_land_proof_signoff_stale|<change>|hone/<change>|<tip>|<the
 worktree|human|msg_wt_land_proof_missing|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_proof_adapter_change|hone/<change>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_proof_always_no_adapter|<plugin-root>/templates/proof/
-worktree|human|msg_wt_land_conflict|hone/<change>
+worktree|human|msg_wt_land_conflict|hone/<change>|- <path>
+worktree|human|msg_wt_land_hook_refused|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
+worktree|human|msg_wt_land_merge_failed|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_adapter_red|<typecheck or lint>|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_tier_empty|- <tier>

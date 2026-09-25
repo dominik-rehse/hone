@@ -88,9 +88,10 @@
 #       retry: land tells the two apart by fetching again after a rejection.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached/push refused · 5 lock
 #       timeout, or
-#       the remote moved on every attempt · 6 post-merge regression (rolled
-#       back) · 7 real-environment proof missing · 8 ungranted irreversible
-#       change · 9 merge conflict (aborted, tree restored).
+#       the remote moved on every attempt · 6 post-merge regression, or a
+#       git hook refused the merge commit (rolled back) · 7 real-environment
+#       proof missing · 8 ungranted irreversible change · 9 merge conflict
+#       (aborted, tree restored, paths named).
 #
 #   worktree.sh review-scope <change>
 #       Print how deep the change's review must go: `full`, or `docs-only`
@@ -887,20 +888,38 @@ cmd_land() {
         shared_sync_primary "$main_root" "$remote" "$primary" || return 2
     fi
     pre=$(git -C "$main_root" rev-parse HEAD)
-    if ! git -C "$main_root" "${merge_args[@]}" >/dev/null 2>&1; then
-        # A conflict means the independence check missed an overlap. Restore the
-        # shared tree so the next lander starts clean. The branch stays as
-        # evidence to fold in serially. Its own exit code (9), so a caller can
-        # tell "fold in serially" from a usage or repo-state error (2).
-        git -C "$main_root" merge --abort 2>/dev/null
-        msg_wt_land_conflict "$branch" >&2
-        return 9
-    fi
-    # Keep the post-merge run's output. On red it is the only record of what
-    # broke, and land rolls the merge back before anyone can re-run it. One
-    # file per primary tree, and each land overwrites it.
+    # Keep the output of the merge and of the post-merge run. On red it is the
+    # only record of what broke, and land rolls the merge back before anyone
+    # can re-run it. One file per primary tree, and each land overwrites it.
     land_log="$(cd "$common_dir" 2>/dev/null && pwd || printf '%s' "$common_dir")/hone-land.log"
     : >"$land_log"
+    if ! git -C "$main_root" "${merge_args[@]}" >>"$land_log" 2>&1; then
+        # A failed merge has three causes, and each needs another action. Read
+        # the state before the abort erases it. Every case restores the shared
+        # tree, so the next lander starts clean, and keeps the branch.
+        local unmerged merging=""
+        unmerged=$(git -C "$main_root" diff --name-only --diff-filter=U 2>/dev/null)
+        git -C "$main_root" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 && merging=yes
+        git -C "$main_root" merge --abort 2>/dev/null
+        # Unmerged paths: a real conflict, so the independence check missed
+        # an overlap. Its own exit code (9) means "fold in serially".
+        if [ -n "$unmerged" ]; then
+            msg_wt_land_conflict "$branch" "$(sed 's/^/- /' <<<"$unmerged")" >&2
+            return 9
+        fi
+        # A clean merge that git did not commit: a git hook (pre-merge-commit,
+        # commit-msg) refused the merge commit. Like a red adapter, a check
+        # failed on the merged tree, so it shares exit 6. The fix is what the
+        # hook reports. Folding in serially would change nothing.
+        if [ -n "$merging" ]; then
+            msg_wt_land_hook_refused "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+            return 6
+        fi
+        # git refused before it merged anything, for example because an
+        # untracked file was in the way. That is repo state, so exit 2.
+        msg_wt_land_merge_failed "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+        return 2
+    fi
     # The merge moved a lockfile, so the primary tree's installed dependencies
     # sit behind the manifest the suite below runs against. A change that adds
     # a package its tests import would red that suite and roll back, though

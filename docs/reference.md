@@ -450,12 +450,12 @@ The gate's error message prints the exact helper command with its full path.
 | Exit | Meaning |
 |------|---------|
 | 0 | landed and green |
-| 2 | usage or repo-state error (missing branch, detached HEAD, no `Cut:` line on the branch), or in shared mode a push the host refused |
+| 2 | usage or repo-state error (missing branch, detached HEAD, no `Cut:` line on the branch, a merge git refused to start), or in shared mode a push the host refused |
 | 5 | lock timeout: another land or full-suite run held the lock. In shared mode also: the remote moved on every attempt, merge rolled back |
-| 6 | suite, type-check, or lint red after the merge; rolled back, worktree kept, output in the land log |
+| 6 | suite, type-check, or lint red after the merge, or a git hook refused the merge commit; rolled back, worktree kept, output in the land log |
 | 7 | proof gate: real-environment proof missing |
 | 8 | authority gate: irreversible change without a grant |
-| 9 | merge conflict; aborted, tree restored, branch kept |
+| 9 | merge conflict; aborted, tree restored, branch kept, conflicting paths named |
 
 What to do at each code, in detail:
 [`skills/run/references/land.md`](../skills/run/references/land.md).
@@ -466,8 +466,8 @@ The merge result is a tree no gate has checked: two changes that each append
 to one file can be lint-green alone and lint-red merged. A red adapter rolls
 the merge back with the same exit 6, and the message names the adapter.
 
-The post-merge suite writes `<git-common-dir>/hone-land.log`, replaced on
-every land, and the adapter runs append to it. Exit 6 prints that path and
+The merge and the post-merge suite write `<git-common-dir>/hone-land.log`,
+replaced on every land, and the adapter runs append to it. Exit 6 prints that path and
 the last 20 lines of it.
 
 After a green post-merge run, land reads the tier summary lines out of that

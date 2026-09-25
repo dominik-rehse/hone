@@ -933,12 +933,44 @@ WT_CB=$(bash "$WSH" add conflict-b) || die "worktree add conflict-b"
 echo "version A" > "$WT_CA/README.md"; (cd "$WT_CA" && git add -A && git commit -qm "feat: a" -m "Cut: nothing, a test change")
 echo "version B" > "$WT_CB/README.md"; (cd "$WT_CB" && git add -A && git commit -qm "feat: b" -m "Cut: nothing, a test change")
 bash "$WSH" land conflict-a >/dev/null 2>&1 || die "first land should succeed"
-bash "$WSH" land conflict-b >/dev/null 2>&1; rc=$?
+out=$(bash "$WSH" land conflict-b 2>&1); rc=$?
 [ "$rc" -eq 9 ] || die "a conflicting land should exit 9 (got $rc)"
+echo "$out" | grep -q -- "- README.md" || die "a conflicted land should name the conflicting path: $out"
 [ -z "$(git status --porcelain -uno)" ] || die "a conflicted land should leave the tracked tree clean"
 git show-ref --verify --quiet refs/heads/hone/conflict-b || die "the conflicting branch should survive as evidence"
-step "conflict aborted with its own exit code (9), tree clean, branch kept"
+step "conflict aborted with its own exit code (9), paths named, tree clean, branch kept"
 bash "$WSH" remove "$WT_CB" >/dev/null 2>&1; git branch -D hone/conflict-b >/dev/null 2>&1
+
+echo "== 6b2. a git hook that refuses the merge commit is not a conflict =="
+WT_HK=$(bash "$WSH" add hook-refused) || die "worktree add hook-refused"
+echo "hook change" > "$WT_HK/hook-refused.txt"; (cd "$WT_HK" && git add -A && git commit -qm "feat: hook" -m "Cut: nothing, a test change")
+hooks_dir=$(git rev-parse --git-path hooks)
+mkdir -p "$hooks_dir"
+printf '#!/bin/sh\necho "styles: output.css is stale" >&2\nexit 1\n' > "$hooks_dir/pre-merge-commit"
+chmod +x "$hooks_dir/pre-merge-commit"
+pre_head=$(git rev-parse HEAD)
+out=$(bash "$WSH" land hook-refused 2>&1); rc=$?
+rm -f "$hooks_dir/pre-merge-commit"
+[ "$rc" -eq 6 ] || die "a refused merge commit should exit 6, not 9 (got $rc): $out"
+echo "$out" | grep -q "a git hook refused the merge commit" || die "the message should name the hook: $out"
+echo "$out" | grep -q "output.css is stale" || die "the message should show the hook's output: $out"
+echo "$out" | grep -q "conflicted" && die "a refused merge commit is not a conflict: $out"
+[ "$(git rev-parse HEAD)" = "$pre_head" ] || die "a refused merge should leave the primary branch where it was"
+git rev-parse -q --verify MERGE_HEAD >/dev/null && die "a refused merge should leave no merge in progress"
+[ -z "$(git status --porcelain -uno)" ] || die "a refused merge should leave the tracked tree clean"
+git show-ref --verify --quiet refs/heads/hone/hook-refused || die "the branch should survive a refused merge"
+step "a refused merge commit exits 6 with the hook's output, tree restored"
+
+echo "== 6b3. a merge git refuses to start is repo state, exit 2 =="
+echo "in the way" > "$REPO/hook-refused.txt"
+out=$(bash "$WSH" land hook-refused 2>&1); rc=$?
+rm -f "$REPO/hook-refused.txt"
+[ "$rc" -eq 2 ] || die "a merge blocked by an untracked file should exit 2 (got $rc): $out"
+echo "$out" | grep -q "git could not merge" || die "the message should say git could not merge: $out"
+echo "$out" | grep -q "hook-refused.txt" || die "the message should show git's output: $out"
+[ "$(git rev-parse HEAD)" = "$pre_head" ] || die "a blocked merge should leave the primary branch where it was"
+step "a merge git refuses to start exits 2 with git's output"
+bash "$WSH" remove "$WT_HK" >/dev/null 2>&1; git branch -D hone/hook-refused >/dev/null 2>&1
 
 echo "== 6c. landed: the artifact predicate an orchestrator polls =="
 # conflict-a landed above: merge commit present, branch and worktree gone.

@@ -22,8 +22,11 @@ worktree as evidence. This is stop-point 1 surfacing at land: the change passed
 in isolation but not against what else has landed since. **Stop and escalate.**
 
 Read the message first: it names what failed (the suite, `typecheck`, `lint`,
-or `setup-tree`). A `setup-tree` red means the install step failed in the
-primary tree, not that the change regressed anything. One more case wears this
+`setup-tree`, or a git hook that refused the merge commit). A `setup-tree` red
+means the install step failed in the primary tree, not that the change
+regressed anything. A refused hook can fail on the trunk alone, for example a
+generated file that is out of date. Then every land fails the same way until a
+person fixes the trunk. One more case wears this
 exit. Take a project with **no** `setup-tree.sh`, and a land that changed a
 lockfile. There, the suite red can be the stale primary-tree install rather
 than the change. The tell is a lockfile in the branch diff plus a
@@ -32,9 +35,9 @@ the durable fix.
 
 ## 9: merge conflict
 
-Aborted, tree restored. Under `--all` this means the independence check missed an
-overlap: fold this change in serially and flag it for a Decision-level look. Do
-not force the merge.
+Aborted, tree restored. The message names the conflicting paths. Under `--all`
+this means the independence check missed an overlap: fold this change in
+serially and flag it for a Decision-level look. Do not force the merge.
 
 ## 5: lock timeout, or the remote kept moving
 
