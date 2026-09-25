@@ -9,8 +9,8 @@ one artifact written outside the loop. A human usually invokes it, and another
 agent may invoke it too. The command ends with the `plan-critic` check while
 its caller can still revise the Plan. `/hone:run` then
 executes the Plan unattended in a git worktree. The loop is build (test-first)
-→ verify → consolidate → `/code-review` → land (merge into the primary tree,
-re-run the suite, remove the worktree). It proceeds without checking in, and
+→ verify → consolidate → `/code-review` → land (merge and re-run the suite
+in the worktree, fast-forward the primary branch, remove the worktree). It proceeds without checking in, and
 stops only when a check cannot be made green, the change is genuinely
 ambiguous, or it is done. On a stop it keeps the worktree as evidence and
 reports the blocker. It never disables a check to proceed.

@@ -79,7 +79,8 @@ work. The loop calls it, and you can too:
 - `worktree.sh land <change>` builds the merge in the change's worktree,
   re-runs the suite there, fast-forwards the primary branch onto the tested
   merge commit, and cleans up. Runs the land gates first. When the primary
-  branch moved during the suite, it merges and verifies again. In shared
+  branch moved during the suite, it merges and verifies again. A missing
+  worktree is cut again from the branch. In shared
   mode it merges on top of the remote's latest and pushes the tested result
   (see *Shared mode* under *Land gates*).
 - `worktree.sh landed <change>` answers "has this change fully landed?" from

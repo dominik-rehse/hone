@@ -31,8 +31,8 @@
 # sign-off discharges that gate. The same holds for an edit to a probe that
 # already exists, though not for a newly added one. The other three need no
 # such gate:
-# land re-runs the MERGED run-tests.sh, typecheck.sh, and lint.sh in the primary
-# tree after the merge, so a weakened adapter would be judging its own merge,
+# land re-runs the MERGED run-tests.sh, typecheck.sh, and lint.sh on the merge
+# commit, in the change's worktree, so a weakened adapter would be judging its own merge,
 # and the deny rule is what stops the agent writing one.
 Edit(./scripts/run-tests.sh)
 Edit(./scripts/typecheck.sh)

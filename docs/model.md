@@ -505,8 +505,9 @@ change. A solo clone has the same race with its own sessions, which commit
 Plans onto the primary branch. So land never verifies in the shared primary
 tree. It builds and tests the merge in the change's worktree and only
 fast-forwards the primary branch onto that commit. A red merge needs no
-rollback there, and no other session's commit or draft is ever reset. Merges from several machines serialize on the suite, and no
-commit reaches the remote unless the suite passed on exactly that tree.
+rollback there, and no other session's commit or draft is ever reset.
+Merges from several machines serialize on the suite, and no commit reaches
+the remote unless the suite passed on exactly that tree.
 The partition rule above stays per machine: across machines the merge
 alone verifies independence, and a collision is the same exit 9.
 
