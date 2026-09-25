@@ -189,17 +189,26 @@ the shape:
   and it counts toward the cap of three blocks. About 20 blocks had blamed
   another session for the run's own background land.
 
-Reverted in 0.62.1, and open again. 0.62.0 made the `bash-guard` judge each
-simple command in the tree it runs in, and the `dirty-guard` skip the paths
-of a merge in progress. A review then let about twenty command shapes that
-move the primary branch or HEAD past the new `bash-guard`: a `cd` after
-`&&`, `||`, or `|`, a `git` command inside `bash -c` or `eval`, and a
-`--work-tree` that overrides `-C`, among others. A `touch` of a merge
-marker let a staged write past the `dirty-guard`. The false alarms these
-changes removed are back. Next step: rebuild the walker so that it can only
-turn an ask into an allow for a command it fully understands, with the old
-whole-line scan kept as the fail-closed backstop, and with a test for every
-shape of the review.
+Reverted in 0.62.1, and rebuilt after it (not yet released). 0.62.0 made
+the `bash-guard` judge each simple command in the tree it runs in, and a
+review then let about twenty command shapes that move the primary branch or
+HEAD past it: a `cd` after `&&`, `||`, or `|`, a `git` command inside
+`bash -c` or `eval`, and a `--work-tree` that overrides `-C`, among others.
+The rebuild keeps the old whole-line rules as the default. Where one of them
+would ask, an analysis replays the command, and it passes the command only
+when it models every part (the header of `hooks/bash-guard.sh` lists what it
+gives up on). Every shape of the review has a test, and each one asks. The
+false alarms of the 2026-09-25 note pass: a merge or an abort in a scratch
+worktree or clone, a path-scoped unstage, a package install in a scratch
+directory, a formatter on a variable set to a Plan, a heredoc commit
+message, a read of `.hone-grant/` inside `$(...)`, and a scratch check
+config outside the repository. The check-config ask now names the file.
+Next step: release it, then count the asks in the field again.
+
+The `dirty-guard` skip of a merge in progress stays reverted: a `touch` of
+the merge marker let a staged write past it. A fix must not trust the
+marker, for example by comparing the dirty paths before and after the
+command.
 
 Still open:
 
@@ -211,6 +220,15 @@ Still open:
   denies a sabotage token anywhere outside a commit message or a sign-off
   text, a read of the hooks-path key included. A variable set outside the
   command cannot be resolved, so its tree counts as the primary tree.
+- The old whole-line scan of the `bash-guard` misses some real moves of
+  the primary branch, and the analysis only ever turns an ask into an
+  allow, so they still pass. Examples: `(cd <scratch> && git merge x); git
+  merge y`, a leading `cd <worktree>` followed by `git -C "$X" merge` with
+  `X` set to the primary tree, `sudo git merge` after such a `cd`, and a
+  `git push origin HEAD:main` from a scratch clone whose origin is the
+  primary tree. Found while building the analysis on 2026-09-25. Next step:
+  decide whether the analysis may also add an ask when it models the whole
+  command and finds a move in the primary tree.
 
 How we know that the fixes hold in the field: we do not yet. The tests
 replay each shape from the transcripts. Next step: after the release, read
