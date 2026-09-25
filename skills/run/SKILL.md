@@ -438,9 +438,12 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    the branch. Read its exit:
 
    - **0**: landed and green. Continue.
-   - **9**: merge conflict. Aborted, tree restored. Fold in serially. Stop.
-   - **6**: the merge failed a check. The primary branch did not move, and
-     the worktree is kept. Stop.
+   - **9**: merge conflict. Aborted, tree restored. The message names the
+     paths. Fold in serially. Stop, and never run land again blindly.
+   - **6**: the merge failed a check, or a git hook refused the merge
+     commit. The message says which. The primary branch did not move, and
+     the worktree is kept. Stop. Never run land again to see whether it
+     passes: a flake is a finding, and the person decides.
    - **7**: the proof gate wants real-environment proof. Run the check the
      refusal names where you can reach it, then stop: hand the human its full
      output and the `worktree.sh attest` command. The sign-off is the human's
