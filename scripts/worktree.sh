@@ -1155,6 +1155,12 @@ cmd_land() {
         leftovers=$(git -C "$wt" status --porcelain --untracked-files=all 2>/dev/null | head -n 20)
     fi
     git -C "$main_root" branch -d "$branch" >/dev/null 2>&1 || msg_wt_remove_branch_kept "$branch" >&2
+    # The claim goes with the landed change, whether or not the worktree went.
+    # A kept worktree would otherwise hold the change name for the team.
+    if [ -n "$remote" ]; then
+        shared_release "$main_root" "$remote" "$change" \
+            || msg_wt_land_claim_delete_failed "$change" "$remote" >&2
+    fi
 
     # Land hygiene 3: the change's records go with its worktree and branch.
     # Every record that opened a gate has its text in the merge commit body

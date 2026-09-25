@@ -31,6 +31,7 @@ printf '.worktrees/\n.hone-grant/\n.hone-proof/\n' > "$A/.gitignore"
 cat > "$A/scripts/run-tests.sh" <<'EOF'
 #!/bin/bash
 case "${1:-}" in --all|--unit) shift ;; esac
+[ -n "${HONE_TEST_LEAVE:-}" ] && echo report > suite-output.txt
 if [ -n "${HONE_TEST_RACE:-}" ] && [ ! -e "$HONE_TEST_RACE/done" ]; then
   : > "$HONE_TEST_RACE/done"
   ( cd "$HONE_TEST_RACE/clone" && git pull -q --ff-only \
@@ -152,6 +153,17 @@ rm -rf "$B/.worktrees/t"; git -C "$B" worktree prune; git -C "$B" branch -D hone
 remote_has_claim t || die "setup: claim t missing"
 out=$(cd "$B" && bash "$WSH" release t) || die "release t: $out"
 remote_has_claim t && die "release left the claim" || step "release removed the claim"
+
+echo "== 5d. a green land releases the claim even when the worktree stays =="
+WTB=$(cd "$B" && bash "$WSH" add s) || die "B: add s"
+write_change "$WTB" s
+out=$(cd "$B" && HONE_TEST_LEAVE=1 bash "$WSH" land s 2>&1) || die "B: land s: $out"
+log_has "$ORIGIN" -n 1 main "Merge branch 'hone/s'" || die "s's merge not on origin/main"
+[ -d "$WTB" ] || die "setup: the leftover file should keep the worktree"
+remote_has_claim s && die "a landed change must not keep its claim: $out"
+echo "$out" | grep -qF "worktree.sh remove s" || die "the message should print the remove command: $out"
+rm -f "$WTB/suite-output.txt"; (cd "$B" && bash "$WSH" remove s >/dev/null 2>&1) || die "B: remove s"
+step "claim released, kept worktree named with its remove command"
 
 echo "== 6. a local Plan commit rebases onto the team's main at add =="
 mkdir -p "$B/.plans"; echo "# z" > "$B/.plans/z.md"
