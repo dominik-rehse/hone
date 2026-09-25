@@ -146,8 +146,9 @@ the file.
 *irreversible* change (destructive SQL, a `db/` deletion, a
 `.hone-irreversible-paths` match) and found no `.hone-grant/<change>`.
 
-The merge did not happen and the worktree is kept. The refusal prints the
-signals that fired, a diffstat, and the command to read the whole diff. Read
+The merge did not happen and the worktree is kept. The refusal quotes
+each destructive statement with its file, then a diffstat and the command to
+read the whole diff. Read
 that diff. Then decide one of two things.
 
 If the change is what the Plan asked for, record the authorization with

@@ -439,8 +439,8 @@ The stamp separates the two. A record the loop writes opens with
 audit can tell an agent grant from yours. It is a label for a reader, not a
 lock.
 
-An unattended run discharges its own gates. On exit 8 it reads the diff the
-refusal printed and records why the irreversible change is right. On exit 7 it
+An unattended run discharges its own gates. On exit 8 it reads the statements the
+refusal quotes and the diff it names, and records why the irreversible change is right. On exit 7 it
 runs the check the refusal names and records what that run printed. It stops
 and reports instead in two cases. Either the check is out of its reach (a
 browser journey with no adapter), or the diff does something the Plan never

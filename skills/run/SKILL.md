@@ -450,8 +450,8 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
      act, and the `bash-guard` denies the run that helper. Where you cannot
      run any real check, stop with what you tried.
    - **8**: the authority gate wants a scoped grant for an irreversible change.
-     Read the diff it printed, then record the authorization with
-     `worktree.sh grant` and land again.
+     Read the statements it quotes and the diff it names, then record the
+     authorization with `worktree.sh grant` and land again.
    - **5**: a land or a full-suite run held the land lock past the timeout
      (often this session's own background run), or the primary branch moved
      on every attempt. Wait, retry.
