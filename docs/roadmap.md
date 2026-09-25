@@ -168,27 +168,147 @@ in git.
   adds neither `.venv/` nor `__pycache__/` to `.gitignore`. No run has
   committed one so far. The seed of `python-structure` adds them itself.
 
-#### Two guards and the nag give many false alarms in real use
+#### Two guards still give false alarms in real use
 
-The field data of 2026-09-20 counts each block in about 220 real sessions
-([note](spikes/2026-09-20-field-data-from-real-sessions.md)). A false alarm
-is a block on a command that did nothing the hook exists to stop.
+Field data counts each block in real sessions: about 220 sessions in
+[the 2026-09-20 note](spikes/2026-09-20-field-data-from-real-sessions.md),
+and 37 more in
+[the 2026-09-25 note](spikes/2026-09-25-field-data-since-0-58.md). A false
+alarm is a block on a command that did nothing the hook exists to stop.
+Both guards also made real catches that no other part could make, so the
+work is to fix the shapes, not to remove a guard.
 
-- The `dirty-guard` fired 45 times, and 41 were false alarms. It reports
-  every uncommitted path of the primary tree, not the paths that the command
-  writes. One old uncommitted file blocked 30 read-only commands. Its
-  suggested remedy would once have destroyed a person's uncommitted work.
-- The `bash-guard` fired 50 times, and 28 were false alarms. The note lists
-  the shapes. Some are fixed since 0.40.1. Others are still in the code: a
-  change of directory to a place outside every repository, a protected file
-  as the source of a copy, a token inside a quoted string, and a read of
-  the hooks-path key.
-- The `nag` printed 342 wrong lines, and two causes made 340 of them. Two
-  true findings repeated on every stop for weeks, and nobody acted.
+Fixed after 0.61.0, each with a test in `test/hooks_test.sh` that replays
+the shape:
 
-Both guards also made real catches that no other part could make. So the
-next step is to fix the shapes, not to remove a guard. Each fix is a hook
-change with a test in `test/hooks_test.sh` that replays the shape.
+- The `bash-guard` judges each simple command in the tree it runs in. It
+  follows `cd`, `git -C`, subshells, and a variable that the command sets
+  to a literal path or to `$(mktemp -d)`. So a merge in a scratch
+  worktree, a package install in a scratch directory, and a path-scoped
+  unstage no longer ask. These made about 11 of the 14 field asks of the
+  rule that guards the primary branch.
+- The check-config ask names the file, and a config outside the
+  repository passes. Unattended runs had stalled for up to seven hours on
+  an unnamed ask about a scratch mutation-check config.
+- The `dirty-guard` leaves out the staged and conflicted paths of a merge,
+  cherry-pick, revert, or rebase in progress. Another session's
+  half-finished merge had blocked unrelated commands.
+- The `nag` skips links inside code, prints its full list once per session
+  and tree, and reads a Plan whose change has a worktree as active work.
+  Its 342 wrong lines of the first note came from the link check and from
+  repeats.
+- The gate's suite-lock block names the lock and not "another session",
+  and it counts toward the cap of three blocks. About 20 blocks had blamed
+  another session for the run's own background land.
+
+Still open:
+
+- The `dirty-guard` reports every uncommitted durable path of the primary
+  tree, not the paths that the command wrote. One old uncommitted file
+  blocked 30 read-only commands in the first note.
+- The `bash-guard` still asks when a protected adapter is the *source* of
+  a copy, because its pattern reads any path after the verb. It still
+  denies a sabotage token anywhere outside a commit message or a sign-off
+  text, a read of the hooks-path key included. A variable set outside the
+  command cannot be resolved, so its tree counts as the primary tree.
+
+How we know that the fixes hold in the field: we do not yet. The tests
+replay each shape from the transcripts. Next step: after the release, read
+the next field window and count fires per hook again. For the
+`dirty-guard`, the open question is how to tell the paths a command wrote
+from paths that were already dirty; a snapshot before the command is one
+route.
+
+#### Progress lines are still missing in most steps
+
+- What happens: the run skill asks for a progress line when each step of
+  the loop starts and when it ends. The model often starts a step in a
+  message that holds only tool calls and no text, so the start line never
+  appears. A person watching sees silence, in the field for up to 50
+  minutes.
+- How we know: 10 of 23 finished field runs printed fewer than 5 of the 6
+  start lines ([note](spikes/2026-09-25-field-data-since-0-58.md)). The lab
+  measure `progress_starts` (steps announced as started over steps
+  reached, in `evals/lab/checks.sh`) reads 1/6 to 3/6 on claude-opus-5-5,
+  also after the 0.61.0 prose that asks for the line at the start and end
+  of each step.
+- What we tried: a candidate of one paragraph, "open each step with its
+  progress line in the message of its first tool call". It was green on
+  the unit suites, but its gain in the lab sat inside the spread between
+  identical runs, so the procedure in `development.md` cannot accept it.
+- Next step: a mechanical route, so the line does not depend on the
+  model. Either the `worktree.sh` subcommands that start a step print it,
+  or a hook prints it. Else more lab runs, until a gain can show above the
+  spread.
+
+#### The lab scenario `proof-gate` has a real fork at review
+
+- What happens: the Plan asks `deliver` to retry a 5xx up to three
+  attempts, and says the staging receiver answers 503 "for a few seconds".
+  The nested `/code-review` finds that the three attempts have no delay
+  between them, so all three can fall inside that outage. Some runs then
+  add a backoff, some decline the finding, and some stop at review. A run
+  that stops at review never reaches land's exit 7, which is what the
+  scenario tests.
+- How we know: lab runs of `proof-gate` on claude-opus-5-5 end in all
+  three ways. The finding is right, and each ending can be defended, so
+  the variance is in the fixture and not in hone.
+- Next step: fix the fixture's Plan. Either it gives a delay schedule, or
+  it states that one 503 is the whole outage. Then the review has nothing
+  to fork on, and the scenario tests the proof gate again.
+
+#### The authority gate caught nothing in the field
+
+- What happens: land refuses an irreversible change (exit 8) until a grant
+  names who authorized it. The run skill tells an unattended run to write
+  that grant itself when the Plan asked for the change. So the agent grants
+  itself, and the gate asks no person.
+- How we know: in [the 2026-09-25 note](spikes/2026-09-25-field-data-since-0-58.md)
+  the gate fired 3 times and caught nothing real. Twice it fired on
+  SQLite's table-rewrite idiom (new table, copy, drop, rename), and once
+  on a defect of the old land rollback. Since 0.60.0 the refusal quotes
+  each destructive statement with its file, so a reader sees what fired.
+  That does not change the false fires on the idiom.
+- Next step: the maintainer decides whether exit 8 should need a person,
+  like the proof sign-off. Until then the gate is a record in the merge
+  commit, not a stop.
+
+#### The `consolidate-critic` once proposed cutting code that a Plan requires
+
+- What happens: in one field run the critic proposed to remove a
+  `MutationObserver` that the Plan required, and a person had to decline
+  it. In the same window it proposed two more cuts that a person declined
+  ([note](spikes/2026-09-25-field-data-since-0-58.md)).
+- How we know it is not pinned: an eval case built from that run did not
+  discriminate. The current prompt and the stub both answered CLEAN, 3
+  votes of 3 each. A case that no baseline fails pins nothing, so it did
+  not go in, and no prose was added.
+- Next step: collect more such cuts in the [field log](field-log.md). A
+  case needs a brief on which the stub proposes the cut and the prompt
+  must refuse it.
+
+#### A session once ran without hone's workflow rules
+
+- What happens: the SessionStart hook injects `rules/workflow.md` into each
+  session. In one field session that injection was missing, while other
+  plugins' injections were present.
+- How we know: one transcript in
+  [the 2026-09-25 note](spikes/2026-09-25-field-data-since-0-58.md). The
+  cause is not known.
+- Next step: none until it happens again. Then read the hook's output and
+  the harness's plugin load log for that session.
+
+#### The critics' verdict line drifted on 0.58.1
+
+- What happens: the critics must end with the verdict on its own line. On
+  0.58.1 they wrote a bolded verdict, a "Verdict:" prefix, prose after the
+  verdict, or a file list last.
+- How we know: [the 2026-09-25 note](spikes/2026-09-25-field-data-since-0-58.md).
+  The 0.59.0 sample was clean, but it held too few reviews to call it
+  fixed.
+- Next step: count the verdict shapes in the next field window. If the
+  drift returns, check whether the loop still reads such a line as the
+  verdict, and tighten the output paragraph of the critic prompts.
 
 ### A question for the maintainer
 
@@ -235,8 +355,10 @@ then, a real base buys the lab a price comparison and no outcome room.
 [`field-log.md`](field-log.md) collects what hone does wrong in the
 repositories that use it, one dated line per incident. These fails are the
 best source of new scenarios, because they are real. The first entries came
-on 2026-09-20 from about 220 recorded sessions. The counts per hook are in
-[the field-data note](spikes/2026-09-20-field-data-from-real-sessions.md).
+on 2026-09-20 from about 220 recorded sessions, and more on 2026-09-25
+from 37. The counts per hook are in
+[the first field-data note](spikes/2026-09-20-field-data-from-real-sessions.md)
+and [the second](spikes/2026-09-25-field-data-since-0-58.md).
 
 #### Probes
 
