@@ -175,8 +175,11 @@ WT=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" add garden/<slug>)
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" land garden/<slug>
 ```
 
-Read the land exit as `run` does. 0 landed. 6 regressed and rolled back → the cut
-was unsafe, treat as red above. 9 conflict → another change owns these files, defer.
+Read the land exit as `run` does. 0 landed. 6 → the primary branch did not move.
+Read the message. A failed check means the cut was unsafe: treat it as red
+above. A git hook that refused the merge commit says nothing about the cut:
+keep the worktree and escalate the hook's message. Never run land again to
+see whether it passes. 9 conflict → another change owns these files, defer.
 7/8 → a land gate fired, discharge it as `run` does. Independent changes may run
 in parallel worktrees. Land them one at a time.
 
