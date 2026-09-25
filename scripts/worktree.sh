@@ -79,8 +79,13 @@
 #       the primary tree after the fast-forward. The merge stands by then,
 #       so a red run there is a warning.
 #       A land whose worktree is gone cuts it again from the branch first.
+#       A worktree with untracked files that git does not ignore is refused
+#       (2): the suite there would see files the merge does not carry. A
+#       trap puts the worktree back on its branch on any exit before the
+#       fast-forward.
 #       On success it prints a receipt on stdout: the merge commit, the green
-#       suite on it, and the removed worktree and branch. When the change
+#       suite on it, and the removed worktree and branch. A worktree that
+#       git keeps (the suite left files) is named with its remove command. When the change
 #       touched a lockfile, the receipt also names it, and asks for a
 #       reinstall in the primary tree when no setup-tree adapter ran there.
 #       Shared mode: land levels the primary tree with the remote first, so
@@ -89,11 +94,15 @@
 #       while the suite ran, so land undoes its fast-forward, levels again,
 #       and redoes merge and suite, up to HONE_LAND_RETRIES times (default 3).
 #       Nothing untested ever reaches the remote. On success it releases the
-#       claim. Exhausted retries exit 5 with nothing published. A push the
-#       host refused (a protected branch) is exit 2, no retry: land tells the
-#       two apart by fetching again after a rejection.
+#       claim, even when the worktree stays. Exhausted retries exit 5 with
+#       nothing published. A push the host refused (a protected branch) is
+#       exit 2, no retry: land tells the two apart by fetching again after a
+#       rejection. When the undo of the fast-forward fails, land exits 2,
+#       prints the recovery, and marks the merge so no sync pushes it.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached/push refused/caller in
-#       the worktree/dirty worktree/files in the way · 5 lock timeout, or the
+#       the worktree/dirty or untracked worktree/files in the way/primary
+#       tree left its branch/bad HONE_LAND_RETRIES/rebuild failed/undo
+#       failed · 5 lock timeout, or the
 #       branch or remote moved on every attempt · 6 red on the merge, or a git
 #       hook refused the merge commit · 7 real-environment proof missing · 8
 #       ungranted irreversible change · 9 merge conflict (paths named).
@@ -157,8 +166,9 @@
 #       commits on top, then push them. The plan skill runs it after
 #       committing a Plan, so the Plan reaches the team's queue. A human runs
 #       it to catch up. Under the land lock. Exit: 0 level · 2 not shared,
-#       no such remote, dirty tree, fetch failed, or rebase conflict
-#       (aborted) · 5 the remote moved on every push attempt.
+#       no such remote, dirty tree, fetch failed, rebase conflict (aborted),
+#       or a land merge that land could not undo (it is never pushed) · 5
+#       the remote moved on every push attempt.
 #
 #   Shared mode. A committed .hone-shared marker turns it on. Its first
 #   non-comment line names the remote, and a blank file means origin. The

@@ -405,20 +405,23 @@ the lock. Under its own land lock, land first levels the primary tree with
 the remote: it fetches, then fast-forwards, or rebases local-only commits on
 top. A rebase that conflicts aborts and refuses. Then it merges the branch,
 runs the suite, and pushes the primary branch. Git rejects the push when
-another developer landed while the suite ran, because the merge is no
-longer a straight extension of the remote. land then undoes its local
+another developer landed while the suite ran. land then undoes its local
 fast-forward, levels again, and redoes merge and suite. It gives up after
 `HONE_LAND_RETRIES` attempts with exit 5, nothing published and the
 worktree kept. So a commit never reaches the remote unless the suite passed
-on exactly that tree, and merges from several machines serialize on the
-suite's duration.
+on exactly that tree.
+
+The undo fails when the primary tree holds an edit to a file the merge
+changed, or a commit sits on top. land then exits 2 and prints a recovery
+command for the human. Until then, hone pushes nothing from that clone.
 
 The claim is a ref on the remote, `refs/hone/claim/<change>`, pointing at a
 detached commit that names who claimed, on which host, and when. The commit
 sits on no branch, so it never enters history. `add` pushes it with a lease
 that says the ref must not exist yet, so of two developers racing on one
-change exactly one wins. A green land deletes it. A land that stops keeps
-it, like the worktree. You release a claim whose owner walked away by hand:
+change exactly one wins. A green land deletes it, even when git keeps the
+worktree. A land that stops keeps it. You release a claim whose owner
+walked away by hand:
 
 ```
 git push origin --delete refs/hone/claim/<change>
@@ -455,7 +458,7 @@ The gate's error message prints the exact helper command with its full path.
 | Exit | Meaning |
 |------|---------|
 | 0 | landed and green |
-| 2 | usage or repo-state error (missing branch, detached HEAD, no `Cut:` line on the branch, land run from inside the worktree, uncommitted changes in the worktree, a merge git refused to start, files in the primary tree that stopped the fast-forward), or in shared mode a push the host refused |
+| 2 | usage or repo-state error (missing branch, detached HEAD, no `Cut:` line, land run from inside the worktree, uncommitted or untracked files in the worktree, a missing worktree land could not cut again or set up, a merge git refused to start, files in the primary tree that stopped the fast-forward, the primary tree left its branch, a `HONE_LAND_RETRIES` that is no whole number). In shared mode also: a push the host refused, or a fast-forward land could not undo |
 | 5 | lock timeout: another land or full-suite run held the lock. Also: the primary branch, or in shared mode the remote, moved on every attempt; nothing published |
 | 6 | suite, type-check, lint, or setup-tree red on the merge, or a git hook refused the merge commit; primary branch unmoved, worktree kept, output in the land log |
 | 7 | proof gate: real-environment proof missing |
@@ -467,19 +470,16 @@ What to do at each code, in detail:
 
 After a green suite, land also runs `scripts/typecheck.sh` and
 `scripts/lint.sh` where they exist, the same optional adapters the gate runs.
-The merge result is a tree no gate has checked: two changes that each append
-to one file can be lint-green alone and lint-red merged. A red adapter fails
-the land with the same exit 6, and the message names the adapter.
+A red adapter fails the land with the same exit 6, and the message names the
+adapter.
 
 The merge and its suite write `<git-common-dir>/hone-land.log`,
-replaced on every land, and the adapter runs append to it. Exit 6 prints that path and
-the last 20 lines of it.
+replaced on every land, and the adapter runs append to it. Exit 6 prints its
+tail.
 
-After a green run on the merge, land reads the tier summary lines out of that
-log. It then warns about every tier that reported `ran=0`, because a tier
-that matched no test makes the green prove nothing. The warning never blocks:
-land exits 0 and the merge stands. An adapter that prints no summary lines
-draws no warning.
+After a green run on the merge, land warns about every tier whose summary
+line in that log reported `ran=0`. The warning never blocks: the merge
+stands. An adapter that prints no summary lines draws no warning.
 
 Other subcommands:
 
@@ -500,7 +500,8 @@ Other subcommands:
 - `sync` exits 0 when the primary tree is level with the remote, and 5
   when the remote moved on every push attempt. It exits 2 on a setup or
   state problem. Those are: not shared, no such remote, a dirty primary
-  tree, a failed fetch, a rebase conflict, and a push the host refused.
+  tree, a failed fetch, a rebase conflict, a stuck land merge, and a push the
+  host refused.
 - `release` exits 0 when the claim is gone (2 not shared, no such remote,
   or the delete failed).
 

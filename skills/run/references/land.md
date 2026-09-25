@@ -10,13 +10,19 @@ worktree**, re-runs the whole suite and the adapters there, and on green
 fast-forwards the primary branch onto that merge commit. Then it removes the
 worktree and deletes the branch. The confirmation is the suite on the exact
 commit that lands, not the merge succeeding. A red land never touched the
-primary tree, and the worktree is back on its branch.
+primary tree, and the worktree is back on its branch, even when the land
+was killed.
 
 ## 0: landed and green
 
 The merge is in, the suite passed on the merge commit, the worktree and branch
 are gone. Confirm to the user what landed, the Decisions and Notes written, and
 what was deleted.
+
+When the suite left files in the worktree, git keeps it. The receipt then
+names the files and prints the `worktree.sh remove` command. The change has
+landed, so nothing there needs a commit. Delete the files and run that
+command.
 
 ## 6: the merge failed a check
 
@@ -61,13 +67,24 @@ or merge the primary branch by hand.
 
 The branch does not exist, the primary tree is on a detached HEAD, no
 commit on the branch carries a `Cut:` line, or the invocation was
-malformed. Four more causes each name themselves: you ran land from inside the
-worktree, the worktree holds uncommitted changes, git refused the merge
-before it started, or files in the primary tree stopped the fast-forward.
+malformed. More causes each name themselves: you ran land from inside the
+worktree, or the worktree holds uncommitted changes. It holds untracked
+files: commit each one the change needs, and delete the others, because the
+suite must see exactly what lands. land could not cut a missing worktree
+again, or its `setup-tree` failed. git refused the merge before it started.
+Files in the primary tree stopped the fast-forward: they may be another
+session's drafts, so move them only if they are yours. The primary tree left
+its branch during the land, or `HONE_LAND_RETRIES` is not a whole number.
 land never overwrites a file in the primary tree. Nothing was merged. Read
-the stderr line. Fix the
-state rather than retrying blindly: from the primary tree, or in the
-worktree when the line asks for an amended commit.
+the stderr line. Fix the state rather than retrying blindly: from the
+primary tree, or in the worktree when the line asks for an amended commit.
+
+In shared mode, exit 2 also means the host refused the push, or land could
+not take its fast-forward back after the push failed. In that second case
+the merge is still on the local primary branch, unpushed, and hone pushes
+nothing until it is gone. **Stop and hand the human the recovery command**
+that the message prints. Never run it yourself: it moves the primary
+tree's HEAD.
 
 ## 7: the proof gate
 
