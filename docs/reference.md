@@ -272,8 +272,8 @@ irreversible. When you want that record, route the edit through the loop.
   worktree is enough, and the commands after it pass.
 - *dirty-guard* (PostToolUse on Bash) reads the effect instead of the command.
   In the primary tree it asks git what the command left dirty, and blocks when
-  that list holds a protected path. This catches the writer the bash-guard's name
-  list misses, because it never has to recognize the tool. It reports after the
+  that list holds a protected path. It catches a writer the bash-guard's name
+  list misses. It reports after the
   write, so it stops the run before the commit rather than preventing the edit.
 - *gate* (Stop) runs `scripts/run-tests.sh`, plus `scripts/typecheck.sh`
   and `scripts/lint.sh` when they exist, and blocks the turn on any failure.
@@ -302,22 +302,25 @@ irreversible. When you want that record, route the edit through the loop.
     `<git-dir>/hone-gate-blocks`, per session. A green run deletes it, and a
     different failure starts it over.
 
-  One early warning per change is what this backstop is for. `land` re-runs
-  the full suite after the merge, so it still catches a regression that a
-  later commit introduces. The cap is the turn's and never the trunk's: a
-  red change still cannot land.
+  `land` re-runs the full suite after the merge, so it still catches a
+  regression that a later commit introduces. The cap is the turn's and
+  never the trunk's: a red change still cannot land.
 - *nag* (Stop, advisory) reports hygiene findings as a visible message,
   never a block. The findings:
   - a Plan that survived its landing
   - an oversized or orphan Note
   - a broken `Governs:` link
-  - a relative markdown link in a Decision or Note that does not resolve
+  - a relative markdown link in a Decision or Note that does not resolve,
+    outside code
   - a merged `hone/*` branch left behind
   - a claim this clone holds on the remote with no worktree (shared mode)
   - a change about to land that deletes nothing
   - a `src/<area>/` that a change about to land touched, with more lines
     in its tracked text files than `HONE_AREA_MAX_LINES` (default 3000)
   - a `type: project` entry in the harness's own memory store
+
+  It prints the full list once per session and tree, and again when it
+  changes. Otherwise it prints the count.
 - *session-start* injects the workflow rule from the plugin. It warns when
   the test adapter or the `src/` layout is missing. It also warns, naming
   the missing rules, when the settings lack any rule from the canonical deny

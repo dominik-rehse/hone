@@ -37,10 +37,11 @@
 #   9. Broken relative link: a markdown link in a Decision or Note whose
 #      target does not resolve from the doc's directory. Same reasoning as
 #      the Governs check: the target exists or it does not, so the check is
-#      exact. URLs and #anchors are not files, and the check skips them.
-#      Backticked prose paths stay unchecked: prose legitimately names
-#      example paths, and a stateless nag cannot be told a finding is
-#      intentional.
+#      exact. A target with a URI scheme (https:, mailto:, javascript:,
+#      data:) and an #anchor are not files, and the check skips them. So is
+#      a link inside an inline code span or a fenced code block: prose that
+#      shows markdown syntax, like `[x](javascript:…)`, is an example, not a
+#      link. Backticked prose paths stay unchecked for the same reason.
 #   4. Change that cuts nothing: on a clean hone/<change> branch (committed,
 #      about to land), the branch's whole diff against its merge base has zero
 #      deletions. "Every cycle removes something" is the model's principle 4.
@@ -75,6 +76,14 @@
 # ...} on stdout, the one non-blocking channel a Stop hook has that the harness
 # actually shows. Stderr on exit 0 reaches neither the model nor the user.
 # .hone-off disables the nag entirely.
+#
+# The full list goes out once per session and tree, and again whenever it
+# changes. A stop whose findings match the last one prints one line with the
+# count. The same unacted findings on every stop ran to hundreds of lines per
+# session in the field, and a reader stops reading a list that never changes.
+# The memory is <git-dir>/hone-nag-seen: one "<session> <checksum>" line per
+# session. --git-dir resolves per worktree, so each tree keeps its own. A stop
+# with no session id stays stateless and prints the full list.
 
 set -uo pipefail
 
@@ -82,6 +91,10 @@ set -uo pipefail
 . "$(dirname -- "${BASH_SOURCE[0]}")/common.sh"
 # shellcheck source=hooks/messages.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/messages.sh"
+
+# The Stop payload, for the session id alone (see the header).
+NAG_INPUT=$(cat 2>/dev/null)
+SESSION=$(hone_extract_top_field "$NAG_INPUT" session_id)
 
 PROJECT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || true)
 [ -n "$PROJECT_ROOT" ] || PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$PWD}"
@@ -128,6 +141,15 @@ nag_branch_carried_work() {
     [ -z "$(git rev-list --first-parent "$primary" 2>/dev/null | grep -xF "$tip")" ]
 }
 
+# The primary tree and the branches checked out in any worktree, for the
+# active-work test of check 1.
+PRIMARY_ROOT="."
+ATTACHED=""
+if git rev-parse --git-dir >/dev/null 2>&1; then
+    PRIMARY_ROOT=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd -P) || PRIMARY_ROOT="."
+    ATTACHED=$(git worktree list --porcelain 2>/dev/null | sed -n 's|^branch refs/heads/||p')
+fi
+
 # 1. Leftover Plan. Recurse: slugs are nested (.plans/<area>/<change>.md).
 # Flag only on landed evidence (see the header). Otherwise count as pending.
 if [ -d ".plans" ]; then
@@ -140,7 +162,14 @@ if [ -d ".plans" ]; then
         [ -f "$(dirname "$plan").md" ] && continue
         change=${plan#.plans/}
         change=${change%.md}
-        [ -d ".worktrees/$change" ] && continue   # active work
+        # Active work: the change has a worktree. Read it from the primary
+        # tree's .worktrees/ and from git's worktree list, not from the tree
+        # the nag stands in. A Stop hook runs where the shell stands, and
+        # inside the change's own worktree its branch is merged into itself
+        # and carries work, which read as a landing (three false findings
+        # in one 2026-09 session).
+        [ -d "$PRIMARY_ROOT/.worktrees/$change" ] && continue
+        printf '%s\n' "$ATTACHED" | grep -qxF "hone/$change" && continue
         landed=""
         if git rev-parse --git-dir >/dev/null 2>&1; then
             if [ -n "$(git log --fixed-strings --grep="Merge branch 'hone/${change}'" -n 1 --format=%H 2>/dev/null)" ]; then
@@ -214,20 +243,32 @@ fi
 
 # 9. Broken relative link. A markdown link target in a Decision or Note either
 # resolves from the doc's directory or it does not, so the check needs no
-# judgment. URLs and #anchors are not files. A title after the target
-# (`](x.md "Title")`) and a #fragment are stripped before the check.
+# judgment. A target with a URI scheme and an #anchor are not files. A title
+# after the target (`](x.md "Title")`) and a #fragment are stripped before the
+# check. The awk drops fenced code blocks and inline code spans first, because
+# a link shown as code is an example: one Decision that quotes
+# `[x](javascript:…)` printed a finding on every stop of every session.
+nag_link_targets() {
+    awk '
+        /^[[:space:]]*(```|~~~)/ { fence = !fence; next }
+        fence { next }
+        { gsub(/``[^`]*``/, ""); gsub(/`[^`]*`/, ""); print }
+    ' "$1" 2>/dev/null | grep -oE '\]\([^)]+\)' | sed 's/^](//; s/)$//'
+}
 if [ -d "docs/decisions" ] || [ -d "docs/notes" ]; then
     while IFS= read -r doc; do
         [ -e "$doc" ] || continue
         while IFS= read -r target; do
             case "$target" in
-                ''|*://*|mailto:*|'#'*|/*) continue ;;
+                ''|'#'*|/*) continue ;;
             esac
+            # Any URI scheme: https:, mailto:, javascript:, data:, tel:.
+            printf '%s' "$target" | grep -Eq '^[A-Za-z][A-Za-z0-9+.-]*:' && continue
             target=${target%%#*}      # drop a fragment
             target=${target%% *}      # drop a link title
             [ -n "$target" ] || continue
             [ -e "$(dirname "$doc")/$target" ] || add_finding "$(msg_nag_link_broken "$doc" "$target")"
-        done < <(grep -oE '\]\([^)]+\)' "$doc" 2>/dev/null | sed 's/^](//; s/)$//')
+        done < <(nag_link_targets "$doc")
     done < <(find docs/decisions docs/notes -type f -name '*.md' 2>/dev/null)
 fi
 
@@ -310,7 +351,28 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     fi
 fi
 
+# The repeat memory (see the header). Only a session id keys it.
+SEEN_FILE=""
+if [ -n "$SESSION" ] && git rev-parse --git-dir >/dev/null 2>&1; then
+    SEEN_FILE="$(git rev-parse --git-dir 2>/dev/null)/hone-nag-seen"
+fi
+SUM=$(printf '%s' "$findings" | cksum | tr -dc '0-9')
+LAST=""
+[ -n "$SEEN_FILE" ] && LAST=$(awk -v s="$SESSION" '$1 == s { print $2 }' "$SEEN_FILE" 2>/dev/null)
+if [ -n "$SEEN_FILE" ]; then
+    # Rewrite this session's line and keep the latest lines of the others.
+    { awk -v s="$SESSION" '$1 != s' "$SEEN_FILE" 2>/dev/null | tail -n 20
+      [ -n "$findings" ] && printf '%s %s\n' "$SESSION" "$SUM"
+    } > "$SEEN_FILE.tmp" 2>/dev/null && mv -f "$SEEN_FILE.tmp" "$SEEN_FILE" 2>/dev/null
+fi
+
 [ -z "$findings" ] && exit 0
+
+if [ -n "$LAST" ] && [ "$LAST" = "$SUM" ]; then
+    count=$(printf '%s' "$findings" | grep -c '^- ')
+    printf '{"systemMessage":"%s"}\n' "$(hone_json_escape "$(msg_nag_unchanged "$count")")"
+    exit 0
+fi
 
 printf '{"systemMessage":"%s"}\n' "$(hone_json_escape "$(msg_nag_header)
 ${findings%$'\n'}")"

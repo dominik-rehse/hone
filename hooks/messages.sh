@@ -265,6 +265,12 @@ msg_nag_header() {
     printf 'hone nag (advisory):\n'
 }
 
+# The whole report on a stop whose findings match the last stop's in this
+# session. The full list went out once, so a repeat only says it still holds.
+msg_nag_unchanged() {
+    printf 'hone nag (advisory): %s finding(s), unchanged since the last stop.\n' "$1"
+}
+
 msg_nag_plan_survived() {
     local plan="$1" evidence="$2"
     cat <<EOF
@@ -1330,6 +1336,7 @@ gate|human|msg_gate_cap_reached|<check>|<count>
 gate|plain|msg_gate_green|<checks that ran>
 gate|plain|msg_gate_green_cached|<tree-hash>
 nag|plain|msg_nag_header
+nag|plain|msg_nag_unchanged|<count>
 nag|human|msg_nag_plan_survived|.plans/<change>.md|<evidence>
 nag|human|msg_nag_plans_pending|<count>
 nag|human|msg_nag_note_oversized|docs/notes/<area>.md|<count>|<cap>

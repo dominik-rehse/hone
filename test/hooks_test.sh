@@ -769,6 +769,11 @@ WT_G=$(cd "$REPO" && bash "$PLUGIN_ROOT/scripts/worktree.sh" add ghost3 2>&1 | t
 if [ -n "$WT_G" ] && [ -d "$WT_G" ]; then
     out=$(cd "$WT_G" && echo '{}' | bash "$NAG" 2>&1)
     echo "$out" | grep -q "ghost3.md survived its landing" && bad "a run's own branch is not evidence of its landing" || ok "the run's own branch is no evidence inside its worktree"
+    # Once the run commits, its branch carries work and is merged into
+    # itself. A Stop in the worktree read that as a landing (9f02dfd8).
+    (cd "$WT_G" && git commit -q --allow-empty -m "feat(ghost3): work in flight")
+    out=$(cd "$WT_G" && echo '{}' | bash "$NAG" 2>&1)
+    echo "$out" | grep -q "ghost3.md survived its landing" && bad "a branch with work in its own worktree is active, not landed" || ok "a committed run is no evidence inside its worktree"
     (cd "$REPO" && bash "$PLUGIN_ROOT/scripts/worktree.sh" remove "$WT_G" >/dev/null 2>&1)
 else
     bad "could not make a worktree for the nag's branch-evidence test: $WT_G"
@@ -831,7 +836,49 @@ echo "$out" | grep -q "docs/decisions/auth.md links to" && bad "a resolving link
 printf '# Export format\nSee [the old spike](../spikes/2024-01-01-gone.md).\n' > "$REPO/docs/decisions/export.md"
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
 echo "$out" | grep -q "docs/decisions/export.md links to ../spikes/2024-01-01-gone.md, which does not resolve" && ok "Decision with a dangling relative link flagged" || bad "should flag a dangling relative link"
-rm -f "$REPO/docs/decisions/auth.md" "$REPO/docs/decisions/export.md"
+# A link shown as code is an example, and a target with any URI scheme is no
+# file. The field shape: a Decision quoting `[x](javascript:…)` and
+# `![](data:…)` in inline code printed a finding on every stop.
+cat > "$REPO/docs/decisions/render.md" <<'MD'
+# Rendering
+Dangerous URLs (`[x](javascript:…)`, `![](data:…)`) and a ``[y](gone-too.md)`` span.
+Call [the desk](tel:+4912345) or run [the probe](javascript:void(0)).
+```md
+[an example](not-a-file.md)
+```
+~~~
+[another](also-not-a-file.md)
+~~~
+See [the gone one](../spikes/2024-02-02-gone.md).
+MD
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -qE 'links to (javascript|data|tel):' && bad "a target with a URI scheme is no file" || ok "javascript:, data:, and tel: targets are skipped"
+echo "$out" | grep -qE 'links to (gone-too|not-a-file|also-not-a-file)\.md' && bad "a link inside code is an example" || ok "links inside inline code and fenced blocks are skipped"
+echo "$out" | grep -q "docs/decisions/render.md links to ../spikes/2024-02-02-gone.md" && ok "a real broken link beside them still flags" || bad "a broken link outside code should still flag"
+rm -f "$REPO/docs/decisions/auth.md" "$REPO/docs/decisions/export.md" "$REPO/docs/decisions/render.md"
+
+# The same unacted findings on every stop ran to hundreds of lines a session.
+# With a session id the full list goes out once, and again when it changes.
+# An unchanged stop prints one line. Another session, and a stop with no id,
+# still see the full list.
+nagstop() { (cd "$REPO" && printf '{"session_id":"%s"}' "$1" | bash "$NAG" 2>&1); }
+rm -f "$REPO/.git/hone-nag-seen"
+echo "# Plan" > "$REPO/.plans/seen-a.md"
+out=$(nagstop n1)
+echo "$out" | grep -q 'Plan(s) pending run' && ok "the first stop of a session prints the full list" || bad "the first stop should print the findings"
+out=$(nagstop n1)
+echo "$out" | grep -q 'Plan(s) pending run' && bad "an unchanged list should not repeat" || ok "an unchanged list does not repeat"
+echo "$out" | grep -qE 'hone nag \(advisory\): [0-9]+ finding\(s\), unchanged since the last stop' && ok "an unchanged list prints one line with its count" || bad "an unchanged stop should print the one-line count"
+echo "# Plan" > "$REPO/.plans/seen-b.md"
+out=$(nagstop n1)
+echo "$out" | grep -q 'Plan(s) pending run' && ok "a changed list prints in full again" || bad "a changed list should print in full"
+out=$(nagstop n2)
+echo "$out" | grep -q 'Plan(s) pending run' && ok "another session sees the full list" || bad "another session should see the full list"
+out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
+echo "$out" | grep -q 'Plan(s) pending run' && ok "a stop with no session id stays stateless" || bad "a stop with no session id should print in full"
+echo "$out" | grep -q '"decision":"block"' && bad "the nag must stay advisory" || ok "the repeat memory keeps the nag advisory"
+git -C "$REPO" status --porcelain | grep -q 'hone-nag-seen' && bad "the repeat memory must not dirty the tree" || ok "the repeat memory lives in the git dir"
+rm -f "$REPO/.plans/seen-a.md" "$REPO/.plans/seen-b.md" "$REPO/.git/hone-nag-seen"
 
 # The nag never blocks: even with findings present, no block decision is emitted.
 out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>/dev/null)
