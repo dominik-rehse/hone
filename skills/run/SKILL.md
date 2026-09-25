@@ -235,10 +235,11 @@ Print the progress line: `verify ...` now.
   run a mutation check with your ecosystem's runner (StrykerJS for JS/TS,
   mutmut or cosmic-ray for Python). It plants small bugs on purpose and confirms
   a test catches each one. Run it **diff-scoped and budget-capped**. Write the
-  runner's config outside the worktree (under `$TMPDIR`) and pass it by
-  path. Never create, edit, or delete a config file in the tree for the
-  check: the guards ask the person about any check config, and an
-  unattended run then waits for hours. It audits the *tests*, not the code.
+  runner's config outside the repository and pass it by path. Prefer a
+  private directory made in the same command (`D=$(mktemp -d)`). Never
+  create, edit, or delete a config file in the tree for the check: the
+  guards ask the person about any check config, and an unattended run then
+  waits for hours. It audits the *tests*, not the code.
   A planted bug no test catches means a test that checks too little. Close
   the gap with another red-green cycle. Skip it for non-critical or UI
   changes. Never gate a trivial change on it.
