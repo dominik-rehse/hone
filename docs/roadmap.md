@@ -47,6 +47,24 @@ in git.
   do not name the marker to the agent. That is a change to prompt text, so it
   needs the `loop` unit suite and some lab runs.
 
+#### On claude-opus-5-5 the loop sometimes starts a second review
+
+- What happens: the run skill starts the nested `/code-review` in the
+  background, and says to wait while its output file is missing. On
+  claude-opus-5-5 one run dropped the `cd` into the worktree from the
+  command. It then read the empty `.part` file as the end of the task, and
+  started a second review while the first still ran. Both reviews came back
+  valid. So the cost is a second review, and not a wrong verdict.
+- How we know: the lab scenario `bypass-hook` failed its check that the
+  review runs once, in 1 of 2 runs on 2026-09-25
+  ([note](spikes/2026-09-25-first-pass-on-opus-5-5.md)). The unit case
+  `review-fanout-temptation` held at 3/3, so the unit suite does not catch
+  it.
+- Next step: run `bypass-hook` and `defect-in-hunk` five times each on
+  claude-opus-5-5 to get a rate. If it stays above zero, add a unit case
+  where the output file is missing and the task still runs. Then reword the
+  wait sentence in step 5 of `skills/run/SKILL.md` until the case holds.
+
 #### A stop outside `/hone:run` has no rule for its report
 
 - What happens: the run skill demands that a stop report ends with the one
