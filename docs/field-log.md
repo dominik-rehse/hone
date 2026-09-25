@@ -9,8 +9,102 @@ scenario, a probe, or an eval case, its line names it. A case path is below
 `evals/`.
 
 The counts and the method are in
-[the 2026-09-20 field-data note](spikes/2026-09-20-field-data-from-real-sessions.md).
+[the 2026-09-20 field-data note](spikes/2026-09-20-field-data-from-real-sessions.md)
+and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md).
 "Not recorded" in the version field means the source did not record it.
+
+- 2026-09-25 · 0.59.1 · `garden` · `skills/garden/SKILL.md` reads every land
+  exit 6 as "the cut was unsafe," but since 0.59.1 a refused merge hook also
+  exits 6.
+- 2026-09-25 · 0.59.0 · `plan-critic`/`consolidate-critic` · both missed
+  that a CLI upgrade had made a stated Decision false. The nested review
+  caught it instead.
+- 2026-09-25 · mixed · `gate` · exit 9 reported a refused pre-merge-commit
+  hook as a merge conflict, in three sessions. Fixed in 0.59.1.
+- 2026-09-25 · 0.58.1 · `nag` · a "survived its landing" false alarm fired
+  three times in one session. This happened while its worktree was still
+  legitimately open, right after a rollback.
+- 2026-09-25 · 0.58.1 · `dirty-guard` · blamed paths from another session's
+  half-finished manual merge in the primary tree on two unrelated commands.
+  Both agents correctly declined the hook's suggested restore.
+- 2026-09-21 to 2026-09-25 · 0.58.1 · `gate` · post-merge checks in the
+  primary tree read other sessions' untracked draft Plans, causing at
+  least 6 spurious rollbacks. Fixed in 0.60.0.
+- 2026-09-21 to 2026-09-25 · 0.58.1 · `bash-guard` · a scratch
+  `stryker.conf.json` for the mutation check matched the tracked-check-
+  config rule. The ask did not name the file. Unattended runs stalled 7
+  hours, 81 minutes, 69 and 12 minutes, and 40 minutes across four
+  sessions.
+- 2026-09-21 to 2026-09-25 · 0.58.1 · `bash-guard` · the primary-branch-
+  move ask fired 14 times, 3 right and 11 false. False shapes: a
+  directory change into a scratch worktree, a path-scoped `git reset`,
+  and a checkout addressed only by a shell variable. One false ask sat
+  40 minutes.
+- 2026-09-21 to 2026-09-25 · mixed · `bash-guard` · denied a formatter run
+  as writing a durable file, three times. Its target path was an
+  unresolved variable. It also denied a read-only listing under
+  `.hone-grant/triggers/` as a write into it. It denied a package-manager
+  init or install in a scratchpad or worktree as writing its own files,
+  four times.
+- 2026-09-21 to 2026-09-25 · 0.58.1 · `gate` · the suite-lock block named
+  "another session" as the holder, about 20 times. The real holder was
+  the session's own land, or its background verify. The block skips the
+  retry cap, so an agent looped on turns with no visible output.
+- 2026-09-21 to 2026-09-25 · 0.58.1 · `nag` · the broken-link check read
+  `javascript:` and `data:` links inside inline code as real. It printed
+  on every stop in every session. A doc over its line cap and a list of
+  pending Plans also repeated on every stop, with no action taken.
+- 2026-09-21 to 2026-09-25 · mixed · run loop · 10 of 23 finished runs
+  printed fewer than 5 of the 6 step-start progress lines.
+  `skills/run/SKILL.md` asks for one at the start and end of each step.
+  Five runs went quiet for 30 to 50 minutes with no line at all.
+- 2026-09-21 to 2026-09-25 · 0.58.1 · `plan-critic` · approved a Plan
+  whose Proof trailer needed a probe script keyed by the change's slug.
+  No such script existed. This happened twice, and land then failed the
+  proof gate both times.
+- 2026-09-21 to 2026-09-25 · 0.58.1 · `consolidate-critic` · proposed
+  three cuts a person had to decline. They were: a required
+  `MutationObserver`, a test and a sentence nested review later restored,
+  and content outside the diff that another Plan had ring-fenced.
+- 2026-09-21 to 2026-09-25 · 0.58.1 · `plan-critic`/`consolidate-critic` ·
+  verdict format drifted: a bolded verdict, a "Verdict:" prefix, prose
+  after the verdict, a file list last. Clean on a small 0.59.0 sample,
+  too small to call fixed.
+- 2026-09-21 to 2026-09-25 · 0.58.1 · `gate` · the authority gate (exit 8)
+  fired 3 times and caught nothing real. Twice it fired on SQLite's
+  table-rewrite idiom, and once as a false alarm from the land rollback
+  bug below. Partly addressed in 0.60.0: the refusal now quotes each
+  destructive statement with its file.
+- 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · land run from inside its
+  own worktree exited 2 after a successful merge, three times. It also
+  printed getcwd noise. `worktree.sh remove` also rejected a change name
+  or a relative path, twice. Fixed in 0.60.0.
+- 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · a Sonnet main session
+  retried land blindly after an exit 9 or exit 6, twice. Once this went
+  against `land.md`'s own "stop and escalate," citing a memory file
+  instead.
+- 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · `/hone:plan` fired when
+  the person had asked for a chat handoff instead ("No, don't plan").
+- 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · a session created and
+  landed an unplanned worktree after the person said "You do it."
+- 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · the person twice asked
+  the agent to speak plainly. Once was about a plan-skill blocking
+  question, once about a run reply.
+- 2026-09-22 · 0.58.1 · run loop · land's rollback `git reset --hard`
+  dropped a concurrent Plan's own commit from main, twice. A branch cut
+  from the dropped commit later caused a false exit 8. Fixed in 0.60.0.
+- not recorded · 0.58.1 · run loop · land's receipt named the wrong
+  commit as the merge. It named a Plan commit made mid-suite, not the
+  real merge. Fixed in 0.60.0.
+- not recorded · 0.58.1 · `plan-critic` · took four rounds, about 17
+  minutes, on a one-paragraph docs Plan. Each reject named a real
+  contradiction, mostly introduced by the previous fix.
+- not recorded · 0.58.1 · `gate` · the proof gate named a probe script
+  for a change that had edited another change's probe. That script did
+  not exist. Fixed in 0.60.0.
+- not recorded · 0.58.1 · `session-start` · one session's workflow-rule
+  injection went missing, while other plugins' injections were present.
+  Cause unknown.
 
 - 2026-08-20 to 2026-09-18 · mixed · `nag` · 314 lines telling the session
   that a template entry under the spike directory carries no date. The person

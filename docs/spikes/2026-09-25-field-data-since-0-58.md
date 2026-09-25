@@ -81,9 +81,7 @@ Four defects from this window are already fixed:
 - Land's receipt once named the wrong commit as the merge. **Fixed in
   0.60.0**, by the same change.
 - Post-merge checks in the primary tree read other sessions' untracked
-  draft Plans, causing at least 6 spurious rollbacks. One consumer's
-  Tailwind build also scanned `.plans/*.md` prose and went stale on every
-  land. **Fixed in 0.60.0.**
+  draft Plans, causing at least 6 spurious rollbacks. **Fixed in 0.60.0.**
 - Exit 9 reported a refused pre-merge-commit hook as a merge conflict.
   **Fixed in 0.59.1.**
 
