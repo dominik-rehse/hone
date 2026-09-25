@@ -165,6 +165,61 @@ echo "$out" | grep -qF "worktree.sh remove s" || die "the message should print t
 rm -f "$WTB/suite-output.txt"; (cd "$B" && bash "$WSH" remove s >/dev/null 2>&1) || die "B: remove s"
 step "claim released, kept worktree named with its remove command"
 
+echo "== 5e. an undo that cannot happen stops land, and sync pushes nothing =="
+WTB=$(cd "$B" && bash "$WSH" add q) || die "B: add q"
+write_change "$WTB" q
+# The host refuses the push, and during the push someone edits a file the
+# merge added in B's primary tree. The keep-reset then cannot undo.
+cat > "$ORIGIN/hooks/pre-receive" <<EOF
+#!/bin/bash
+echo "// an edit made during the push" >> "$B/src/mathx/q.js"
+echo "main is protected" >&2
+exit 1
+EOF
+chmod +x "$ORIGIN/hooks/pre-receive"
+pre=$(git -C "$B" rev-parse HEAD)
+out=$(cd "$B" && bash "$WSH" land q 2>&1); rc=$?
+rm -f "$ORIGIN/hooks/pre-receive"
+[ "$rc" -eq 2 ] || die "an undo that cannot happen should exit 2, got $rc: $out"
+echo "$out" | grep -q 'land could not take merge commit' || die "the message should name the stuck merge: $out"
+echo "$out" | grep -q 'rebase --onto' || die "the message should print the recovery: $out"
+merge=$(git -C "$B" rev-parse HEAD)
+[ "$merge" != "$pre" ] || die "setup: the merge should still be on B's main"
+[ "$(git -C "$WTB" rev-parse --abbrev-ref HEAD)" = hone/q ] || die "the worktree should be back on its branch"
+out=$(cd "$B" && bash "$WSH" sync 2>&1); rc=$?
+[ "$rc" -eq 2 ] || die "sync should refuse to push the untested merge, got $rc: $out"
+echo "$out" | grep -q 'still holds merge commit' || die "sync should name the stuck merge: $out"
+log_has "$ORIGIN" main "Merge branch 'hone/q'" && die "the untested merge reached origin"
+git -C "$B" checkout -q -- src/mathx/q.js
+(cd "$B" && git rebase -q --onto "$merge^1" "$merge") || die "the printed recovery should work"
+[ "$(git -C "$B" rev-parse HEAD)" = "$pre" ] || die "the recovery should take the merge off"
+out=$(cd "$B" && bash "$WSH" sync 2>&1) || die "sync after the recovery: $out"
+(cd "$B" && bash "$WSH" remove "$WTB" >/dev/null 2>&1) && git -C "$B" branch -D hone/q -q
+step "a stuck merge stops land with its recovery, and sync never pushes it"
+# The same stop when a commit sits on top of the merge: the undo is skipped.
+WTB=$(cd "$B" && bash "$WSH" add p) || die "B: add p"
+write_change "$WTB" p
+cat > "$ORIGIN/hooks/pre-receive" <<EOF
+#!/bin/bash
+unset GIT_DIR GIT_QUARANTINE_PATH GIT_OBJECT_DIRECTORY GIT_ALTERNATE_OBJECT_DIRECTORIES
+git -C "$B" commit -q --allow-empty -m "chore: a commit made during the push" >&2
+echo "main is protected" >&2
+exit 1
+EOF
+chmod +x "$ORIGIN/hooks/pre-receive"
+pre=$(git -C "$B" rev-parse HEAD)
+out=$(cd "$B" && bash "$WSH" land p 2>&1); rc=$?
+rm -f "$ORIGIN/hooks/pre-receive"
+[ "$rc" -eq 2 ] || die "a commit on top of the merge should exit 2, got $rc: $out"
+echo "$out" | grep -q 'land could not take merge commit' || die "the message should name the stuck merge: $out"
+log_has "$B" -n 1 main "chore: a commit made during the push" || die "setup: the commit should sit on top"
+merge=$(git -C "$B" rev-parse HEAD^)
+(cd "$B" && git rebase -q --onto "$merge^1" "$merge") || die "the printed recovery should work"
+[ "$(git -C "$B" rev-parse HEAD^)" = "$pre" ] || die "the recovery should keep the commit on top and drop the merge"
+out=$(cd "$B" && bash "$WSH" sync 2>&1) || die "sync after the recovery: $out"
+(cd "$B" && bash "$WSH" remove "$WTB" >/dev/null 2>&1) && git -C "$B" branch -D hone/p -q
+step "a commit on top of the merge stops land the same way"
+
 echo "== 6. a local Plan commit rebases onto the team's main at add =="
 mkdir -p "$B/.plans"; echo "# z" > "$B/.plans/z.md"
 (cd "$B" && git add .plans/z.md && git commit -qm "chore(plan): z") || die "B: plan commit"

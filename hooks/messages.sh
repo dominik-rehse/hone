@@ -1242,6 +1242,24 @@ Why: shared mode lands on $primary, and the marker is policy.
 EOF
     hone_msg_block "$tail"
 }
+msg_wt_land_undo_failed() {
+    local primary="$1" remote="$2" sha="$3" cmd="$4"
+    cat <<EOF
+hone worktree: $remote did not take the merge, and land could not take merge commit $sha back off $primary.
+Do: stop, and ask the human to run the command below in the primary tree once it is clean.
+Why: until then, hone pushes nothing from $primary.
+$(hone_msg_block "$cmd")
+EOF
+}
+msg_wt_sync_stranded_merge() {
+    local primary="$1" sha="$2" cmd="$3"
+    cat <<EOF
+hone worktree: $primary still holds merge commit $sha, which an earlier land could not publish, so hone pushed nothing.
+Do: stop, and ask the human to run the command below in the primary tree once it is clean.
+Why: no suite ran that merge on the remote's latest.
+$(hone_msg_block "$cmd")
+EOF
+}
 msg_wt_land_push_rejected() {
     local remote="$1" primary="$2" attempts="$3"
     cat <<EOF
@@ -1472,6 +1490,8 @@ worktree|human|msg_wt_sync_not_shared
 worktree|plain|msg_wt_release_receipt|<change>|origin
 worktree|plain|msg_wt_sync_receipt|origin|main
 worktree|human|msg_wt_push_refused|origin|main|<git output>
+worktree|human|msg_wt_land_undo_failed|main|origin|<sha>|git -C <main-root> rebase --onto <sha>^1 <sha>
+worktree|human|msg_wt_sync_stranded_merge|main|<sha>|git -C <main-root> rebase --onto <sha>^1 <sha>
 worktree|human|msg_wt_land_push_rejected|origin|main|3
 worktree|plain|msg_wt_land_pushed|origin|main
 worktree|plain|msg_wt_land_retry|origin|main|2

@@ -1131,13 +1131,19 @@ cmd_land() {
     # moved under the suite. Undo the local fast-forward and go around again.
     # The undo is a keep-reset, and only while the primary branch still sits
     # on the merge. A hard reset would drop a commit that another session
-    # made on top, or an uncommitted edit in the primary tree.
+    # made on top, or an uncommitted edit in the primary tree. When the undo
+    # cannot happen, the merge stays on the local branch, unpushed. land
+    # stops, and marks it, so no later sync pushes it untested.
     if [ -n "$remote" ]; then
         local push_rc=0
         shared_push_once "$main_root" "$remote" "$primary" || push_rc=$?
         if [ "$push_rc" -ne 0 ]; then
-            if [ "$(git -C "$main_root" rev-parse HEAD)" = "$merge_sha" ]; then
-                git -C "$main_root" reset -q --keep "$pre" >/dev/null 2>&1
+            if ! land_undo_ff "$main_root" "$primary" "$merge_sha" "$pre"; then
+                land_restore_tree "$wt" "$branch" "$setup_tree_ran"
+                printf '%s\n' "$merge_sha" > "$(shared_stranded_file "$main_root")"
+                msg_wt_land_undo_failed "$primary" "$remote" "${merge_sha:0:7}" \
+                    "$(shared_stranded_recovery "$main_root" "$merge_sha")" >&2
+                return 2
             fi
             # A refused push (a protected branch, a lost remote) has no retry
             # that helps. The message already said so.
@@ -1246,6 +1252,24 @@ land_on_primary() {
     [ "$(git -C "$1" symbolic-ref -q --short HEAD 2>/dev/null)" = "$2" ]
 }
 
+# Take land's fast-forward back off the local primary branch after a push
+# that did not publish it. Exit 0 undone, or the merge is not on the branch.
+# Exit 1 when it cannot be undone: a commit sits on top of the merge, or the
+# keep-reset refused (an edit in the primary tree to a file the merge changed).
+land_undo_ff() {
+    local root="$1" primary="$2" merge="$3" pre="$4" tip
+    tip=$(git -C "$root" rev-parse -q --verify "refs/heads/$primary" 2>/dev/null)
+    if [ "$tip" != "$merge" ]; then
+        git -C "$root" merge-base --is-ancestor "$merge" "$tip" 2>/dev/null && return 1
+        return 0
+    fi
+    if land_on_primary "$root" "$primary"; then
+        git -C "$root" reset -q --keep "$pre" >/dev/null 2>&1
+    else
+        git -C "$root" update-ref "refs/heads/$primary" "$pre" "$merge" >/dev/null 2>&1
+    fi
+}
+
 # The EXIT trap of a land. It restores the worktree only while a merge is
 # pending in it. An explicit restore, or the fast-forward, clears the state.
 LAND_PENDING_WT="" LAND_PENDING_BRANCH="" LAND_PENDING_REINSTALL=""
@@ -1299,11 +1323,26 @@ shared_remote_checked() {
 # clean for either move. Exit 0 level · 2 fetch failed, dirty, or a rebase
 # conflict (aborted, message printed).
 shared_sync_primary() {
-    local main_root="$1" remote="$2" primary="$3" out upstream
+    local main_root="$1" remote="$2" primary="$3" out upstream stranded sha
     upstream="refs/remotes/$remote/$primary"
     if ! out=$(git -C "$main_root" fetch -q "$remote" "+refs/heads/$primary:$upstream" 2>&1); then
         msg_wt_sync_fetch_failed "$remote" "$(printf '%s\n' "$out" | tail -n 5)" >&2
         return 2
+    fi
+    # A land that could not undo its fast-forward left its merge on the
+    # local branch. Every push from here would publish it untested, so
+    # nothing syncs until a person takes it off. The mark clears itself once
+    # the merge is gone from the branch or has reached the remote.
+    stranded=$(shared_stranded_file "$main_root")
+    if [ -f "$stranded" ]; then
+        sha=$(head -n 1 "$stranded")
+        if git -C "$main_root" merge-base --is-ancestor "$sha" "refs/heads/$primary" 2>/dev/null \
+           && ! git -C "$main_root" merge-base --is-ancestor "$sha" "$upstream" 2>/dev/null; then
+            msg_wt_sync_stranded_merge "$primary" "${sha:0:7}" \
+                "$(shared_stranded_recovery "$main_root" "$sha")" >&2
+            return 2
+        fi
+        rm -f "$stranded"
     fi
     git -C "$main_root" merge-base --is-ancestor "$upstream" HEAD 2>/dev/null && return 0
     if [ -n "$(git -C "$main_root" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
@@ -1318,6 +1357,19 @@ shared_sync_primary() {
         msg_wt_sync_diverged "$remote" "$primary" "$(printf '%s\n' "$out" | tail -n 10)" >&2
         return 2
     fi
+}
+# The mark of a land merge that is on the local primary branch and must not
+# be pushed. One file per clone, beside the land lock.
+shared_stranded_file() {
+    local dir
+    dir=$(git -C "$1" rev-parse --git-common-dir 2>/dev/null)
+    case "$dir" in /*) ;; *) dir="$1/$dir" ;; esac
+    printf '%s/hone-stranded-merge\n' "$dir"
+}
+# The command that takes merge $2 off the primary branch in $1 and keeps
+# every commit made on top of it.
+shared_stranded_recovery() {
+    printf 'git -C %s rebase --onto %s^1 %s\n' "$1" "${2:0:7}" "${2:0:7}"
 }
 # Push the primary branch once, and say why not. Git rejects the push when
 # the remote moved since the fetch, and a host rejects it when the branch is
