@@ -971,6 +971,16 @@ cmd_land() {
         msg_wt_land_worktree_dirty "$wt" >&2
         return 2
     fi
+    # A file that git does not track and does not ignore is in the worktree,
+    # so the suite there sees it. The merge does not carry it, so the primary
+    # tree would get a change that passed only with that file beside it.
+    # Refuse, so the suite on the merge sees exactly what lands.
+    local untracked
+    untracked=$(git -C "$wt" ls-files --others --exclude-standard --directory 2>/dev/null)
+    if [ -n "$untracked" ]; then
+        msg_wt_land_worktree_untracked "$wt" "$(sed 's/^/- /' <<<"$untracked")" >&2
+        return 2
+    fi
     # Shared mode: the primary branch belongs to the team, so the merge goes
     # on top of the team's latest and the result is pushed. Git rejects the
     # push when the remote moved while the suite ran, and a rejected push
@@ -1017,8 +1027,8 @@ cmd_land() {
             msg_wt_land_hook_refused "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
             return 6
         fi
-        # git refused before it merged anything, for example because an
-        # untracked file was in the way. That is repo state, so exit 2.
+        # git refused before it merged anything, for example because a lock
+        # file was in the way. That is repo state, so exit 2.
         msg_wt_land_merge_failed "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
         return 2
     fi
@@ -1133,10 +1143,17 @@ cmd_land() {
     # tree, so it never refuses "the tree you are in"). The worktree sits on
     # the merge commit now, so land deletes the branch itself. In shared mode
     # remove also releases the claim on the remote: the change is on the
-    # remote primary now. A worktree that will not go (an untracked file in
-    # it) is a leftover to clean by hand, not a failed land.
-    local remove_rc=0
-    cmd_remove "$wt" || remove_rc=$?
+    # remote primary now. A worktree that will not go (the suite left a file
+    # in it) is a leftover to clean by hand, not a failed land. remove's own
+    # refusal asks to commit the changes, which is wrong after a land, so
+    # land says it instead and names the files.
+    local remove_rc=0 remove_err leftovers=""
+    remove_err=$(cmd_remove "$wt" 2>&1 >/dev/null) || remove_rc=$?
+    if [ "$remove_rc" -eq 0 ]; then
+        [ -n "$remove_err" ] && printf '%s\n' "$remove_err" >&2
+    else
+        leftovers=$(git -C "$wt" status --porcelain --untracked-files=all 2>/dev/null | head -n 20)
+    fi
     git -C "$main_root" branch -d "$branch" >/dev/null 2>&1 || msg_wt_remove_branch_kept "$branch" >&2
 
     # Land hygiene 3: the change's records go with its worktree and branch.
@@ -1157,6 +1174,7 @@ cmd_land() {
     local kept=""
     [ "$remove_rc" -eq 0 ] || kept="$wt"
     msg_wt_land_receipt "$merge_sha" "$branch" "$consumed" "$kept"
+    [ -n "$kept" ] && msg_wt_land_worktree_kept "$kept" "bash $HONE_WSH remove $change" "$leftovers"
     [ -n "$remote" ] && msg_wt_land_pushed "$remote" "$primary"
     if [ -n "$lockfiles" ]; then
         case "$primary_setup" in

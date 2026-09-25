@@ -869,6 +869,17 @@ Why: land merges only what the branch holds.
 EOF
 }
 
+msg_wt_land_worktree_untracked() {
+    local path="$1" files="$2"
+    cat <<EOF
+hone worktree: $path holds files that git does not track, so land did not start.
+Do: commit to the branch each file the change needs, delete the others, then land again.
+Why: the suite must see exactly what lands.
+Untracked files:
+$(hone_msg_block "$files")
+EOF
+}
+
 msg_wt_land_from_worktree() {
     local main_root="$1" cmd="$2"
     cat <<EOF
@@ -944,7 +955,7 @@ hone worktree: landed $branch as merge commit $sha.
 The suite ran on that merge commit in the worktree and passed.
 EOF
     if [ -n "$kept" ]; then cat <<EOF
-land deleted the branch. The worktree $kept is still there: remove it by hand.
+land deleted the branch and kept the worktree $kept.
 EOF
     else
         echo "land removed the worktree and deleted the branch."
@@ -954,6 +965,17 @@ land deleted the spent record(s): $consumed. The text of every record that
 opened a gate is in the merge commit body.
 EOF
     fi
+}
+
+msg_wt_land_worktree_kept() {
+    local path="$1" cmd="$2" files="$3"
+    cat <<EOF
+hone worktree: the change landed, and git kept the worktree $path because files are left in it.
+Do: delete or move the files below, then run: $cmd
+Why: the merge stands, and only the cleanup is left.
+Files left in the worktree:
+$(hone_msg_block "$files")
+EOF
 }
 
 msg_wt_land_lockfile() {
@@ -1397,6 +1419,7 @@ worktree|human|msg_wt_land_hook_refused|hone/<change>|<git-common-dir>/hone-land
 worktree|human|msg_wt_land_merge_failed|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_release_not_shared
 worktree|human|msg_wt_land_worktree_dirty|<main-root>/.worktrees/<change>
+worktree|human|msg_wt_land_worktree_untracked|<main-root>/.worktrees/<change>|- <path>
 worktree|human|msg_wt_land_from_worktree|<main-root>|bash <plugin-root>/scripts/worktree.sh land <change>
 worktree|plain|msg_wt_land_retry_moved|main|2
 worktree|human|msg_wt_land_primary_moved|main|3
@@ -1406,6 +1429,7 @@ worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.lo
 worktree|human|msg_wt_land_adapter_red|<typecheck or lint>|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_tier_empty|- <tier>
 worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>|.hone-grant/<change> .hone-proof/<change>
+worktree|human|msg_wt_land_worktree_kept|<main-root>/.worktrees/<change>|bash <plugin-root>/scripts/worktree.sh remove <change>|?? <path>
 worktree|human|msg_wt_land_lockfile|- <lockfile>
 worktree|human|msg_wt_add_remote_claimed|<change>|origin
 worktree|human|msg_wt_add_push_failed|refs/hone/claim/<change>|origin|<git output>

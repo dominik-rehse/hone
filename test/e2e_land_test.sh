@@ -341,12 +341,44 @@ out=$(bash "$WSH" land from-inside 2>&1); rc=$?
 [ "$rc" -eq 2 ] || die "a dirty worktree should exit 2 (got $rc): $out"
 echo "$out" | grep -q "uncommitted changes to tracked files" || die "the message should name the dirty worktree: $out"
 git -C "$WT_IN" checkout -q -- src/mathx/inside.js
+# A file the change forgot to add sits in the worktree, where the suite sees
+# it, but the merge does not carry it. land refuses before anything moves.
+echo "// forgotten helper" > "$WT_IN/src/mathx/helper.js"
+out=$(bash "$WSH" land from-inside 2>&1); rc=$?
+[ "$rc" -eq 2 ] || die "an untracked file in the worktree should exit 2 (got $rc): $out"
+echo "$out" | grep -q "holds files that git does not track" || die "the message should name the untracked files: $out"
+echo "$out" | grep -qF -- "- src/mathx/helper.js" || die "the message should list the file: $out"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a land refused for an untracked file must not merge"
+[ "$(git -C "$WT_IN" rev-parse --abbrev-ref HEAD)" = "hone/from-inside" ] || die "the worktree should stay on its branch"
+rm -f "$WT_IN/src/mathx/helper.js"
 git worktree remove "$WT_IN"
 out=$(bash "$WSH" land from-inside 2>&1); rc=$?
 [ "$rc" -eq 0 ] || die "land should rebuild a missing worktree and land (got $rc): $out"
 [ -d "$WT_IN" ] && die "the rebuilt worktree should be gone after the land"
 git show-ref --verify --quiet refs/heads/hone/from-inside && die "the branch should be gone after the land"
-step "caller inside refused, dirty worktree refused, missing worktree rebuilt"
+step "caller inside refused, dirty or untracked worktree refused, missing worktree rebuilt"
+
+echo "== 5b5a. a green land whose suite leaves a file keeps the worktree and says how to remove it =="
+WT_LV=$(bash "$WSH" add leaves-file) || die "worktree add leaves-file"
+cat > "$WT_LV/scripts/run-tests.sh" <<'EOF'
+#!/bin/bash
+[ -n "${HONE_TEST_LEAVE:-}" ] && echo "report" > suite-output.txt
+node -e 'const {add} = require("./src/mathx/add.js"); if (add(2,3) !== 5) process.exit(1)'
+EOF
+(cd "$WT_LV" && git add -A && git commit -qm "test: a suite that can leave a file" -m "Cut: nothing, a test change")
+out=$(HONE_TEST_LEAVE=1 bash "$WSH" land leaves-file 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "a suite that leaves a file should still land (got $rc): $out"
+git log --oneline -1 | grep -q "Merge branch 'hone/leaves-file'" || die "the merge should stand"
+git show-ref --verify --quiet refs/heads/hone/leaves-file && die "the landed branch should be deleted"
+[ -d "$WT_LV" ] || die "git should have kept the worktree with the file in it"
+echo "$out" | grep -q "kept the worktree" || die "the receipt should say the worktree stays: $out"
+echo "$out" | grep -qF "worktree.sh remove leaves-file" || die "the message should print the remove command: $out"
+echo "$out" | grep -q "suite-output.txt" || die "the message should name the leftover file: $out"
+echo "$out" | grep -q "commit or discard the changes" && die "a landed change has nothing to commit: $out"
+rm -f "$WT_LV/suite-output.txt"
+bash "$WSH" remove leaves-file >/dev/null 2>&1 || die "the printed remove command should work"
+[ -d "$WT_LV" ] && die "remove should retire the kept worktree"
+step "a kept worktree after a green land is named, with its files and the remove command"
 
 echo "== 5b6. remove takes a change name and a relative path =="
 bash "$WSH" add rm-by-name >/dev/null || die "worktree add rm-by-name"
@@ -1075,6 +1107,9 @@ out=$(bash "$WSH" land conflict-b 2>&1); rc=$?
 [ "$rc" -eq 9 ] || die "a conflicting land should exit 9 (got $rc)"
 echo "$out" | grep -q -- "- README.md" || die "a conflicted land should name the conflicting path: $out"
 [ -z "$(git status --porcelain -uno)" ] || die "a conflicted land should leave the tracked tree clean"
+git -C "$WT_CB" rev-parse -q --verify MERGE_HEAD >/dev/null && die "a conflicted land should leave no merge in progress in the worktree"
+[ "$(git -C "$WT_CB" rev-parse --abbrev-ref HEAD)" = "hone/conflict-b" ] || die "the worktree should be back on its branch"
+[ -z "$(git -C "$WT_CB" status --porcelain -uno)" ] || die "a conflicted land should leave the worktree clean"
 git show-ref --verify --quiet refs/heads/hone/conflict-b || die "the conflicting branch should survive as evidence"
 step "conflict aborted with its own exit code (9), paths named, tree clean, branch kept"
 bash "$WSH" remove "$WT_CB" >/dev/null 2>&1; git branch -D hone/conflict-b >/dev/null 2>&1
@@ -1094,7 +1129,10 @@ echo "$out" | grep -q "a git hook refused the merge commit" || die "the message 
 echo "$out" | grep -q "output.css is stale" || die "the message should show the hook's output: $out"
 echo "$out" | grep -q "conflicted" && die "a refused merge commit is not a conflict: $out"
 [ "$(git rev-parse HEAD)" = "$pre_head" ] || die "a refused merge should leave the primary branch where it was"
-git rev-parse -q --verify MERGE_HEAD >/dev/null && die "a refused merge should leave no merge in progress"
+# land merges in the worktree, so that is where a merge could be left open.
+git -C "$WT_HK" rev-parse -q --verify MERGE_HEAD >/dev/null && die "a refused merge should leave no merge in progress in the worktree"
+[ "$(git -C "$WT_HK" rev-parse --abbrev-ref HEAD)" = "hone/hook-refused" ] || die "the worktree should be back on its branch"
+[ -z "$(git -C "$WT_HK" status --porcelain -uno)" ] || die "a refused merge should leave the worktree clean"
 [ -z "$(git status --porcelain -uno)" ] || die "a refused merge should leave the tracked tree clean"
 git show-ref --verify --quiet refs/heads/hone/hook-refused || die "the branch should survive a refused merge"
 step "a refused merge commit exits 6 with the hook's output, tree restored"
@@ -1109,19 +1147,18 @@ rm -f "$REPO/hook-refused.txt"
 echo "$out" | grep -q "stopped its fast-forward" || die "the message should name the refused fast-forward: $out"
 echo "$out" | grep -q "hook-refused.txt" || die "the message should show git's output: $out"
 [ "$(git rev-parse HEAD)" = "$pre_head" ] || die "a blocked fast-forward should leave the primary branch where it was"
-# An untracked file in the worktree where the primary branch added one since
-# the cut: git refuses the checkout, before it merges anything.
-echo "trunk file" > trunk-added.txt && git add trunk-added.txt && git commit -qm "chore: the trunk adds a file"
-echo "in the way" > "$WT_HK/trunk-added.txt"
+# A stale index lock in the worktree: git refuses the checkout, before it
+# merges anything.
+wt_lock="$(git -C "$WT_HK" rev-parse --absolute-git-dir)/index.lock"
+touch "$wt_lock"
 pre_head=$(git rev-parse HEAD)
 out=$(bash "$WSH" land hook-refused 2>&1); rc=$?
-rm -f "$WT_HK/trunk-added.txt"
+rm -f "$wt_lock"
 [ "$rc" -eq 2 ] || die "a merge blocked in the worktree should exit 2 (got $rc): $out"
 echo "$out" | grep -q "git could not merge" || die "the message should say git could not merge: $out"
-echo "$out" | grep -q "trunk-added.txt" || die "the message should show git's output: $out"
+echo "$out" | grep -q "index.lock" || die "the message should show git's output: $out"
 [ "$(git rev-parse HEAD)" = "$pre_head" ] || die "a blocked merge should leave the primary branch where it was"
 [ "$(git -C "$WT_HK" rev-parse --abbrev-ref HEAD)" = "hone/hook-refused" ] || die "the worktree should stay on its branch"
-git rm -q trunk-added.txt && git commit -qm "chore: drop the trunk file"
 step "a blocked fast-forward and a blocked merge each exit 2 with git's output"
 bash "$WSH" remove "$WT_HK" >/dev/null 2>&1; git branch -D hone/hook-refused >/dev/null 2>&1
 
