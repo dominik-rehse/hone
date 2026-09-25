@@ -241,18 +241,21 @@ irreversible. When you want that record, route the edit through the loop.
   - It denies a command that hand-writes a grant or a proof sign-off past
     the `worktree.sh` helpers.
   - It asks before a command that modifies a protected artifact: an
-    adapter, a hook, settings, a policy file, or a check config. The ask
-    names the file. A check config outside the repository passes.
+    adapter, a hook, settings, a policy file, or a check config.
   - It asks before a command that moves HEAD in the primary tree.
     `git checkout -- <paths>` and `git checkout <ref> -- <paths>` restore
     files and move no HEAD, so both pass.
   - It asks before a command that moves the primary branch itself there.
     The list is `git merge`, `cherry-pick`, `rebase`, `branch -f`, and
     `update-ref` on `refs/heads/`. A push whose remote is a local path
-    counts, and so does every `git reset` that does more than unstage.
-    `worktree.sh land` is the route, and it passes. `git merge-base` and
-    `git log --merges` read history, so they pass too. A push of the
-    change branch to the team's remote passes.
+    counts, and so does every `git reset` but a bare one and a `--`
+    restore. `worktree.sh land` is the route, and it passes. `git
+    merge-base` and `git log --merges` read history, so they pass too. A
+    push of the change branch to the team's remote passes.
+  - Both rules read every tree the command names, not only the one a
+    leading `cd` reaches: a later `cd`, `git -C <path>`, and
+    `--git-dir=<path>`. Any of them in the primary tree makes the command
+    primary-tree work.
   - It asks before a package manager, a formatter, or a migration tool
     runs in the primary tree. Such a tool writes its own files, so no
     command text ever spells that write out. A bare sync install
@@ -264,10 +267,9 @@ irreversible. When you want that record, route the edit through the loop.
   `--message` option, and the text after `worktree.sh grant` or `attest`.
   So a commit message that names `--no-verify` or `bun add` is not the act.
 
-  Every primary-tree rule judges each simple command in the tree it runs
-  in. It starts from the *shell's* directory, which the harness reports, and
-  follows `cd`, subshells, `git -C`, and a variable set to a literal path or
-  `$(mktemp -d)`. A tree it cannot resolve counts as the primary tree.
+  Every primary-tree rule reads the directory the *shell* stands in, which
+  the harness reports in the hook input. So the loop's one `cd` into its
+  worktree is enough, and the commands after it pass.
 - *dirty-guard* (PostToolUse on Bash) reads the effect instead of the command.
   In the primary tree it asks git what the command left dirty, and blocks when
   that list holds a protected path. It catches a writer the bash-guard's name
