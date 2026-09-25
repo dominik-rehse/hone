@@ -684,9 +684,9 @@ EOF
 msg_wt_lock_timeout() {
     local timeout="$1"
     cat <<EOF
-hone worktree: another session held the lock for more than $timeout seconds.
-Do: wait for that run to finish, then retry.
-Why: a land or a full-suite run holds the lock.
+hone worktree: a land or a full-suite run held the lock for more than $timeout seconds.
+Do: wait for that run to finish, then retry. It can be this session's own background run.
+Why: one lock serializes every land and full-suite run.
 EOF
 }
 
