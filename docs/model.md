@@ -198,7 +198,7 @@ flowchart TD
     cons["Consolidate, in this order:<br/>1 · save what must survive as docs or types<br/>2 · prune redundant tests<br/>3 · delete the Plan<br/>4 · consolidate-critic reviews (runs once)"]
     rev["Review: /code-review reads the<br/>whole change for bugs and cleanups<br/>(runs once)"]
     fix["Auto-fix: run the same red-green cycle,<br/>once per review finding<br/>(re-gated by verify, not re-reviewed)"]
-    land["Land, in this order:<br/>1 · commit in the worktree<br/>2 · merge into main<br/>3 · re-run the full suite there<br/>4 · remove the worktree"]
+    land["Land, in this order:<br/>1 · commit in the worktree<br/>2 · merge main's tip there<br/>3 · re-run the full suite on the merge<br/>4 · fast-forward main, remove the worktree"]
     esc["Escalate: hand the<br/>problem back to you"]
     stop["Stop: halt where it is, keeping<br/>the worktree as evidence"]
 
@@ -501,7 +501,11 @@ whether a merge is safe: git rejects a push that is not a straight
 extension of the remote branch. So land merges on top of the remote's
 latest, runs the suite, and pushes. When another developer landed in the
 meantime the push fails, and land redoes merge and suite on top of their
-change. Merges from several machines serialize on the suite, and no
+change. A solo clone has the same race with its own sessions, which commit
+Plans onto the primary branch. So land never verifies in the shared primary
+tree. It builds and tests the merge in the change's worktree and only
+fast-forwards the primary branch onto that commit. A red merge needs no
+rollback there, and no other session's commit or draft is ever reset. Merges from several machines serialize on the suite, and no
 commit reaches the remote unless the suite passed on exactly that tree.
 The partition rule above stays per machine: across machines the merge
 alone verifies independence, and a collision is the same exit 9.

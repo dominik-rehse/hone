@@ -37,9 +37,9 @@
 # change breaks an integration test, while the change is still open. A re-run
 # after each new commit re-verifies almost the same code, and it adds little.
 # The repeats also cost the most. They hold the land lock, so they collide with
-# each other and with lands. `worktree.sh land` re-runs --all after the merge
-# and rolls back on red. So a regression that a later commit introduces still
-# never reaches the trunk.
+# each other and with lands. `worktree.sh land` re-runs --all on the merge
+# and publishes nothing on red. So a regression that a later commit
+# introduces still never reaches the trunk.
 # (An adapter that expresses tier selection elsewhere, e.g. the Node template
 # runs the project's own "test" script, treats --unit and --all alike. The
 # escalation only matters where the adapter distinguishes tiers.)

@@ -414,12 +414,14 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    ```
 
    It takes the land lock, so concurrent runs queue rather than interleave. It
-   merges `--no-ff`, re-runs the whole suite in the primary tree, and on green
-   removes the worktree and deletes the branch. Read its exit:
+   merges `--no-ff` in the worktree, re-runs the whole suite there, and on
+   green fast-forwards the primary branch, removes the worktree, and deletes
+   the branch. Read its exit:
 
    - **0**: landed and green. Continue.
    - **9**: merge conflict. Aborted, tree restored. Fold in serially. Stop.
-   - **6**: the merge regressed the trunk. Rolled back, worktree kept. Stop.
+   - **6**: the merge failed a check. The primary branch did not move, and
+     the worktree is kept. Stop.
    - **7**: the proof gate wants real-environment proof. Run the check the
      refusal names where you can reach it, then stop: hand the human its full
      output and the `worktree.sh attest` command. The sign-off is the human's
@@ -428,10 +430,11 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    - **8**: the authority gate wants a scoped grant for an irreversible change.
      Read the diff it printed, then record the authorization with
      `worktree.sh grant` and land again.
-   - **5**: another session held the land lock past the timeout, or, in
-     shared mode, the remote moved on every attempt. Wait, retry.
+   - **5**: another session held the land lock past the timeout, or the
+     primary branch moved on every attempt. Wait, retry.
    - **2**: usage or repo-state error (missing branch, detached HEAD, no
-     `Cut:` line on the branch): read the stderr message.
+     `Cut:` line, uncommitted changes in the worktree, or files in the
+     primary tree in the way): read the stderr message.
 
    Any non-zero exit: read `references/land.md` before acting on it. It carries
    what each code means and what resolves it. Three rules hold whatever the

@@ -735,15 +735,15 @@ hone_msg_proof_check() {
 
 # The bootstrap case, as a labelled paste block. land runs the PRIMARY tree's
 # proof.sh, so that copy cannot prove the change that writes or edits it. The
-# copy land would run is the one this change replaces. $1 is the change
-# name, empty when the change leaves the adapter alone.
+# copy land would run is the one this change replaces. $1 holds the commands
+# to run, one per line, and is empty when the change leaves the harness alone.
 hone_msg_proof_bootstrap() {
     [ -n "$1" ] || return 0
     cat <<'EOF'
 This change rewrites scripts/proof.sh or an existing probe, so land cannot use the copy it has.
-Run the change's own adapter, from its worktree, in your own terminal:
+Run the change's own adapter, from its worktree, in your own terminal, once for each line:
 EOF
-    hone_msg_block "bash scripts/proof.sh $1"
+    hone_msg_block "$1"
 }
 
 msg_wt_land_proof_adapter_failed() {
@@ -825,7 +825,7 @@ EOF
 msg_wt_land_conflict() {
     local branch="$1" paths="$2"
     cat <<EOF
-hone worktree: merging $branch conflicted, so land restored the primary tree.
+hone worktree: merging $branch conflicted, so the primary branch did not move.
 Do: fold this change in serially, then land it again.
 Why: the independence check missed an overlap.
 Conflicting paths:
@@ -836,7 +836,7 @@ EOF
 msg_wt_land_hook_refused() {
     local branch="$1" log="$2" tail="$3"
     cat <<EOF
-hone worktree: a git hook refused the merge commit of $branch, so land restored the primary tree.
+hone worktree: a git hook refused the merge commit of $branch, so the primary branch did not move.
 Do: read the hook output below, fix what it reports, then land again.
 Why: the merge had no conflict, and the hook's check failed.
 Last lines of $log:
@@ -847,8 +847,51 @@ EOF
 msg_wt_land_merge_failed() {
     local branch="$1" log="$2" tail="$3"
     cat <<EOF
-hone worktree: git could not merge $branch, so land left the primary tree as it was.
+hone worktree: git could not merge $branch, so the primary branch did not move.
 Do: read the git output below, fix the repo state, then land again.
+Last lines of $log:
+$(hone_msg_block "$tail")
+EOF
+}
+
+msg_wt_land_worktree_dirty() {
+    local path="$1"
+    cat <<EOF
+hone worktree: $path has uncommitted changes to tracked files, so land did not start.
+Do: commit the changes to the branch or discard them, then land again.
+Why: land merges only what the branch holds.
+EOF
+}
+
+msg_wt_land_from_worktree() {
+    local main_root="$1" cmd="$2"
+    cat <<EOF
+hone worktree: you ran land from inside the worktree that land removes.
+Do: cd $main_root && $cmd
+Why: your shell would stand in a deleted directory.
+EOF
+}
+
+msg_wt_land_retry_moved() {
+    local primary="$1" attempt="$2"
+    printf 'hone worktree: %s moved during the suite, so land merges again on the new tip (attempt %s).\n' "$primary" "$attempt"
+}
+
+msg_wt_land_primary_moved() {
+    local primary="$1" attempts="$2"
+    cat <<EOF
+hone worktree: $primary moved during each of $attempts land attempts, so land did not publish the merge.
+Do: wait until the other sessions stop committing, then run land again.
+Why: land publishes only a merge that it tested.
+EOF
+}
+
+msg_wt_land_ff_refused() {
+    local branch="$1" log="$2" tail="$3"
+    cat <<EOF
+hone worktree: the merge of $branch is green, and files in the primary tree stopped its fast-forward.
+Do: commit or move the files that the output below names, then land again.
+Why: land never overwrites uncommitted work.
 Last lines of $log:
 $(hone_msg_block "$tail")
 EOF
@@ -857,9 +900,9 @@ EOF
 msg_wt_land_suite_red() {
     local branch="$1" log="$2" tail="$3"
     cat <<EOF
-hone worktree: the suite failed in the primary tree after merging $branch.
+hone worktree: the suite failed on the merge of $branch, so the primary branch did not move.
 Do: read the tail below, fix the regression, then land again.
-Why: land rolled the merge back and kept the worktree.
+Why: land kept the worktree on its branch for the fix.
 Last lines of $log:
 $(hone_msg_block "$tail")
 EOF
@@ -868,9 +911,9 @@ EOF
 msg_wt_land_adapter_red() {
     local adapter="$1" branch="$2" log="$3" tail="$4"
     cat <<EOF
-hone worktree: $adapter failed in the primary tree after merging $branch.
+hone worktree: $adapter failed on the merge of $branch, so the primary branch did not move.
 Do: read the tail below, fix what $adapter reports, then land again.
-Why: land rolled the merge back and kept the worktree.
+Why: land kept the worktree on its branch for the fix.
 Last lines of $log:
 $(hone_msg_block "$tail")
 EOF
@@ -889,12 +932,17 @@ EOF
 }
 
 msg_wt_land_receipt() {
-    local sha="$1" branch="$2" consumed="${3:-}"
+    local sha="$1" branch="$2" consumed="${3:-}" kept="${4:-}"
     cat <<EOF
 hone worktree: landed $branch as merge commit $sha.
-The post-merge suite ran in the primary tree and passed.
-land removed the worktree and deleted the branch.
+The suite ran on that merge commit in the worktree and passed.
 EOF
+    if [ -n "$kept" ]; then cat <<EOF
+land deleted the branch. The worktree $kept is still there: remove it by hand.
+EOF
+    else
+        echo "land removed the worktree and deleted the branch."
+    fi
     if [ -n "$consumed" ]; then cat <<EOF
 land deleted the spent record(s): $consumed. The text of every record that
 opened a gate is in the merge commit body.
@@ -916,9 +964,9 @@ EOF
 msg_wt_land_setup_tree_red() {
     local branch="$1" log="$2" tail="$3"
     cat <<EOF
-hone worktree: setup-tree failed in the primary tree after merging $branch.
+hone worktree: setup-tree failed on the merge of $branch, so the primary branch did not move.
 Do: read the tail below, fix the install step, then land again.
-Why: land rolled the merge back and kept the worktree.
+Why: land kept the worktree on its branch for the fix.
 Last lines of $log:
 $(hone_msg_block "$tail")
 EOF
@@ -927,7 +975,18 @@ EOF
 msg_wt_land_setup_tree_receipt() {
     local files="$1"
     cat <<EOF
-hone worktree: this land changed a lockfile, and setup-tree reinstalled the primary tree before the post-merge suite.
+hone worktree: this land changed a lockfile, and setup-tree reinstalled the primary tree after the merge.
+Lockfiles this land changed:
+$(hone_msg_block "$files")
+EOF
+}
+
+msg_wt_land_setup_tree_primary_failed() {
+    local files="$1" log="$2"
+    cat <<EOF
+hone worktree: this land changed a lockfile, and setup-tree failed in the primary tree.
+Do: read the end of $log, fix the install, then run scripts/setup-tree.sh in the primary tree.
+Why: the merge stands on the old installed dependencies.
 Lockfiles this land changed:
 $(hone_msg_block "$files")
 EOF
@@ -1096,6 +1155,13 @@ Do: add the remote, or fix the name inside .hone-shared.
 Why: shared mode needs a remote to sync with.
 EOF
 }
+msg_wt_release_not_shared() {
+    cat <<'EOF'
+hone worktree: this repository has no .hone-shared marker, so there is no claim on a remote to release.
+Do: nothing. Without shared mode, the worktree and its branch are the whole claim.
+EOF
+}
+
 msg_wt_sync_not_shared() {
     cat <<'EOF'
 hone worktree: this repository has no .hone-shared marker, so there is nothing to sync.
@@ -1134,7 +1200,7 @@ msg_wt_land_pushed() {
 }
 msg_wt_land_retry() {
     local remote="$1" primary="$2" attempt="$3"
-    printf 'hone worktree: %s/%s moved, so land rolls back and retries (attempt %s).\n' "$remote" "$primary" "$attempt"
+    printf 'hone worktree: %s/%s moved, so land undoes its fast-forward and retries (attempt %s).\n' "$remote" "$primary" "$attempt"
 }
 msg_wt_land_claim_delete_failed() {
     local change="$1" remote="$2"
@@ -1322,6 +1388,13 @@ worktree|human|msg_wt_land_proof_always_no_adapter|<plugin-root>/templates/proof
 worktree|human|msg_wt_land_conflict|hone/<change>|- <path>
 worktree|human|msg_wt_land_hook_refused|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_merge_failed|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
+worktree|human|msg_wt_release_not_shared
+worktree|human|msg_wt_land_worktree_dirty|<main-root>/.worktrees/<change>
+worktree|human|msg_wt_land_from_worktree|<main-root>|bash <plugin-root>/scripts/worktree.sh land <change>
+worktree|plain|msg_wt_land_retry_moved|main|2
+worktree|human|msg_wt_land_primary_moved|main|3
+worktree|human|msg_wt_land_ff_refused|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
+worktree|human|msg_wt_land_setup_tree_primary_failed|- <lockfile>|<git-common-dir>/hone-land.log
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_adapter_red|<typecheck or lint>|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_tier_empty|- <tier>

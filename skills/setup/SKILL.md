@@ -79,8 +79,8 @@ and verify each the same way (execute it, exit 0 = clean):
 - `scripts/setup-tree.sh` when the ecosystem has an install step (`bun.lock`
   → `bun install`, `package-lock.json` → `npm ci`, `uv.lock` → `uv sync`).
   It makes the current tree runnable. `worktree.sh add` runs it in every
-  fresh worktree, and land runs it in the primary tree when the merged diff
-  touched a lockfile. Verify it by executing it once here.
+  fresh worktree, and land runs it on the merge and in the primary tree when
+  a lockfile changed. Verify it by executing it once here.
 
 Skip these where the language has no such tool. The gate does not run them.
 `scripts/proof.sh` stays with the human: mention the templates under

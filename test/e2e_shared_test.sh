@@ -110,7 +110,7 @@ WTB=$(cd "$B" && bash "$WSH" add y) || die "B: add y"
 write_change "$WTB" y
 RACE="$TMP/race"; mkdir -p "$RACE"; ln -s "$C" "$RACE/clone"
 out=$(cd "$B" && HONE_TEST_RACE="$RACE" bash "$WSH" land y 2>&1) || die "B: land y: $out"
-echo "$out" | grep -q 'origin/main moved, so land rolls back and retries (attempt 2)' || die "no retry line: $out"
+echo "$out" | grep -q 'origin/main moved, so land undoes its fast-forward and retries (attempt 2)' || die "no retry line: $out"
 log_has "$ORIGIN" main 'race: another developer landed' || die "C's commit missing on origin"
 log_has "$ORIGIN" -n 1 main "Merge branch 'hone/y'" || die "y's merge not on top of origin/main"
 [ "$(git -C "$B" rev-parse HEAD)" = "$(origin_main)" ] || die "B's main != origin/main after the retry"

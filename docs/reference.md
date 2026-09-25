@@ -76,10 +76,12 @@ work. The loop calls it, and you can too:
   `src/<area>/`. With no worktree left, the command reads the primary
   tree's documents. The loop hands these documents to the `consolidate-critic`,
   whether the change opened them or not.
-- `worktree.sh land <change>` merges the branch into the primary tree,
-  re-runs the suite there, and cleans up. Runs the land gates first. In
-  shared mode it merges on top of the remote's latest and pushes the tested
-  result (see *Shared mode* under *Land gates*).
+- `worktree.sh land <change>` builds the merge in the change's worktree,
+  re-runs the suite there, fast-forwards the primary branch onto the tested
+  merge commit, and cleans up. Runs the land gates first. When the primary
+  branch moved during the suite, it merges and verifies again. In shared
+  mode it merges on top of the remote's latest and pushes the tested result
+  (see *Shared mode* under *Land gates*).
 - `worktree.sh landed <change>` answers "has this change fully landed?" from
   repo artifacts, printing `landed` (exit 0) or `pending` (exit 1). Landed
   means the merge commit is on the primary branch and the branch, worktree,
@@ -94,8 +96,8 @@ work. The loop calls it, and you can too:
 - `worktree.sh release <change>` deletes a claim from the remote by hand,
   for a change whose worktree is already gone. `remove` does it with the
   worktree.
-- `worktree.sh remove <worktree-path>` removes a worktree hone created, and
-  its branch if fully merged.
+- `worktree.sh remove <worktree-path | change>` removes a worktree hone
+  created, and its branch if fully merged.
 - `worktree.sh landable` lists worktrees whose branch is ahead of the
   primary branch.
 - `worktree.sh grant <change> "who/why"` records the authorization for one
@@ -185,8 +187,8 @@ Three environment variables tune the cross-session mechanics.
 `HONE_LAND_LOCK_TIMEOUT` sets the seconds a land or full-suite run waits for
 the lock (default 600). `HONE_SUITE_LOCK_TIMEOUT` sets the seconds the
 gate's pre-land full run waits (default 30). `HONE_LAND_RETRIES` sets how
-many times a shared-mode land redoes merge and suite after the remote
-rejected its push (default 3).
+many times land redoes merge and suite after the primary branch moved, or
+the remote rejected its push (default 3).
 
 Two more variables tune a hook. `HONE_AREA_MAX_LINES` sets the size above
 which the nag names a `src/<area>/` (default 3000). `HONE_GATE_BLOCK_CAP`
@@ -401,9 +403,9 @@ the remote: it fetches, then fast-forwards, or rebases local-only commits on
 top. A rebase that conflicts aborts and refuses. Then it merges the branch,
 runs the suite, and pushes the primary branch. Git rejects the push when
 another developer landed while the suite ran, because the merge is no
-longer a straight extension of the remote. land then rolls the merge back,
-levels again, and redoes merge and suite. It gives up after
-`HONE_LAND_RETRIES` attempts with exit 5, the merge rolled back and the
+longer a straight extension of the remote. land then undoes its local
+fast-forward, levels again, and redoes merge and suite. It gives up after
+`HONE_LAND_RETRIES` attempts with exit 5, nothing published and the
 worktree kept. So a commit never reaches the remote unless the suite passed
 on exactly that tree, and merges from several machines serialize on the
 suite's duration.
@@ -450,9 +452,9 @@ The gate's error message prints the exact helper command with its full path.
 | Exit | Meaning |
 |------|---------|
 | 0 | landed and green |
-| 2 | usage or repo-state error (missing branch, detached HEAD, no `Cut:` line on the branch, a merge git refused to start), or in shared mode a push the host refused |
-| 5 | lock timeout: another land or full-suite run held the lock. In shared mode also: the remote moved on every attempt, merge rolled back |
-| 6 | suite, type-check, or lint red after the merge, or a git hook refused the merge commit; rolled back, worktree kept, output in the land log |
+| 2 | usage or repo-state error (missing branch, detached HEAD, no `Cut:` line on the branch, land run from inside the worktree, uncommitted changes in the worktree, a merge git refused to start, files in the primary tree that stopped the fast-forward), or in shared mode a push the host refused |
+| 5 | lock timeout: another land or full-suite run held the lock. Also: the primary branch, or in shared mode the remote, moved on every attempt; nothing published |
+| 6 | suite, type-check, lint, or setup-tree red on the merge, or a git hook refused the merge commit; primary branch unmoved, worktree kept, output in the land log |
 | 7 | proof gate: real-environment proof missing |
 | 8 | authority gate: irreversible change without a grant |
 | 9 | merge conflict; aborted, tree restored, branch kept, conflicting paths named |
@@ -512,7 +514,7 @@ loop call them, so hone itself stays language-agnostic.
   templates: [`templates/run-tests/README.md`](../templates/run-tests/README.md).
   `setup.sh` installs it.
 - `typecheck.sh` and `lint.sh` are optional, one line each. The gate and
-  land's post-merge check run them when they exist. They are also where a
+  land's check of the merge run them when they exist. They are also where a
   project enforces code quality with a tool of its choice. The goals are no
   copied code, no dead code, small functions, boundaries between areas, and
   strict types.
@@ -522,9 +524,11 @@ loop call them, so hone itself stays language-agnostic.
   `uv sync`). It makes the current tree runnable: dependencies installed,
   local hooks wired. `worktree.sh add` runs it inside every fresh worktree,
   so the first verify never reds on a missing install. `land` runs it in the
-  primary tree, before the post-merge suite, when the merged diff touched a
-  lockfile. Without it, a change that adds a package its tests import rolls
-  back at land on the stale primary-tree install.
+  worktree before the suite when the primary branch changed a lockfile since
+  the cut. It runs it in the primary tree after the fast-forward when the
+  change touched a lockfile. A red run in the worktree fails the land. A red
+  run in the primary tree after the merge is a warning, and the merge
+  stands.
 - `proof.sh` is optional. It proves a change in the real environment for the
   proof gate. land executes the primary tree's copy, with the change's
   worktree as the working directory. So land trusts a change that adds its

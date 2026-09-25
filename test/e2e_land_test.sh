@@ -83,7 +83,7 @@ git show-ref --verify --quiet refs/heads/hone/mathx-add && die "merged branch sh
 # green land says what it did: the merge commit, the green suite, the cleanup.
 echo "$out" | grep -q "landed hone/mathx-add as merge commit" || die "land should print a success receipt"
 echo "$out" | grep -qF "$(git rev-parse --short HEAD)" || die "the receipt should name the merge commit"
-echo "$out" | grep -q "post-merge suite" || die "the receipt should report the post-merge suite"
+echo "$out" | grep -q "The suite ran on that merge commit" || die "the receipt should report the suite on the merge"
 echo "$out" | grep -q "removed the worktree" || die "the receipt should report the cleanup"
 echo "$out" | grep -q "changed a lockfile" && die "a change with no lockfile should draw no reinstall notice"
 step "the receipt names the merge commit, the green suite, and the cleanup"
@@ -218,7 +218,7 @@ PRE=$(git rev-parse HEAD)
 out=$(bash "$WSH" land lint-red 2>&1); rc=$?
 [ "$rc" -eq 6 ] || die "land should exit 6 on post-merge lint red (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "lint-red merge should be rolled back; HEAD moved"
-echo "$out" | grep -q "lint failed in the primary tree" || die "the refusal should name the failing adapter"
+echo "$out" | grep -q "lint failed on the merge" || die "the refusal should name the failing adapter"
 echo "$out" | grep -q "hone-land.log" || die "the refusal should name the land log"
 [ -d "$WT_LR" ] || die "worktree should survive a lint-red land as evidence"
 git show-ref --verify --quiet refs/heads/hone/lint-red || die "branch should survive a lint-red land as evidence"
@@ -230,6 +230,17 @@ echo "// styled" > "$WT_LR/src/mathx/styled.js"
 bash "$WSH" land lint-red >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a lint-green change should land (got $rc)"
 step "the fixed change lands under the same adapter"
+# Another session's untracked draft in the primary tree is not part of any
+# merge. land verifies in the worktree, so the draft cannot red a land.
+echo "// LINT-RED" > src/mathx/draft-of-another-session.js
+WT_UD=$(bash "$WSH" add untracked-draft) || die "worktree add untracked-draft"
+echo "// clean" > "$WT_UD/src/mathx/clean.js"
+(cd "$WT_UD" && git add -A && git commit -qm "feat(mathx): a clean change" -m "Cut: nothing, a test change")
+out=$(bash "$WSH" land untracked-draft 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "a foreign untracked file in the primary tree should not fail a land (got $rc): $out"
+[ -f src/mathx/draft-of-another-session.js ] || die "land must leave the foreign draft alone"
+rm -f src/mathx/draft-of-another-session.js
+step "a foreign untracked draft in the primary tree does not fail a land"
 # A red typecheck adapter gets the identical treatment, named as itself.
 printf '#!/bin/bash\nexit 1\n' > scripts/typecheck.sh
 git add scripts/typecheck.sh && git commit -qm "chore: add a failing typecheck adapter"
@@ -240,10 +251,115 @@ PRE=$(git rev-parse HEAD)
 out=$(bash "$WSH" land type-red 2>&1); rc=$?
 [ "$rc" -eq 6 ] || die "land should exit 6 on post-merge typecheck red (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "typecheck-red merge should be rolled back; HEAD moved"
-echo "$out" | grep -q "typecheck failed in the primary tree" || die "the refusal should name typecheck"
+echo "$out" | grep -q "typecheck failed on the merge" || die "the refusal should name typecheck"
 git rm -q scripts/typecheck.sh && git commit -qm "chore: drop the typecheck adapter"
 bash "$WSH" remove "$WT_TC" >/dev/null 2>&1; git branch -D hone/type-red >/dev/null 2>&1
 step "typecheck-red merge rolled back (exit 6), named as typecheck"
+
+echo "== 5b3. a commit made on the primary branch during the suite survives =="
+# Another session commits a Plan onto the primary branch while land's suite
+# runs. land used to verify in the primary tree and roll back with a hard
+# reset, which dropped that commit. Now the suite runs in the worktree, and
+# the fast-forward refuses a branch that moved. land merges again on the new
+# tip and verifies again.
+MARK="$REPO/.git/concurrent-plan-done"
+cat > "$REPO/.git/commit-a-plan.sh" <<EOF
+#!/bin/bash
+[ -f "$MARK" ] && exit 0
+touch "$MARK"
+mkdir -p "$REPO/.plans"
+echo "# Plan of another session" > "$REPO/.plans/other.md"
+git -C "$REPO" add -f .plans/other.md
+git -C "$REPO" commit -qm "chore(plan): other"
+EOF
+WT_CC=$(bash "$WSH" add concurrent-plan) || die "worktree add concurrent-plan"
+cat > "$WT_CC/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+bash "$REPO/.git/commit-a-plan.sh"
+node -e 'const {add} = require("./src/mathx/add.js"); if (add(2,3) !== 5) process.exit(1)'
+EOF
+(cd "$WT_CC" && git add -A && git commit -qm "test: a suite during which another session commits" -m "Cut: nothing, a test change")
+out=$(bash "$WSH" land concurrent-plan 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "land should retry and land after a concurrent commit (got $rc): $out"
+plan_commit=$(git log --format=%H -1 --grep='chore(plan): other')
+[ -n "$plan_commit" ] || die "the concurrent Plan commit was lost"
+git merge-base --is-ancestor "$plan_commit" HEAD || die "the concurrent Plan commit is not on the primary branch"
+[ "$(git rev-parse HEAD^1)" = "$plan_commit" ] || die "the merge should sit on top of the concurrent commit"
+echo "$out" | grep -q "moved during the suite" || die "land should say that it merged again: $out"
+echo "$out" | grep -qF "$(git rev-parse --short HEAD)" || die "the receipt should name the merge commit"
+rm -f "$MARK"
+step "a concurrent commit survives, and land merged again on top of it"
+# The same race with a red suite: land fails, and the commit still stands.
+WT_CR=$(bash "$WSH" add concurrent-red) || die "worktree add concurrent-red"
+cat > "$WT_CR/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+bash "$REPO/.git/commit-a-plan.sh"
+exit 1
+EOF
+(cd "$WT_CR" && git add -A && git commit -qm "test: a red suite during which another session commits" -m "Cut: nothing, a test change")
+git rm -q .plans/other.md && git commit -qm "chore: drop the other plan"
+out=$(bash "$WSH" land concurrent-red 2>&1); rc=$?
+[ "$rc" -eq 6 ] || die "a red suite should exit 6 (got $rc): $out"
+git log -1 --format=%s | grep -q "chore(plan): other" || die "a red land must not drop a commit made during its suite"
+[ "$(git -C "$WT_CR" rev-parse --abbrev-ref HEAD)" = "hone/concurrent-red" ] || die "the worktree should be back on its branch"
+[ -z "$(git -C "$WT_CR" status --porcelain --untracked-files=no)" ] || die "the worktree should be clean after a red land"
+rm -f "$MARK" "$REPO/.git/commit-a-plan.sh"
+git rm -q .plans/other.md && git commit -qm "chore: drop the other plan again"
+bash "$WSH" remove "$WT_CR" >/dev/null 2>&1; git branch -D hone/concurrent-red >/dev/null 2>&1
+step "a red land leaves a concurrent commit and puts the worktree back on its branch"
+
+echo "== 5b4. land never overwrites uncommitted work in the primary tree =="
+WT_UE=$(bash "$WSH" add overlaps-edit) || die "worktree add overlaps-edit"
+echo "// from the branch" > "$WT_UE/src/mathx/shared.js"
+(cd "$WT_UE" && git add -A && git commit -qm "feat(mathx): shared" -m "Cut: nothing, a test change")
+echo "// a person's own untracked work" > src/mathx/shared.js
+echo "// a person's unrelated edit" >> README.md
+PRE=$(git rev-parse HEAD)
+out=$(bash "$WSH" land overlaps-edit 2>&1); rc=$?
+[ "$rc" -eq 2 ] || die "a fast-forward that would overwrite a file should exit 2 (got $rc): $out"
+echo "$out" | grep -q "stopped its fast-forward" || die "the message should name the refused fast-forward: $out"
+grep -q "a person's own untracked work" src/mathx/shared.js || die "land overwrote a person's file"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a refused fast-forward should leave the primary branch where it was"
+rm -f src/mathx/shared.js
+out=$(bash "$WSH" land overlaps-edit 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "with the file moved away, the change should land (got $rc): $out"
+grep -q "a person's unrelated edit" README.md || die "land dropped an unrelated uncommitted edit"
+git checkout -q -- README.md
+step "land refuses to overwrite a person's file, and keeps an unrelated edit"
+
+echo "== 5b5. land refuses a caller inside the worktree, a dirty worktree, and rebuilds a missing one =="
+WT_IN=$(bash "$WSH" add from-inside) || die "worktree add from-inside"
+echo "// inside" > "$WT_IN/src/mathx/inside.js"
+(cd "$WT_IN" && git add -A && git commit -qm "feat(mathx): inside" -m "Cut: nothing, a test change")
+PRE=$(git rev-parse HEAD)
+out=$(cd "$WT_IN/src" && bash "$WSH" land from-inside 2>&1); rc=$?
+[ "$rc" -eq 2 ] || die "land from inside its worktree should exit 2 (got $rc): $out"
+echo "$out" | grep -q "from inside the worktree that land removes" || die "the message should say why: $out"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a refused land must not merge"
+echo "// uncommitted" >> "$WT_IN/src/mathx/inside.js"
+out=$(bash "$WSH" land from-inside 2>&1); rc=$?
+[ "$rc" -eq 2 ] || die "a dirty worktree should exit 2 (got $rc): $out"
+echo "$out" | grep -q "uncommitted changes to tracked files" || die "the message should name the dirty worktree: $out"
+git -C "$WT_IN" checkout -q -- src/mathx/inside.js
+git worktree remove "$WT_IN"
+out=$(bash "$WSH" land from-inside 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "land should rebuild a missing worktree and land (got $rc): $out"
+[ -d "$WT_IN" ] && die "the rebuilt worktree should be gone after the land"
+git show-ref --verify --quiet refs/heads/hone/from-inside && die "the branch should be gone after the land"
+step "caller inside refused, dirty worktree refused, missing worktree rebuilt"
+
+echo "== 5b6. remove takes a change name and a relative path =="
+bash "$WSH" add rm-by-name >/dev/null || die "worktree add rm-by-name"
+out=$(bash "$WSH" remove rm-by-name 2>&1) || die "remove by change name should work: $out"
+[ -d "$REPO/.worktrees/rm-by-name" ] && die "remove by change name left the worktree"
+bash "$WSH" add rm-relative >/dev/null || die "worktree add rm-relative"
+out=$(bash "$WSH" remove .worktrees/rm-relative/ 2>&1) || die "remove by relative path should work: $out"
+[ -d "$REPO/.worktrees/rm-relative" ] && die "remove by relative path left the worktree"
+mkdir -p "$REPO/elsewhere"
+out=$(bash "$WSH" remove elsewhere 2>&1); rc=$?
+[ "$rc" -eq 3 ] || die "a directory outside .worktrees/ is still not hone's to remove (got $rc)"
+rmdir "$REPO/elsewhere"
+step "remove accepts a change name and a relative path, and still refuses a foreign one"
 
 echo "== 5c. land serializes: a held lock makes a concurrent land wait =="
 if command -v flock >/dev/null 2>&1; then
@@ -310,8 +426,10 @@ mkdir -p "$WT_C/db/migrations"
 echo "DROP TABLE legacy_sessions;" > "$WT_C/db/migrations/0002_drop.sql"
 (cd "$WT_C" && git add -A && git commit -qm "feat(db): drop legacy_sessions" -m "Cut: nothing, a test change")
 PRE=$(git rev-parse HEAD)
-bash "$WSH" land db-drop >/dev/null 2>&1; rc=$?
+out=$(bash "$WSH" land db-drop 2>&1); rc=$?
 [ "$rc" -eq 8 ] || die "irreversible land without a grant should exit 8 (got $rc)"
+echo "$out" | grep -qF "db/migrations/0002_drop.sql: DROP TABLE legacy_sessions;" \
+    || die "the refusal should quote the destructive statement with its file: $out"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "ungranted irreversible change must not touch the trunk"
 [ -d "$WT_C" ] || die "worktree should survive an ungranted irreversible land as evidence"
 step "irreversible change without a grant refused (exit 8), trunk untouched"
@@ -477,7 +595,15 @@ Proof: real-environment - run the new adapter by hand")
     out=$(bash "$WSH" land "bootstrap-$n" 2>&1); rc=$?
     [ "$rc" -eq 7 ] || die "a change rewriting $target should exit 7 (got $rc)"
     echo "$out" | grep -q "land cannot use the copy it has" || die "the gate should explain the bootstrap case for $target"
-    echo "$out" | grep -qF "bash scripts/proof.sh bootstrap-$n" || die "the gate should print the by-hand proof command for $target"
+    case "$target" in
+        scripts/proof.sh) expect="bash scripts/proof.sh bootstrap-$n" ;;
+        # An edited probe serves the change that shipped it. An adapter that
+        # finds its probe by change name has no probe named bootstrap-2.
+        *) expect="bash scripts/proof.sh journey"
+           echo "$out" | grep -qF "bash scripts/proof.sh bootstrap-$n" \
+               && die "the gate should not name a probe that does not exist for $target" ;;
+    esac
+    echo "$out" | grep -qF "$expect" || die "the gate should print '$expect' for $target: $out"
     bash "$WSH" remove "$WT_BS" >/dev/null 2>&1; git branch -D "hone/bootstrap-$n" >/dev/null 2>&1
 done
 # A change that only ADDS its own probe is writing its own check, like a test,
@@ -962,14 +1088,29 @@ git show-ref --verify --quiet refs/heads/hone/hook-refused || die "the branch sh
 step "a refused merge commit exits 6 with the hook's output, tree restored"
 
 echo "== 6b3. a merge git refuses to start is repo state, exit 2 =="
+# An untracked file in the primary tree where the merge adds one: the merge
+# is green, and the fast-forward refuses to overwrite the file.
 echo "in the way" > "$REPO/hook-refused.txt"
 out=$(bash "$WSH" land hook-refused 2>&1); rc=$?
 rm -f "$REPO/hook-refused.txt"
-[ "$rc" -eq 2 ] || die "a merge blocked by an untracked file should exit 2 (got $rc): $out"
-echo "$out" | grep -q "git could not merge" || die "the message should say git could not merge: $out"
+[ "$rc" -eq 2 ] || die "a fast-forward blocked by an untracked file should exit 2 (got $rc): $out"
+echo "$out" | grep -q "stopped its fast-forward" || die "the message should name the refused fast-forward: $out"
 echo "$out" | grep -q "hook-refused.txt" || die "the message should show git's output: $out"
+[ "$(git rev-parse HEAD)" = "$pre_head" ] || die "a blocked fast-forward should leave the primary branch where it was"
+# An untracked file in the worktree where the primary branch added one since
+# the cut: git refuses the checkout, before it merges anything.
+echo "trunk file" > trunk-added.txt && git add trunk-added.txt && git commit -qm "chore: the trunk adds a file"
+echo "in the way" > "$WT_HK/trunk-added.txt"
+pre_head=$(git rev-parse HEAD)
+out=$(bash "$WSH" land hook-refused 2>&1); rc=$?
+rm -f "$WT_HK/trunk-added.txt"
+[ "$rc" -eq 2 ] || die "a merge blocked in the worktree should exit 2 (got $rc): $out"
+echo "$out" | grep -q "git could not merge" || die "the message should say git could not merge: $out"
+echo "$out" | grep -q "trunk-added.txt" || die "the message should show git's output: $out"
 [ "$(git rev-parse HEAD)" = "$pre_head" ] || die "a blocked merge should leave the primary branch where it was"
-step "a merge git refuses to start exits 2 with git's output"
+[ "$(git -C "$WT_HK" rev-parse --abbrev-ref HEAD)" = "hone/hook-refused" ] || die "the worktree should stay on its branch"
+git rm -q trunk-added.txt && git commit -qm "chore: drop the trunk file"
+step "a blocked fast-forward and a blocked merge each exit 2 with git's output"
 bash "$WSH" remove "$WT_HK" >/dev/null 2>&1; git branch -D hone/hook-refused >/dev/null 2>&1
 
 echo "== 6c. landed: the artifact predicate an orchestrator polls =="
@@ -1058,9 +1199,9 @@ bash "$WSH" remove "$REPO/.worktrees/st-broken" >/dev/null 2>&1
 git branch -q -d hone/st-broken 2>/dev/null
 step "a failing setup-tree exits 2 and keeps the worktree"
 
-# 8c. land runs the adapter in the primary tree, before the post-merge suite,
-# when the merged diff touched a lockfile. The receipt then reports the
-# reinstall instead of asking for one.
+# 8c. land runs the adapter in the primary tree after the merge, when the
+# branch touched a lockfile. The receipt then reports the reinstall instead
+# of asking for one.
 cat > scripts/setup-tree.sh <<'EOF'
 #!/bin/bash
 echo "setup-tree ran in $(pwd)"
@@ -1087,9 +1228,9 @@ out=$(bash "$WSH" land st-nolock 2>/dev/null); rc=$?
 echo "$out" | grep -q "setup-tree" && die "no lockfile change: land should not report setup-tree"
 step "no lockfile in the diff, no setup-tree run"
 
-# 8e. a red setup-tree at land rolls the merge back, exit 6. The adapter
-# passes inside a worktree (so `add` succeeds) and fails in the primary tree
-# (the run land triggers).
+# 8e. a red setup-tree in the primary tree after the merge is a warning. The
+# merge was green in the worktree and stands. The adapter passes inside a
+# worktree (so `add` succeeds) and fails in the primary tree.
 cat > scripts/setup-tree.sh <<'EOF'
 #!/bin/bash
 case "$(pwd)" in */.worktrees/*) exit 0 ;; esac
@@ -1097,19 +1238,40 @@ echo "primary install exploded" >&2
 exit 1
 EOF
 git add scripts/setup-tree.sh && git commit -qm "chore: break the setup-tree adapter again"
-pre_land=$(git rev-parse HEAD)
 WT_SR=$(bash "$WSH" add st-red) || die "worktree add st-red"
 printf '{"lockfileVersion":3}\n' > "$WT_SR/bun.lock"
 (cd "$WT_SR" && git add -A && git commit -qm "chore(deps): bump the lockfile" -m "Cut: nothing, a test change")
-err=$(bash "$WSH" land st-red 2>&1 >/dev/null); rc=$?
-[ "$rc" -eq 6 ] || die "a red setup-tree at land should exit 6 (got $rc)"
-echo "$err" | grep -q "setup-tree failed in the primary tree" || die "the message should name setup-tree"
-[ "$(git rev-parse HEAD)" = "$pre_land" ] || die "land should roll the merge back on a red setup-tree"
-[ -d "$WT_SR" ] || die "the worktree should survive as evidence"
-git rm -q scripts/setup-tree.sh && git commit -qm "chore: drop the test setup-tree adapter"
-bash "$WSH" remove "$WT_SR" >/dev/null 2>&1
-git branch -q -D hone/st-red 2>/dev/null
-step "a red setup-tree rolls the merge back and keeps the worktree"
+out=$(bash "$WSH" land st-red 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "a red setup-tree in the primary tree after a green merge should not fail the land (got $rc): $out"
+echo "$out" | grep -q "setup-tree failed in the primary tree" || die "the receipt should warn about the install: $out"
+git log --oneline -1 | grep -q "Merge branch 'hone/st-red'" || die "the merge should stand"
+step "a red install in the primary tree after the merge warns, and the merge stands"
+
+# 8f. the primary branch changed a lockfile after the cut. The worktree's
+# install is then behind the merge, so land runs setup-tree there first, and
+# a red run fails the land with exit 6 before the primary branch moves.
+cat > scripts/setup-tree.sh <<'EOF'
+#!/bin/bash
+[ -f .fail-setup-tree ] && { echo "worktree install exploded" >&2; exit 1; }
+exit 0
+EOF
+git add scripts/setup-tree.sh && git commit -qm "chore: a setup-tree adapter that fails on a marker"
+WT_SW=$(bash "$WSH" add st-worktree) || die "worktree add st-worktree"
+echo "// change" > "$WT_SW/src/mathx/stw.js"
+(cd "$WT_SW" && git add -A && git commit -qm "feat(mathx): stw" -m "Cut: nothing, a test change")
+printf '{"lockfileVersion":4}\n' > bun.lock
+touch .fail-setup-tree
+git add bun.lock .fail-setup-tree && git commit -qm "chore(deps): the trunk moves its lockfile"
+pre_land=$(git rev-parse HEAD)
+out=$(bash "$WSH" land st-worktree 2>&1); rc=$?
+[ "$rc" -eq 6 ] || die "a red setup-tree on the merge should exit 6 (got $rc): $out"
+echo "$out" | grep -q "setup-tree failed on the merge" || die "the message should name setup-tree: $out"
+[ "$(git rev-parse HEAD)" = "$pre_land" ] || die "the primary branch should not move on a red setup-tree"
+[ "$(git -C "$WT_SW" rev-parse --abbrev-ref HEAD)" = "hone/st-worktree" ] || die "the worktree should be back on its branch"
+git rm -q scripts/setup-tree.sh .fail-setup-tree && git commit -qm "chore: drop the test setup-tree adapter"
+bash "$WSH" remove "$WT_SW" >/dev/null 2>&1
+git branch -q -D hone/st-worktree 2>/dev/null
+step "a red setup-tree on the merge fails the land, and the primary branch stays"
 
 echo
 echo "e2e land path: PASS"

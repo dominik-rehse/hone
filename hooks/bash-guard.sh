@@ -294,8 +294,8 @@ fi
 # 3c. A command that moves the PRIMARY BRANCH, in the primary tree → ask. Rule
 # 3 guards the shared HEAD; this one guards the ref HEAD points at.
 # `worktree.sh land` is what moves that ref: it holds the land lock, clears the
-# shape, authority, and proof gates, re-runs the whole suite after the merge,
-# and rolls a red merge back. In pass 2 of the ImpossibleBench probe one run
+# shape, authority, and proof gates, re-runs the whole suite on the merge,
+# and publishes only a green one. In pass 2 of the ImpossibleBench probe one run
 # made a worktree by hand and fast-forwarded the primary branch itself, with no
 # review and no land gate, because no rule named `git merge`.
 #

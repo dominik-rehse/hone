@@ -29,12 +29,15 @@
 #       Land hone/<change> into the primary tree, serialized against every other
 #       session that shares it. Takes a flock on <git-common-dir>/hone-land.lock
 #       (waits up to HONE_LAND_LOCK_TIMEOUT s, default 600). While it holds the
-#       lock, it merges --no-ff, re-runs scripts/run-tests.sh --all in the
-#       primary tree, and on green removes the worktree + deletes the branch.
-#       Any failure leaves the primary tree clean and green (land aborts a
-#       conflict and rolls back a post-merge regression), with the
-#       worktree/branch kept as evidence. Run from the primary tree, after
-#       committing in the worktree.
+#       lock, it checks out the primary branch's tip in the change's
+#       worktree, merges --no-ff there, and re-runs scripts/run-tests.sh
+#       --all and the optional adapters on that merge. On green it
+#       fast-forwards the primary branch onto the tested merge commit, then
+#       removes the worktree and deletes the branch. When the branch moved
+#       during the suite, it merges and verifies again. Any failure leaves
+#       the primary tree untouched, and the worktree back on its branch as
+#       evidence. Run from the primary tree, after committing in the
+#       worktree.
 #       Shape gate: some commit on the branch must carry a `Cut: <what>` line
 #       in its body, or `Repair: <what>` for a garden repair. Without one land
 #       refuses BEFORE every other gate (exit 2), because the fix amends a
@@ -80,18 +83,17 @@
 #       Shared mode: land levels the primary tree with the remote first, so
 #       the merge goes on top of the team's latest. After the green suite it
 #       pushes the primary branch. Git rejects that push when the remote moved
-#       while the suite ran, so land rolls the merge back, levels again, and
-#       redoes merge and suite, up to HONE_LAND_RETRIES times (default 3).
+#       while the suite ran, so land undoes its fast-forward, levels again,
+#       and redoes merge and suite, up to HONE_LAND_RETRIES times (default 3).
 #       Nothing untested ever reaches the remote. On success it releases the
-#       claim. Exhausted retries exit 5 with the merge rolled back. A push
-#       the host refused (a protected branch) is exit 2, rolled back, no
-#       retry: land tells the two apart by fetching again after a rejection.
-#       Exit: 0 landed · 2 usage/not-a-repo/detached/push refused · 5 lock
-#       timeout, or
-#       the remote moved on every attempt · 6 post-merge regression, or a
-#       git hook refused the merge commit (rolled back) · 7 real-environment
-#       proof missing · 8 ungranted irreversible change · 9 merge conflict
-#       (aborted, tree restored, paths named).
+#       claim. Exhausted retries exit 5 with nothing published. A push the
+#       host refused (a protected branch) is exit 2, no retry: land tells the
+#       two apart by fetching again after a rejection.
+#       Exit: 0 landed · 2 usage/not-a-repo/detached/push refused/caller in
+#       the worktree/dirty worktree/files in the way · 5 lock timeout, or the
+#       branch or remote moved on every attempt · 6 red on the merge, or a git
+#       hook refused the merge commit · 7 real-environment proof missing · 8
+#       ungranted irreversible change · 9 merge conflict (paths named).
 #
 #   worktree.sh review-scope <change>
 #       Print how deep the change's review must go: `full`, or `docs-only`
@@ -192,7 +194,7 @@
 #       crashed run). remove does the same with the worktree. Exit: 0
 #       released · 2 not shared, no such remote, or the delete failed.
 #
-#   worktree.sh remove <worktree-path>
+#   worktree.sh remove <worktree-path | change>
 #       Provenance-guarded cleanup. Removes the worktree ONLY if hone created it
 #       (path under the main tree's .worktrees/). It leaves anything elsewhere
 #       for its owner. Prunes stale registrations after. Refuses to remove the
@@ -510,9 +512,25 @@ land_irreversible() {
     # The final grep runs without -q on purpose. With -q it quit on its first
     # match, the diff writer took SIGPIPE on a migration larger than the pipe,
     # and this gate stayed quiet on exactly the diff that carried a real DROP.
-    if git -C "$root" diff "$base" "$branch" -- db ':(glob)**/migrations/**' 2>/dev/null \
-        | grep -E '^\+' | grep -iE 'DROP[[:space:]]+(TABLE|COLUMN)|TRUNCATE|DELETE[[:space:]]+FROM|ALTER[[:space:]].+DROP' >/dev/null; then
-        reasons+="- destructive SQL (DROP/TRUNCATE/DELETE/ALTER...DROP) in a migration or db/ file"$'\n'
+    #
+    # The signal carries the matched statements with their files, up to ten.
+    # Whoever records the grant then judges the statement, not a file name.
+    # A table rewrite (create, copy, drop, rename) is the common case, and it
+    # loses data exactly when the copy leaves a column out.
+    local sql
+    sql=$(git -C "$root" diff -U0 "$base" "$branch" -- db ':(glob)**/migrations/**' 2>/dev/null \
+        | awk '
+            /^\+\+\+ / { f = substr($0, 7); next }
+            /^\+/ {
+                line = substr($0, 2); u = toupper(line)
+                if (u ~ /DROP[ \t]+(TABLE|COLUMN)|TRUNCATE|DELETE[ \t]+FROM|ALTER[ \t].*DROP/) {
+                    n++
+                    if (n <= 10) print "    " f ": " line
+                }
+            }
+            END { if (n > 10) print "    ... and " n - 10 " more" }')
+    if [ -n "$sql" ]; then
+        reasons+="- destructive SQL (DROP/TRUNCATE/DELETE/ALTER...DROP) in a migration or db/ file:"$'\n'"$sql"$'\n'
     fi
     if [ -n "$(git -C "$root" diff --diff-filter=D --name-only "$base" "$branch" -- db 2>/dev/null)" ]; then
         reasons+="- a file under db/ is deleted"$'\n'
@@ -598,18 +616,34 @@ land_proof_required() {
 # whose adapter asks each change for its own probe. That is the shape
 # templates/proof/README.md recommends. An edit to a probe that already exists
 # still gates: that probe guards a change that landed before this one.
+#
+# It prints the commands the human runs, one per line, and prints nothing when
+# the change leaves the harness alone. An edited probe usually serves another,
+# landed change, and an adapter that picks its probe by change name finds no
+# probe under this change's name. So each edited probe gets the command under
+# its own name. A rewritten adapter, or a deleted probe, gets the change's own.
 land_proof_bootstrap() {
-    local root="$1" base="$2" branch="$3" change="$4"
+    local root="$1" base="$2" branch="$3" change="$4" cmds="" probe
     [ -n "$base" ] || return 0
     if [ -n "$(git -C "$root" diff --name-only "$base" "$branch" \
-        -- scripts/proof.sh 2>/dev/null)" ]; then
-        printf '%s' "$change"
-        return 0
+        -- scripts/proof.sh 2>/dev/null)" ] \
+       || [ -n "$(git -C "$root" diff --name-only --diff-filter=D "$base" "$branch" \
+        -- scripts/proof-probes 2>/dev/null)" ]; then
+        cmds="bash scripts/proof.sh $change"
     fi
-    # Every status except A (added) and C (copied): a probe that already exists,
-    # modified, deleted, renamed, or type-changed.
-    [ -n "$(git -C "$root" diff --name-only --diff-filter=MDRTUXB "$base" "$branch" \
-        -- scripts/proof-probes 2>/dev/null)" ] && printf '%s' "$change"
+    # Every status except A (added), C (copied), and D (above): a probe that
+    # already exists, modified, renamed, or type-changed.
+    while IFS= read -r probe; do
+        [ -n "$probe" ] || continue
+        probe=${probe#scripts/proof-probes/}
+        probe=${probe%.sh}
+        case $'\n'"$cmds"$'\n' in
+            *$'\n'"bash scripts/proof.sh $probe"$'\n'*) continue ;;
+        esac
+        cmds="$cmds${cmds:+$'\n'}bash scripts/proof.sh $probe"
+    done < <(git -C "$root" diff --name-only --diff-filter=MRTUXB "$base" "$branch" \
+        -- scripts/proof-probes 2>/dev/null)
+    printf '%s' "$cmds"
 }
 
 # Print non-empty if the sign-off at .hone-proof/<change> names the commit it
@@ -699,6 +733,19 @@ cmd_land() {
     # lock). A concurrent land waits up to $timeout rather than interleaving on
     # the shared HEAD/index/worktree. Everything that reads or moves the primary
     # tree lives inside the lock. Checking outside it would be a TOCTOU race.
+    # A green land removes the worktree. A caller whose shell stands inside
+    # it is left in a deleted directory, and every later command in that
+    # shell fails. main() already moved this process to the tree root, so
+    # the caller's own directory comes from WT_CALLER_PWD.
+    if [ -d "$wt" ] && [ -n "${WT_CALLER_PWD:-}" ]; then
+        local caller_dir wt_dir
+        caller_dir=$(cd "$WT_CALLER_PWD" 2>/dev/null && pwd -P)
+        wt_dir=$(cd "$wt" 2>/dev/null && pwd -P)
+        case "$caller_dir/" in
+            "$wt_dir"/*) msg_wt_land_from_worktree "$main_root" "bash $HONE_WSH land $change" >&2; return 2 ;;
+        esac
+    fi
+
     exec 9>"$lock" || { msg_wt_lock_unopenable "$lock" >&2; return 2; }
     flock -w "$timeout" 9 || { msg_wt_lock_timeout "$timeout" >&2; return 5; }
 
@@ -882,25 +929,78 @@ cmd_land() {
     local remote="" primary="" attempt=1 retries="${HONE_LAND_RETRIES:-3}"
     remote=$(shared_remote_checked "$main_root") || { [ $? -eq 2 ] && return 2; }
     [ -n "$remote" ] && primary=$(git -C "$main_root" symbolic-ref -q --short HEAD)
-    local pre land_log setup_tree_ran adapter zero_tiers
+    local primary_name
+    primary_name=$(git -C "$main_root" symbolic-ref -q --short HEAD)
+    # The merge is built and verified in the change's WORKTREE, never in the
+    # primary tree. The primary tree is shared: other sessions commit Plans
+    # onto it and leave draft files in it while a land runs. A post-merge
+    # suite there read those drafts and rolled back correct changes, and its
+    # rollback (a hard reset to the pre-merge commit) dropped a Plan commit
+    # that another session made during the suite. So land checks out the
+    # primary branch's tip in the worktree, merges the branch there, and runs
+    # the suite and the adapters on that merge commit. Only a green merge
+    # reaches the primary branch, by a fast-forward. A fast-forward moves
+    # nothing but the branch and the files the merge changed, and it refuses
+    # rather than overwrite a person's uncommitted edit. A red merge never
+    # touched the primary tree, so nothing needs a rollback there.
+    local pre land_log setup_tree_ran="" adapter zero_tiers merge_sha="" tree_lockfiles
+    # The worktree is the verify tree. It already holds the branch and its
+    # installed dependencies. A land whose worktree is gone (a person removed
+    # it) cuts it again from the branch, the way add does.
+    if [ ! -d "$wt" ]; then
+        local add_log
+        add_log="$(cd "$common_dir" 2>/dev/null && pwd || printf '%s' "$common_dir")/hone-land.log"
+        if ! git -C "$main_root" worktree add -q "$wt" "$branch" >"$add_log" 2>&1; then
+            msg_wt_land_merge_failed "$branch" "$add_log" "$(tail -n 20 "$add_log" 2>/dev/null)" >&2
+            return 2
+        fi
+        if [ -f "$wt/scripts/setup-tree.sh" ]; then
+            local setup_out
+            if ! setup_out=$( (cd "$wt" && bash scripts/setup-tree.sh) 2>&1 ); then
+                msg_wt_add_setup_tree_failed "$wt" "$(printf '%s\n' "$setup_out" | tail -n 20)" >&2
+                return 2
+            fi
+        fi
+    fi
+    # A tracked edit that nobody committed is not part of the branch, and the
+    # checkout below would carry it into the merge. Refuse before anything
+    # moves.
+    if [ -n "$(git -C "$wt" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+        msg_wt_land_worktree_dirty "$wt" >&2
+        return 2
+    fi
+    # Shared mode: the primary branch belongs to the team, so the merge goes
+    # on top of the team's latest and the result is pushed. Git rejects the
+    # push when the remote moved while the suite ran, and a rejected push
+    # means the combination on the remote was never tested. Solo mode has
+    # the same race inside one clone: another session commits a Plan onto
+    # the primary branch during the suite, and the fast-forward refuses. In
+    # both cases land merges again on the new tip and verifies again, up to
+    # HONE_LAND_RETRIES times. Nothing untested ever reaches the branch.
     while :; do
     if [ -n "$remote" ]; then
-        shared_sync_primary "$main_root" "$remote" "$primary" || return 2
+        shared_sync_primary "$main_root" "$remote" "$primary" || { land_restore_tree "$wt" "$branch"; return 2; }
     fi
     pre=$(git -C "$main_root" rev-parse HEAD)
     # Keep the output of the merge and of the post-merge run. On red it is the
-    # only record of what broke, and land rolls the merge back before anyone
-    # can re-run it. One file per primary tree, and each land overwrites it.
+    # only record of what broke. One file per primary tree, and each land
+    # overwrites it.
     land_log="$(cd "$common_dir" 2>/dev/null && pwd || printf '%s' "$common_dir")/hone-land.log"
     : >"$land_log"
-    if ! git -C "$main_root" "${merge_args[@]}" >>"$land_log" 2>&1; then
+    if ! git -C "$wt" checkout -q --detach "$pre" >>"$land_log" 2>&1; then
+        land_restore_tree "$wt" "$branch"
+        msg_wt_land_merge_failed "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+        return 2
+    fi
+    if ! git -C "$wt" "${merge_args[@]}" >>"$land_log" 2>&1; then
         # A failed merge has three causes, and each needs another action. Read
-        # the state before the abort erases it. Every case restores the shared
-        # tree, so the next lander starts clean, and keeps the branch.
+        # the state before the abort erases it. Every case puts the worktree
+        # back on its branch and keeps the branch.
         local unmerged merging=""
-        unmerged=$(git -C "$main_root" diff --name-only --diff-filter=U 2>/dev/null)
-        git -C "$main_root" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 && merging=yes
-        git -C "$main_root" merge --abort 2>/dev/null
+        unmerged=$(git -C "$wt" diff --name-only --diff-filter=U 2>/dev/null)
+        git -C "$wt" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 && merging=yes
+        git -C "$wt" merge --abort >/dev/null 2>&1
+        land_restore_tree "$wt" "$branch"
         # Unmerged paths: a real conflict, so the independence check missed
         # an overlap. Its own exit code (9) means "fold in serially".
         if [ -n "$unmerged" ]; then
@@ -920,39 +1020,37 @@ cmd_land() {
         msg_wt_land_merge_failed "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
         return 2
     fi
-    # The merge moved a lockfile, so the primary tree's installed dependencies
-    # sit behind the manifest the suite below runs against. A change that adds
-    # a package its tests import would red that suite and roll back, though
-    # the worktree was green and the trunk never moved. The optional
-    # setup-tree adapter closes the gap: run the MERGED copy here, before the
-    # suite, so the suite judges the change rather than the stale install. A
-    # red adapter rolls the merge back exactly like a red suite.
+    merge_sha=$(git -C "$wt" rev-parse HEAD)
+    # The worktree's installed dependencies match the branch's lockfiles. A
+    # lockfile that the primary branch changed since the cut leaves them
+    # behind the merge, and a suite over a stale install judges the install,
+    # not the change. The optional setup-tree adapter closes the gap. A red
+    # adapter fails the land exactly like a red suite.
     setup_tree_ran=""
-    if [ -n "$lockfiles" ] && [ -f "$main_root/scripts/setup-tree.sh" ]; then
-        if ! ( cd "$main_root" && bash scripts/setup-tree.sh ) >>"$land_log" 2>&1; then
-            git -C "$main_root" reset --hard "$pre" >/dev/null 2>&1
+    tree_lockfiles=$(land_lockfiles "$main_root" "$branch" "$merge_sha")
+    if [ -n "$tree_lockfiles" ] && [ -f "$wt/scripts/setup-tree.sh" ]; then
+        setup_tree_ran=yes
+        if ! ( cd "$wt" && bash scripts/setup-tree.sh ) >>"$land_log" 2>&1; then
+            land_restore_tree "$wt" "$branch" "$setup_tree_ran"
             msg_wt_land_setup_tree_red "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
             return 6
         fi
-        setup_tree_ran=yes
     fi
-    if ! ( cd "$main_root" && bash scripts/run-tests.sh --all ) >>"$land_log" 2>&1; then
-        # Green confirms the merge. Red means it regressed the trunk, so roll
-        # the merge back and leave the shared tree green for the next lander.
-        # The worktree and branch survive for investigation.
-        git -C "$main_root" reset --hard "$pre" >/dev/null 2>&1
+    if ! ( cd "$wt" && bash scripts/run-tests.sh --all ) >>"$land_log" 2>&1; then
+        # Red means the merge regresses the trunk. The primary branch never
+        # moved. The worktree goes back to its branch for investigation.
+        land_restore_tree "$wt" "$branch" "$setup_tree_ran"
         msg_wt_land_suite_red "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
         return 6
     fi
     # The gate holds every worktree to tests, type-check, and lint. The merge
     # result is a third tree: two changes that each append to one file can be
     # lint-green alone and lint-red merged. So land re-runs the same optional
-    # adapters the gate runs, into the same log. A red adapter rolls the
-    # merge back exactly like a red suite.
+    # adapters the gate runs, into the same log.
     for adapter in typecheck lint; do
-        [ -f "$main_root/scripts/$adapter.sh" ] || continue
-        if ! ( cd "$main_root" && bash "scripts/$adapter.sh" ) >>"$land_log" 2>&1; then
-            git -C "$main_root" reset --hard "$pre" >/dev/null 2>&1
+        [ -f "$wt/scripts/$adapter.sh" ] || continue
+        if ! ( cd "$wt" && bash "scripts/$adapter.sh" ) >>"$land_log" 2>&1; then
+            land_restore_tree "$wt" "$branch" "$setup_tree_ran"
             msg_wt_land_adapter_red "$adapter" "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
             return 6
         fi
@@ -963,17 +1061,48 @@ cmd_land() {
     # and the human decides.
     zero_tiers=$(land_zero_tiers "$land_log")
     [ -n "$zero_tiers" ] && msg_wt_land_tier_empty "$zero_tiers" >&2
+    # Publish the tested merge: fast-forward the primary branch onto it. The
+    # fast-forward refuses when the branch moved during the suite, because
+    # the merge no longer extends it. Then the combination on the branch was
+    # never tested, so land goes around again.
+    if ! git -C "$main_root" merge -q --ff-only "$merge_sha" >>"$land_log" 2>&1; then
+        if [ "$(git -C "$main_root" rev-parse HEAD)" != "$pre" ]; then
+            if [ "$attempt" -ge "$retries" ]; then
+                land_restore_tree "$wt" "$branch" "$setup_tree_ran"
+                msg_wt_land_primary_moved "$primary_name" "$retries" >&2
+                return 5
+            fi
+            attempt=$((attempt+1))
+            msg_wt_land_retry_moved "$primary_name" "$attempt" >&2
+            continue
+        fi
+        # The branch did not move, so a file in the primary tree refused the
+        # fast-forward: an uncommitted edit or an untracked file that the
+        # merge would overwrite. land never overwrites a person's file.
+        land_restore_tree "$wt" "$branch" "$setup_tree_ran"
+        msg_wt_land_ff_refused "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+        return 2
+    fi
     # Shared mode: publish the tested merge. A rejection means the remote
-    # moved under the suite, so roll back and go around again.
+    # moved under the suite. Undo the local fast-forward and go around again.
+    # The undo is a keep-reset, and only while the primary branch still sits
+    # on the merge. A hard reset would drop a commit that another session
+    # made on top, or an uncommitted edit in the primary tree.
     if [ -n "$remote" ]; then
         local push_rc=0
         shared_push_once "$main_root" "$remote" "$primary" || push_rc=$?
         if [ "$push_rc" -ne 0 ]; then
-            git -C "$main_root" reset --hard "$pre" >/dev/null 2>&1
+            if [ "$(git -C "$main_root" rev-parse HEAD)" = "$merge_sha" ]; then
+                git -C "$main_root" reset -q --keep "$pre" >/dev/null 2>&1
+            fi
             # A refused push (a protected branch, a lost remote) has no retry
             # that helps. The message already said so.
-            [ "$push_rc" -eq 3 ] || return 2
+            if [ "$push_rc" -ne 3 ]; then
+                land_restore_tree "$wt" "$branch" "$setup_tree_ran"
+                return 2
+            fi
             if [ "$attempt" -ge "$retries" ]; then
+                land_restore_tree "$wt" "$branch" "$setup_tree_ran"
                 msg_wt_land_push_rejected "$remote" "$primary" "$retries" >&2
                 return 5
             fi
@@ -984,16 +1113,29 @@ cmd_land() {
     fi
     break
     done
-    # Green: the suite confirms the merge. Retire the worktree and its branch
-    # (cmd_remove runs from the primary tree, so it never refuses "the tree
-    # you are in").
-    local merge_sha
-    merge_sha=$(git -C "$main_root" rev-parse --short HEAD)
-    # In shared mode remove also releases the claim on the remote: the change
-    # is on the remote primary now. The merge is already pushed, so a failed
-    # release is a leftover to clean by hand (worktree.sh release), not a
-    # failed land.
-    cmd_remove "$wt" || return $?
+    # The merge is on the primary branch now. The merge commit is the one the
+    # suite judged, so the receipt names it, not whatever HEAD is by now.
+    merge_sha=$(git -C "$main_root" rev-parse --short "$merge_sha")
+    # The fast-forward moved the primary tree's lockfiles past its installed
+    # dependencies. Reinstall there when the project ships setup-tree. The
+    # merge already stands, so a red install is a warning, not a failure.
+    local primary_setup=""
+    if [ -n "$lockfiles" ] && [ -f "$main_root/scripts/setup-tree.sh" ]; then
+        if ( cd "$main_root" && bash scripts/setup-tree.sh ) >>"$land_log" 2>&1; then
+            primary_setup=ran
+        else
+            primary_setup=failed
+        fi
+    fi
+    # Retire the worktree and its branch (cmd_remove runs from the primary
+    # tree, so it never refuses "the tree you are in"). The worktree sits on
+    # the merge commit now, so land deletes the branch itself. In shared mode
+    # remove also releases the claim on the remote: the change is on the
+    # remote primary now. A worktree that will not go (an untracked file in
+    # it) is a leftover to clean by hand, not a failed land.
+    local remove_rc=0
+    cmd_remove "$wt" || remove_rc=$?
+    git -C "$main_root" branch -d "$branch" >/dev/null 2>&1 || msg_wt_remove_branch_kept "$branch" >&2
 
     # Land hygiene 3: the change's records go with its worktree and branch.
     # Every record that opened a gate has its text in the merge commit body
@@ -1010,14 +1152,30 @@ cmd_land() {
     # Say what happened. A silent exit 0 made the caller re-derive the outcome
     # from `git log`, so the receipt names the merge commit, the green suite,
     # and the cleanup. It goes to stdout, because it is the success path.
-    msg_wt_land_receipt "$merge_sha" "$branch" "$consumed"
+    local kept=""
+    [ "$remove_rc" -eq 0 ] || kept="$wt"
+    msg_wt_land_receipt "$merge_sha" "$branch" "$consumed" "$kept"
     [ -n "$remote" ] && msg_wt_land_pushed "$remote" "$primary"
     if [ -n "$lockfiles" ]; then
-        if [ -n "$setup_tree_ran" ]; then
-            msg_wt_land_setup_tree_receipt "$lockfiles"
-        else
-            msg_wt_land_lockfile "$lockfiles"
-        fi
+        case "$primary_setup" in
+            ran)    msg_wt_land_setup_tree_receipt "$lockfiles" ;;
+            failed) msg_wt_land_setup_tree_primary_failed "$lockfiles" "$land_log" ;;
+            *)      msg_wt_land_lockfile "$lockfiles" ;;
+        esac
+    fi
+    return 0
+}
+
+# Put the change's worktree back on its branch after a land that did not
+# publish. The checkout discards what the merge and the suite left in tracked
+# files. The branch holds every commit, so nothing of the change is lost. A
+# setup-tree run for the merge ($3 non-empty) left the merge's dependencies
+# installed, so the adapter runs again for the branch.
+land_restore_tree() {
+    local wt="$1" branch="$2" reinstall="${3:-}"
+    git -C "$wt" checkout -q -f "$branch" >/dev/null 2>&1
+    if [ -n "$reinstall" ] && [ -f "$wt/scripts/setup-tree.sh" ]; then
+        ( cd "$wt" && bash scripts/setup-tree.sh ) >/dev/null 2>&1
     fi
     return 0
 }
@@ -1284,7 +1442,7 @@ cmd_release() {
     main_root=$(main_root_of)
     remote=$(shared_remote_checked "$main_root") || {
         [ $? -eq 2 ] && return 2
-        msg_wt_sync_not_shared >&2; return 2; }
+        msg_wt_release_not_shared >&2; return 2; }
     shared_release "$main_root" "$remote" "$change" || {
         msg_wt_land_claim_delete_failed "$change" "$remote" >&2; return 2; }
     msg_wt_release_receipt "$change" "$remote"
@@ -1459,6 +1617,21 @@ cmd_remove() {
     main_root=$(git -C "$(git rev-parse --git-common-dir 2>/dev/null)/.." rev-parse --show-toplevel 2>/dev/null)
     here=$(git rev-parse --show-toplevel 2>/dev/null)
 
+    # Accept the three spellings a caller uses: an absolute path, a path
+    # relative to the caller's directory, and a bare change name. The run
+    # skill itself passed `.worktrees/<change>`, and the absolute-only test
+    # answered that hone had not created the worktree.
+    case "$wt" in
+        /*) : ;;
+        *)
+            if [ -d "${WT_CALLER_PWD:-$PWD}/$wt" ]; then
+                wt=$(cd "${WT_CALLER_PWD:-$PWD}/$wt" && pwd -P)
+            elif [ -d "$main_root/.worktrees/$wt" ]; then
+                wt="$main_root/.worktrees/$wt"
+            fi
+            ;;
+    esac
+    wt="${wt%/}"
     case "$wt" in
         "$main_root"/.worktrees/*) : ;;
         *) msg_wt_remove_foreign "$wt" >&2; return 3 ;;
@@ -1502,6 +1675,9 @@ cmd_remove() {
 }
 
 main() {
+    # The directory the caller ran this from, before the cd below. land reads
+    # it to refuse a caller that stands in the worktree it would remove.
+    WT_CALLER_PWD="$PWD"
     local root
     root=$(git rev-parse --show-toplevel 2>/dev/null || true)
     [ -n "$root" ] || root="${CLAUDE_PROJECT_DIR:-$PWD}"

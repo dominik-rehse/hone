@@ -5,26 +5,31 @@ when land returns something other than 0, before you act on it.
 
 `land` takes the **land lock**, so it is safe even when another `run` is landing
 into the same primary tree at the same time. It waits its turn instead of
-interleaving. Under the lock it merges `--no-ff`, **re-runs the whole suite** in
-the primary tree, and on green removes the worktree and deletes the branch. The
-confirmation is the suite, not the merge succeeding.
+interleaving. Under the lock it builds the `--no-ff` merge **in the change's
+worktree**, re-runs the whole suite and the adapters there, and on green
+fast-forwards the primary branch onto that merge commit. Then it removes the
+worktree and deletes the branch. The confirmation is the suite on the exact
+commit that lands, not the merge succeeding. A red land never touched the
+primary tree, and the worktree is back on its branch.
 
 ## 0: landed and green
 
-The merge is in, the suite passed in the primary tree, the worktree and branch
+The merge is in, the suite passed on the merge commit, the worktree and branch
 are gone. Confirm to the user what landed, the Decisions and Notes written, and
 what was deleted.
 
 ## 6: the merge regressed the trunk
 
-`land` rolled the merge back, so the primary tree is left green, and kept the
-worktree as evidence. This is stop-point 1 surfacing at land: the change passed
-in isolation but not against what else has landed since. **Stop and escalate.**
+The primary branch did not move, and the worktree is back on its branch as
+evidence. This is stop-point 1 surfacing at land: the change passed in
+isolation but not against what else has landed since. **Stop and escalate.**
+Do not run land again to see whether it passes this time. A flake is a
+finding, and the person decides.
 
 Read the message first: it names what failed (the suite, `typecheck`, `lint`,
 `setup-tree`, or a git hook that refused the merge commit). A `setup-tree` red
-means the install step failed in the primary tree, not that the change
-regressed anything. A refused hook can fail on the trunk alone, for example a
+means the install step failed for the merge, not that the change regressed
+anything. A refused hook can fail on the trunk alone, for example a
 generated file that is out of date. Then every land fails the same way until a
 person fixes the trunk. One more case wears this
 exit. Take a project with **no** `setup-tree.sh`, and a land that changed a
@@ -45,17 +50,22 @@ Another session held the land lock (a land or a full-suite run) past the
 timeout. Nothing happened to the trunk. Wait for that run to finish, then
 re-run land. Never work around the lock.
 
-In shared mode (a committed `.hone-shared`) the same exit has a second cause,
-and the message names it. Another developer landed on the remote during each
-of land's attempts. The remote rejected every push, and land rolled the merge
-back each time. Nothing untested reached the remote. Wait a moment, then
-re-run land. Never push the primary branch by hand.
+The same exit has a second cause, and the message names it. The primary
+branch moved during each of land's attempts: another session committed onto
+it, or in shared mode (a committed `.hone-shared`) another developer landed on
+the remote. land merges again on the new tip and verifies again each time, and
+publishes only a merge it tested. Wait a moment, then re-run land. Never push
+or merge the primary branch by hand.
 
 ## 2: usage or repo-state error
 
 The branch does not exist, the primary tree is on a detached HEAD, no
 commit on the branch carries a `Cut:` line, or the invocation was
-malformed. Nothing was merged. Read the stderr line. Fix the
+malformed. Four more causes each name themselves: you ran land from inside the
+worktree, the worktree holds uncommitted changes, git refused the merge
+before it started, or files in the primary tree stopped the fast-forward.
+land never overwrites a file in the primary tree. Nothing was merged. Read
+the stderr line. Fix the
 state rather than retrying blindly: from the primary tree, or in the
 worktree when the line asks for an amended commit.
 
