@@ -465,8 +465,8 @@ What to do at each code, in detail:
 After a green suite, land also runs `scripts/typecheck.sh` and
 `scripts/lint.sh` where they exist, the same optional adapters the gate runs.
 The merge result is a tree no gate has checked: two changes that each append
-to one file can be lint-green alone and lint-red merged. A red adapter rolls
-the merge back with the same exit 6, and the message names the adapter.
+to one file can be lint-green alone and lint-red merged. A red adapter fails
+the land with the same exit 6, and the message names the adapter.
 
 The merge and the post-merge suite write `<git-common-dir>/hone-land.log`,
 replaced on every land, and the adapter runs append to it. Exit 6 prints that path and

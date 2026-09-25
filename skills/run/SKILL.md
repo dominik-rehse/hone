@@ -215,7 +215,7 @@ Print the progress line: `verify ...` now.
     `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" verify`. Never run the
     adapter bare with `--all`. Full-suite runs share one cross-session lock with
     land, because e2e tiers are load-sensitive. A suite racing another
-    session's suite or land produces phantom flakes and spurious rollbacks. The
+    session's suite or land produces phantom flakes and spurious red lands. The
     wrapper waits its turn. (Per-file and unit-tier runs during build need no
     wrapper.)
   - Then run `scripts/typecheck.sh` and `scripts/lint.sh` if present. All must be

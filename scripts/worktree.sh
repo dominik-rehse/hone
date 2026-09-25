@@ -71,11 +71,11 @@
 #       discharges it: land holds the copy such a change replaces, so no
 #       automatic route can judge it. Adding a NEW probe does not open it.
 #       When the merged diff touched a lockfile and the project ships
-#       scripts/setup-tree.sh, land runs that adapter in the primary tree
-#       BEFORE the post-merge suite. Without it, a change that adds a package
-#       its tests import reds the post-merge suite on the stale install and
-#       rolls back, though the worktree was green and the trunk never moved.
-#       A red adapter rolls the merge back like a red suite (exit 6).
+#       scripts/setup-tree.sh, land runs that adapter in the worktree
+#       BEFORE the post-merge suite. Without it, a lockfile the primary
+#       branch changed since the cut reds the post-merge suite on the stale
+#       install, though the change is sound. A red adapter fails the land
+#       like a red suite (exit 6).
 #       On success it prints a receipt on stdout: the merge commit, the green
 #       post-merge suite, and the removed worktree and branch. When the merge
 #       changed a lockfile, the receipt also names it, and asks for a reinstall
