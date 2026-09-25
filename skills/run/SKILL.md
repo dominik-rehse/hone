@@ -120,6 +120,9 @@ here. Spawn the worktree and build.
 
 ### 1. Worktree
 
+Print the progress line: `worktree ...` now, and `worktree ✓` once `add`
+exits 0.
+
 Spawn an isolated worktree and work in it for every step below:
 
 ```bash
@@ -150,6 +153,9 @@ action. Put both into the report as they are. Under `--all` it is **skipped**
 (below). Only exit 0 means you own this change and may proceed.
 
 ### 2. Build: red → green, serial
+
+Print the progress line: `build ...` now, and `build ✓` when the last cycle
+is green.
 
 If the Plan has a *References* section, **read every file it names before writing
 anything**. A reference is there because prose would have lost the detail: a
@@ -202,6 +208,8 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
 
 ### 3. Verify
 
+Print the progress line: `verify ...` now.
+
 - **gate**: the full suite, plus type-check and lint, all green:
   - Run the full suite through the serialized wrapper:
     `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" verify`. Never run the
@@ -242,6 +250,9 @@ If verify cannot go green and you have exhausted the fix, **stop and escalate**
 (stop-point 1), leaving the worktree as evidence.
 
 ### 4. Consolidate: sort the leftovers, prune, delete the Plan
+
+Print the progress line: `consolidate ...` now, and `consolidate ✓` once
+the critic's findings are applied or declined.
 
 This is the only step that writes `docs/` and the only step that prunes tests.
 Sort everything the change leaves behind that is worth keeping into the place
@@ -299,6 +310,8 @@ spec, a redundant test, an abstraction not earning its keep. Apply its accepted
 findings (more pruning), or record why not.
 
 ### 5. Review: native `/code-review`
+
+Print the progress line: `review ...` now, and `review ✓` after triage.
 
 First ask the diff how deep its review must go:
 
@@ -391,6 +404,9 @@ wrong to land, **stop and escalate** (stop-point 2). Merely large or out of
 scope is not that.
 
 ### 6. Land
+
+Print the progress line: `land ...` now, and `land ✓` or `land ✗` on its
+exit.
 
 Commit in the worktree, then hand the merge to `worktree.sh land`:
 
