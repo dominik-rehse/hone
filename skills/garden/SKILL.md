@@ -40,9 +40,9 @@ Setup check: if `scripts/run-tests.sh` is missing, stop and tell the user to run
 
 ## 1. Scan: find the drift, repo-wide
 
-The Stop-hook `nag` already names most of it on every turn. `garden` runs the same
-questions across the whole tree at once, and adds the ones a diff-scoped hook
-can't see. In shared mode (a committed `.hone-shared`) the tree you scan may be
+The Stop-hook `nag` already names most of it, in full once per session and
+as a count after that. `garden` runs the same questions across the whole tree
+at once, and adds the ones a diff-scoped hook can't see. In shared mode (a committed `.hone-shared`) the tree you scan may be
 behind the team's, so first run
 `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" sync`. Collect, don't act yet:
 
