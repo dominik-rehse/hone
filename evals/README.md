@@ -100,7 +100,7 @@ bash evals/run.sh garden --ablate       # the discrimination check, not a suite 
 ```
 
 Match the model to what actually runs in production, or the result means nothing.
-The critics carry a full model ID in their frontmatter, and a run without
+The critics name the `opus` alias in their frontmatter, and a run without
 `--model` reads it from there. A critic run on any other model prints a note,
 because it answers an assignment question and gates no release. The `loop` and
 `garden` targets use whatever model drives the session (`--model opus`). The
@@ -220,7 +220,7 @@ The next cut of no-op cases decides the three that the opus stub approves.
   tally first when a run degrades.
 - `helper-single-caller`: CLEAN. On sonnet the prompt minus the
   single-caller bullet answered CUTS 2/3. On opus it answers CLEAN 3/3, so
-  the case pins nothing on the pin today.
+  the case pins nothing on claude-opus-5.
 - `spike-conclusion-only`: CUTS with `spike-drift`. The prompt minus the
   two sentences on a conclusion-only note answers CLEAN 3/3.
 - `spike-verdict-only-holdout`: held out, a paraphrase of the case above.

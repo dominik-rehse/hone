@@ -79,8 +79,8 @@
 #   bash evals/lab/run.sh --regrade /var/tmp/hone-lab/<time> [SCENARIO...]
 #   --model ID     the full model ID that drives the run (default claude-opus-5,
 #                  the floor of the loop). An alias floats, so the lab refuses one.
-#   --review-model ID  the model of the nested /code-review, in place of the ID
-#                  that the run skill pins. It is the setting review.model, and
+#   --review-model ID  the model of the nested /code-review, in place of the model
+#                  that the run skill names. It is the setting review.model, and
 #                  it edits the review command in the sandboxed copy of
 #                  skills/run/SKILL.md. result.json records the model that the
 #                  nested calls named, with the switch or without it.

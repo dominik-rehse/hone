@@ -22,10 +22,10 @@
 #      that ships without its reference entry fails here. The semantic half
 #      (a sentence elsewhere that now states the old behavior) stays a
 #      reading job, and .claude/rules/releasing.md names the files to read.
-#   4. Model pins. A critic's frontmatter and the nested review command each
-#      name the model that fills the slot. An alias there floats: the
-#      provider re-points it, and production changes with no commit here.
-#      So each slot must carry a full model ID.
+#   4. Model slots. A critic's frontmatter and the nested review command each
+#      name the model that fills the slot. Each names the `opus` alias, so
+#      the slot follows the newest Opus that Claude Code maps the alias to.
+#      A full model ID there would freeze the slot on one version.
 #   5. Word budgets. Each maintained doc has a budget in words. A doc grows
 #      one true sentence at a time, and no single edit looks like the one
 #      that made it too long. The fix for a doc over its budget is a cut, or
@@ -122,18 +122,18 @@ for hook in hooks/*.sh; do
 done
 [ "$gaps" -eq 0 ] && ok "every subcommand, marker, tunable, and hook has a reference entry"
 
-echo "== prose: every model slot carries a full model ID =="
+echo "== prose: every model slot names the opus alias =="
 for agent in agents/*.md; do
     model=$(awk '/^---[[:space:]]*$/{n++; next} n==1 && /^model:/{print $2}' "$agent")
     case "$model" in
-        claude-*) ok "$agent pins $model" ;;
-        *) bad "$agent has model '$model', which is not a full model ID" ;;
+        opus) ok "$agent runs on opus" ;;
+        *) bad "$agent has model '$model', not the opus alias" ;;
     esac
 done
 review_model=$(grep -A6 -F 'claude -p "/code-review' skills/run/SKILL.md | grep -oE -- '--model [A-Za-z0-9.-]+' | head -1 | cut -d' ' -f2)
 case "$review_model" in
-    claude-*) ok "the review command pins $review_model" ;;
-    *) bad "the review command in skills/run/SKILL.md has model '$review_model', which is not a full model ID" ;;
+    opus) ok "the review command runs on opus" ;;
+    *) bad "the review command in skills/run/SKILL.md has model '$review_model', not the opus alias" ;;
 esac
 
 # 5. Word budgets, about a tenth above the count of 2026-09-18.

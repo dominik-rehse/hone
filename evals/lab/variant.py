@@ -239,18 +239,19 @@ def apply_setting(edits, key, spec, value):
         edits.cache[rel] = pat.sub("%s: %s" % (field, value), text, count=1)
         return
     if spec.get("review_pin"):
-        # The review command pins one model. The run skill states the pin in
-        # one place, and a command with no pin or with two must not build.
+        # The review command names one model, an alias or a full ID. The run
+        # skill states it in one place, and a command with none or two must
+        # not build.
         text = edits.read(rel)
         block = re.compile(r"(claude -p \"/code-review(?:.|\n){0,400}?--output-format)")
         found = block.search(text)
         if not found:
             raise Fail("%s: %s has no /code-review command" % (where, rel))
-        pins = re.findall(r"--model claude-[A-Za-z0-9.-]+", found.group(1))
+        pins = re.findall(r"--model [A-Za-z0-9.-]+", found.group(1))
         if edits.strict and len(pins) != 1:
             raise Fail("%s: the review command in %s pins %d models, not 1"
                        % (where, rel, len(pins)))
-        fixed = re.sub(r"--model claude-[A-Za-z0-9.-]+", "--model " + value, found.group(1))
+        fixed = re.sub(r"--model [A-Za-z0-9.-]+", "--model " + value, found.group(1))
         edits.cache[rel] = text[:found.start(1)] + fixed + text[found.end(1):]
         return
     for item in spec.get("sub", []):

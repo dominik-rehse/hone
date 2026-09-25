@@ -32,8 +32,8 @@
 #                     [--model NAME] [--votes N] [--jobs N] [--holdout]
 #                     [--dry-run] [--ablate] [--cases A,B] [--prompt-file FILE]
 #                     [--json FILE] [--cache]
-#   --model NAME  an alias or a full model ID. The default is the ID the critics
-#               ship on (their frontmatter). The run resolves an alias once,
+#   --model NAME  an alias or a full model ID. The default is the model the
+#               critics ship on (their frontmatter). The run resolves an alias once,
 #               pins every call to the full ID, and prints that ID, because an
 #               alias floats and a saved log must name what it measured.
 #   --votes N   plurality vote over N runs per case (default 1); use 3 pre-release.
@@ -100,8 +100,8 @@ done
 # The model a critic ships on: the `model:` line of its frontmatter.
 ships_on() { awk '/^---[[:space:]]*$/{n++; next} n==1 && /^model:/{print $2}' "agents/$1.md"; }
 
-# Without --model the run measures what production runs for the critics: their
-# own pin. The loop and the garden skill run on the session's model, which no
+# Without --model the run measures what production runs for the critics: the
+# model their frontmatter names. The loop and the garden skill run on the session's model, which no
 # file pins, so a defaulted run of those two says so (see the NOTE below).
 MODEL_GIVEN=1
 [ -n "$MODEL" ] || { MODEL_GIVEN=0; MODEL=$(ships_on plan-critic); }
@@ -376,7 +376,7 @@ done
 # a cheaper model hold the slot?), and it is never a release gate. Say which.
 for target in "${TARGETS[@]}"; do
     case "$target" in
-        *-critic) [ "$(ships_on "$target")" = "$MODEL_ID" ] \
+        *-critic) { [ "$(ships_on "$target")" = "$MODEL" ] || [ "$(ships_on "$target")" = "$MODEL_ID" ]; } \
             || echo "NOTE: $target ships on $(ships_on "$target"), and this run measures $MODEL_ID. It does not gate a release." ;;
         *) [ "$MODEL_GIVEN" -eq 1 ] \
             || echo "NOTE: no --model, so $target runs on the critics' $MODEL_ID. Its release gate is --model opus, and for garden --model sonnet too." ;;

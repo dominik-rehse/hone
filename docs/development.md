@@ -45,8 +45,8 @@ critic prompts and the run skill's loop instructions to cases with
 known-good answers. [`evals/README.md`](../evals/README.md) is the manual:
 targets and cases, the balance between reject and near-miss pass cases,
 plurality voting, and the held-out set discipline. Two rules matter most.
-Match the model to what runs in production. The critic frontmatter pins a
-full model ID, and the harness defaults to it. The loop target runs with
+Match the model to what runs in production. The critic frontmatter names the
+`opus` alias, and the harness defaults to it. The loop target runs with
 `--model opus`. The garden target runs on opus and on its floor, sonnet.
 And never read or tune against a `*-holdout` case while editing prose.
 
@@ -91,8 +91,8 @@ header lists every flag and every output line, and
 1. *Coverage is the limit.* A change can degrade an outcome that nothing
    measures. So the measurements grow before a campaign of changes.
 2. *Test on the floor model.* The floor of a slot is the cheapest model on
-   which its suite is green. A slot that hone pins has its pin as the
-   floor. `evals/floors` names the model of each suite, and the procedure
+   which its suite is green. A critic's floor is the model that its
+   `opus` alias resolves to. `evals/floors` names the model of each suite, and the procedure
    refuses a run on another one.
 3. *A change enters as a reviewed change.* No tool commits here. An accept
    from the procedure is not the release gate. The procedure never reads

@@ -64,20 +64,20 @@ Before the release commit, the changed layer must pass its suite:
   run's transcript before you release. On 2026-09-18 a green pass hid a fix
   that had made a defect worse, and only two transcripts showed it.
 
-## Moving a model pin
+## The model slots
 
 The critics' frontmatter and the review command in `skills/run/SKILL.md`
-each carry a full model ID. `test/prose_test.sh` fails on an alias there. A
-move to another ID is a behavior change, so it is a minor bump. Before the
-release commit, run all four eval targets on the new IDs at `--votes 3`,
-then with `--holdout`. Then re-measure the noise floor and date it in
-`evals/README.md`. A new tally below 3/3 on any case means the new model
-does not hold the slot yet.
+each name the `opus` alias, on the maintainer's decision of 2026-09-24.
+`test/prose_test.sh` fails on anything else there. The slots therefore
+follow the newest Opus with no hone release. A consumer gets a new Opus
+when Claude Code re-points the alias, whether or not the suites ran on it.
 
 ## When a new model is released
 
-A new model can read the same prose differently, in both directions. Do
-this before the first release on it, and date each result where it lives.
+A new model can read the same prose differently, in both directions. For a
+new Opus, do this as soon as `opus` resolves to it, because consumers
+already run on it. `bash evals/run.sh` prints the model ID it resolved.
+Date each result where it lives.
 
 1. Does the prose still hold? Run all four eval targets on the new ID at
    `--votes 3`, then with `--holdout`, and run the lab once.
@@ -90,7 +90,8 @@ this before the first release on it, and date each result where it lives.
    *Watch cases*). A paragraph that no longer moves its case is a candidate
    for `bash evals/candidate.sh`.
 
-A move of a pin itself follows *Moving a model pin* above.
+A tally below 3/3 on any case means the prose does not hold on the new
+model. Fix the prose in a release of its own.
 
 ## The docs sweep
 

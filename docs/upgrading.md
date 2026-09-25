@@ -95,6 +95,11 @@ mechanical steps.
      hands the `consolidate-critic` every Note and Decision about the changed
      code, which `worktree.sh governed` lists. A `Governs:` line on a Decision
      is what puts it on that list, so the lines are worth more than before.
+   - *The critics and the review run on the `opus` alias since 0.59*: they
+     named claude-opus-5. They now run on the newest Opus that your Claude
+     Code maps the alias to, and a new Opus reaches them without a hone
+     release. Nothing to do on the Anthropic API. On another provider, see
+     the model paragraph under *Commands* in `reference.md`.
 
 After that, run `worktree.sh status`. It shows what is present and what is
 missing. It also flags a policy file that is still uncommitted, and a

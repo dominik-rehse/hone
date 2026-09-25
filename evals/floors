@@ -1,10 +1,12 @@
 # The model on which each suite judges a candidate change (docs/development.md).
-# A slot that hone pins runs on its pin for every user, so its floor is the
-# pin. A slot that runs on the session's model is judged on the cheapest model
-# that holds its suite, because a user may run that one.
-# Measured 2026-09-17 and 2026-09-18. Measure again on every model release.
-plan-critic claude-opus-5
-consolidate-critic claude-opus-5
+# A critic names the `opus` alias, so for every user it runs on the model that
+# the alias resolves to, and that model is its floor. A slot that runs on the
+# session's model is judged on the cheapest model that holds its suite,
+# because a user may run that one.
+# The critics: `opus` resolved to claude-opus-5-5 on 2026-09-24. The rest:
+# measured 2026-09-17 and 2026-09-18. Measure again on every model release.
+plan-critic claude-opus-5-5
+consolidate-critic claude-opus-5-5
 loop claude-opus-5
 garden claude-sonnet-5
 # The lab has the floor of the loop first. The models after it are below that

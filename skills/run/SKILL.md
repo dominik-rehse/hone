@@ -337,7 +337,7 @@ the output file, because a review can outlast the ~2m foreground timeout:
 ```
 cd <worktree> && claude -p "/code-review high $(cat <brief-file>)" \
   --allowedTools "Task Agent Read Grep Glob Bash(git *)" \
-  --model claude-opus-5 --effort high \
+  --model opus --effort high \
   --output-format json > <out-file>.part 2>&1; mv <out-file>.part <out-file>
 ```
 
@@ -359,7 +359,7 @@ means the native review did not happen.
 
 Those three fields are the **whole** check. `permission_denials`, `num_turns`,
 and `subagent_stats` say nothing about the review. The command picks its shape
-from the review model. On the pin that is one careful pass, in one subagent it
+from the review model. On opus that is one careful pass, in one subagent it
 does not count. So the last two read `0`, and the narrow allowlist draws the
 denial on purpose.
 **Never widen `--allowedTools`.**

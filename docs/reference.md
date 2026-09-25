@@ -36,17 +36,18 @@ Slash commands, in the order a change flows:
   area. You invoke it, as often as the repo needs it, and another agent may
   invoke it too.
 
-Two steps run on a model that hone pins by its full ID, not by an alias. The
-critics run on the `model:` of their frontmatter in `agents/`, and the nested
-`/code-review` runs on the `--model` of the command in the run skill. An
-alias moves when the provider re-points it. A full ID moves only with a hone
-release, after the eval suite passed on the new model. The review command
+Two steps run on the `opus` alias, not on a model version. The critics run on
+the `model:` of their frontmatter in `agents/`, and the nested
+`/code-review` runs on the `--model` of the command in the run skill. The
+alias follows the newest Opus that your Claude Code maps it to. So a new Opus
+reaches these steps when Claude Code updates, with no hone release. The review command
 also names its level, `high`, in the prompt. Without a level there,
 `/code-review` reuses the level you typed last. The session itself
 runs on whatever model you chose. Claude Code reads the frontmatter before
 `CLAUDE_CODE_SUBAGENT_MODEL`, so that variable moves a critic only together
-with `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`. You need that on a provider that
-names its models differently. hone's evals do not cover such a setup.
+with `CLAUDE_CODE_SUBAGENT_MODEL_FORCE=1`. On a provider that names its
+models differently, set the model that the alias maps to with
+`ANTHROPIC_DEFAULT_OPUS_MODEL`. hone's evals do not cover such a setup.
 
 `worktree.sh` (in the plugin's `scripts/` directory) does the mechanical git
 work. The loop calls it, and you can too:
