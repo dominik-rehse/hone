@@ -385,32 +385,6 @@ blocked "$out" && ok "untracked durable path blocks" || bad "should block an unt
 echo "$out" | grep -q 'git checkout HEAD --' && bad "no checkout restores an untracked path" || ok "no restore command offered for an untracked path"
 rm -f "$REPO/src/auth/extra.ts"
 
-# Another session's half-finished merge in the primary tree left its results
-# staged and its conflicts unmerged, and the hook blamed every later command
-# for them (049e6182, 5f6007d0). While a merge is in progress those paths are
-# the merge's. A working-tree change beside it still blocks.
-git -C "$REPO" checkout -q -b dg-side
-echo "// side" >> "$REPO/src/auth/.keep"
-echo "// side" > "$REPO/src/auth/merged.ts"
-(cd "$REPO" && git add -A && git commit -qm "side")
-git -C "$REPO" checkout -q main
-echo "// main" >> "$REPO/src/auth/.keep"
-(cd "$REPO" && git commit -qam "main")
-git -C "$REPO" merge -q --no-ff --no-commit dg-side >/dev/null 2>&1
-[ -f "$REPO/.git/MERGE_HEAD" ] || bad "the fixture should leave a merge in progress"
-out=$(dg "$REPO")
-blocked "$out" && bad "a merge in progress is not this command's write" || ok "staged and conflicted merge paths do not block"
-echo "// a command's own write" >> "$REPO/tests/x.test.ts"
-out=$(dg "$REPO")
-blocked "$out" && ok "a durable write beside the merge still blocks" || bad "a write outside the merge should block"
-echo "$out" | grep -q 'src/auth/merged.ts' && bad "the block should not list the merge's paths" || ok "the block lists only the command's paths"
-rm -f "$REPO/tests/x.test.ts"
-git -C "$REPO" merge --abort
-git -C "$REPO" reset -q --hard HEAD~1
-git -C "$REPO" branch -q -D dg-side
-out=$(dg "$REPO")
-blocked "$out" && bad "the primary tree should be clean after the merge fixture" || ok "the merge fixture leaves the tree clean"
-
 # A non-durable root file is the project's business.
 echo '{}' > "$REPO/package.json"
 out=$(dg "$REPO")

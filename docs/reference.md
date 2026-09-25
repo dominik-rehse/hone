@@ -265,7 +265,8 @@ irreversible. When you want that record, route the edit through the loop.
 
   It reads the command with its prose removed: the value of a git `-m` or
   `--message` option, and the text after `worktree.sh grant` or `attest`.
-  So a commit message that names `--no-verify` or `bun add` is not the act.
+  So a commit message that names `--no-verify` or `bun add` is not the act,
+  while the same token outside the message still is.
 
   Every primary-tree rule reads the directory the *shell* stands in, which
   the harness reports in the hook input. So the loop's one `cd` into its
@@ -274,8 +275,7 @@ irreversible. When you want that record, route the edit through the loop.
   In the primary tree it asks git what the command left dirty, and blocks when
   that list holds a protected path. It catches a writer the bash-guard's name
   list misses. It reports after the
-  write, so it stops the run before the commit. During a merge, cherry-pick,
-  revert, or rebase, it skips that operation's staged and conflicted paths.
+  write, so it stops the run before the commit rather than preventing the edit.
 - *gate* (Stop) runs `scripts/run-tests.sh`, plus `scripts/typecheck.sh`
   and `scripts/lint.sh` when they exist, and blocks the turn on any failure.
   - With an uncommitted change to any durable path it runs the fast unit
