@@ -929,6 +929,11 @@ cmd_land() {
     # The sign-off that discharged the proof gate gets the same treatment.
     [ -n "$signoff_note" ] && merge_args+=(-m "Proven (real-environment):"$'\n'"$signoff_note")
     local remote="" primary="" attempt=1 retries="${HONE_LAND_RETRIES:-3}"
+    # A count that is not a whole number never compares true, and the retry
+    # loop below would never end.
+    case "$retries" in
+        ''|*[!0-9]*) msg_wt_land_bad_retries "$retries" >&2; return 2 ;;
+    esac
     remote=$(shared_remote_checked "$main_root") || { [ $? -eq 2 ] && return 2; }
     [ -n "$remote" ] && primary=$(git -C "$main_root" symbolic-ref -q --short HEAD)
     local primary_name
@@ -953,7 +958,7 @@ cmd_land() {
         local add_log
         add_log="$(cd "$common_dir" 2>/dev/null && pwd || printf '%s' "$common_dir")/hone-land.log"
         if ! git -C "$main_root" worktree add -q "$wt" "$branch" >"$add_log" 2>&1; then
-            msg_wt_land_merge_failed "$branch" "$add_log" "$(tail -n 20 "$add_log" 2>/dev/null)" >&2
+            msg_wt_land_rebuild_failed "$wt" "$add_log" "$(tail -n 20 "$add_log" 2>/dev/null)" >&2
             return 2
         fi
         if [ -f "$wt/scripts/setup-tree.sh" ]; then
@@ -989,9 +994,26 @@ cmd_land() {
     # the primary branch during the suite, and the fast-forward refuses. In
     # both cases land merges again on the new tip and verifies again, up to
     # HONE_LAND_RETRIES times. Nothing untested ever reaches the branch.
+    # From the checkout until the fast-forward, the worktree sits detached on
+    # a merge. A land killed there (a signal, a timeout) left it detached, and
+    # the next commit in it landed on no branch. So a trap puts it back on
+    # its branch on any exit, and the fast-forward disarms it.
+    trap land_on_exit EXIT
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
     while :; do
+    # The fast-forward below moves whatever branch the primary tree has
+    # checked out. A person who switched it during a suite would get the
+    # merge on another branch. So each attempt, and the fast-forward, check
+    # that the primary tree is still on the branch land started on.
+    if ! land_on_primary "$main_root" "$primary_name"; then
+        land_restore_tree "$wt" "$branch" "$setup_tree_ran"
+        msg_wt_land_primary_switched "$primary_name" >&2
+        return 2
+    fi
     if [ -n "$remote" ]; then
-        shared_sync_primary "$main_root" "$remote" "$primary" || { land_restore_tree "$wt" "$branch"; return 2; }
+        shared_sync_primary "$main_root" "$remote" "$primary" || { land_restore_tree "$wt" "$branch" "$setup_tree_ran"; return 2; }
     fi
     pre=$(git -C "$main_root" rev-parse HEAD)
     # Keep the output of the merge and of the run on it. On red it is the
@@ -999,8 +1021,9 @@ cmd_land() {
     # overwrites it.
     land_log="$(cd "$common_dir" 2>/dev/null && pwd || printf '%s' "$common_dir")/hone-land.log"
     : >"$land_log"
+    LAND_PENDING_WT="$wt" LAND_PENDING_BRANCH="$branch" LAND_PENDING_REINSTALL="$setup_tree_ran"
     if ! git -C "$wt" checkout -q --detach "$pre" >>"$land_log" 2>&1; then
-        land_restore_tree "$wt" "$branch"
+        land_restore_tree "$wt" "$branch" "$setup_tree_ran"
         msg_wt_land_merge_failed "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
         return 2
     fi
@@ -1012,7 +1035,7 @@ cmd_land() {
         unmerged=$(git -C "$wt" diff --name-only --diff-filter=U 2>/dev/null)
         git -C "$wt" rev-parse -q --verify MERGE_HEAD >/dev/null 2>&1 && merging=yes
         git -C "$wt" merge --abort >/dev/null 2>&1
-        land_restore_tree "$wt" "$branch"
+        land_restore_tree "$wt" "$branch" "$setup_tree_ran"
         # Unmerged paths: a real conflict, so the independence check missed
         # an overlap. Its own exit code (9) means "fold in serially".
         if [ -n "$unmerged" ]; then
@@ -1037,11 +1060,13 @@ cmd_land() {
     # lockfile that the primary branch changed since the cut leaves them
     # behind the merge, and a suite over a stale install judges the install,
     # not the change. The optional setup-tree adapter closes the gap. A red
-    # adapter fails the land exactly like a red suite.
-    setup_tree_ran=""
+    # adapter fails the land exactly like a red suite. The flag stays set
+    # across attempts: once any attempt installed a merge's dependencies,
+    # every restore must install the branch's again.
     tree_lockfiles=$(land_lockfiles "$main_root" "$branch" "$merge_sha")
     if [ -n "$tree_lockfiles" ] && [ -f "$wt/scripts/setup-tree.sh" ]; then
         setup_tree_ran=yes
+        LAND_PENDING_REINSTALL=yes
         if ! ( cd "$wt" && bash scripts/setup-tree.sh ) >>"$land_log" 2>&1; then
             land_restore_tree "$wt" "$branch" "$setup_tree_ran"
             msg_wt_land_setup_tree_red "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
@@ -1077,7 +1102,14 @@ cmd_land() {
     # fast-forward refuses when the branch moved during the suite, because
     # the merge no longer extends it. Then the combination on the branch was
     # never tested, so land goes around again.
-    if ! git -C "$main_root" merge -q --ff-only "$merge_sha" >>"$land_log" 2>&1; then
+    if ! land_on_primary "$main_root" "$primary_name"; then
+        land_restore_tree "$wt" "$branch" "$setup_tree_ran"
+        msg_wt_land_primary_switched "$primary_name" >&2
+        return 2
+    fi
+    if git -C "$main_root" merge -q --ff-only "$merge_sha" >>"$land_log" 2>&1; then
+        LAND_PENDING_WT=""
+    else
         if [ "$(git -C "$main_root" rev-parse HEAD)" != "$pre" ]; then
             if [ "$attempt" -ge "$retries" ]; then
                 land_restore_tree "$wt" "$branch" "$setup_tree_ran"
@@ -1120,11 +1152,13 @@ cmd_land() {
             fi
             attempt=$((attempt+1))
             msg_wt_land_retry "$remote" "$primary" "$attempt" >&2
+            LAND_PENDING_WT="$wt"
             continue
         fi
     fi
     break
     done
+    trap - EXIT HUP INT TERM
     # The merge is on the primary branch now. The merge commit is the one the
     # suite judged, so the receipt names it, not whatever HEAD is by now.
     merge_sha=$(git -C "$main_root" rev-parse --short "$merge_sha")
@@ -1199,11 +1233,25 @@ cmd_land() {
 # installed, so the adapter runs again for the branch.
 land_restore_tree() {
     local wt="$1" branch="$2" reinstall="${3:-}"
+    LAND_PENDING_WT=""
     git -C "$wt" checkout -q -f "$branch" >/dev/null 2>&1
     if [ -n "$reinstall" ] && [ -f "$wt/scripts/setup-tree.sh" ]; then
         ( cd "$wt" && bash scripts/setup-tree.sh ) >/dev/null 2>&1
     fi
     return 0
+}
+
+# Exit 0 when the primary tree at $1 has branch $2 checked out.
+land_on_primary() {
+    [ "$(git -C "$1" symbolic-ref -q --short HEAD 2>/dev/null)" = "$2" ]
+}
+
+# The EXIT trap of a land. It restores the worktree only while a merge is
+# pending in it. An explicit restore, or the fast-forward, clears the state.
+LAND_PENDING_WT="" LAND_PENDING_BRANCH="" LAND_PENDING_REINSTALL=""
+land_on_exit() {
+    [ -n "$LAND_PENDING_WT" ] || return 0
+    land_restore_tree "$LAND_PENDING_WT" "$LAND_PENDING_BRANCH" "$LAND_PENDING_REINSTALL"
 }
 
 # Resolve the main tree's root (the common git dir's parent), the anchor every

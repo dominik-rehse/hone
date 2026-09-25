@@ -352,6 +352,14 @@ echo "$out" | grep -qF -- "- src/mathx/helper.js" || die "the message should lis
 [ "$(git -C "$WT_IN" rev-parse --abbrev-ref HEAD)" = "hone/from-inside" ] || die "the worktree should stay on its branch"
 rm -f "$WT_IN/src/mathx/helper.js"
 git worktree remove "$WT_IN"
+# Something stands where land would cut the worktree again.
+touch "$WT_IN"
+out=$(bash "$WSH" land from-inside 2>&1); rc=$?
+rm -f "$WT_IN"
+[ "$rc" -eq 2 ] || die "a worktree land cannot cut again should exit 2 (got $rc): $out"
+echo "$out" | grep -q "could not cut the missing worktree" || die "the message should name the failed rebuild: $out"
+echo "$out" | grep -q "git could not merge" && die "a failed rebuild is not a failed merge: $out"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a failed rebuild must not merge"
 out=$(bash "$WSH" land from-inside 2>&1); rc=$?
 [ "$rc" -eq 0 ] || die "land should rebuild a missing worktree and land (got $rc): $out"
 [ -d "$WT_IN" ] && die "the rebuilt worktree should be gone after the land"
@@ -379,6 +387,70 @@ rm -f "$WT_LV/suite-output.txt"
 bash "$WSH" remove leaves-file >/dev/null 2>&1 || die "the printed remove command should work"
 [ -d "$WT_LV" ] && die "remove should retire the kept worktree"
 step "a kept worktree after a green land is named, with its files and the remove command"
+
+echo "== 5b5b. a land killed during its suite puts the worktree back on its branch =="
+HOLD="$REPO/.git/hold"; mkdir -p "$HOLD"
+WT_KL=$(bash "$WSH" add killed) || die "worktree add killed"
+cat > "$WT_KL/scripts/run-tests.sh" <<'EOF'
+#!/bin/bash
+if [ -n "${HONE_TEST_HOLD:-}" ]; then
+  : > "$HONE_TEST_HOLD/started"
+  for _ in $(seq 100); do [ -e "$HONE_TEST_HOLD/go" ] && break; sleep 0.1; done
+fi
+exit 0
+EOF
+(cd "$WT_KL" && git add -A && git commit -qm "test: a suite that waits" -m "Cut: nothing, a test change")
+PRE=$(git rev-parse HEAD)
+HONE_TEST_HOLD="$HOLD" bash "$WSH" land killed >/dev/null 2>&1 & land_pid=$!
+for _ in $(seq 100); do [ -e "$HOLD/started" ] && break; sleep 0.1; done
+[ -e "$HOLD/started" ] || die "setup: the suite never started"
+kill -TERM "$land_pid"; touch "$HOLD/go"
+wait "$land_pid"; rc=$?
+rm -rf "$HOLD"
+[ "$rc" -ne 0 ] || die "a killed land should not exit 0"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a killed land must not move the primary branch"
+[ "$(git -C "$WT_KL" rev-parse --abbrev-ref HEAD)" = "hone/killed" ] || die "a killed land should put the worktree back on its branch"
+[ -z "$(git -C "$WT_KL" status --porcelain)" ] || die "a killed land should leave the worktree clean"
+bash "$WSH" remove "$WT_KL" >/dev/null 2>&1; git branch -D hone/killed >/dev/null 2>&1
+step "a killed land restores the worktree onto its branch"
+
+echo "== 5b5c. the primary tree: retries run out, a switched branch, a bad retry count =="
+MOVE="$REPO/.git/move-primary.sh"
+cat > "$MOVE" <<EOF
+#!/bin/bash
+git -C "$REPO" commit -q --allow-empty -m "chore: another session commits"
+EOF
+WT_MV=$(bash "$WSH" add moving) || die "worktree add moving"
+cat > "$WT_MV/scripts/run-tests.sh" <<'EOF'
+#!/bin/bash
+[ -n "${HONE_TEST_MOVE:-}" ] && bash "$HONE_TEST_MOVE"
+[ -n "${HONE_TEST_SWITCH:-}" ] && git -C "$HONE_TEST_SWITCH" checkout -q -b side
+exit 0
+EOF
+(cd "$WT_MV" && git add -A && git commit -qm "test: a suite during which the primary tree moves" -m "Cut: nothing, a test change")
+out=$(HONE_TEST_MOVE="$MOVE" HONE_LAND_RETRIES=2 bash "$WSH" land moving 2>&1); rc=$?
+[ "$rc" -eq 5 ] || die "retries running out should exit 5 (got $rc): $out"
+echo "$out" | grep -q "moved during each of 2 land attempts" || die "the message should count the attempts: $out"
+merges=$(git log --format=%s --grep="Merge branch 'hone/moving'")
+[ -z "$merges" ] || die "an unpublished land must not reach the primary branch"
+[ "$(git -C "$WT_MV" rev-parse --abbrev-ref HEAD)" = "hone/moving" ] || die "the worktree should be back on its branch"
+step "solo retries run out with exit 5, nothing published"
+PRE=$(git rev-parse HEAD)
+out=$(HONE_TEST_SWITCH="$REPO" bash "$WSH" land moving 2>&1); rc=$?
+on=$(git symbolic-ref --short HEAD)
+git checkout -q main; git branch -q -D side
+[ "$rc" -eq 2 ] || die "a primary tree that left its branch should exit 2 (got $rc): $out"
+[ "$on" = side ] || die "setup: the suite should have switched the primary tree"
+echo "$out" | grep -q "left main during the land" || die "the message should name the branch: $out"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "the merge must not land on the other branch"
+[ "$(git -C "$WT_MV" rev-parse --abbrev-ref HEAD)" = "hone/moving" ] || die "the worktree should be back on its branch"
+step "a primary tree that switched branch during the suite gets no merge"
+out=$(HONE_LAND_RETRIES=abc bash "$WSH" land moving 2>&1); rc=$?
+[ "$rc" -eq 2 ] || die "a retry count that is not a number should exit 2 (got $rc): $out"
+echo "$out" | grep -q "HONE_LAND_RETRIES is 'abc'" || die "the message should name the bad value: $out"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a bad retry count must not merge"
+bash "$WSH" remove "$WT_MV" >/dev/null 2>&1; git branch -D hone/moving >/dev/null 2>&1; rm -f "$MOVE"
+step "a retry count that is not a number is refused before anything moves"
 
 echo "== 5b6. remove takes a change name and a relative path =="
 bash "$WSH" add rm-by-name >/dev/null || die "worktree add rm-by-name"
@@ -1321,6 +1393,37 @@ git rm -q scripts/setup-tree.sh .fail-setup-tree && git commit -qm "chore: drop 
 bash "$WSH" remove "$WT_SW" >/dev/null 2>&1
 git branch -q -D hone/st-worktree 2>/dev/null
 step "a red setup-tree on the merge fails the land, and the primary branch stays"
+
+# 8g. an attempt that installed the merge's dependencies leaves every later
+# restore to install the branch's again. Here attempt 1 runs setup-tree on
+# the merge, the primary branch moves, and attempt 2 fails at its checkout.
+RUNS="$REPO/.git/setup-tree-runs"
+cat > scripts/setup-tree.sh <<EOF
+#!/bin/bash
+echo run >> "$RUNS"
+EOF
+git add scripts/setup-tree.sh && git commit -qm "chore: a setup-tree adapter that counts its runs"
+WT_SS=$(bash "$WSH" add st-sticky) || die "worktree add st-sticky"
+cat > "$WT_SS/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+# Once: another session commits, and a stale lock blocks the next checkout.
+[ -e "$REPO/.git/st-sticky-done" ] && exit 0
+touch "$REPO/.git/st-sticky-done"
+git -C "$REPO" commit -q --allow-empty -m "chore: another session commits"
+touch "\$(git rev-parse --absolute-git-dir)/index.lock"
+EOF
+(cd "$WT_SS" && git add -A && git commit -qm "test: a suite that moves the trunk once" -m "Cut: nothing, a test change")
+printf '{"lockfileVersion":5}\n' > bun.lock
+git add bun.lock && git commit -qm "chore(deps): the trunk moves its lockfile"
+before=$(wc -l < "$RUNS")
+out=$(bash "$WSH" land st-sticky 2>&1); rc=$?
+rm -f "$(git -C "$WT_SS" rev-parse --absolute-git-dir)/index.lock" "$REPO/.git/st-sticky-done"
+[ "$rc" -eq 2 ] || die "a checkout blocked on the retry should exit 2 (got $rc): $out"
+after=$(wc -l < "$RUNS")
+[ $((after - before)) -eq 2 ] || die "setup-tree should run for the merge and again for the restore (ran $((after - before)) times): $out"
+git rm -q scripts/setup-tree.sh && git commit -qm "chore: drop the counting setup-tree adapter"
+bash "$WSH" remove "$WT_SS" >/dev/null 2>&1; git branch -q -D hone/st-sticky 2>/dev/null; rm -f "$RUNS"
+step "a restore after a retry installs the branch's dependencies again"
 
 echo
 echo "e2e land path: PASS"

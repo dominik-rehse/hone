@@ -860,6 +860,34 @@ $(hone_msg_block "$tail")
 EOF
 }
 
+msg_wt_land_rebuild_failed() {
+    local path="$1" log="$2" tail="$3"
+    cat <<EOF
+hone worktree: land could not cut the missing worktree $path again, so nothing merged.
+Do: read the git output below, clear what stands at that path, then land again.
+Last lines of $log:
+$(hone_msg_block "$tail")
+EOF
+}
+
+msg_wt_land_bad_retries() {
+    local value="$1"
+    cat <<EOF
+hone worktree: HONE_LAND_RETRIES is '$value', which is not a whole number, so land did not start.
+Do: unset HONE_LAND_RETRIES, or set it to a whole number such as 3.
+Why: it counts how often land merges again.
+EOF
+}
+
+msg_wt_land_primary_switched() {
+    local primary="$1"
+    cat <<EOF
+hone worktree: the primary tree left $primary during the land, so land did not publish the merge.
+Do: ask the person who switched it to put the primary tree back on $primary, then land again.
+Why: land merges only into the branch that it started on.
+EOF
+}
+
 msg_wt_land_worktree_dirty() {
     local path="$1"
     cat <<EOF
@@ -907,7 +935,7 @@ msg_wt_land_ff_refused() {
     local branch="$1" log="$2" tail="$3"
     cat <<EOF
 hone worktree: the merge of $branch is green, and files in the primary tree stopped its fast-forward.
-Do: commit or move the files that the output below names, then land again.
+Do: move the files that the output below names, or ask their owner to, then land again.
 Why: land never overwrites uncommitted work.
 Last lines of $log:
 $(hone_msg_block "$tail")
@@ -1418,6 +1446,9 @@ worktree|human|msg_wt_land_conflict|hone/<change>|- <path>
 worktree|human|msg_wt_land_hook_refused|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_merge_failed|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_release_not_shared
+worktree|human|msg_wt_land_rebuild_failed|<main-root>/.worktrees/<change>|<git-common-dir>/hone-land.log|<output-tail>
+worktree|human|msg_wt_land_bad_retries|<value>
+worktree|human|msg_wt_land_primary_switched|main
 worktree|human|msg_wt_land_worktree_dirty|<main-root>/.worktrees/<change>
 worktree|human|msg_wt_land_worktree_untracked|<main-root>/.worktrees/<change>|- <path>
 worktree|human|msg_wt_land_from_worktree|<main-root>|bash <plugin-root>/scripts/worktree.sh land <change>
