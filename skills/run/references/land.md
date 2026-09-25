@@ -18,7 +18,7 @@ The merge is in, the suite passed on the merge commit, the worktree and branch
 are gone. Confirm to the user what landed, the Decisions and Notes written, and
 what was deleted.
 
-## 6: the merge regressed the trunk
+## 6: the merge failed a check
 
 The primary branch did not move, and the worktree is back on its branch as
 evidence. This is stop-point 1 surfacing at land: the change passed in
@@ -44,7 +44,7 @@ Aborted, tree restored. The message names the conflicting paths. Under `--all`
 this means the independence check missed an overlap: fold this change in
 serially and flag it for a Decision-level look. Do not force the merge.
 
-## 5: lock timeout, or the remote kept moving
+## 5: lock timeout, or the primary branch kept moving
 
 Another session held the land lock (a land or a full-suite run) past the
 timeout. Nothing happened to the trunk. Wait for that run to finish, then
