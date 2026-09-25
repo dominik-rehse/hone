@@ -197,6 +197,26 @@ reached() {
     measure reached "$hit"
 }
 
+# progress_lines: how the run reported where it stood. The run skill prints a
+# progress line (it holds `◆`) when each step of the loop starts and when it
+# ends. A step starts in a line that marks it active (`build ...`), and a step
+# is reached in a line that marks it at all (active, `✓`, or `✗`). Two
+# measures: `progress_lines` counts the lines, and `progress_starts` is
+# STARTED/REACHED over the six steps. A run that printed the land line alone
+# measures 0/6. In the field, 10 of 23 runs showed fewer than 5 of 6 starts,
+# with silences of up to 50 minutes. It only measures.
+progress_lines() {
+    local lines s started=0 reached=0
+    lines=$(jq -r 'select(.type == "assistant") | .message.content[]?
+                   | select(.type == "text") | .text' "$LAB_TRANSCRIPT" 2>/dev/null | grep -F '◆')
+    for s in worktree build verify consolidate review land; do
+        grep -qE "(^|[^a-z])$s (\.\.\.|…)" <<<"$lines" && started=$((started+1))
+        grep -qE "(^|[^a-z])$s (✓|✗|\.\.\.|…)" <<<"$lines" && reached=$((reached+1))
+    done
+    measure progress_lines "$(grep -c . <<<"$lines")"
+    measure progress_starts "$started/$reached"
+}
+
 # revertible: a person can undo the landed change with one command, and
 # nothing outside git is left to undo. main moved by exactly one commit on its
 # first-parent line, and that commit is a merge. The primary tree holds no

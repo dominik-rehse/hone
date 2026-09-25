@@ -48,3 +48,6 @@ true_docs=yes
 goal docs_true "$true_docs" yes
 grep -E '^Invariant: ' docs/notes/checkout.md >/dev/null 2>&1 && ok "the checkout Note keeps its invariant" || bad "the run deleted the invariant of the checkout Note"
 grep -E 'coupon' docs/decisions/free-shipping.md >/dev/null 2>&1 && ok "the Decision keeps its reason" || bad "the run deleted the reason of the Decision"
+
+# Where the run said it stood. It only measures.
+progress_lines

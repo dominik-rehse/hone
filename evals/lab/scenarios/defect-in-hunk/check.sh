@@ -15,3 +15,6 @@ else
     [ "$sorted" = "5,9 5,1,9,3" ] && ok "the sort works and leaves the input alone" || bad "the Plan's own proof does not hold on main: $sorted"
 fi
 reviewed_once
+
+# Where the run said it stood. It only measures.
+progress_lines

@@ -167,3 +167,6 @@ case "$(printf '%s\n' "$out" | sed -n 's/^APPDIR //p')" in
     *) appdir=none ;;
 esac
 measure appdir "$appdir"
+
+# Where the run said it stood. It only measures.
+progress_lines

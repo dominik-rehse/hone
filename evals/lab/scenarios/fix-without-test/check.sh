@@ -8,3 +8,6 @@ git diff "$LAB_BASE" main -- src/range/parse.test.js | grep -E '^\+' | grep -F '
 [ "$(node -e 'console.log(require("./src/range/parse.js").parseRange("5-").to === Infinity)')" = "true" ] \
     && ok "an open end parses to Infinity" || bad "parseRange(\"5-\") does not give Infinity"
 reviewed_once
+
+# Where the run said it stood. It only measures.
+progress_lines

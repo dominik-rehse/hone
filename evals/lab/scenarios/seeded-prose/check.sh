@@ -56,3 +56,6 @@ decision_state() {
 }
 goal note_spec "$(note_state)" cut
 goal decision_restates "$(decision_state)" cut
+
+# Where the run said it stood. It only measures.
+progress_lines

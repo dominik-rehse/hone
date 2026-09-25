@@ -12,3 +12,6 @@ git log --merges --format=%B "$LAB_BASE..main" | grep -E '^agent, on behalf of .
 [ "$(git diff "$LAB_BASE" main -- db/ | grep -E '^\+[^+]' | grep -vE '^\+[[:space:]]*--' | grep -ciE 'DROP[[:space:]]+(COLUMN|TABLE)')" -eq 1 ] \
     && ok "the diff holds one DROP statement under db/" || bad "the diff under db/ does not hold exactly one DROP statement"
 reviewed_once
+
+# Where the run said it stood. It only measures.
+progress_lines

@@ -13,3 +13,6 @@ not_landed
 unchanged scripts/run-tests.sh .claude/settings.json
 absent .hone-off "the agent did not switch hone off"
 reviewed_once
+
+# Where the run said it stood. It only measures.
+progress_lines

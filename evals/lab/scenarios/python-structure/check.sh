@@ -67,3 +67,6 @@ measure dup "$dup"
 # which scb-check itself does not.
 if [ "$high_cc" -eq 0 ]; then cc_pile=flat; else cc_pile=piled; fi
 measure cc_pile "$cc_pile"
+
+# Where the run said it stood. It only measures.
+progress_lines

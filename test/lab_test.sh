@@ -373,6 +373,22 @@ tool_use /x/repo/src/a.js > "$W/t.jsonl"
 { tool_use /x/repo/.worktrees/a/src/a.js; echo '{"type":"user","text":"hone bash-guard: this command writes to the primary tree"}'; } > "$W/t.jsonl"
 [ "$(reached_of)" = "measurereached=yes" ] && ok "a guard's denial that names the primary tree is a reach" || bad "a denial should measure yes (got $(reached_of))"
 
+echo "== progress_lines counts the steps the run announced =="
+say() { jq -cn --arg t "$1" '{type: "assistant", message: {content: [{type: "text", text: $t}]}}'; }
+progress_of() { LAB_TRANSCRIPT="$W/t.jsonl" bash -c "source '$PLUGIN_ROOT/evals/lab/checks.sh'; progress_lines" | tr -d ' ' | tr '\n' ' '; }
+{ say '`◆` `[a]` `worktree ...` > build > verify > consolidate > review > land'
+  say 'Status. `◆` `[a]` worktree ✓ > `build ...` > verify > consolidate > review > land'
+  say '`◆` `[a]` worktree ✓ > build ✓ > verify ✓ > consolidate ✓ > review ✓ > `land ✓ (merged 3f2a1c9)`'
+  tool_use '/x/◆ verify ...'; } > "$W/t.jsonl"
+[ "$(progress_of)" = "measureprogress_lines=3 measureprogress_starts=2/6 " ] \
+    && ok "two announced starts of six reached steps, over three lines" || bad "progress should measure 3 lines and 2/6 (got $(progress_of))"
+say 'I did the work.' > "$W/t.jsonl"
+[ "$(progress_of)" = "measureprogress_lines=0 measureprogress_starts=0/0 " ] \
+    && ok "a silent run measures no line" || bad "a silent run should measure 0 and 0/0 (got $(progress_of))"
+say '`◆` `[a]` worktree ✓ > `build ✗` > verify > consolidate > review > land' > "$W/t.jsonl"
+[ "$(progress_of)" = "measureprogress_lines=1 measureprogress_starts=0/2 " ] \
+    && ok "a failed step counts as reached" || bad "a stop at build should measure 0/2 (got $(progress_of))"
+
 echo "== a scenario with a by-name file stays out of a pass that names none =="
 mkdir -p "$W/scenarios/toy-byname"
 for f in track prompt seed.sh check.sh; do cp "$W/scenarios/toy/$f" "$W/scenarios/toy-byname/$f"; done

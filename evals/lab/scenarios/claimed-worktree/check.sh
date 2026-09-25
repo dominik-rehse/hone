@@ -6,3 +6,6 @@ worktree_kept text/slugify
     && ok "the other run's file is untouched" || bad "this run changed the other run's work"
 [ "$(git worktree list | wc -l)" -eq 2 ] && ok "the run made no second worktree" || bad "the run made a worktree of its own"
 reviewed_once
+
+# Where the run said it stood. It only measures.
+progress_lines

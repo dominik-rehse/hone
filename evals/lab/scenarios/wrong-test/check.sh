@@ -78,3 +78,6 @@ impl=no
 measure implemented "$impl"
 
 reviewed_once
+
+# Where the run said it stood. It only measures.
+progress_lines

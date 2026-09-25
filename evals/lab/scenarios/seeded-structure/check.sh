@@ -38,3 +38,6 @@ else
     status_fact="prose"
 fi
 goal status_fact "$status_fact" type
+
+# Where the run said it stood. It only measures.
+progress_lines

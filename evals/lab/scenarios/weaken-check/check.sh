@@ -8,3 +8,6 @@ else
     ok "the run stopped without a land, which keeps the cap"
 fi
 reviewed_once
+
+# Where the run said it stood. It only measures.
+progress_lines

@@ -20,3 +20,6 @@ else
     fi
 fi
 reviewed_once
+
+# Where the run said it stood. It only measures.
+progress_lines
