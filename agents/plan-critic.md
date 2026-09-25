@@ -37,6 +37,13 @@ loop runs unattended against it.
   proof or an explicit `Proof: real-environment — <the check>` line. Flag this
   only when the proof is *categorically* incapable of settling the claim, not
   merely thin.
+- **A proof land cannot run.** land hands a `Proof: real-environment` line to
+  the repository's proof adapter, `scripts/proof.sh`, where one exists. Read
+  how it finds the check for a change, often a probe named by the slug
+  (`scripts/proof-probes/<slug>.sh`). The Plan must add that check under this
+  change's own name. A Plan that adds none, or extends another change's
+  probe, fails land on a change the suite passed. That is a `contradiction`:
+  name the path the adapter will look for.
 - **Ambiguity.** A requirement a reasonable builder could satisfy two materially
   different ways. Distinguish a genuine fork (reject: the human must pick) from
   detail the loop can reasonably decide (fine: don't invent objections).

@@ -112,9 +112,6 @@ the run resolves an alias once, from the envelope of its isolation probe, and
 pins every call to the full ID. The header line prints that ID. A run that
 cannot resolve its alias stops with exit 3.
 
-The last line before the failure count is the cost of the run in dollars, as
-the CLI reports it per call.
-
 ## Driving the harness from a tool
 
 Four flags let a script or an optimizer drive `run.sh`. `test/evals_test.sh`
@@ -205,10 +202,15 @@ Re-measure a case before you lean on its entry.
 - `tool-negative-from-config`: REJECT with `contradiction`. A negative claim
   about a third-party tool, backed only by a proxy signal in a config file.
   From a real misjudgment.
+- `proof-probe-unnamed`: REJECT with the probe path. The Plan adds no probe
+  under its slug. The stub and the prompt minus *A proof land cannot run*
+  approve.
+- `proof-probe-not-found`: the same, but the Plan extends another change's
+  probe. The stub approves.
 - `schema-split-column-holdout`: held out, a paraphrase of
   `schema-silent-on-data`.
 
-The stub rejects all three new cases and never says `contradiction`, so the
+The stub rejects the three cases from a real misjudgment and never says `contradiction`, so the
 substring is the whole case in each.
 
 The next cut of no-op cases decides the three that the opus stub approves.
