@@ -636,10 +636,15 @@ land_proof_bootstrap() {
     fi
     # Every status except A (added), C (copied), and D (above): a probe that
     # already exists, modified, renamed, or type-changed.
+    # A probe is a .sh file. Any other file there (a fixture, a note) names
+    # no probe, so its edit gets the change's own command.
     while IFS= read -r probe; do
         [ -n "$probe" ] || continue
         probe=${probe#scripts/proof-probes/}
-        probe=${probe%.sh}
+        case "$probe" in
+            *.sh) probe=${probe%.sh} ;;
+            *)    probe=$change ;;
+        esac
         case $'\n'"$cmds"$'\n' in
             *$'\n'"bash scripts/proof.sh $probe"$'\n'*) continue ;;
         esac

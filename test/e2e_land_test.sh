@@ -606,6 +606,18 @@ Proof: real-environment - run the new adapter by hand")
     echo "$out" | grep -qF "$expect" || die "the gate should print '$expect' for $target: $out"
     bash "$WSH" remove "$WT_BS" >/dev/null 2>&1; git branch -D "hone/bootstrap-$n" >/dev/null 2>&1
 done
+# An edited file under proof-probes/ that is not a .sh names no probe. Its
+# edit still gates, under the change's own name, never as a bogus command.
+printf '{"url":"a"}\n' > "$REPO/scripts/proof-probes/fixture.json"
+git add scripts/proof-probes/fixture.json && git commit -qm "chore(proof): land a probe fixture"
+WT_BS=$(bash "$WSH" add bootstrap-fixture) || die "worktree add bootstrap-fixture"
+printf '{"url":"b"}\n' > "$WT_BS/scripts/proof-probes/fixture.json"
+(cd "$WT_BS" && git add -A && git commit -qm "chore(proof): edit the fixture" -m "Cut: nothing, a test change")
+out=$(bash "$WSH" land bootstrap-fixture 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "an edited probe fixture should exit 7 (got $rc): $out"
+echo "$out" | grep -qF "bash scripts/proof.sh bootstrap-fixture" || die "the gate should name the change's own command: $out"
+echo "$out" | grep -qF "proof.sh fixture.json" && die "the gate must not turn a fixture into a command: $out"
+bash "$WSH" remove "$WT_BS" >/dev/null 2>&1; git branch -D hone/bootstrap-fixture >/dev/null 2>&1
 # A change that only ADDS its own probe is writing its own check, like a test,
 # and the adapter that judges it is untouched. Its trailer still gates it, but
 # the bootstrap rule never does.
