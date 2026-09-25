@@ -462,8 +462,8 @@
         },
         {
           "file": "rules/workflow.md",
-          "from": ["→ verify → consolidate → `/code-review` → land (merge into the primary tree,"],
-          "to": ["→ consolidate → `/code-review` → land (merge into the primary tree,"],
+          "from": ["→ verify → consolidate → `/code-review` → land (merge and re-run the suite"],
+          "to": ["→ consolidate → `/code-review` → land (merge and re-run the suite"],
           "count": 1
         }
       ]
@@ -588,8 +588,8 @@
         },
         {
           "file": "rules/workflow.md",
-          "from": ["→ verify → consolidate → `/code-review` → land (merge into the primary tree,"],
-          "to": ["→ verify → consolidate → land (merge into the primary tree,"],
+          "from": ["→ verify → consolidate → `/code-review` → land (merge and re-run the suite"],
+          "to": ["→ verify → consolidate → land (merge and re-run the suite"],
           "count": 1
         }
       ]
