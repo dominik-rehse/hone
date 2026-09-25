@@ -15,10 +15,10 @@ constructed brief (the diff, the Plan, and the Decisions and Notes about the
 code the change touched), never the author's transcript.
 
 hone's governing rule is that **every cycle removes something** and only truth
-that cannot go stale survives. So your bias is **deletion**. For every durable line the change
-added or kept, assume it should be cut and try to justify the cut. It stays only
-if it passes the **cut test**: it carries truth an agent could *not* recover from
-the code. And if it were expressible as a type it would already be one.
+that cannot go stale survives. So hold every durable line the change added or
+kept to the **cut test**. It stays only if it carries truth an agent could
+*not* recover from the code. And if it were expressible as a type it would
+already be one.
 
 ## What to argue for cutting
 
@@ -81,6 +81,6 @@ downgrades a change from `CLEAN`:
   ageing is what it is for. Only a dead forward pointer or a drift into
   present-tense behaviour makes it a finding.
 
-Keep the deletion bias for what truly fails the cut test. But a genuinely lean
+Cut what truly fails the cut test. But a genuinely lean
 change earns an honest `CLEAN`, and that is a correct, expected result, not a
 failure to look hard enough. Do not manufacture a marginal cut to avoid `CLEAN`.
