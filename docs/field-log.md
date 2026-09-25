@@ -26,7 +26,7 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
   legitimately open, right after a rollback. Fixed in 0.62.0.
 - 2026-09-25 · 0.58.1 · `dirty-guard` · blamed paths from another session's
   half-finished manual merge in the primary tree on two unrelated commands.
-  Both agents correctly declined the hook's suggested restore. Fixed in 0.62.0.
+  Both agents correctly declined the hook's suggested restore. Fixed in 0.62.0, reverted in 0.62.1 after a review found shapes it let through. Open.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `gate` · post-merge checks in the
   primary tree read other sessions' untracked draft Plans, causing at
   least 6 spurious rollbacks. Fixed in 0.60.0.
@@ -34,19 +34,19 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
   `stryker.conf.json` for the mutation check matched the tracked-check-
   config rule. The ask did not name the file. Unattended runs stalled 7
   hours, 81 minutes, 69 and 12 minutes, and 40 minutes across four
-  sessions. Fixed in 0.62.0.
+  sessions. Fixed in 0.62.0, reverted in 0.62.1 after a review found shapes it let through. Open.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `bash-guard` · the primary-branch-
   move ask fired 14 times, 3 right and 11 false. False shapes: a
   directory change into a scratch worktree, a path-scoped `git reset`,
   and a checkout addressed only by a shell variable. One false ask sat
-  40 minutes. Fixed in 0.62.0.
+  40 minutes. Fixed in 0.62.0, reverted in 0.62.1 after a review found shapes it let through. Open.
 - 2026-09-21 to 2026-09-25 · mixed · `bash-guard` · denied a formatter run
   as writing a durable file, three times. Its target path was an
   unresolved variable. It also denied a read-only listing under
   `.hone-grant/triggers/` as a write into it. It denied a package-manager
   init or install in a scratchpad or worktree as writing its own files,
-  four times. Fixed in 0.62.0 where the command sets the variable or
-  the directory itself. A path set outside the command still asks.
+  four times. Fixed in 0.62.0, reverted in 0.62.1 after a review found
+  shapes it let through. Open.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `gate` · the suite-lock block named
   "another session" as the holder, about 20 times. The real holder was
   the session's own land, or its background verify. The block skips the

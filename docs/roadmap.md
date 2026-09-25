@@ -178,21 +178,9 @@ alarm is a block on a command that did nothing the hook exists to stop.
 Both guards also made real catches that no other part could make, so the
 work is to fix the shapes, not to remove a guard.
 
-Fixed after 0.61.0, each with a test in `test/hooks_test.sh` that replays
+Fixed in 0.62.0, each with a test in `test/hooks_test.sh` that replays
 the shape:
 
-- The `bash-guard` judges each simple command in the tree it runs in. It
-  follows `cd`, `git -C`, subshells, and a variable that the command sets
-  to a literal path or to `$(mktemp -d)`. So a merge in a scratch
-  worktree, a package install in a scratch directory, and a path-scoped
-  unstage no longer ask. These made about 11 of the 14 field asks of the
-  rule that guards the primary branch.
-- The check-config ask names the file, and a config outside the
-  repository passes. Unattended runs had stalled for up to seven hours on
-  an unnamed ask about a scratch mutation-check config.
-- The `dirty-guard` leaves out the staged and conflicted paths of a merge,
-  cherry-pick, revert, or rebase in progress. Another session's
-  half-finished merge had blocked unrelated commands.
 - The `nag` skips links inside code, prints its full list once per session
   and tree, and reads a Plan whose change has a worktree as active work.
   Its 342 wrong lines of the first note came from the link check and from
@@ -200,6 +188,18 @@ the shape:
 - The gate's suite-lock block names the lock and not "another session",
   and it counts toward the cap of three blocks. About 20 blocks had blamed
   another session for the run's own background land.
+
+Reverted in 0.62.1, and open again. 0.62.0 made the `bash-guard` judge each
+simple command in the tree it runs in, and the `dirty-guard` skip the paths
+of a merge in progress. A review then let about twenty command shapes that
+move the primary branch or HEAD past the new `bash-guard`: a `cd` after
+`&&`, `||`, or `|`, a `git` command inside `bash -c` or `eval`, and a
+`--work-tree` that overrides `-C`, among others. A `touch` of a merge
+marker let a staged write past the `dirty-guard`. The false alarms these
+changes removed are back. Next step: rebuild the walker so that it can only
+turn an ask into an allow for a command it fully understands, with the old
+whole-line scan kept as the fail-closed backstop, and with a test for every
+shape of the review.
 
 Still open:
 

@@ -249,9 +249,8 @@ irreversible. When you want that record, route the edit through the loop.
     The list is `git merge`, `cherry-pick`, `rebase`, `branch -f`, and
     `update-ref` on `refs/heads/`. A push whose remote is a local path
     counts, and so does every `git reset` but a bare one and a `--`
-    restore. `worktree.sh land` is the route, and it passes. `git
-    merge-base` and `git log --merges` read history, so they pass too. A
-    push of the change branch to the team's remote passes.
+    restore. `worktree.sh land` is the route, and it passes, as do reads
+    of history and a push of the change branch to the team's remote.
   - Both rules read every tree the command names, not only the one a
     leading `cd` reaches: a later `cd`, `git -C <path>`, and
     `--git-dir=<path>`. Any of them in the primary tree makes the command
@@ -275,7 +274,7 @@ irreversible. When you want that record, route the edit through the loop.
   In the primary tree it asks git what the command left dirty, and blocks when
   that list holds a protected path. It catches a writer the bash-guard's name
   list misses. It reports after the
-  write, so it stops the run before the commit rather than preventing the edit.
+  write, so it stops the run before the commit.
 - *gate* (Stop) runs `scripts/run-tests.sh`, plus `scripts/typecheck.sh`
   and `scripts/lint.sh` when they exist, and blocks the turn on any failure.
   - With an uncommitted change to any durable path it runs the fast unit
