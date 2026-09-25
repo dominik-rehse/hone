@@ -168,7 +168,7 @@ msg_bashguard_branch_move() {
     cat <<EOF
 hone bash-guard: this command moves the primary branch.
 Do: for a hone change, run 'bash "$(hone_msg_plugin_root)/scripts/worktree.sh" land <change>'. For a branch that did not come through the loop, stop, name the branch, and leave the move to the person.
-Why: land holds the land lock and clears the shape, authority, and proof gates. It re-runs the whole suite after the merge, and rolls the merge back when it reds. A merge here skips the review and all of that.
+Why: land holds the land lock and clears the shape, authority, and proof gates. It re-runs the whole suite on the merge, and publishes nothing when it reds. A merge here skips the review and all of that.
 EOF
 }
 
@@ -1226,7 +1226,7 @@ EOF
 msg_wt_land_push_rejected() {
     local remote="$1" primary="$2" attempts="$3"
     cat <<EOF
-hone worktree: $remote/$primary moved during each of $attempts land attempts, so land rolled the merge back.
+hone worktree: $remote/$primary moved during each of $attempts land attempts, so land published nothing.
 Do: wait a moment, then run land again.
 Why: another developer landed each time this suite ran.
 EOF

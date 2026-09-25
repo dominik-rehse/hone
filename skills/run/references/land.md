@@ -46,8 +46,8 @@ serially and flag it for a Decision-level look. Do not force the merge.
 
 ## 5: lock timeout, or the primary branch kept moving
 
-Another session held the land lock (a land or a full-suite run) past the
-timeout. Nothing happened to the trunk. Wait for that run to finish, then
+A land or a full-suite run held the land lock past the timeout. It can be
+this session's own run in the background. Nothing happened to the trunk. Wait for that run to finish, then
 re-run land. Never work around the lock.
 
 The same exit has a second cause, and the message names it. The primary

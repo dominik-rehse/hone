@@ -19,8 +19,8 @@
 #     check. The hooks.json timeout (600s) bounds a Stop hook. The harness kills
 #     a suite that outruns the timeout, which then reads as a non-block, so the
 #     gate fails OPEN. The authoritative --all runs inside `worktree.sh land`,
-#     under the land lock, after the merge: that one gates the trunk and rolls
-#     back on red. Keep the suite within the hook timeout to keep this backstop
+#     under the land lock, on the merge: that one gates the trunk and
+#     publishes nothing on red. Keep the suite within the hook timeout to keep this backstop
 #     meaningful.
 #   - Clean tree on any other branch → nothing in flight, no-op. With one
 #     exception: when this session was already blocked in a linked worktree of
@@ -80,8 +80,8 @@
 # stands never reaches the lookup.
 #
 # The cap loosens nothing. The gate is a Stop hook and gates no merge.
-# `worktree.sh land` re-runs --all under the land lock after the merge and
-# rolls the trunk back on red, so a red change still reaches no trunk. No
+# `worktree.sh land` re-runs --all under the land lock on the merge and
+# publishes nothing on red, so a red change still reaches no trunk. No
 # message the agent reads before the cap mentions it, because a message that
 # names a way past a gate is a way past the gate.
 
