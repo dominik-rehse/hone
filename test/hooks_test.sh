@@ -722,8 +722,10 @@ if command -v flock >/dev/null 2>&1; then
     out=$(lockstop); blocked "$out" || bad "the second lock wait should block"
     out=$(lockstop)
     asked "$out" && ok "the third lock wait asks for the final report" || bad "the lock wait should reach the report request"
+    echo "$out" | grep -Eqi 'what is red|failing check' && bad "the lock report request must not call the suite red" || ok "the lock report request does not call the suite red"
     out=$(lockstop)
-    capped "$out" && ok "the fourth lock wait lets the turn end" || bad "the lock wait should meet the cap"
+    echo "$out" | grep -q 'without a full suite' && ok "the fourth lock wait lets the turn end" || bad "the lock wait should meet the cap"
+    echo "$out" | grep -Eqi 'stays red|failing check|what is red' && bad "a lock wait ran no suite, so its cap must not call it red" || ok "the lock cap does not call the suite red"
     blocked "$out" && bad "a capped lock wait must not block" || ok "a capped lock wait does not block"
     kill "$LOCK_HOLDER" 2>/dev/null; wait "$LOCK_HOLDER" 2>/dev/null
     rm -f "$BLOCKS"

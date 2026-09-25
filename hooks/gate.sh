@@ -243,21 +243,26 @@ gate_signature() {
 # msg_gate_step_failed. The suite-lock wait passes its own, so a run that
 # waits on its own background land meets the same cap as a red check.
 gate_block_or_cap() {
-    local label="$1" rc="$2" tail="$3" first="${4:-}" file sig n=1 recorded
+    local label="$1" rc="$2" tail="$3" first="${4:-}" file sig n=1 recorded msg
     file=$(gate_blocks_file)
     sig=$(gate_signature "$label" "$rc" "$tail")
     recorded=$(cat "$file" 2>/dev/null)
     case "$recorded" in
         "$SESSION $sig "*) n=$(( ${recorded##* } + 1 )) ;;
     esac
+    # A lock wait ran no suite, so its cap messages must not call it red.
     if [ "$n" -gt "$GATE_BLOCK_CAP" ]; then
         rm -f "$file" 2>/dev/null
-        printf '{"systemMessage":"%s"}\n' \
-            "$(hone_json_escape "$(msg_gate_cap_reached "$label" "$n")")"
+        if [ "$rc" = lock ]; then msg=$(msg_gate_lock_cap_reached "$n")
+        else msg=$(msg_gate_cap_reached "$label" "$n"); fi
+        printf '{"systemMessage":"%s"}\n' "$(hone_json_escape "$msg")"
         exit 0
     fi
     printf '%s %s %s\n' "$SESSION" "$sig" "$n" > "$file" 2>/dev/null || true
-    [ "$n" -eq "$GATE_BLOCK_CAP" ] && block "$(msg_gate_report_now "$label" "$n")"
+    if [ "$n" -eq "$GATE_BLOCK_CAP" ]; then
+        [ "$rc" = lock ] && block "$(msg_gate_lock_report_now "$n")"
+        block "$(msg_gate_report_now "$label" "$n")"
+    fi
     [ -n "$first" ] && block "$first"
     block "$(msg_gate_step_failed "$label" "$rc" "$tail")"
 }

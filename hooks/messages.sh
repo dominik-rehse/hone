@@ -249,6 +249,27 @@ Why: the suite stays red, and no change landed.
 EOF
 }
 
+# The two cap messages for a stop that waited on the suite lock. No suite ran
+# on those stops, so neither message may say the suite is red or name a
+# failing check. The reader learns what did not run.
+msg_gate_lock_report_now() {
+    local n="$1"
+    cat <<EOF
+hone gate: a land or a full-suite run held the suite lock on $n stops in a row, so the gate ran no full suite.
+Do: write your final report in this turn. Say that the full suite has not run on this state, what state the work is in, and the one action you recommend.
+Why: the gate lets the next turn end, and the person reads only that report. No check has failed.
+EOF
+}
+
+msg_gate_lock_cap_reached() {
+    local n="$1"
+    cat <<EOF
+hone gate: a land or a full-suite run held the suite lock on $n stops in a row. The gate let this turn end without a full suite.
+Do: let the land or verify that holds the lock finish, then run the full suite.
+Why: no suite ran, so no check has failed yet.
+EOF
+}
+
 msg_gate_green() {
     printf 'hone gate: green (%s)\n' "$1"
 }
@@ -1399,6 +1420,8 @@ gate|agent|msg_gate_step_failed|<check>|<code>|<output-tail>
 gate|agent|msg_gate_suite_lock
 gate|agent|msg_gate_report_now|<check>|<count>
 gate|human|msg_gate_cap_reached|<check>|<count>
+gate|agent|msg_gate_lock_report_now|<count>
+gate|human|msg_gate_lock_cap_reached|<count>
 gate|plain|msg_gate_green|<checks that ran>
 gate|plain|msg_gate_green_cached|<tree-hash>
 nag|plain|msg_nag_header
