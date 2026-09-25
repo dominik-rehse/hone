@@ -1,6 +1,6 @@
 ---
 name: plan
-description: "Author the temporary Plan for one change: .plans/<change>.md, the one artifact written outside the loop, plus any references under .plans/<change>/ that carry what prose would lose. Guides sizing a change to the smallest unit worth its own review gate, states what, why, and how you'll know it works, then submits it to the plan-critic for approval while the caller is still present to revise. Does not write code, tests, or docs. Invoke with /hone:plan <change-name-or-sketch>."
+description: "Author the temporary Plan for one change: .plans/<change>.md, the one artifact written outside the loop, plus any references under .plans/<change>/ that carry what prose would lose. Guides sizing a change to the smallest unit worth its own review gate, states what, why, and how you'll know it works, then submits it to the plan-critic for approval while the caller is still present to revise. Does not write code, tests, or docs. Use it only when the caller asks for a Plan, or names a code change to plan; never for a handoff, a summary, or a note. Invoke with /hone:plan <change-name-or-sketch>."
 argument-hint: "[change-name-or-sketch]"
 ---
 
@@ -19,6 +19,11 @@ record of behaviour.
 This command helps its caller write that brief. It writes **only** `.plans/<change>.md`
 (and, when the change rests on an untested assumption, an entry in
 `docs/open-questions.md`). It does not write code, tests, or other docs.
+
+When you ask the caller something, write plain English. Use short
+sentences. Name things as the person sees them. Explain a file, a
+function, or a hone term before you lean on it, or leave it out. Say what
+each answer leads to, then say which one you would pick and why.
 
 ## Task
 
