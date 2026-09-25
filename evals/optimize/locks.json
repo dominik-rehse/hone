@@ -15,6 +15,7 @@
       "what-to-hunt/missing-baseline": "5 flips of 11. The bullet moves the answer, and it is right on only 4 of 11 either way.",
       "what-to-hunt/prose-doing-an-artifacts-job": "3 flips of 10. The case outcome-table-in-prose aims at it.",
       "what-to-hunt/contract-churn": "2 flips of 11, and the case schema-silent-on-data aims at the bullet's data question.",
+      "what-to-hunt/a-proof-land-cannot-run": "The case proof-probe-unnamed aims at it: the prompt without it approves 3/3.",
       "output/calibration": "Held by hone's own cases on 2026-09-18: thin-proof-right-level, named-references, dep-refresh-no-red-test."
     },
     "locked": {

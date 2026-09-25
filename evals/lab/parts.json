@@ -367,16 +367,12 @@
         {
           "file": "skills/run/SKILL.md",
           "from": [
-            "  a test catches each one. Run it **diff-scoped and budget-capped**, isolated so",
-            "  it never touches the tree. It audits the *tests*, not the code. A planted bug",
-            "  no test catches means a test that checks too little. Close the gap with",
-            "  another red-green cycle. Skip it"
+            "  A planted bug no test catches means a test that checks too little. Close",
+            "  the gap with another red-green cycle. Skip it for non-critical or UI"
           ],
           "to": [
-            "  a test catches each one. Run it **diff-scoped and budget-capped**, isolated so",
-            "  it never touches the tree. It audits the *tests*, not the code. A planted bug",
-            "  no test catches means a test that checks too little. Close the gap with",
-            "  another test. Skip it"
+            "  A planted bug no test catches means a test that checks too little. Close",
+            "  the gap with another test. Skip it for non-critical or UI"
           ],
           "count": 1
         },
