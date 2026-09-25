@@ -1,9 +1,11 @@
 # Field log: where hone failed in real use
 
 This page collects what hone did wrong in the repositories that use it. Each
-incident is one line, and the newest line is first. A line names no
-repository, because this repository is public. It has the date or the date
-range, the hone version, the hook or the critic, and what happened. Identical
+incident is one line, and the newest line is first. A range sorts by its
+last date, and an undated line goes below the dated lines of its block. A
+line names no repository, because this repository is public. It has the
+date or the date range, the hone version, the hook or the critic, and what
+happened. Identical
 incidents share one line with a count. When an incident becomes a lab
 scenario, a probe, or an eval case, its line names it. A case path is below
 `evals/`.
@@ -19,16 +21,16 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
 - 2026-09-25 · 0.59.0 · `plan-critic`/`consolidate-critic` · both missed
   that a CLI upgrade had made a stated Decision false. The nested review
   caught it instead.
-- 2026-09-25 · mixed · `gate` · exit 9 reported a refused pre-merge-commit
-  hook as a merge conflict, in three sessions. Fixed in 0.59.1.
+- 2026-09-25 · mixed · run loop · land's exit 9 reported a refused
+  pre-merge-commit hook as a merge conflict, in three sessions. Fixed in 0.59.1.
 - 2026-09-25 · 0.58.1 · `nag` · a "survived its landing" false alarm fired
   three times in one session. This happened while its worktree was still
   legitimately open, right after a rollback. Fixed in 0.62.0.
 - 2026-09-25 · 0.58.1 · `dirty-guard` · blamed paths from another session's
   half-finished manual merge in the primary tree on two unrelated commands.
   Both agents correctly declined the hook's suggested restore. Fixed in 0.62.0, reverted in 0.62.1 after a review found shapes it let through. Open.
-- 2026-09-21 to 2026-09-25 · 0.58.1 · `gate` · post-merge checks in the
-  primary tree read other sessions' untracked draft Plans, causing at
+- 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · land's post-merge checks in
+  the primary tree read other sessions' untracked draft Plans, causing at
   least 6 spurious rollbacks. Fixed in 0.60.0.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `bash-guard` · a scratch
   `stryker.conf.json` for the mutation check matched the tracked-check-
@@ -72,8 +74,8 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
   verdict format drifted: a bolded verdict, a "Verdict:" prefix, prose
   after the verdict, a file list last. Clean on a small 0.59.0 sample,
   too small to call fixed.
-- 2026-09-21 to 2026-09-25 · 0.58.1 · `gate` · the authority gate (exit 8)
-  fired 3 times and caught nothing real. Twice it fired on SQLite's
+- 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · land's authority gate (exit
+  8) fired 3 times and caught nothing real. Twice it fired on SQLite's
   table-rewrite idiom, and once as a false alarm from the land rollback
   bug below. Partly addressed in 0.60.0: the refusal now quotes each
   destructive statement with its file.
@@ -96,18 +98,18 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
 - 2026-09-22 · 0.58.1 · run loop · land's rollback `git reset --hard`
   dropped a concurrent Plan's own commit from main, twice. A branch cut
   from the dropped commit later caused a false exit 8. Fixed in 0.60.0.
+- 2026-09-21 · 0.58.1 · `session-start` · one session's workflow-rule
+  injection went missing. Right by design: the person had created the off
+  marker ten seconds before that session started.
 - not recorded · 0.58.1 · run loop · land's receipt named the wrong
   commit as the merge. It named a Plan commit made mid-suite, not the
   real merge. Fixed in 0.60.0.
 - not recorded · 0.58.1 · `plan-critic` · took four rounds, about 17
   minutes, on a one-paragraph docs Plan. Each reject named a real
   contradiction, mostly introduced by the previous fix.
-- not recorded · 0.58.1 · `gate` · the proof gate named a probe script
+- not recorded · 0.58.1 · run loop · land's proof gate named a probe script
   for a change that had edited another change's probe. That script did
   not exist. Fixed in 0.60.0.
-- 2026-09-21 · 0.58.1 · `session-start` · one session's workflow-rule
-  injection went missing. Right by design: the person had created the off
-  marker ten seconds before that session started.
 
 - 2026-08-20 to 2026-09-18 · mixed · `nag` · 314 lines telling the session
   that a template entry under the spike directory carries no date. The person
