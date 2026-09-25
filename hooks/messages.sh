@@ -998,9 +998,9 @@ EOF
 msg_wt_land_worktree_kept() {
     local path="$1" cmd="$2" files="$3"
     cat <<EOF
-hone worktree: the change landed, and git kept the worktree $path because files are left in it.
+hone worktree: the change landed, and git kept the worktree $path because it still holds files.
 Do: delete or move the files below, then run: $cmd
-Why: the merge stands, and only the cleanup is left.
+Why: the merge stands, and only the cleanup remains.
 Files left in the worktree:
 $(hone_msg_block "$files")
 EOF
