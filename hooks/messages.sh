@@ -77,7 +77,7 @@ msg_guard_check_config() {
     local rel="$1"
     cat <<EOF
 hone guard: $rel is a config the gate's checks read.
-Do: confirm that the Plan calls for this edit before you allow it.
+Do: for a scratch config, such as one for a mutation check, write it outside the repository. Otherwise confirm that the Plan calls for this edit.
 Why: the test, lint, format, and type-check runs are only as strict as their config. An edit here can turn a red check green without touching the code.
 EOF
 }
@@ -125,11 +125,27 @@ Why: a sign-off the run writes for itself is the record the proof gate exists to
 EOF
 }
 
+# Each ask names the file it is about. The person approved an unnamed ask
+# without knowing which file it meant, and one tracked config was overwritten.
 msg_bashguard_protected() {
-    cat <<'EOF'
-hone bash-guard: this command modifies a protected hone artifact.
+    local path="$1"
+    cat <<EOF
+hone bash-guard: this command modifies $path, a protected hone artifact.
 Do: confirm you intend this change before you allow it.
-Why: the adapters, the hooks, the settings, the policy files, and the check configs carry hone's enforcement.
+Why: the adapters, the hooks, the settings, and the policy files carry hone's enforcement.
+EOF
+}
+
+# The check-config half of rule 2. A scratch config for a one-off run, such
+# as a mutation check, belongs outside the repository, where no gate reads it
+# and the hook lets it pass. Unattended runs stalled for hours on this ask
+# while they wrote a scratch mutation-check config into their worktree.
+msg_bashguard_check_config() {
+    local path="$1"
+    cat <<EOF
+hone bash-guard: this command modifies $path, a config the gate's checks read.
+Do: for a scratch config, such as one for a mutation check, write it outside the repository and point the tool at it. Otherwise confirm that the Plan calls for this edit.
+Why: the test, lint, format, and type-check runs are only as strict as their config. An edit here can turn a red check green without touching the code.
 EOF
 }
 
@@ -153,6 +169,19 @@ msg_bashguard_branch_move() {
 hone bash-guard: this command moves the primary branch.
 Do: for a hone change, run 'bash "$(hone_msg_plugin_root)/scripts/worktree.sh" land <change>'. For a branch that did not come through the loop, stop, name the branch, and leave the move to the person.
 Why: land holds the land lock and clears the shape, authority, and proof gates. It re-runs the whole suite after the merge, and rolls the merge back when it reds. A merge here skips the review and all of that.
+EOF
+}
+
+# Rules 3 to 3d when the command names its tree through something the hook
+# cannot read: a variable set by another command, a cd that can fail, or a
+# path it cannot resolve. The rule fails closed, and this says why, so the
+# reader can name the tree plainly.
+msg_bashguard_tree_unresolved() {
+    local what="$1"
+    cat <<EOF
+hone bash-guard: this command $what, and the hook cannot tell which tree it runs in.
+Do: name the tree with a literal path, such as 'git -C <path>' or 'cd <path> &&', or run the command in a worktree.
+Why: the hook resolves a literal path and a variable set to one in the same command. Anything else could be the primary tree, which only receives merges.
 EOF
 }
 
@@ -1323,9 +1352,11 @@ bash-guard|agent|msg_bashguard_unparsed
 bash-guard|agent|msg_bashguard_sabotage
 bash-guard|agent|msg_bashguard_signoff
 bash-guard|agent|msg_bashguard_attest
-bash-guard|agent|msg_bashguard_protected
+bash-guard|agent|msg_bashguard_protected|scripts/lint.sh
+bash-guard|agent|msg_bashguard_check_config|biome.json
 bash-guard|agent|msg_bashguard_head_move
 bash-guard|agent|msg_bashguard_branch_move
+bash-guard|agent|msg_bashguard_tree_unresolved|moves HEAD
 bash-guard|agent|msg_bashguard_self_writer
 bash-guard|agent|msg_bashguard_formatter
 dirty-guard|agent|msg_dirtyguard_primary_tree|src/<area>/<file>|git checkout HEAD -- 'src/<area>/<file>'
