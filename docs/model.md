@@ -376,7 +376,7 @@ not "proven".
 So the Plan states the boundary explicitly: a Plan whose proof is user-
 or ops-level declares `Proof: real-environment — <the check>`. (The
 `plan-critic` rejects a plan whose named proof is categorically unable to
-settle its claim.) `land` refuses such a change until a reviewed
+settle its claim, or that the project's proof adapter could not run.) `land` refuses such a change until a reviewed
 real-environment check passes, or until whoever ran the check signs it
 off. The loop runs the check where it can reach it and hands you the
 output, and you sign off. It never signs a proof off itself, because a
