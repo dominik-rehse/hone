@@ -457,8 +457,9 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
      (often this session's own background run), or the primary branch moved
      on every attempt. Wait, retry.
    - **2**: usage or repo-state error (missing branch, detached HEAD, no
-     `Cut:` line, uncommitted changes in the worktree, or files in the
-     primary tree in the way): read the stderr message.
+     `Cut:` line, land run from inside the worktree, uncommitted changes in
+     the worktree, a merge git refused, or files in the primary tree in the
+     way): read the stderr message.
 
    Any non-zero exit: read `references/land.md` before acting on it. It carries
    what each code means and what resolves it. Three rules hold whatever the
