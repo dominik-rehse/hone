@@ -287,17 +287,6 @@ route.
   case needs a brief on which the stub proposes the cut and the prompt
   must refuse it.
 
-#### A session once ran without hone's workflow rules
-
-- What happens: the SessionStart hook injects `rules/workflow.md` into each
-  session. In one field session that injection was missing, while other
-  plugins' injections were present.
-- How we know: one transcript in
-  [the 2026-09-25 note](spikes/2026-09-25-field-data-since-0-58.md). The
-  cause is not known.
-- Next step: none until it happens again. Then read the hook's output and
-  the harness's plugin load log for that session.
-
 #### The critics' verdict line drifted on 0.58.1
 
 - What happens: the critics must end with the verdict on its own line. On

@@ -23,10 +23,10 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
   hook as a merge conflict, in three sessions. Fixed in 0.59.1.
 - 2026-09-25 · 0.58.1 · `nag` · a "survived its landing" false alarm fired
   three times in one session. This happened while its worktree was still
-  legitimately open, right after a rollback. Fixed after 0.61.0.
+  legitimately open, right after a rollback. Fixed in 0.62.0.
 - 2026-09-25 · 0.58.1 · `dirty-guard` · blamed paths from another session's
   half-finished manual merge in the primary tree on two unrelated commands.
-  Both agents correctly declined the hook's suggested restore. Fixed after 0.61.0.
+  Both agents correctly declined the hook's suggested restore. Fixed in 0.62.0.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `gate` · post-merge checks in the
   primary tree read other sessions' untracked draft Plans, causing at
   least 6 spurious rollbacks. Fixed in 0.60.0.
@@ -34,27 +34,27 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
   `stryker.conf.json` for the mutation check matched the tracked-check-
   config rule. The ask did not name the file. Unattended runs stalled 7
   hours, 81 minutes, 69 and 12 minutes, and 40 minutes across four
-  sessions. Fixed after 0.61.0.
+  sessions. Fixed in 0.62.0.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `bash-guard` · the primary-branch-
   move ask fired 14 times, 3 right and 11 false. False shapes: a
   directory change into a scratch worktree, a path-scoped `git reset`,
   and a checkout addressed only by a shell variable. One false ask sat
-  40 minutes. Fixed after 0.61.0.
+  40 minutes. Fixed in 0.62.0.
 - 2026-09-21 to 2026-09-25 · mixed · `bash-guard` · denied a formatter run
   as writing a durable file, three times. Its target path was an
   unresolved variable. It also denied a read-only listing under
   `.hone-grant/triggers/` as a write into it. It denied a package-manager
   init or install in a scratchpad or worktree as writing its own files,
-  four times. Fixed after 0.61.0 where the command sets the variable or
+  four times. Fixed in 0.62.0 where the command sets the variable or
   the directory itself. A path set outside the command still asks.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `gate` · the suite-lock block named
   "another session" as the holder, about 20 times. The real holder was
   the session's own land, or its background verify. The block skips the
-  retry cap, so an agent looped on turns with no visible output. Fixed after 0.61.0.
+  retry cap, so an agent looped on turns with no visible output. Fixed in 0.62.0.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `nag` · the broken-link check read
   `javascript:` and `data:` links inside inline code as real. It printed
   on every stop in every session. A doc over its line cap and a list of
-  pending Plans also repeated on every stop, with no action taken. Fixed after 0.61.0.
+  pending Plans also repeated on every stop, with no action taken. Fixed in 0.62.0.
 - 2026-09-21 to 2026-09-25 · mixed · run loop · 10 of 23 finished runs
   printed fewer than 5 of the 6 step-start progress lines.
   `skills/run/SKILL.md` asks for one at the start and end of each step.
@@ -105,9 +105,9 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
 - not recorded · 0.58.1 · `gate` · the proof gate named a probe script
   for a change that had edited another change's probe. That script did
   not exist. Fixed in 0.60.0.
-- not recorded · 0.58.1 · `session-start` · one session's workflow-rule
-  injection went missing, while other plugins' injections were present.
-  Cause unknown.
+- 2026-09-21 · 0.58.1 · `session-start` · one session's workflow-rule
+  injection went missing. Right by design: the person had created the off
+  marker ten seconds before that session started.
 
 - 2026-08-20 to 2026-09-18 · mixed · `nag` · 314 lines telling the session
   that a template entry under the spike directory carries no date. The person
