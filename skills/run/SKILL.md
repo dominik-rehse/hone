@@ -21,8 +21,9 @@ Resolve `$ARGUMENTS`:
 - empty: list the Plans in `.plans/`. If exactly one, run it. Otherwise ask which.
 - `--model <model>`: the model for the sessions `--all` spawns inside herdr
   (below). It changes nothing about a run in this session. The default is
-  `opus`. Never select `fable` yourself. The loop needs the stronger model.
-  Use `fable`, or any other model, only when the user asks for it by name.
+  `opus`, the model on which hone's suites measure the loop. Never select `fable`
+  yourself. It costs twice as much per token, and no suite has measured the
+  loop on it. Use `fable`, or any other model, only when the user asks for it by name.
 
 Setup check: if `scripts/run-tests.sh` is missing, stop and tell the user to run
 `/hone:setup` first. Without the adapter the gate can't verify anything.
