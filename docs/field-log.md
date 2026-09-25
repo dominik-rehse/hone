@@ -15,7 +15,7 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
 
 - 2026-09-25 · 0.59.1 · `garden` · `skills/garden/SKILL.md` reads every land
   exit 6 as "the cut was unsafe," but since 0.59.1 a refused merge hook also
-  exits 6.
+  exits 6. Fixed in 0.61.0.
 - 2026-09-25 · 0.59.0 · `plan-critic`/`consolidate-critic` · both missed
   that a CLI upgrade had made a stated Decision false. The nested review
   caught it instead.
@@ -23,10 +23,10 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
   hook as a merge conflict, in three sessions. Fixed in 0.59.1.
 - 2026-09-25 · 0.58.1 · `nag` · a "survived its landing" false alarm fired
   three times in one session. This happened while its worktree was still
-  legitimately open, right after a rollback.
+  legitimately open, right after a rollback. Fixed after 0.61.0.
 - 2026-09-25 · 0.58.1 · `dirty-guard` · blamed paths from another session's
   half-finished manual merge in the primary tree on two unrelated commands.
-  Both agents correctly declined the hook's suggested restore.
+  Both agents correctly declined the hook's suggested restore. Fixed after 0.61.0.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `gate` · post-merge checks in the
   primary tree read other sessions' untracked draft Plans, causing at
   least 6 spurious rollbacks. Fixed in 0.60.0.
@@ -34,26 +34,27 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
   `stryker.conf.json` for the mutation check matched the tracked-check-
   config rule. The ask did not name the file. Unattended runs stalled 7
   hours, 81 minutes, 69 and 12 minutes, and 40 minutes across four
-  sessions.
+  sessions. Fixed after 0.61.0.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `bash-guard` · the primary-branch-
   move ask fired 14 times, 3 right and 11 false. False shapes: a
   directory change into a scratch worktree, a path-scoped `git reset`,
   and a checkout addressed only by a shell variable. One false ask sat
-  40 minutes.
+  40 minutes. Fixed after 0.61.0.
 - 2026-09-21 to 2026-09-25 · mixed · `bash-guard` · denied a formatter run
   as writing a durable file, three times. Its target path was an
   unresolved variable. It also denied a read-only listing under
   `.hone-grant/triggers/` as a write into it. It denied a package-manager
   init or install in a scratchpad or worktree as writing its own files,
-  four times.
+  four times. Fixed after 0.61.0 where the command sets the variable or
+  the directory itself. A path set outside the command still asks.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `gate` · the suite-lock block named
   "another session" as the holder, about 20 times. The real holder was
   the session's own land, or its background verify. The block skips the
-  retry cap, so an agent looped on turns with no visible output.
+  retry cap, so an agent looped on turns with no visible output. Fixed after 0.61.0.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `nag` · the broken-link check read
   `javascript:` and `data:` links inside inline code as real. It printed
   on every stop in every session. A doc over its line cap and a list of
-  pending Plans also repeated on every stop, with no action taken.
+  pending Plans also repeated on every stop, with no action taken. Fixed after 0.61.0.
 - 2026-09-21 to 2026-09-25 · mixed · run loop · 10 of 23 finished runs
   printed fewer than 5 of the 6 step-start progress lines.
   `skills/run/SKILL.md` asks for one at the start and end of each step.
@@ -61,7 +62,8 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `plan-critic` · approved a Plan
   whose Proof trailer needed a probe script keyed by the change's slug.
   No such script existed. This happened twice, and land then failed the
-  proof gate both times.
+  proof gate both times. Fixed in 0.61.0: the critic checks the proof
+  route.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `consolidate-critic` · proposed
   three cuts a person had to decline. They were: a required
   `MutationObserver`, a test and a sentence nested review later restored,
@@ -82,9 +84,10 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
 - 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · a Sonnet main session
   retried land blindly after an exit 9 or exit 6, twice. Once this went
   against `land.md`'s own "stop and escalate," citing a memory file
-  instead.
+  instead. The run skill forbids it since 0.61.0.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · `/hone:plan` fired when
   the person had asked for a chat handoff instead ("No, don't plan").
+  Addressed in 0.61.0: the plan skill fires only for a Plan.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · a session created and
   landed an unplanned worktree after the person said "You do it."
 - 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · the person twice asked
