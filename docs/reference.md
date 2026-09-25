@@ -193,7 +193,7 @@ the remote rejected its push (default 3).
 Two more variables tune a hook. `HONE_AREA_MAX_LINES` sets the size above
 which the nag names a `src/<area>/` (default 3000). `HONE_GATE_BLOCK_CAP`
 sets how many identical failures the gate blocks a turn end for before it
-lets the turn end (default 3). Both are under *Hooks* below.
+lets the turn end (default 3).
 
 ## Hooks
 
@@ -250,8 +250,7 @@ irreversible. When you want that record, route the edit through the loop.
     counts, and so does every `git reset` but a bare one and a `--`
     restore. `worktree.sh land` is the route, and it passes. `git
     merge-base` and `git log --merges` read history, so they pass too. A
-    push of the change branch to the team's remote is the loop's own step,
-    and it passes.
+    push of the change branch to the team's remote passes.
   - Both rules read every tree the command names, not only the one a
     leading `cd` reaches: a later `cd`, `git -C <path>`, and
     `--git-dir=<path>`. Any of them in the primary tree makes the command
@@ -286,7 +285,8 @@ irreversible. When you want that record, route the edit through the loop.
     change branch. This is the pre-land check. A green run records the
     branch and the tree it verified in `<git-dir>/hone-gate-green`. Every
     later Stop on that branch skips the run and says so, and a plugin
-    upgrade invalidates the record.
+    upgrade invalidates the record. When a land or a verify holds the land
+    lock, often this session's own, the gate blocks under the cap below.
 
   - A Stop hook runs where the agent's shell stands, and the agent moves it.
     So when this session was already blocked in a linked worktree of the

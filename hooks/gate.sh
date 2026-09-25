@@ -238,8 +238,12 @@ gate_signature() {
 # before, so no run can plan around it. A green run or a failure that changes
 # clears the streak at any point, so a run that keeps working keeps every
 # block it earns, and giving up sooner buys a run nothing.
+#
+# $4, when given, is the ordinary block's message in place of
+# msg_gate_step_failed. The suite-lock wait passes its own, so a run that
+# waits on its own background land meets the same cap as a red check.
 gate_block_or_cap() {
-    local label="$1" rc="$2" tail="$3" file sig n=1 recorded
+    local label="$1" rc="$2" tail="$3" first="${4:-}" file sig n=1 recorded
     file=$(gate_blocks_file)
     sig=$(gate_signature "$label" "$rc" "$tail")
     recorded=$(cat "$file" 2>/dev/null)
@@ -254,6 +258,7 @@ gate_block_or_cap() {
     fi
     printf '%s %s %s\n' "$SESSION" "$sig" "$n" > "$file" 2>/dev/null || true
     [ "$n" -eq "$GATE_BLOCK_CAP" ] && block "$(msg_gate_report_now "$label" "$n")"
+    [ -n "$first" ] && block "$first"
     block "$(msg_gate_step_failed "$label" "$rc" "$tail")"
 }
 
@@ -323,17 +328,23 @@ run_step() {
 }
 
 # The full tier shares land's lock (<git-common-dir>/hone-land.lock). e2e tiers
-# are load-sensitive, so a --all racing another session's suite or a land's
-# re-verify poisons both signals (phantom flakes, spurious land rollbacks).
-# Short wait only: if a suite is live, blocking the stop with "retry" beats
-# running red under contention. The unit tier stays lock-free: it is the
-# per-Stop inner loop and must stay cheap. Without flock, degrade to running
-# unserialized rather than not at all.
+# are load-sensitive, so a --all racing another suite or a land's re-verify
+# poisons both signals (phantom flakes, spurious land rollbacks). Short wait
+# only: if a suite is live, blocking the stop with "retry" beats running red
+# under contention. The unit tier stays lock-free: it is the per-Stop inner
+# loop and must stay cheap. Without flock, degrade to running unserialized
+# rather than not at all.
+#
+# The holder is often this session's own land or verify, run in the
+# background as the run skill asks. So the block names no other session, and
+# it counts toward the cap like a red check. It used to call block directly:
+# about twenty field blocks said "another session" of the run's own land, and
+# runs waiting on it looped on empty turns with no cap to end them.
 if [ "$TIER" = "--all" ] && command -v flock >/dev/null 2>&1; then
     SUITE_LOCK="$(git rev-parse --git-common-dir 2>/dev/null)/hone-land.lock"
     if { exec 9>"$SUITE_LOCK"; } 2>/dev/null; then
         flock -w "${HONE_SUITE_LOCK_TIMEOUT:-30}" 9 || \
-            block "$(msg_gate_suite_lock)"
+            gate_block_or_cap "the wait for the suite lock" lock "" "$(msg_gate_suite_lock)"
     fi
 fi
 

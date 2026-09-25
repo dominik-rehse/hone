@@ -213,11 +213,13 @@ $(hone_msg_block "$tail")
 EOF
 }
 
+# The holder is often the session's own background land or verify, so the
+# message names no other session. It names the lock, and the wait.
 msg_gate_suite_lock() {
     cat <<'EOF'
-hone gate: another session is running the full suite.
-Do: wait for that run to finish, then verify again.
-Why: two full suites at once poison each other's signal. Do not run the suite concurrently.
+hone gate: a land or a full-suite run holds the suite lock, so the gate did not run the full suite.
+Do: wait until the run that holds the lock ends, such as your own background land or verify, then end the turn again.
+Why: two full suites at once poison each other's signal. The holder can be a land or a verify that this session started in the background.
 EOF
 }
 

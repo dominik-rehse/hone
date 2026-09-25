@@ -702,6 +702,33 @@ git -C "$REPO" checkout -q hone/verify-tier
 rm -f "$WT_BLOCKS" "$BLOCKS" "$CAPTAIL"
 git -C "$REPO" checkout -q -- src/auth/login.ts
 
+echo "== gate: a held suite lock blocks under the same cap, and names no other session =="
+# The holder is often the session's own background land or verify. About
+# twenty field blocks said "another session" of it, and the block bypassed
+# the cap, so a run waiting on its own land looped on empty turns.
+if command -v flock >/dev/null 2>&1; then
+    rm -f "$RECEIPT" "$BLOCKS"
+    LOCKF="$(git -C "$REPO" rev-parse --git-common-dir)/hone-land.lock"
+    case "$LOCKF" in /*) ;; *) LOCKF="$REPO/$LOCKF" ;; esac
+    ( flock 8; sleep 20; ) 8>"$LOCKF" &
+    LOCK_HOLDER=$!
+    sleep 0.3
+    lockstop() { (cd "$REPO" && printf '{"session_id":"lk"}' | HONE_SUITE_LOCK_TIMEOUT=0 bash "$GATE"); }
+    out=$(lockstop)
+    blocked "$out" && ok "a held suite lock blocks the stop" || bad "a held suite lock should block"
+    echo "$out" | grep -q 'holds the suite lock' && ok "the lock block names the lock" || bad "the lock block should name the lock"
+    echo "$out" | grep -q 'another session' && bad "the lock block must not claim another session" || ok "the lock block claims no other session"
+    echo "$out" | grep -q 'your own background land' && ok "the lock block names the session's own background run" || bad "the lock block should name the session's own run"
+    out=$(lockstop); blocked "$out" || bad "the second lock wait should block"
+    out=$(lockstop)
+    asked "$out" && ok "the third lock wait asks for the final report" || bad "the lock wait should reach the report request"
+    out=$(lockstop)
+    capped "$out" && ok "the fourth lock wait lets the turn end" || bad "the lock wait should meet the cap"
+    blocked "$out" && bad "a capped lock wait must not block" || ok "a capped lock wait does not block"
+    kill "$LOCK_HOLDER" 2>/dev/null; wait "$LOCK_HOLDER" 2>/dev/null
+    rm -f "$BLOCKS"
+fi
+
 echo "== nag: leftover Plan (landed evidence only), oversized Note, orphan Note =="
 # No worktree and no landed evidence = the normal plan→run gap: pending, not
 # stale. No per-Plan finding; one aggregate advisory line instead.

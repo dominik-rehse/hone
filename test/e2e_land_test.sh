@@ -400,7 +400,7 @@ if command -v flock >/dev/null 2>&1; then
   sleep 0.3
   out=$(cd "$WT_G" && echo '{}' | HONE_SUITE_LOCK_TIMEOUT=1 bash "$GATE")
   echo "$out" | grep -q '"decision":"block"' || die "gate --all under a held suite lock should block the stop"
-  echo "$out" | grep -q "another session is running the full suite" || die "gate block should name the live suite as the reason"
+  echo "$out" | grep -q "holds the suite lock" || die "gate block should name the held lock as the reason"
   wait "$HOLDER" 2>/dev/null
   # Lock free again → the gate runs --all and passes green.
   out=$(cd "$WT_G" && echo '{}' | bash "$GATE")
