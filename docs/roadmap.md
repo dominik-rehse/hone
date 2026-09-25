@@ -273,7 +273,12 @@ route.
   scenario tests.
 - How we know: lab runs of `proof-gate` on claude-opus-5-5 end in all
   three ways. The finding is right, and each ending can be defended, so
-  the variance is in the fixture and not in hone.
+  the variance is in the fixture and not in hone. The stop grew more
+  common on 2026-09-25: none in the passes of 0.59.1 and 0.60.0, then 3
+  of 5 runs on 0.61.0 to 0.63.0. The review and stop prose did not
+  change in those releases. The same passes kept a duplicate once in
+  `python-structure` (measure `dup=kept`), when the run declined the
+  review's finding as cosmetic.
 - Next step: fix the fixture's Plan. Either it gives a delay schedule, or
   it states that one 503 is the whole outage. Then the review has nothing
   to fork on, and the scenario tests the proof gate again.
