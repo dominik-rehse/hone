@@ -1,6 +1,6 @@
 ---
 name: plan
-description: "Author the temporary Plan for one change: .plans/<change>.md, the one artifact written outside the loop, plus any references under .plans/<change>/ that carry what prose would lose. Guides sizing a change to the smallest unit worth its own review gate, states what, why, and how you'll know it works, then submits it to the plan-critic for approval while the caller is still present to revise. Does not write code, tests, or docs. Use it only when the caller asks for a Plan, or names a code change to plan; never for a handoff, a summary, or a note. Invoke with /hone:plan <change-name-or-sketch>."
+description: "Author the temporary Plan for one change: .plans/<change>.md, the one artifact written outside the loop, plus any references under .plans/<change>/ that carry what prose would lose. Guides sizing a change to the smallest unit worth its own review gate, states what, why, and how you'll know it works, then submits it to the plan-critic for approval while the caller is still present to revise. Does not write code, tests, or docs. Use it only when the caller asks for a Plan, or names a change to plan; never for a handoff, a summary, or a note. Invoke with /hone:plan <change-name-or-sketch>."
 argument-hint: "[change-name-or-sketch]"
 ---
 
