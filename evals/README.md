@@ -206,7 +206,7 @@ Re-measure a case before you lean on its entry.
   under its slug. The stub and the prompt minus *A proof land cannot run*
   approve.
 - `proof-probe-not-found`: the same, but the Plan extends another change's
-  probe. The stub approves.
+  probe. Both baselines approve.
 - `schema-split-column-holdout`: held out, a paraphrase of
   `schema-silent-on-data`.
 

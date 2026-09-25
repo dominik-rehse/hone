@@ -161,6 +161,12 @@ isolated, three votes, moved three numbers and left the rest standing:
   pins the bullet and not that sentence. A first draft with seven strings
   split the full critic 2/3, and its approving vote called seven examples
   "acceptable spec-by-example". Measured 2026-09-17, claude-sonnet-5.
+- `proof-probe-unnamed` and `proof-probe-not-found`: REJECT with the probe
+  path, 3/3 each. The prompt minus *A proof land cannot run* approves both
+  3/3. Measured 2026-09-25, claude-opus-5-5, before and after the bullet
+  became conditional on an adapter that looks up a check per change. The
+  briefs needed no line on how the adapter finds its probe: the list of
+  existing probes was enough.
 - `schema-split-column-holdout`: REJECT with `disposable`, held out. It
   paraphrases `schema-silent-on-data` with different content, and it measured
   the same way: critic 3/3 with the substring, stub REJECT 3/3 without it.
