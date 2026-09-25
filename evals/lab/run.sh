@@ -77,7 +77,7 @@
 #                         [--bare]
 #                         [--budget USD] [--timeout MIN] [--jobs N] [--dry-run]
 #   bash evals/lab/run.sh --regrade /var/tmp/hone-lab/<time> [SCENARIO...]
-#   --model ID     the full model ID that drives the run (default claude-opus-5,
+#   --model ID     the full model ID that drives the run (default claude-opus-5-5,
 #                  the floor of the loop). An alias floats, so the lab refuses one.
 #   --review-model ID  the model of the nested /code-review, in place of the model
 #                  that the run skill names. It is the setting review.model, and
@@ -153,7 +153,7 @@ ROOT=$(cd "$LAB/../.." && pwd)
 SCENARIOS="${LAB_SCENARIOS:-$LAB/scenarios}"
 OUT_ROOT="${LAB_OUT:-/var/tmp/hone-lab}"
 
-MODEL="claude-opus-5"; JUDGE_MODEL="claude-sonnet-5"; REVIEW_MODEL=""; TRACK=""; WITHOUT=""
+MODEL="claude-opus-5-5"; JUDGE_MODEL="claude-sonnet-5"; REVIEW_MODEL=""; TRACK=""; WITHOUT=""
 BUDGET=25; TIMEOUT_MIN=60; JOBS=2; DRY=0; REGRADE=""; BARE=0; VARIANT_SPEC=""
 SETS=()
 NAMES=()

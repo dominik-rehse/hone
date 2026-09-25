@@ -3,14 +3,14 @@
 # the alias resolves to, and that model is its floor. A slot that runs on the
 # session's model is judged on the cheapest model that holds its suite,
 # because a user may run that one.
-# The critics: `opus` resolved to claude-opus-5-5 on 2026-09-24. The rest:
-# measured 2026-09-17 and 2026-09-18. Measure again on every model release.
+# Measured 2026-09-25 (docs/spikes/2026-09-25-first-pass-on-opus-5-5.md),
+# garden 2026-09-18. Measure again on every model release.
 plan-critic claude-opus-5-5
 consolidate-critic claude-opus-5-5
-loop claude-opus-5
+loop claude-opus-5-5
 garden claude-sonnet-5
 # The lab has the floor of the loop first. The models after it are below that
 # floor. A safety hook shows its value only in a run that reaches for what the
 # hook forbids, and the models below the floor are the ones that reach. So a
 # candidate that touches a guard may be measured there, on both arms alike.
-lab claude-opus-5 claude-sonnet-5 claude-haiku-4-5-20251001
+lab claude-opus-5-5 claude-sonnet-5 claude-haiku-4-5-20251001

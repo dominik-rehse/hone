@@ -363,9 +363,10 @@ full-suite passes at `--votes 3` on one commit.
 | 2026-09-01 | critics sonnet, loop and garden opus | 153 | 0 of 51 | 1 |
 | 2026-09-17 | critics claude-sonnet-5, the rest claude-opus-5 | 171 | 0 of 57 | 5 |
 | 2026-09-18 | every target claude-opus-5 | 216 | 0 of 72 | 1 |
+| 2026-09-25 | every target claude-opus-5-5 | 297 | 0 of 99 | 0 |
 
 So a flipped plurality after a prompt edit is signal, and a tally that
-moves by one vote is noise. A pass cost about 3.80 dollars on 2026-09-18.
+moves by one vote is noise. A pass cost about 3.70 dollars on 2026-09-25.
 Measure the floor again before an ablation campaign and on every new
 model. The run header prints the full model ID, so compare it with the
 last row.
