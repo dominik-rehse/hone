@@ -388,6 +388,10 @@ say 'I did the work.' > "$W/t.jsonl"
 say '`◆` `[a]` worktree ✓ > `build ✗` > verify > consolidate > review > land' > "$W/t.jsonl"
 [ "$(progress_of)" = "measureprogress_lines=1 measureprogress_starts=0/2 " ] \
     && ok "a failed step counts as reached" || bad "a stop at build should measure 0/2 (got $(progress_of))"
+{ say "$(printf '%s\n%s\n\n%s' '`◆` `[a]` worktree ✓ > build ✓ > verify ✓ (suite 3/3,' 'lint ✓) > `consolidate ...` > review > land' 'Running the critic.')"
+  say "$(printf '%s\n%s' '`◆` `[a]` worktree ✓ > build ✓ > verify ✓ > consolidate ✓ > review ✓ >' '`land ✓ (merged 3f2a1c9)`')"; } > "$W/t.jsonl"
+[ "$(progress_of)" = "measureprogress_lines=2 measureprogress_starts=1/6 " ] \
+    && ok "a wrapped line keeps the steps on its second line" || bad "wrapped lines should measure 2 lines and 1/6 (got $(progress_of))"
 
 echo "== a scenario with a by-name file stays out of a pass that names none =="
 mkdir -p "$W/scenarios/toy-byname"

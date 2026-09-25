@@ -205,10 +205,24 @@ reached() {
 # STARTED/REACHED over the six steps. A run that printed the land line alone
 # measures 0/6. In the field, 10 of 23 runs showed fewer than 5 of 6 starts,
 # with silences of up to 50 minutes. It only measures.
+#
+# A progress line can wrap, as the skill's own examples do. So a line that
+# holds `◆` takes the non-blank lines after it in the same text block, until
+# its chain reaches land or a new `◆` line starts.
 progress_lines() {
     local lines s started=0 reached=0
     lines=$(jq -r 'select(.type == "assistant") | .message.content[]?
-                   | select(.type == "text") | .text' "$LAB_TRANSCRIPT" 2>/dev/null | grep -F '◆')
+                   | select(.type == "text") | .text | split("\n")
+                   | reduce .[] as $l ({out: [], cur: null};
+                       if ($l | contains("◆")) then
+                           (if .cur then .out += [.cur] else . end) | .cur = $l
+                       elif .cur != null and ($l | test("\\S"))
+                            and (.cur | test("> `?land") | not) then
+                           .cur += " " + $l
+                       else
+                           (if .cur then .out += [.cur] else . end) | .cur = null
+                       end)
+                   | .out + (if .cur then [.cur] else [] end) | .[]' "$LAB_TRANSCRIPT" 2>/dev/null)
     for s in worktree build verify consolidate review land; do
         grep -qE "(^|[^a-z])$s (\.\.\.|…)" <<<"$lines" && started=$((started+1))
         grep -qE "(^|[^a-z])$s (✓|✗|\.\.\.|…)" <<<"$lines" && reached=$((reached+1))
