@@ -361,6 +361,114 @@ echo "$(bg 'bunx biome check --write src/auth/login.ts')" | grep -q '"ask"' && o
 echo "$(bg 'bunx dprint fmt')" | grep -q 'name the paths' && ok "the formatter ask offers scoping" || bad "the formatter ask should name scoping as the remedy"
 echo "$(bg 'bun add -d dprint@latest')" | grep -q 'run it in a worktree' && ok "the package-manager ask keeps the worktree remedy" || bad "rule 4 should keep msg_bashguard_self_writer"
 
+echo "== bash-guard: the analysis turns a false ask into an allow, and nothing else =="
+# The field asks of 2026-09-21 to 25. About eleven of fourteen asks on the
+# primary-branch rule were false, most of them a merge test in a scratch
+# worktree outside the repository, and one sat forty minutes. The analysis
+# passes such a command only when it understands all of it. Every shape in
+# the fail-closed half below asked on the old whole-line hook too, and still
+# does.
+bgj() {
+    local c; c=$(. "$PLUGIN_ROOT/hooks/common.sh"; hone_json_escape "$1")
+    printf '{"cwd":"%s","tool_input":{"command":"%s"}}' "${2:-$REPO}" "$c" | (cd "$REPO" && bash "$BASH_GUARD")
+}
+passes() { echo "$1" | grep -q 'permissionDecision' && bad "$2" || ok "$2"; }
+asks()   { echo "$1" | grep -q '"ask"' && ok "$2" || bad "$2"; }
+denies() { echo "$1" | grep -q '"deny"' && ok "$2" || bad "$2"; }
+SCR=$(mktemp -d)
+SCR=$(cd "$SCR" && pwd -P)
+git -C "$REPO" worktree add -q --detach "$SCR/wt" main
+git clone -q "$REPO" "$SCR/clone"
+ln -s "$REPO" "$SCR/link"
+mkdir -p "$REPO/docs/spikes/probe" && touch "$REPO/docs/spikes/probe/ws"
+
+# (a) The false shapes pass.
+passes "$(bgj "SCRATCH=$SCR/landcheck && rm -rf \"\$SCRATCH\" && git worktree add --detach \"\$SCRATCH\" main && git -C \"\$SCRATCH\" merge --no-ff --no-edit hone/auth-login")" \
+    "a merge in a scratch worktree the same chain adds passes"
+passes "$(bgj $'SCRATCH=$(mktemp -d)\ngit worktree add --detach "$SCRATCH" main 2>&1\ncd "$SCRATCH" && git merge --no-commit --no-ff hone/auth-login 2>&1')" \
+    "a merge after cd into a mktemp scratch worktree passes"
+passes "$(bgj "S=$SCR/mergetest; git -C $REPO worktree add --detach \$S main >/dev/null 2>&1; git -C \$S merge --no-ff --no-edit hone/auth-login 2>&1 | tail -3; git -C $REPO worktree remove --force \$S")" \
+    "git -C on a variable set to a new scratch worktree passes"
+passes "$(bgj "git worktree add --detach $SCR/s2 main && git -C \"$SCR/s2\" merge hone/auth-login")" \
+    "git -C into a worktree added earlier in the chain passes"
+passes "$(bgj "git -C $SCR/wt merge --abort 2>&1 || true")" "a merge abort in a scratch worktree passes"
+passes "$(bgj "cd $SCR/wt"$'\ngit merge --abort 2>&1 || true\n'"cd $REPO"$'\ngit worktree list')" \
+    "a merge abort after cd into a scratch worktree, then cd back, passes"
+passes "$(bgj "P=$SCR/wt; cd \$P && git add -A && git reset -q; git status --short")" "a reset in a scratch worktree passes"
+passes "$(bgj "T=$SCR/clone; cd \"\$T\" && git checkout -q -f main")" "a checkout in a scratch clone passes"
+passes "$(bgj 'git reset -q docs/spikes/probe/ws && git status --short')" "a path-scoped unstage in the primary tree passes"
+passes "$(bgj "cd $SCR && bun init -y; bun add left-pad")" "a package install in a scratch directory passes"
+passes "$(bgj "W2=$WT; cd \$W2 && bun install --frozen-lockfile 2>&1 | tail -1 && bun add left-pad")" \
+    "a package install after cd into a worktree variable passes"
+passes "$(bgj 'bun install 2>&1 | tail -1')" "a sync install with a redirection passes"
+passes "$(bgj "cd $REPO; f=.plans/server/todo-tasks.md"$'\nbunx dprint fmt "$f" >/dev/null && echo ok')" \
+    "a formatter on a variable set to a Plan passes"
+passes "$(bgj $'git add -A && git commit -q -F - <<\'EOF\'\nchore(deps): bump\n\nfrom an unpinned `bun add -g x`, see git -C '"$REPO"$' merge\nEOF\ngit log --oneline -1' "$WT")" \
+    "a heredoc commit message is data, not a command"
+passes "$(bgj 'echo "grant: $(ls .hone-grant/triggers/ 2>/dev/null || echo NONE)"')" \
+    "reading .hone-grant/ inside a substitution passes"
+
+# (b) Section B of the 2026-09-25 review: each asked on the old hook, and the
+# reverted walker let it through.
+for c in 'false && cd /tmp; git merge feat' 'true || cd /tmp; git merge feat' \
+         'if false; then cd /tmp; fi; git merge feat' 'f() { cd /tmp; }; git merge feat' \
+         'cd /tmp | true; git merge feat' 'cd /tmp & git merge feat' 'cd /tmp `true`; git merge feat' \
+         'X=/tmp | true; git -C "$X" merge feat' 'git worktree add . 2>/dev/null; git merge feat' \
+         'git worktree add docs; git -C docs merge feat' 'mkdir /nonexist/a/b; cd /nonexist/a/b; git merge feat' \
+         'D=$(mktemp -d -p /nonexistent); cd $D; git merge feat' $'bash <<EOF\ngit merge feat\nEOF' \
+         $'echo $((1<<2))\ngit merge feat' $'cat <<\'EOF\' | bash\ngit merge feat\nEOF'; do
+    asks "$(bgj "$c")" "fails closed: $(printf '%s' "$c" | tr '\n' ' ')"
+done
+for c in "git --git-dir=$REPO/.git --work-tree=/tmp merge feat" "git -C $REPO --work-tree=/tmp merge feat" \
+         "bash -c \"git -C $REPO merge feat\"" "eval \"git -C $REPO merge feat\"" "env -C $REPO git merge feat" \
+         "git -C $SCR/link merge feat" "cd $SCR/link && git merge feat" "timeout 5 git -C $REPO merge x"; do
+    asks "$(bgj "$c" "$WT")" "fails closed from a worktree: ${c//$SCR/<scr>}"
+done
+asks "$(bgj 'false && cd /tmp; echo x > eslint.config.js' "$WT")" "a config write after a cd that may not run asks"
+
+# (c) The true cases still ask.
+asks "$(bgj 'git reset -q main')" "a reset to a commit in the primary tree still asks"
+asks "$(bgj 'git reset -q docs/spikes/none/ws')" "a reset to a path that does not exist still asks"
+asks "$(bgj "cd $REPO"$'\ngit merge --abort' "$WT")" "a merge abort after cd back to the primary tree still asks"
+asks "$(bgj "S=$REPO; git -C \"\$S\" merge --ff-only hone/auth-login")" "a variable set to the primary tree still asks"
+asks "$(bgj "cd $SCR/missing && git merge hone/auth-login")" "a cd into a missing directory fails closed"
+asks "$(bgj "T=\$(ls -d $SCR/clone* | tail -1); cd \"\$T\"; git checkout -q -f main")" "a tree set by another command fails closed"
+asks "$(bgj "cd $SCR/wt; cd $REPO; bun add left-pad")" "a package install back in the primary tree still asks"
+asks "$(bgj 'f=docs/notes/auth.md; bunx dprint fmt "$f"')" "a formatter on a variable set to a durable path still asks"
+asks "$(bgj "mkdir -p $SCR/n && cd $SCR/n; git merge x")" "a cd that may not run leaves the next list in the primary tree"
+asks "$(bgj "git -C $SCR/wt merge x && git merge y")" "a merge in the primary tree after one in a scratch worktree asks"
+asks "$(bgj "git -C $WT branch -f main HEAD")" "a branch move from a worktree that shares the refs asks"
+asks "$(bgj "S=$SCR/s3; git worktree add -f \$S main; git -C \$S merge feat")" "a forced worktree add fails closed"
+asks "$(bgj "ln -s $REPO $SCR/l2; git -C $SCR/l2 merge feat")" "a symlink the command creates fails closed"
+asks "$(bgj "export GIT_DIR=$REPO/.git; cd $SCR/wt && git merge x")" "an exported GIT_DIR fails closed"
+asks "$(bgj "cd $SCR && bun add x --cwd $REPO")" "a tool pointed back into the primary tree fails closed"
+denies "$(bgj 'echo "$(cat reason.txt)" > .hone-grant/db-drop')" "a redirect into .hone-grant/ after a substitution is still denied"
+denies "$(bgj 'x=$(echo ok; touch .hone-proof/ui-flow)')" "a write inside a substitution is still denied"
+
+echo "== bash-guard: a check config asks inside the repository, names the file, and passes outside =="
+# Unattended runs stalled up to seven hours on an unnamed ask about a scratch
+# mutation-check config. A person approved one without knowing which file it
+# was, and a tracked config was overwritten.
+out=$(bgj $'cat > vitest.config.ts <<\'EOF\'\n{ "testRunner": "command" }\nEOF' "$WT")
+asks "$out" "a scratch config in the worktree still asks"
+echo "$out" | grep -q 'modifies vitest.config.ts' && ok "the config ask names the file" || bad "the config ask should name the file"
+echo "$out" | grep -q 'outside the repository' && ok "the config ask offers a path outside the repository" || bad "the config ask should offer the outside route"
+passes "$(bgj "cat > $SCR/stryker.conf.json <<'EOF'"$'\n{}\nEOF')" "a config written outside the repository passes"
+passes "$(bgj "cd $SCR && cat > vitest.config.ts <<'EOF'"$'\n{}\nEOF')" "a config written after cd outside the repository passes"
+passes "$(bgj $'S=$(mktemp -d); cat > "$S/stryker.conf.json" <<\'EOF\'\n{}\nEOF' "$WT")" "a config written into a mktemp directory passes"
+passes "$(bgj 'echo {} > "${TMPDIR:-/tmp}/stryker.conf.json"' "$WT")" "a config written under TMPDIR passes"
+passes "$(bgj "cp stryker.conf.json $SCR/" "$WT")" "copying a config out of the repository passes"
+asks "$(bgj "cp $SCR/vitest.config.ts ." "$WT")" "copying a config into the repository asks"
+asks "$(bgj "rm -f $SCR/wt/tsconfig.json")" "a config in a scratch worktree of the repository asks"
+asks "$(bgj 'X=$(pwd -P); echo {} > "$X"/../biome.json')" "a config path that does not resolve asks"
+asks "$(bgj "cp x.json $SCR/link/biome.json" "$WT")" "a config written through a symlink into the repository asks"
+out=$(bgj 'sed -i s/x/y/ scripts/lint.sh')
+echo "$out" | grep -q 'modifies scripts/lint.sh' && ok "the protected-artifact ask names the file" || bad "the protected ask should name the file"
+
+git -C "$REPO" worktree remove --force "$SCR/wt"
+git -C "$REPO" worktree prune
+rm -rf "$SCR" "$REPO/docs/spikes/probe"
+
 echo "== dirty-guard: what a shell command leaves dirty in the primary tree =="
 dg() { echo '{"tool_input":{"command":"bun add -d dprint"}}' | (cd "$1" && bash "$DIRTY_GUARD"); }
 blocked() { echo "$1" | grep -q '"decision":"block"'; }

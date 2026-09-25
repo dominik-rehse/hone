@@ -125,11 +125,26 @@ Why: a sign-off the run writes for itself is the record the proof gate exists to
 EOF
 }
 
+# Each ask names the file it is about. A person approved an unnamed ask
+# without knowing which file it meant, and one tracked config was overwritten.
 msg_bashguard_protected() {
-    cat <<'EOF'
-hone bash-guard: this command modifies a protected hone artifact.
+    local path="$1"
+    cat <<EOF
+hone bash-guard: this command modifies $path, a protected hone artifact.
 Do: confirm you intend this change before you allow it.
-Why: the adapters, the hooks, the settings, the policy files, and the check configs carry hone's enforcement.
+Why: the adapters, the hooks, the settings, and the policy files carry hone's enforcement.
+EOF
+}
+
+# The check-config half of rule 2. A scratch config for a one-off run, such
+# as a mutation check, belongs outside the repository, where no gate reads it
+# and the hook lets it pass.
+msg_bashguard_check_config() {
+    local path="$1"
+    cat <<EOF
+hone bash-guard: this command modifies $path, a config the gate's checks read.
+Do: for a scratch config, such as one for a mutation check, write it outside the repository, for example under \$TMPDIR. Otherwise confirm that the Plan calls for this edit.
+Why: the test, lint, format, and type-check runs are only as strict as their config. An edit here can turn a red check green without touching the code.
 EOF
 }
 msg_bashguard_head_move() {
@@ -1410,7 +1425,8 @@ bash-guard|agent|msg_bashguard_unparsed
 bash-guard|agent|msg_bashguard_sabotage
 bash-guard|agent|msg_bashguard_signoff
 bash-guard|agent|msg_bashguard_attest
-bash-guard|agent|msg_bashguard_protected
+bash-guard|agent|msg_bashguard_protected|scripts/lint.sh
+bash-guard|agent|msg_bashguard_check_config|biome.json
 bash-guard|agent|msg_bashguard_head_move
 bash-guard|agent|msg_bashguard_branch_move
 bash-guard|agent|msg_bashguard_self_writer
