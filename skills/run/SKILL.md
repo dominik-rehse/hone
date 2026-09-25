@@ -234,11 +234,14 @@ Print the progress line: `verify ...` now.
 - **mutation check on critical paths only**. For a critical path the Plan names,
   run a mutation check with your ecosystem's runner (StrykerJS for JS/TS,
   mutmut or cosmic-ray for Python). It plants small bugs on purpose and confirms
-  a test catches each one. Run it **diff-scoped and budget-capped**, isolated so
-  it never touches the tree. It audits the *tests*, not the code. A planted bug
-  no test catches means a test that checks too little. Close the gap with
-  another red-green cycle. Skip it
-  for non-critical or UI changes. Never gate a trivial change on it.
+  a test catches each one. Run it **diff-scoped and budget-capped**. Write the
+  runner's config outside the worktree (under `$TMPDIR`) and pass it by
+  path. Never create, edit, or delete a config file in the tree for the
+  check: the guards ask the person about any check config, and an
+  unattended run then waits for hours. It audits the *tests*, not the code.
+  A planted bug no test catches means a test that checks too little. Close
+  the gap with another red-green cycle. Skip it for non-critical or UI
+  changes. Never gate a trivial change on it.
 
 Close verify with its progress line. Each check's outcome (tests, type-check,
 lint, mutation) goes in the verify `✓`'s artifact. Include any skip **with
