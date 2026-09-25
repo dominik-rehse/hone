@@ -361,9 +361,10 @@ LAST=""
 [ -n "$SEEN_FILE" ] && LAST=$(awk -v s="$SESSION" '$1 == s { print $2 }' "$SEEN_FILE" 2>/dev/null)
 if [ -n "$SEEN_FILE" ]; then
     # Rewrite this session's line and keep the latest lines of the others.
+    # The temp name carries the pid, so two sessions never share one.
     { awk -v s="$SESSION" '$1 != s' "$SEEN_FILE" 2>/dev/null | tail -n 20
       [ -n "$findings" ] && printf '%s %s\n' "$SESSION" "$SUM"
-    } > "$SEEN_FILE.tmp" 2>/dev/null && mv -f "$SEEN_FILE.tmp" "$SEEN_FILE" 2>/dev/null
+    } > "$SEEN_FILE.tmp.$$" 2>/dev/null && mv -f "$SEEN_FILE.tmp.$$" "$SEEN_FILE" 2>/dev/null
 fi
 
 [ -z "$findings" ] && exit 0
