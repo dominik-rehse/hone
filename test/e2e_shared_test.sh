@@ -2,7 +2,7 @@
 # End-to-end proof of shared mode (.hone-shared): two developers, two clones,
 # one bare remote. Pins the mechanical contract: add claims a change on the
 # remote and the second claimant loses, land pushes the tested merge and
-# releases the claim, a push the remote rejected rolls back and retries,
+# releases the claim, a push the remote rejected undoes the local fast-forward and retries,
 # landed reads the remote, and sync rebases a local Plan commit onto the
 # team's primary branch. Run: bash test/e2e_shared_test.sh
 set -uo pipefail
@@ -105,7 +105,7 @@ out=$(cd "$B" && bash "$WSH" landed x); rc=$?
 out=$(cd "$B" && bash "$WSH" sync) || die "B: sync: $out"
 [ "$(git -C "$B" rev-parse HEAD)" = "$(origin_main)" ] && step "B: sync fast-forwarded main" || die "B: sync did not level main"
 
-echo "== 4. a push the remote rejects rolls back and retries =="
+echo "== 4. a push the remote rejects undoes the fast-forward and retries =="
 WTB=$(cd "$B" && bash "$WSH" add y) || die "B: add y"
 write_change "$WTB" y
 RACE="$TMP/race"; mkdir -p "$RACE"; ln -s "$C" "$RACE/clone"
@@ -117,15 +117,15 @@ log_has "$ORIGIN" -n 1 main "Merge branch 'hone/y'" || die "y's merge not on top
 git -C "$B" merge-base --is-ancestor "$(git -C "$C" rev-parse HEAD)" HEAD || die "the merge was not rebuilt on C's commit"
 [ -d "$WTB" ] && die "worktree still present after land" || step "retried once, landed on top of C's commit"
 
-echo "== 5. retries exhausted: rolled back, worktree kept, exit 5 =="
+echo "== 5. retries exhausted: nothing published, worktree kept, exit 5 =="
 WTB=$(cd "$B" && bash "$WSH" add v) || die "B: add v"
 write_change "$WTB" v
 rm -f "$RACE/done"; pre=$(git -C "$B" rev-parse HEAD)
 out=$(cd "$B" && HONE_TEST_RACE="$RACE" HONE_LAND_RETRIES=1 bash "$WSH" land v 2>&1); rc=$?
 [ "$rc" -eq 5 ] || die "expected exit 5, got $rc: $out"
 echo "$out" | grep -q 'moved during each of 1 land attempts' || die "wrong message: $out"
-[ "$(git -C "$B" rev-parse HEAD)" = "$pre" ] || die "primary tree moved after the rolled-back land"
-[ -d "$WTB" ] && remote_has_claim v && step "rolled back, worktree and claim kept" || die "evidence lost"
+[ "$(git -C "$B" rev-parse HEAD)" = "$pre" ] || die "primary tree moved after the unpublished land"
+[ -d "$WTB" ] && remote_has_claim v && step "nothing published, worktree and claim kept" || die "evidence lost"
 log_has "$ORIGIN" main "Merge branch 'hone/v'" && die "untested merge reached origin"
 out=$(cd "$B" && bash "$WSH" remove "$WTB" 2>&1) || die "B: remove v: $out"
 remote_has_claim v && die "remove left the claim on origin" || step "remove released the claim"
@@ -143,7 +143,7 @@ echo "$out" | grep -q 'origin refused the push to main, and origin/main did not 
 echo "$out" | grep -q 'main is protected' || die "the host's reason is missing from the paste block: $out"
 echo "$out" | grep -q 'retries' && die "a refused push must not retry"
 [ "$(git -C "$B" rev-parse HEAD)" = "$pre" ] || die "primary tree moved after the refused land"
-[ -d "$WTB" ] && remote_has_claim u && step "refused push: exit 2, rolled back, evidence kept" || die "evidence lost"
+[ -d "$WTB" ] && remote_has_claim u && step "refused push: exit 2, fast-forward undone, evidence kept" || die "evidence lost"
 rm -f "$ORIGIN/hooks/pre-receive"
 (cd "$B" && bash "$WSH" remove "$WTB" >/dev/null 2>&1) && git -C "$B" branch -D hone/u -q
 echo "== 5c. release by hand =="

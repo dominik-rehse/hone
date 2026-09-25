@@ -428,8 +428,8 @@ remove` releases the claim with the worktree, and `worktree.sh release
 claim this clone still holds with no worktree.
 
 Shared mode pushes straight to the primary branch. A host that protects that
-branch refuses the push. land then exits 2 with the host's reason, rolls the
-merge back, and keeps the worktree. It does not retry, and it does not open a
+branch refuses the push. land then exits 2 with the host's reason, undoes its
+local fast-forward, and keeps the worktree. It does not retry, and it does not open a
 pull request. Either allow direct pushes for the developers who land, or
 leave shared mode off.
 
@@ -469,11 +469,11 @@ The merge result is a tree no gate has checked: two changes that each append
 to one file can be lint-green alone and lint-red merged. A red adapter fails
 the land with the same exit 6, and the message names the adapter.
 
-The merge and the post-merge suite write `<git-common-dir>/hone-land.log`,
+The merge and the suite on it write `<git-common-dir>/hone-land.log`,
 replaced on every land, and the adapter runs append to it. Exit 6 prints that path and
 the last 20 lines of it.
 
-After a green post-merge run, land reads the tier summary lines out of that
+After a green run on the merge, land reads the tier summary lines out of that
 log. It then warns about every tier that reported `ran=0`, because a tier
 that matched no test makes the green prove nothing. The warning never blocks:
 land exits 0 and the merge stands. An adapter that prints no summary lines

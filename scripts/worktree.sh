@@ -70,16 +70,19 @@
 #       change alone. It needs no trailer and no marker, and only a sign-off
 #       discharges it: land holds the copy such a change replaces, so no
 #       automatic route can judge it. Adding a NEW probe does not open it.
-#       When the merged diff touched a lockfile and the project ships
-#       scripts/setup-tree.sh, land runs that adapter in the worktree
-#       BEFORE the post-merge suite. Without it, a lockfile the primary
-#       branch changed since the cut reds the post-merge suite on the stale
-#       install, though the change is sound. A red adapter fails the land
-#       like a red suite (exit 6).
+#       When the primary branch changed a lockfile since the cut and the
+#       project ships scripts/setup-tree.sh, land runs that adapter in the
+#       worktree BEFORE the suite on the merge. Without it, the suite runs
+#       on the stale install and reds, though the change is sound. A red
+#       adapter there fails the land like a red suite (exit 6). When the
+#       change itself touched a lockfile, land runs the adapter again in
+#       the primary tree after the fast-forward. The merge stands by then,
+#       so a red run there is a warning.
+#       A land whose worktree is gone cuts it again from the branch first.
 #       On success it prints a receipt on stdout: the merge commit, the green
-#       post-merge suite, and the removed worktree and branch. When the merge
-#       changed a lockfile, the receipt also names it, and asks for a reinstall
-#       in the primary tree when no setup-tree adapter ran.
+#       suite on it, and the removed worktree and branch. When the change
+#       touched a lockfile, the receipt also names it, and asks for a
+#       reinstall in the primary tree when no setup-tree adapter ran there.
 #       Shared mode: land levels the primary tree with the remote first, so
 #       the merge goes on top of the team's latest. After the green suite it
 #       pushes the primary branch. Git rejects that push when the remote moved
@@ -120,7 +123,7 @@
 #       Run the full suite (scripts/run-tests.sh --all) in the current tree,
 #       serialized under the SAME lock as land. e2e tiers are load-sensitive:
 #       two concurrent full suites poison each other's signal (phantom flakes),
-#       and a suite racing a land's re-verify produces spurious rollbacks. So
+#       and a suite racing a land's re-verify produces spurious reds. So
 #       every full-suite run shares the one lock. This is the sanctioned way to
 #       run --all by hand. Never invoke the adapter bare for a full run. The
 #       fast unit tier needs no lock and no wrapper. Exit: the adapter's exit ·
@@ -920,12 +923,6 @@ cmd_land() {
     [ -n "$grant_note" ] && merge_args+=(-m "Authorized (irreversible change):"$'\n'"$grant_note")
     # The sign-off that discharged the proof gate gets the same treatment.
     [ -n "$signoff_note" ] && merge_args+=(-m "Proven (real-environment):"$'\n'"$signoff_note")
-    # Shared mode: the primary branch belongs to the team, so the merge goes
-    # on top of the team's latest and the result is pushed. Git rejects the
-    # push when the remote moved while the suite ran, and a rejected push
-    # means the combination on the remote was never tested. So land rolls the
-    # merge back, syncs, and runs the whole merge-and-verify again, up to
-    # HONE_LAND_RETRIES times. Nothing untested ever reaches the remote.
     local remote="" primary="" attempt=1 retries="${HONE_LAND_RETRIES:-3}"
     remote=$(shared_remote_checked "$main_root") || { [ $? -eq 2 ] && return 2; }
     [ -n "$remote" ] && primary=$(git -C "$main_root" symbolic-ref -q --short HEAD)
@@ -982,7 +979,7 @@ cmd_land() {
         shared_sync_primary "$main_root" "$remote" "$primary" || { land_restore_tree "$wt" "$branch"; return 2; }
     fi
     pre=$(git -C "$main_root" rev-parse HEAD)
-    # Keep the output of the merge and of the post-merge run. On red it is the
+    # Keep the output of the merge and of the run on it. On red it is the
     # only record of what broke. One file per primary tree, and each land
     # overwrites it.
     land_log="$(cd "$common_dir" 2>/dev/null && pwd || printf '%s' "$common_dir")/hone-land.log"
@@ -1395,9 +1392,10 @@ cmd_landed() {
     fi
     # -n 1 and a capture, never `| grep -q .`. The grep quit on the first hash,
     # git took SIGPIPE writing the next one, and pipefail turned that 141 into
-    # "no merge found". A rolled-back and re-landed change carries several
-    # matching merge subjects, so exactly the landed changes read as pending,
-    # and a ready --all chain stalled on its one completion signal.
+    # "no merge found". A change that an older land rolled back and landed
+    # again carries several matching merge subjects, so exactly the landed
+    # changes read as pending, and a ready --all chain stalled on its one
+    # completion signal.
     local merge
     merge=$(git -C "$main_root" log -F --grep="Merge branch '$branch'" --format=%H -n 1 "$ref" 2>/dev/null)
     if git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch" \

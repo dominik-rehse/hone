@@ -552,7 +552,7 @@ hone_msg_attest_placeholders() {
 }
 
 msg_wt_usage() {
-    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|governed <change>|land <change>|landed <change>|sync|release <change>|remove <worktree-path>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
+    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|governed <change>|land <change>|landed <change>|sync|release <change>|remove <worktree-path | change>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
 }
 
 msg_wt_grant_usage() {
@@ -1096,9 +1096,9 @@ EOF
 
 msg_wt_remove_needs_path() {
     cat <<'EOF'
-hone worktree: remove needs a worktree path.
-Do: run 'worktree.sh remove <worktree-path>'.
-Why: the path selects the worktree to retire.
+hone worktree: remove needs a worktree path or a change name.
+Do: run 'worktree.sh remove <worktree-path | change>'.
+Why: the argument selects the worktree to retire.
 EOF
 }
 

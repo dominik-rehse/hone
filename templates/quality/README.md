@@ -12,9 +12,10 @@ on none of them. Read the documentation of a tool before you adopt it.
 ## Contract
 
 - hone runs each adapter with no argument, from the root of the tree under
-  check. That tree is the worktree in the gate, and the primary tree at land.
-- Exit `0` means green. Any other exit blocks the stop or rolls the merge
-  back, and hone shows the end of the output to the agent.
+  check. That tree is the worktree in the gate, and the worktree holding the
+  merge at land.
+- Exit `0` means green. Any other exit blocks the stop or fails the land,
+  and hone shows the end of the output to the agent.
 - An adapter that runs several tools runs all of them and then fails. The
   agent then sees every finding in one pass:
 

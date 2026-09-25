@@ -32,10 +32,10 @@ means the install step failed for the merge, not that the change regressed
 anything. A refused hook can fail on the trunk alone, for example a
 generated file that is out of date. Then every land fails the same way until a
 person fixes the trunk. One more case wears this
-exit. Take a project with **no** `setup-tree.sh`, and a land that changed a
-lockfile. There, the suite red can be the stale primary-tree install rather
-than the change. The tell is a lockfile in the branch diff plus a
-missing-module error in the land log. Shipping a `scripts/setup-tree.sh` is
+exit. Take a project with **no** `setup-tree.sh`, and a primary branch that
+changed a lockfile since the cut. There, the suite red can be the worktree's
+stale install rather than the change. The tell is a lockfile in the trunk's
+diff since the cut plus a missing-module error in the land log. Shipping a `scripts/setup-tree.sh` is
 the durable fix.
 
 ## 9: merge conflict

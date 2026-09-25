@@ -26,7 +26,7 @@ or the gate becomes flaky and people start to bypass it.
 A tier that matches no test still exits `0`. The suite goes green and proves
 nothing, and nobody sees it. The summary line makes that visible.
 
-`land` reads these lines from the post-merge run and warns about every tier that
+`land` reads these lines from its run on the merge and warns about every tier that
 reported `ran=0`. The warning never blocks a land. An older adapter prints no
 such lines, and `land` then says nothing.
 

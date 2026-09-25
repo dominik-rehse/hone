@@ -143,9 +143,9 @@ echo "$out" | grep -qx "  packages/api/uv.lock" || die "the notice should name a
 echo "$out" | grep -q "src/mathx/dep.js" && die "the notice should list lockfiles only"
 step "a landed lockfile draws a reinstall notice naming every lockfile"
 
-echo "== 5b. land rolls back a regression, leaving the trunk green =="
+echo "== 5b. land refuses a regression, leaving the trunk green =="
 # A change that passes on its own branch but breaks the suite once merged. `land`
-# must merge, see red, roll the merge back, and keep the worktree as evidence.
+# must merge, see red, leave the primary branch unmoved, and keep the worktree as evidence.
 WT_R=$(bash "$WSH" add mathx-regress) || die "worktree add mathx-regress"
 # Its test asserts a NEW contract (mul), but it also rewrites add() to break the
 # already-landed add test, so the branch is green alone, red after merge.
@@ -173,18 +173,18 @@ EOF
 (cd "$WT_R" && git add -A && git commit -qm "feat(mathx): mul() [breaks add]" -m "Cut: nothing, a test change")
 PRE=$(git rev-parse HEAD)
 bash "$WSH" land mathx-regress >/dev/null 2>&1; rc=$?
-[ "$rc" -eq 6 ] || die "land should exit 6 on a post-merge regression (got $rc)"
-[ "$(git rev-parse HEAD)" = "$PRE" ] || die "regressing merge should be rolled back; HEAD moved"
-bash scripts/run-tests.sh >/dev/null 2>&1 || die "trunk left red after a rolled-back land"
+[ "$rc" -eq 6 ] || die "land should exit 6 on a regression in the merge (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a regressing merge must not move the primary branch"
+bash scripts/run-tests.sh >/dev/null 2>&1 || die "trunk left red after a refused land"
 git show-ref --verify --quiet refs/heads/hone/mathx-regress || die "branch should survive a failed land as evidence"
 [ -d "$WT_R" ] || die "worktree should survive a failed land as evidence"
-step "regression merged, rolled back, trunk green, evidence kept"
+step "regression merged, not published, trunk green, evidence kept"
 bash "$WSH" remove "$WT_R" >/dev/null 2>&1; git branch -D hone/mathx-regress >/dev/null 2>&1
 
 echo "== 5b1. the gate's block cap does not loosen land =="
 # The Stop gate caps itself after N identical failures, so a run that cannot go
 # green still gets a turn in which to report. That cap is the turn's, never the
-# trunk's: land re-runs --all after the merge and rolls back on red, whatever
+# trunk's: land re-runs --all on the merge and publishes nothing on red, whatever
 # the counter holds. A counter already at the cap must change nothing here.
 WT_C=$(bash "$WSH" add mathx-capped) || die "worktree add mathx-capped"
 cat > "$WT_C/src/mathx/add.js" <<'EOF'
@@ -197,15 +197,15 @@ PRE=$(git rev-parse HEAD)
 bash "$WSH" land mathx-capped >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 6 ] || die "land should still exit 6 with the gate's counter at the cap (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "a capped counter must not let a red merge stand"
-bash scripts/run-tests.sh >/dev/null 2>&1 || die "trunk left red after a rolled-back land"
+bash scripts/run-tests.sh >/dev/null 2>&1 || die "trunk left red after a refused land"
 step "land refuses a red change with the gate's block counter at the cap"
 rm -f "$(git rev-parse --git-dir)/hone-gate-blocks"
 bash "$WSH" remove "$WT_C" >/dev/null 2>&1; git branch -D hone/mathx-capped >/dev/null 2>&1
 
-echo "== 5b2. land re-runs the optional adapters and rolls back a red one =="
+echo "== 5b2. land re-runs the optional adapters and refuses a red one =="
 # The gate keeps every worktree lint-green, but a merge result is a third tree:
 # two lint-green parents can merge lint-red. land must run the same optional
-# adapters the gate runs, and give a red one the suite's rollback.
+# adapters the gate runs, and give a red one the suite's exit.
 cat > scripts/lint.sh <<'EOF'
 #!/bin/bash
 ! grep -rq "LINT-RED" src
@@ -216,14 +216,14 @@ echo "// LINT-RED" > "$WT_LR/src/mathx/styled.js"
 (cd "$WT_LR" && git add -A && git commit -qm "feat(mathx): a change lint rejects" -m "Cut: nothing, a test change")
 PRE=$(git rev-parse HEAD)
 out=$(bash "$WSH" land lint-red 2>&1); rc=$?
-[ "$rc" -eq 6 ] || die "land should exit 6 on post-merge lint red (got $rc)"
-[ "$(git rev-parse HEAD)" = "$PRE" ] || die "lint-red merge should be rolled back; HEAD moved"
+[ "$rc" -eq 6 ] || die "land should exit 6 on lint red on the merge (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a lint-red merge must not move the primary branch"
 echo "$out" | grep -q "lint failed on the merge" || die "the refusal should name the failing adapter"
 echo "$out" | grep -q "hone-land.log" || die "the refusal should name the land log"
 [ -d "$WT_LR" ] || die "worktree should survive a lint-red land as evidence"
 git show-ref --verify --quiet refs/heads/hone/lint-red || die "branch should survive a lint-red land as evidence"
-bash scripts/lint.sh >/dev/null 2>&1 || die "trunk left lint-red after a rolled-back land"
-step "lint-red merge rolled back (exit 6), trunk lint-green, evidence kept"
+bash scripts/lint.sh >/dev/null 2>&1 || die "trunk left lint-red after a refused land"
+step "lint-red merge not published (exit 6), trunk lint-green, evidence kept"
 # Fixed in the same worktree, the change lands, so a green adapter never blocks.
 echo "// styled" > "$WT_LR/src/mathx/styled.js"
 (cd "$WT_LR" && git add -A && git commit -qm "fix(mathx): satisfy lint" -m "Cut: nothing, a test change")
@@ -249,12 +249,12 @@ echo "// typed" > "$WT_TC/src/mathx/typed.js"
 (cd "$WT_TC" && git add -A && git commit -qm "feat(mathx): a change under red typecheck" -m "Cut: nothing, a test change")
 PRE=$(git rev-parse HEAD)
 out=$(bash "$WSH" land type-red 2>&1); rc=$?
-[ "$rc" -eq 6 ] || die "land should exit 6 on post-merge typecheck red (got $rc)"
-[ "$(git rev-parse HEAD)" = "$PRE" ] || die "typecheck-red merge should be rolled back; HEAD moved"
+[ "$rc" -eq 6 ] || die "land should exit 6 on typecheck red on the merge (got $rc)"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a typecheck-red merge must not move the primary branch"
 echo "$out" | grep -q "typecheck failed on the merge" || die "the refusal should name typecheck"
 git rm -q scripts/typecheck.sh && git commit -qm "chore: drop the typecheck adapter"
 bash "$WSH" remove "$WT_TC" >/dev/null 2>&1; git branch -D hone/type-red >/dev/null 2>&1
-step "typecheck-red merge rolled back (exit 6), named as typecheck"
+step "typecheck-red merge not published (exit 6), named as typecheck"
 
 echo "== 5b3. a commit made on the primary branch during the suite survives =="
 # Another session commits a Plan onto the primary branch while land's suite
@@ -1137,8 +1137,8 @@ bash "$WSH" landed conflict-a >/dev/null || die "landed should be 0 again after 
 step "landed reads the merge commit, claim, and Plan, never a report"
 
 echo "== 6d. landed: several matching merge subjects, spread through history =="
-# The shape a rolled-back and re-landed change leaves behind: more than one
-# 'Merge branch' subject for the same change, separated by other commits. The
+# The shape a change that an older land rolled back and landed again leaves
+# behind: more than one 'Merge branch' subject for the same change, separated by other commits. The
 # old `| grep -q .` read the first hash and quit, git took SIGPIPE flushing a
 # later one, and pipefail turned that into pending, so exactly the landed
 # changes stalled their --all chain. Two matches with 30000 commits between

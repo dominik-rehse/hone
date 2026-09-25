@@ -253,7 +253,7 @@ echo "$(bgwt 'git checkout some-commit')" | grep -q '"ask"' && bad "HEAD-move in
 
 # Rule 3 also covers a move of the PRIMARY BRANCH itself, not only of HEAD.
 # The primary branch is a merge target that `worktree.sh land` moves, under the
-# lock and with the post-merge suite. A run of the ImpossibleBench probe made a
+# lock and with the suite on the merge. A run of the ImpossibleBench probe made a
 # worktree by hand and fast-forwarded the branch, with no review and no land
 # gate, and no rule named `git merge`.
 echo "$(bg 'git merge --ff-only hone/auth-login')" | grep -q '"ask"' && ok "a fast-forward merge in the primary tree escalated" || bad "git merge --ff-only should ask"

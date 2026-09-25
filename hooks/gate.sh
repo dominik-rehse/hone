@@ -329,7 +329,7 @@ run_step() {
 
 # The full tier shares land's lock (<git-common-dir>/hone-land.lock). e2e tiers
 # are load-sensitive, so a --all racing another suite or a land's re-verify
-# poisons both signals (phantom flakes, spurious land rollbacks). Short wait
+# poisons both signals (phantom flakes, spurious land reds). Short wait
 # only: if a suite is live, blocking the stop with "retry" beats running red
 # under contention. The unit tier stays lock-free: it is the per-Stop inner
 # loop and must stay cheap. Without flock, degrade to running unserialized

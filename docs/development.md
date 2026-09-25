@@ -30,7 +30,7 @@ Which suite a change must pass follows from what it touches.
 calls. It covers:
 
 - the hook unit tests
-- the end-to-end land path (worktree, gates, merge, rollback)
+- the end-to-end land path (worktree, gates, merge, fast-forward)
 - the plumbing of the eval harness and of the lab, against a fake CLI
 - the candidate procedure, against hand-written results
 - the prose and the shape of every message in `hooks/messages.sh`
