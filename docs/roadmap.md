@@ -247,9 +247,12 @@ route.
 - How we know: 10 of 23 finished field runs printed fewer than 5 of the 6
   start lines ([note](spikes/2026-09-25-field-data-since-0-58.md)). The lab
   measure `progress_starts` (steps announced as started over steps
-  reached, in `evals/lab/checks.sh`) reads 1/6 to 3/6 on claude-opus-5-5,
-  also after the 0.61.0 prose that asks for the line at the start and end
-  of each step.
+  reached, in `evals/lab/checks.sh`) read 1/6 to 3/6 on claude-opus-5-5
+  on 2026-09-25, also after the 0.61.0 prose that asks for the line at the
+  start and end of each step. The runs are the lab pass in
+  `/var/tmp/hone-lab/20260925-153159/` and the three reruns in
+  `/var/tmp/hone-lab/prog-*/`. A measure that also reads a wrapped line
+  gives the same numbers on those transcripts.
 - What we tried: a candidate of one paragraph, "open each step with its
   progress line in the message of its first tool call". It was green on
   the unit suites, but its gain in the lab sat inside the spread between
