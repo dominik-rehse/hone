@@ -54,6 +54,18 @@ COMMON_DIR=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && p
 # second, bare record holding the original path, so track that record and read
 # it whole. That original path is tracked in HEAD, which is why this loop gives
 # it the R status.
+#
+# A merge, cherry-pick, revert, or rebase in progress leaves its own results
+# staged, and its conflicts unmerged. The command that started it went past
+# the bash-guard's ask, often in another session. So while one is in progress,
+# a staged or unmerged path is the operation's, not this command's, and the
+# hook leaves it out. It used to blame every later command of every session
+# for another session's half-finished merge. A path changed only in the
+# working tree, or an untracked one, still counts.
+IN_OP=0
+for marker in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD rebase-merge rebase-apply; do
+    [ -e "$GIT_DIR/$marker" ] && { IN_OP=1; break; }
+done
 DIRTY=""
 TRACKED=""
 expect_orig=0
@@ -66,6 +78,9 @@ while IFS= read -r -d '' entry; do
         path="${entry:3}"
     fi
     [ -n "$path" ] || continue
+    if [ "$IN_OP" -eq 1 ]; then
+        case "$xy" in "??"|" "?) ;; *) continue ;; esac
+    fi
     hone_is_durable "$path" || continue
     DIRTY+="${DIRTY:+$'\n'}$path"
     [ "$xy" = "??" ] || TRACKED+="${TRACKED:+$'\n'}$path"
