@@ -205,16 +205,26 @@ message, a read of `.hone-grant/` inside `$(...)`, and a scratch check
 config outside the repository. The check-config ask now names the file.
 Next step: release it, then count the asks in the field again.
 
-The `dirty-guard` skip of a merge in progress stays reverted: a `touch` of
-the merge marker let a staged write past it. A fix must not trust the
-marker, for example by comparing the dirty paths before and after the
-command.
+Fixed, not yet released: the `dirty-guard` now records the dirty protected
+paths before each shell command, with a hash of each, and blocks only on
+those the command changed. One old uncommitted file blocked 30 read-only
+commands in the first note, and another session's half-finished merge was
+blamed on unrelated commands in the second. Both shapes now pass. The skip
+of a merge in progress stays reverted, because a `touch` of the merge
+marker let a staged write past it. The comparison trusts no marker, and a
+test replays that bypass. With no record of the tree before the command
+(no ids in the hook input), the hook blocks on every dirty protected path,
+as before. Next step: release it, then count its fires in the field again.
 
 Still open:
 
-- The `dirty-guard` reports every uncommitted durable path of the primary
-  tree, not the paths that the command wrote. One old uncommitted file
-  blocked 30 read-only commands in the first note.
+- The `dirty-guard` blames no command for a write that lands after the
+  command returns, such as one from a background job. The next command's
+  record already holds that path. Two calls of one session that run at
+  the same time each see the other's writes. Next step: count in the field
+  how often a background command writes a protected path in the primary
+  tree, before anyone designs for it.
+
 - The `bash-guard` still asks when a protected adapter is the *source* of
   a copy, because its pattern reads any path after the verb. It still
   denies a sabotage token anywhere outside a commit message or a sign-off
@@ -232,10 +242,7 @@ Still open:
 
 How we know that the fixes hold in the field: we do not yet. The tests
 replay each shape from the transcripts. Next step: after the release, read
-the next field window and count fires per hook again. For the
-`dirty-guard`, the open question is how to tell the paths a command wrote
-from paths that were already dirty; a snapshot before the command is one
-route.
+the next field window and count fires per hook again.
 
 #### Progress lines are still missing in most steps
 
