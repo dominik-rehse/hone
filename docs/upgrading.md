@@ -111,6 +111,9 @@ mechanical steps.
      one. The run stops and hands you the diff and the grant command. Plan
      for a person to review each irreversible change: run the printed
      `worktree.sh grant` command in your own terminal, then land.
+   - *Restart sessions for 0.64*: Claude Code reads the hook set at session
+     start. Restart every session in the repo to get the progress hook and
+     the dirty-guard's new events.
 
 After that, run `worktree.sh status`. It shows what is present and what is
 missing. It also flags a policy file that is still uncommitted, and a
