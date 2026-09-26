@@ -396,6 +396,9 @@ passes "$(bgj "cd $SCR/wt"$'\ngit merge --abort 2>&1 || true\n'"cd $REPO"$'\ngit
     "a merge abort after cd into a scratch worktree, then cd back, passes"
 passes "$(bgj "P=$SCR/wt; cd \$P && git add -A && git reset -q; git status --short")" "a reset in a scratch worktree passes"
 passes "$(bgj "T=$SCR/clone; cd \"\$T\" && git checkout -q -f main")" "a checkout in a scratch clone passes"
+passes "$(bgj "T=\$(ls -d $SCR/clon* | tail -1); cd \"\$T\"; git checkout -q -f main")" "a checkout in a scratch clone found by ls -d passes"
+passes "$(bgj "T=\$(ls -td $SCR/clon* 2>/dev/null | head -1); git -C \"\$T\" checkout -q -f main")" \
+    "git -C a scratch clone found by ls -d passes"
 passes "$(bgj 'git reset -q docs/spikes/probe/ws && git status --short')" "a path-scoped unstage in the primary tree passes"
 passes "$(bgj "cd $SCR && bun init -y; bun add left-pad")" "a package install in a scratch directory passes"
 passes "$(bgj "W2=$WT; cd \$W2 && bun install --frozen-lockfile 2>&1 | tail -1 && bun add left-pad")" \
@@ -432,7 +435,11 @@ asks "$(bgj 'git reset -q docs/spikes/none/ws')" "a reset to a path that does no
 asks "$(bgj "cd $REPO"$'\ngit merge --abort' "$WT")" "a merge abort after cd back to the primary tree still asks"
 asks "$(bgj "S=$REPO; git -C \"\$S\" merge --ff-only hone/auth-login")" "a variable set to the primary tree still asks"
 asks "$(bgj "cd $SCR/missing && git merge hone/auth-login")" "a cd into a missing directory fails closed"
-asks "$(bgj "T=\$(ls -d $SCR/clone* | tail -1); cd \"\$T\"; git checkout -q -f main")" "a tree set by another command fails closed"
+asks "$(bgj "T=\$(ls -d $SCR/none* | tail -1); cd \"\$T\"; git checkout -q -f main")" "a tree set by a glob with no match fails closed"
+asks "$(bgj "T=\$(ls -d $REPO); cd \"\$T\" && git checkout -q -f main" "$WT")" "a tree set by ls -d to the primary tree asks"
+asks "$(bgj "mkdir $SCR/clonz; T=\$(ls -d $SCR/clon* | tail -1); cd \"\$T\" && git checkout -q -f main")" \
+    "a tree set by a glob after a command that writes fails closed"
+asks "$(bgj "T=\$(ls -d $SCR/*); cd \"\$T\"; git checkout -q -f main")" "a glob with several matches and no pick fails closed"
 asks "$(bgj "cd $SCR/wt; cd $REPO; bun add left-pad")" "a package install back in the primary tree still asks"
 asks "$(bgj 'f=docs/notes/auth.md; bunx dprint fmt "$f"')" "a formatter on a variable set to a durable path still asks"
 asks "$(bgj "mkdir -p $SCR/n && cd $SCR/n; git merge x")" "a cd that may not run leaves the next list in the primary tree"
@@ -442,8 +449,31 @@ asks "$(bgj "S=$SCR/s3; git worktree add -f \$S main; git -C \$S merge feat")" "
 asks "$(bgj "ln -s $REPO $SCR/l2; git -C $SCR/l2 merge feat")" "a symlink the command creates fails closed"
 asks "$(bgj "export GIT_DIR=$REPO/.git; cd $SCR/wt && git merge x")" "an exported GIT_DIR fails closed"
 asks "$(bgj "cd $SCR && bun add x --cwd $REPO")" "a tool pointed back into the primary tree fails closed"
+
 denies "$(bgj 'echo "$(cat reason.txt)" > .hone-grant/db-drop')" "a redirect into .hone-grant/ after a substitution is still denied"
 denies "$(bgj 'x=$(echo ok; touch .hone-proof/ui-flow)')" "a write inside a substitution is still denied"
+
+# (d) Moves the old whole-line rules missed. They read the tree from one
+# leading cd and from literal -C paths, so each of these passed on 0.63.0.
+git init -q --bare "$SCR/bare.git"
+git -C "$SCR/clone" remote add up git@example.invalid:x.git
+asks "$(bgj "(cd $SCR/wt && git merge x); git merge y")" "a merge after a subshell's cd asks"
+passes "$(bgj "(cd $SCR/wt && git merge x); git status")" "a merge inside a subshell's cd passes"
+asks "$(bgj "cd $WT; X=$REPO; git -C \"\$X\" merge x")" "git -C on a variable set to the primary tree after a cd asks"
+asks "$(bgj "cd $WT && sudo git merge x")" "sudo git after a leading cd asks"
+asks "$(bgj "cd $WT && command git merge x")" "command git after a leading cd asks"
+asks "$(bgj "git -C $SCR/clone push origin HEAD:main")" "a push from a clone whose origin is the primary tree asks"
+asks "$(bgj 'git push origin HEAD:main' "$SCR/clone")" "a push from a clone shell whose origin is the primary tree asks"
+asks "$(bgj 'git push . hone/auth-login:main' "$WT")" "a push into the repository from a worktree asks"
+asks "$(bgj "git -C $REPO checkout hone/auth-login" "$WT")" "git -C a checkout into the primary tree asks"
+asks "$(bgj "git -C $REPO stash" "$WT")" "git -C a stash into the primary tree asks"
+passes "$(bgj "git -C $REPO checkout -- README.md" "$WT")" "git -C a restore in the primary tree passes"
+asks "$(bgj 'npm install left-pad' "$REPO/src")" "a package install in a subdirectory of the primary tree asks"
+asks "$(bgj 'git stash push -u' "$REPO/src")" "a stash in a subdirectory of the primary tree asks"
+passes "$(bgj 'git stash list' "$REPO/src")" "a stash list in a subdirectory of the primary tree passes"
+asks "$(bgj "git clone -q $REPO $SCR/c2 && git -C $SCR/c2 push origin HEAD:main")" "a push from a clone the same command makes asks"
+passes "$(bgj "git -C $SCR/clone push up HEAD:main")" "a push from a clone to another host passes"
+passes "$(bgj "cd $SCR/clone && git push $SCR/bare.git HEAD:main")" "a push from a clone to another local repository passes"
 
 echo "== bash-guard: a check config asks inside the repository, names the file, and passes outside =="
 # Unattended runs stalled up to seven hours on an unnamed ask about a scratch

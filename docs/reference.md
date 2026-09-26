@@ -241,9 +241,9 @@ irreversible. When you want that record, route the edit through the loop.
     `git checkout -- <paths>` and `git checkout <ref> -- <paths>` restore
     files and move no HEAD, so both pass.
   - It asks before a command that moves the primary branch itself there.
-    The list is `git merge`, `cherry-pick`, `rebase`, `branch -f`, and
-    `update-ref` on `refs/heads/`. A push whose remote is a local path
-    counts, and so does every `git reset` but a bare one, a `--`
+    The list is `git merge`, `cherry-pick`, `rebase`, `branch -f`,
+    `update-ref` on `refs/heads/`. A push into this repository counts from
+    any tree, and so does every `git reset` but a bare one, a `--`
     restore, and one whose operands are paths. `worktree.sh land` is the
     route, and it passes, as do reads of history and a push of the change
     branch to the team's remote.
@@ -253,17 +253,17 @@ irreversible. When you want that record, route the edit through the loop.
     with flags only) passes, because it installs what the lockfile already
     says. An install that names a package still asks.
 
-  It reads the command with its prose removed: the value of a git `-m` or
-  `--message` option, and the text after `worktree.sh grant` or `attest`.
-  So a commit message that names `--no-verify` or `bun add` is not the act.
+  It reads the command without its prose: a git `-m` value, and the text
+  after `worktree.sh grant` or `attest`.
 
   Every primary-tree rule reads each tree the command names, and the
-  *shell's* directory, which the harness reports. Before a rule asks, an
-  analysis replays the command. It follows `cd`, `git -C`, and a variable
-  set to a literal path, `$TMPDIR`, or `$(mktemp -d)`. If it models the
-  whole command, and nothing moves or writes the primary tree, the command
-  passes. Otherwise the ask stands. The header of `hooks/bash-guard.sh`
-  lists what it cannot model.
+  shell's directory. Before a rule asks, an analysis replays the command.
+  It follows `cd`, `git -C`, and a variable set to a literal path,
+  `$TMPDIR`, `$(mktemp -d)`, or the one directory an `ls -d <glob>` finds.
+  If it models the whole command and nothing moves or writes the primary
+  tree, it passes. Otherwise it asks. A command that names such a
+  move or a push, but that no rule caught, gets the same test. The header
+  of `hooks/bash-guard.sh` lists what it cannot model.
 - *dirty-guard* (PreToolUse and PostToolUse on Bash) reads the effect instead
   of the command. In the primary tree it records the dirty protected paths
   before the command, with a hash of each, and blocks on those that the

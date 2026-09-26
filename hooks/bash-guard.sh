@@ -126,6 +126,7 @@ RE_STASH_READ="${RE_GIT}"'stash[[:space:]]+(list|show)([[:space:]]|$)'
 RE_CHECKOUT="${RE_GIT}"'checkout([[:space:]]|$)'
 RE_DASHDASH='[[:space:]]--([[:space:]]|$)'
 RE_MOVER="${RE_GIT}(${BRANCH_MOVERS})"
+RE_PUSH="${RE_GIT}"'push([[:space:]]|$)'
 RE_RESET="${RE_GIT}"'reset([[:space:]]|$)'
 RE_RESET_BARE="${RE_GIT}"'reset[[:space:]]*$'
 RE_REF_MOVER="${RE_GIT}"'(branch[[:space:]]+[^|;&]*(-f|--force|-M|-m|--move|-D|-d|--delete)([[:space:]]|$)|update-ref)'
@@ -191,7 +192,11 @@ hone_fmt_scoped() (
 # command. Anything it does not model leaves the old decision standing. It
 # parses the command into simple commands and replays them in order. It tracks
 # the directory each one runs in, the command's own variables, and the
-# worktrees it adds. A git command is judged in the tree its -C path names.
+# worktrees it adds. A git command is judged in the tree its -C path names,
+# and a push by the repository it writes to.
+#
+# Rule 5 at the end also runs it on a guarded command that no rule caught,
+# and there it can add an ask (rule 5 says when).
 #
 # It gives up (and the old rule decides) on:
 #   - `&`, `if`/`for`/`while`/`case`, functions, `{ }`, backticks, arithmetic,
@@ -199,8 +204,10 @@ hone_fmt_scoped() (
 #     shell or sets a variable in a way it does not track
 #   - a `cd`, `export`, or assignment inside a pipeline or after `||`
 #   - a cd target it cannot resolve to an existing directory, a fresh
-#     `$(mktemp -d)`, or a worktree the same `&&` chain adds; a path with `..`
-#   - `git --git-dir`, `--work-tree`, `-c`, and `git push`
+#     `$(mktemp -d)`, the one directory an `ls -d <glob>` finds, or a
+#     worktree the same `&&` chain adds; a path with `..`
+#   - `git --git-dir`, `--work-tree`, `-c`, and a push option that names
+#     another repository or program
 #   - a git, package-manager, or formatter command named inside another
 #     command (`bash -c`, `env -C`, `xargs`, `sudo`, an echo), or in a heredoc
 #     body that is not a commit message
@@ -350,15 +357,22 @@ AN_OK=1            # it understood the whole command
 AN_WHY=""          # the first thing it did not understand (for debugging)
 LEX_OK=1           # the lexer read every character
 TREE_OK=1          # no git, package-manager, or formatter command in the primary tree would ask
+TREE_MSG=""        # the message of the first one that would
 CFG_OK=1           # every check-config write lands outside the repository
+WRAP=0             # a guarded command the hook cannot place: in a runner, or a push it cannot resolve
+RUNNERS=' sudo doas command exec builtin eval env nice nohup timeout xargs stdbuf time watch flock setsid chroot bash sh zsh dash ksh '
 CFG_NAME=""
 SIGNOFF_LINES=()
 VN=(); VV=()       # the command's own variables; \001 marks an unknown value
 ADDED_P=(); ADDED_OK=()
 MKTEMP_DIRS=(); MK_N=0
 LN_SEEN=0
+AN_WROTE=0         # a command before this point may have written a file
 declare -A AN_KIND=()
 RE_DOTGIT="(^|[/\"'])\\.git(\$|[/\"'])"
+# `$(ls -d <glob> [2>/dev/null] [| tail -1])`, the usual way to find a scratch
+# tree by name.
+RE_LSGLOB='^"?\$\(ls( +-[1dtr]+)+ +([^][ ;&|<>()`"'"'"'$\\{}]+)( +2>/dev/null)?( *\| *(tail|head) +(-1|-n *1))?\)"?$'
 
 an_fail() { [ -n "$AN_WHY" ] || AN_WHY=$1; AN_OK=0; }
 
@@ -399,6 +413,7 @@ hone_an_var() {
     for ((i = ${#VN[@]} - 1; i >= 0; i--)); do
         [ "${VN[$i]}" = "$1" ] || continue
         [ "${VV[$i]}" = $'\001' ] && return 1
+        [[ ${VV[$i]} == $'\002'* ]] && return 1
         AN_V=${VV[$i]}; return 0
     done
     # An unset TMPDIR expands to nothing, so "$TMPDIR/x" is /x.
@@ -562,6 +577,11 @@ hone_an_assign() {
         GIT_*|CDPATH|HOME|PWD|OLDPWD|IFS|PATH|BASH_ENV|ENV|TMPDIR|SHELLOPTS|BASHOPTS)
             an_fail "an assignment to $name"; return ;;
     esac
+    if [[ $val =~ $RE_LSGLOB ]] && hone_an_lsglob; then
+        hone_an_setvar "$name" "$AN_SET"
+        [ "$COND" -eq 1 ] && CONDV+=" $name"
+        return
+    fi
     case $val in
         '$(mktemp -d)'|'"$(mktemp -d)"')
             if [ -n "$AN_TMP" ]; then
@@ -576,6 +596,45 @@ hone_an_assign() {
     [ "$COND" -eq 1 ] && CONDV+=" $name"
 }
 
+# The glob of the RE_LSGLOB match in BASH_REMATCH, expanded here. The
+# variable then holds one of the matches, in AN_SET after \002. Only when
+# nothing before it wrote a file, every match is a directory, and the value
+# is one match: a single one, or one picked by head or tail. With no match
+# the value is empty, and a cd to it fails.
+# shellcheck disable=SC2088  # the literal ~ is matched
+hone_an_lsglob() {
+    local pat=${BASH_REMATCH[2]} pick=${BASH_REMATCH[4]} m out=""
+    local -a ms
+    [ "$AN_WROTE" -eq 0 ] && [[ ${BASH_REMATCH[0]} =~ \ -[1tr]*d ]] || return 1
+    case $pat in '~/'*) pat=$HOME/${pat#'~/'} ;; '~'*|*'**'*|*[[:space:]]*) return 1 ;; esac
+    case $pat in /*) ;; *) [[ $CURSET != *$'\n'* ]] || return 1; pat=$CURSET/$pat ;; esac
+    # dotglob and nocaseglob make the set a superset of what the shell sees.
+    mapfile -t ms < <(shopt -s nullglob dotglob nocaseglob; for m in $pat; do printf '%s\n' "$m"; done)
+    [ "${#ms[@]}" -ge 1 ] || return 1
+    [ "${#ms[@]}" -eq 1 ] || [ -n "$pick" ] || return 1
+    for m in "${ms[@]}"; do
+        [ -d "$m" ] || return 1
+        out+=${out:+$'\n'}$m
+    done
+    AN_SET=$'\002'$out
+}
+
+# True when word $1 is a bare reference to a variable set by hone_an_lsglob.
+# Its candidates in AN_SET.
+hone_an_setref() {
+    local i name
+    [[ $1 =~ ^\"?\$\{?([A-Za-z_][A-Za-z0-9_]*)\}?\"?$ ]] || return 1
+    name=${BASH_REMATCH[1]}
+    for ((i = ${#VN[@]} - 1; i >= 0; i--)); do
+        [ "${VN[$i]}" = "$name" ] || continue
+        [[ ${VV[$i]} == $'\002'* ]] || return 1
+        AN_SET=${VV[$i]#$'\002'}
+        # Unquoted, the shell splits and globs the value.
+        [[ $1 == '"'* ]] || ! [[ $AN_SET =~ [[:blank:]*?[] ]]; return
+    done
+    return 1
+}
+
 hone_an_cd() {
     local prev=$1 nx=$2 a=$3 j tgt="" cnt=0 p
     hone_an_state_ok "$prev" "$nx" || return
@@ -585,6 +644,15 @@ hone_an_cd() {
         tgt=${W[$j]}; cnt=$((cnt + 1))
     done
     [ "$cnt" -le 1 ] || { an_fail "a cd with two targets"; return; }
+    if [ "$cnt" -eq 1 ] && hone_an_setref "$tgt"; then
+        local c set=""
+        while IFS= read -r c; do
+            hone_an_phys "$c" || { an_fail "a cd target that does not resolve"; return; }
+            set+=${set:+$'\n'}$AN_P
+        done <<<"$AN_SET"
+        [ "$COND" -eq 1 ] && ALT+=$'\n'"$CURSET"
+        CURSET=$set; CERTAIN=1; return
+    fi
     if [ "$cnt" -eq 0 ]; then
         [ -n "${HOME:-}" ] || { an_fail "a cd to an unset HOME"; return; }
         AN_E=$HOME
@@ -616,7 +684,7 @@ hone_an_cd() {
 # Parse the git command at word $1: GSUB, GSUBI, and GTD (the tree each
 # directory of CURSET reaches through the -C chain). GFAIL says why not.
 hone_an_git() {
-    local a=$1 j w d t p
+    local a=$1 j w d t p ts c nts
     local -a cpaths=()
     GSUB=""; GSUBI=-1; GTD=""; GFAIL=""
     for ((j = a + 1; j < ${#W[@]}; j++)); do
@@ -630,13 +698,28 @@ hone_an_git() {
         esac
     done
     while IFS= read -r d; do
-        t=$d
+        ts=$d
         for p in "${cpaths[@]+"${cpaths[@]}"}"; do
-            hone_an_expand "$p" && [ -n "$AN_E" ] || { GFAIL="a git -C path the hook cannot resolve"; return; }
-            hone_an_resolve "$AN_E" "$t" || { GFAIL="a git -C path with .."; return; }
-            t=$AN_P
+            if hone_an_setref "$p"; then
+                c=$AN_SET
+            else
+                hone_an_expand "$p" && [ -n "$AN_E" ] || { GFAIL="a git -C path the hook cannot resolve"; return; }
+                c=$AN_E
+            fi
+            if [[ $ts$c != *$'\n'* ]]; then
+                hone_an_resolve "$c" "$ts" || { GFAIL="a git -C path with .."; return; }
+                ts=$AN_P; continue
+            fi
+            nts=""
+            while IFS= read -r t; do
+                while IFS= read -r w; do
+                    hone_an_resolve "$w" "$t" || { GFAIL="a git -C path with .."; return; }
+                    nts+=${nts:+$'\n'}$AN_P
+                done <<<"$c"
+            done <<<"$ts"
+            ts=$nts
         done
-        GTD+=${GTD:+$'\n'}$t
+        GTD+=${GTD:+$'\n'}$ts
     done <<<"$CURSET"
 }
 
@@ -689,17 +772,21 @@ hone_an_reset_paths() {
 }
 
 # True when trigger text $1, run in primary-tree directory $2, is a move or
-# a write the rules below would ask about.
+# a write the rules below would ask about. AN_MSG names the rule's message.
 hone_an_primary_unsafe() {
     local tt=$1 d=$2 j exp=""
+    AN_MSG=msg_bashguard_head_move
     [[ $tt =~ $RE_HEAD ]] && return 0
     [[ $tt =~ $RE_STASH ]] && ! [[ $tt =~ $RE_STASH_READ ]] && return 0
     [[ $tt =~ $RE_CHECKOUT ]] && ! [[ $tt =~ $RE_DASHDASH ]] && return 0
+    AN_MSG=msg_bashguard_branch_move
     [[ $tt =~ $RE_MOVER ]] && return 0
     if [[ $tt =~ $RE_RESET ]]; then
         [[ $tt =~ $RE_DASHDASH ]] || [[ $tt =~ $RE_RESET_BARE ]] || hone_an_reset_paths "$d" || return 0
     fi
+    AN_MSG=msg_bashguard_self_writer
     [[ $tt =~ $RE_SELF ]] && return 0
+    AN_MSG=msg_bashguard_formatter
     if [[ $tt =~ $RE_FMT ]]; then
         [ "$d" = "$PRIMARY_TOP" ] || return 0
         for ((j = AN_A; j < ${#W[@]}; j++)); do
@@ -708,6 +795,75 @@ hone_an_primary_unsafe() {
         hone_fmt_scoped "$exp" || return 0
     fi
     return 1
+}
+
+# A move or a write in the primary tree. The first one names the message.
+hone_an_unsafe() { TREE_OK=0; TREE_MSG=${TREE_MSG:-$AN_MSG}; }
+
+# The leading assignments of the current command (words 0 to $1) change
+# nothing a guarded command reads.
+hone_an_env_ok() {
+    local j
+    for ((j = 0; j < $1; j++)); do
+        case ${W[$j]%%=*} in
+            GIT_EDITOR|GIT_SEQUENCE_EDITOR|GIT_PAGER|GIT_TERMINAL_PROMPT|GIT_AUTHOR_*|GIT_COMMITTER_*|LANG|LC_*|NO_COLOR|FORCE_COLOR|CI|TERM|TZ) ;;
+            *) an_fail "an environment prefix on a guarded command"; return 1 ;;
+        esac
+    done
+}
+
+# `git push` at word $1. A push into this repository can move the primary
+# branch from any tree, a scratch clone of the primary tree included. So it
+# counts as a move in the primary tree. The destination is the repository
+# argument, or the remote git picks for the branch, and a remote name stands
+# for its push URLs. A URL on another host passes. A push the hook cannot
+# resolve asks, as a clone this same command makes could have any origin.
+hone_an_push() {
+    local j w dest="" d r b urls u
+    [ -z "$GFAIL" ] || { an_fail "$GFAIL"; WRAP=1; return; }
+    hone_an_env_ok "$1" || return
+    for ((j = GSUBI + 1; j < ${#W[@]}; j++)); do
+        w=${W[$j]}
+        case $w in
+            --repo|--repo=*|-o|--push-option|--receive-pack*|--exec*) an_fail "git push $w"; WRAP=1; return ;;
+            -*) ;;
+            *) hone_an_expand "$w" && [ -n "$AN_E" ] || { an_fail "a push destination the hook cannot read"; WRAP=1; return; }
+               dest=$AN_E; break ;;
+        esac
+    done
+    while IFS= read -r d; do
+        [ -d "$d" ] || { an_fail "a push from a tree that does not exist yet"; WRAP=1; return; }
+        r=$dest
+        if [ -z "$r" ]; then
+            b=$(git -C "$d" symbolic-ref -q --short HEAD 2>/dev/null)
+            r=$(git -C "$d" config "branch.$b.pushRemote" || git -C "$d" config remote.pushDefault \
+                || git -C "$d" config "branch.$b.remote") || r=origin
+        fi
+        urls=$(git -C "$d" remote get-url --push --all "$r" 2>/dev/null) || urls=$r
+        while IFS= read -r u; do
+            hone_an_push_url "$u" "$d"
+        done <<<"$urls"
+    done <<<"$GTD"
+}
+
+# Push URL $1, read from directory $2: a move when it names this repository.
+# shellcheck disable=SC2088  # the literal ~ is matched
+hone_an_push_url() {
+    local u=${1#file://} p c
+    case $1 in file://*) ;; [A-Za-z]*://*) return 0 ;; esac
+    # host:path is ssh when no slash comes before the colon.
+    case ${u%%/*} in *:*) return 0 ;; esac
+    case $u in '~/'*) u=$HOME/${u#'~/'} ;; '~'*) an_fail "a push to another user's home"; return ;; esac
+    case $u in /*) ;; *) u=$2/$u ;; esac
+    for p in "$u" "$u.git"; do
+        [ -d "$p" ] || continue
+        c=$(git -C "$p" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) || return 0
+        hone_an_phys "$c" || { an_fail "a push destination that does not resolve"; return; }
+        if [ -z "$OUR_COMMON" ] || [ "$AN_P" = "$OUR_COMMON" ]; then
+            AN_MSG=msg_bashguard_branch_move; hone_an_unsafe
+        fi
+        return 0
+    done
 }
 
 # A check-config path $1 (a raw word) is written: it must land outside the
@@ -806,11 +962,16 @@ hone_an_simple() {
             [ "$dataok" -eq 1 ] && continue
             if hone_an_triggers "${HB[$k]}" || [[ ${HB[$k]} =~ $RE_CFG_REDIR || ${HB[$k]} =~ $RE_CFG_VERB ]]; then
                 an_fail "a heredoc body that names a guarded command"
+                [[ $RUNNERS == *" $base "* ]] && WRAP=1
             fi
         done
     fi
 
     hone_an_redirs
+    case $base in ''|cd|export|ls|tail|head|pwd|echo|printf|true|:|test|'[') ;; *) AN_WROTE=1 ;; esac
+    for k in "${!RD[@]}"; do
+        case ${RDOP[$k]} in *'>'*) [ "${RD[$k]}" = /dev/null ] || AN_WROTE=1 ;; esac
+    done
 
     if [ "$a" -eq "$n" ]; then
         [ "$n" -gt 0 ] || return 0
@@ -837,7 +998,9 @@ hone_an_simple() {
             return 0 ;;
         true|:) CERTAIN=1 ;;
         pushd|popd|eval|source|.|exec|builtin|command|alias|unalias|trap|shopt|set|enable|hash|unset|declare|typeset|local|readonly|let|read|mapfile|readarray|getopts|'if'|'then'|'elif'|'else'|'fi'|'for'|'while'|'until'|'do'|'done'|'case'|'esac'|'select'|'function'|'time'|'coproc'|'{'|'}'|'!'|'[['|']]'|'in')
-            an_fail "the shell construct $cw"; return 0 ;;
+            an_fail "the shell construct $cw"
+            [[ $RUNNERS == *" $cw "* ]] && hone_an_triggers "$tt" && WRAP=1
+            return 0 ;;
         printf) for ((j = a + 1; j < n; j++)); do [[ ${W[$j]} == -v* ]] && an_fail "printf -v"; done ;;
         ln) LN_SEEN=1 ;;
         cp) for ((j = a + 1; j < n; j++)); do [[ ${W[$j]} =~ ^(-[A-Za-z]*s|--symbolic-link)$ ]] && LN_SEEN=1; done ;;
@@ -880,25 +1043,22 @@ hone_an_simple() {
             fi ;;
     esac
 
+    if [ "$base" = git ] && [ "$GSUB" = push ]; then hone_an_push "$a"; return 0; fi
+
     # The primary-tree rules.
     hone_an_triggers "$tt" || return 0
-    for ((j = 0; j < a; j++)); do
-        case ${W[$j]%%=*} in
-            GIT_EDITOR|GIT_SEQUENCE_EDITOR|GIT_PAGER|GIT_TERMINAL_PROMPT|GIT_AUTHOR_*|GIT_COMMITTER_*|LANG|LC_*|NO_COLOR|FORCE_COLOR|CI|TERM|TZ) ;;
-            *) an_fail "an environment prefix on a guarded command"; return 0 ;;
-        esac
-    done
+    hone_an_env_ok "$a" || return 0
     case $base in
         git)
             [ -z "$GFAIL" ] || { an_fail "$GFAIL"; return 0; }
-            case $GSUB in push|bisect|submodule|filter-branch|filter-repo) an_fail "git $GSUB"; return 0 ;; esac
+            case $GSUB in bisect|submodule|filter-branch|filter-repo) an_fail "git $GSUB"; return 0 ;; esac
             for ((j = GSUBI + 1; j < n; j++)); do
                 case ${W[$j]} in --exec|--exec=*|-x|--ignore-other-worktrees) an_fail "git ${W[$j]}"; return 0 ;; esac
             done
             while IFS= read -r d; do
                 hone_an_kind "$d" || { an_fail "a tree the hook cannot tell"; return 0; }
                 case $KIND in
-                    primary) hone_an_primary_unsafe "$tt" "$d" && TREE_OK=0 ;;
+                    primary) hone_an_primary_unsafe "$tt" "$d" && hone_an_unsafe ;;
                     linked) [[ $tt =~ $RE_REF_MOVER ]] && { an_fail "a ref move in a worktree that shares the refs"; return 0; } ;;
                 esac
             done <<<"$GTD" ;;
@@ -906,7 +1066,7 @@ hone_an_simple() {
             while IFS= read -r d; do
                 hone_an_kind "$d" || { an_fail "a tree the hook cannot tell"; return 0; }
                 if [ "$KIND" = primary ]; then
-                    hone_an_primary_unsafe "$tt" "$d" && TREE_OK=0
+                    hone_an_primary_unsafe "$tt" "$d" && hone_an_unsafe
                     continue
                 fi
                 # Outside the primary tree, the tool must not reach back in.
@@ -920,7 +1080,8 @@ hone_an_simple() {
                     case $w in /*|'~'*|*..*) an_fail "a tool argument outside its directory"; return 0 ;; esac
                 done
             done <<<"$CURSET" ;;
-        *) an_fail "a guarded command named inside $base" ;;
+        *) an_fail "a guarded command named inside $base"
+           [[ $RUNNERS == *" $base "* ]] && WRAP=1 ;;
     esac
 }
 
@@ -943,6 +1104,7 @@ hone_an_end_cmd() {
         for k in "${!RD[@]}"; do line+=" ${RDOP[$k]}${RD[$k]}"; done
         SIGNOFF_LINES+=("$line")
         hone_an_redirs
+        [ "${#RD[@]}" -eq 0 ] || AN_WROTE=1
     else
         hone_an_simple "$PREV" "$nx"
     fi
@@ -1161,10 +1323,12 @@ fi
 # git-dir == common-dir ⇔ TREE_DIR is the primary tree, not a linked worktree
 # (whose git-dir sits under .git/worktrees/). So neither rule fires for work
 # aimed at a worktree, which is where both operations are safe and belong.
+# Both paths are absolute: in a subdirectory git prints the one absolute and
+# the other relative, and the primary tree's subdirectories passed.
 hone_is_primary_tree() {
     [ -d "$1" ] || return 1
-    [ "$(git -C "$1" rev-parse --git-dir 2>/dev/null)" \
-      = "$(git -C "$1" rev-parse --git-common-dir 2>/dev/null)" ]
+    [ "$(git -C "$1" rev-parse --path-format=absolute --git-dir 2>/dev/null)" \
+      = "$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" ]
 }
 
 IN_PRIMARY_TREE=0
@@ -1267,9 +1431,10 @@ fi
 # `git -C <primary tree> merge` reaches the branch from a worktree shell. It
 # accepts no other token, so `git log --grep=merge x` never reads as a merge.
 #
-# `git push` counts only when its remote is a local path. Pushing the change
-# branch to the team's remote is the loop's own step, and shared-mode land
-# makes the primary-branch push itself, inside the lock.
+# Here `git push` counts only when its remote is a local path, and rule 5
+# judges a push by the repository it writes to. Pushing the change branch to
+# the team's remote is the loop's own step, and shared-mode land makes the
+# primary-branch push itself, inside the lock.
 # (GIT_PRE and BRANCH_MOVERS are defined above, with the other patterns.)
 if [ "$IN_PRIMARY_TREE" -eq 1 ] \
    && echo "$CMD" | grep -Eq "(^|[^A-Za-z_])${GIT_PRE}(${BRANCH_MOVERS})"; then
@@ -1358,6 +1523,35 @@ if [ "$IN_PRIMARY_TREE" -eq 1 ]; then
         hone_fmt_scoped "$seg" && continue
         primary_ask msg_bashguard_formatter
     done < <(printf '%s\n' "$CMD" | tr '|;&' '\n\n\n')
+fi
+
+# 5. A move the rules above did not see. They read the tree from one leading
+# cd and from literal -C paths, so a move in the primary tree passed when it
+# sat after a subshell's cd, behind a variable, behind `sudo` or `command`,
+# or in a push from a scratch clone whose origin is the primary tree. So a
+# command that names a guarded command, or any push, gets the analysis too.
+# It asks when the analysis finds a move in the primary tree, even in a
+# command it does not model in full, when a runner such as `sudo`, `env`,
+# or `bash -c` hides the tree of a guarded command, and on a push it cannot
+# resolve.
+#
+# It does not ask on every command the analysis gives up on. In a replay of
+# real commands, most such asks were false: a push to the team's remote
+# inside a loop, a script whose text names a checkout. See
+# docs/spikes/2026-09-26-bash-guard-holes-replay.md.
+if hone_an_triggers "$CMD" || [[ $CMD =~ $RE_PUSH ]]; then
+    hone_analyze
+    if [ "$WRAP" -eq 1 ] || [ "$TREE_OK" -eq 0 ]; then
+        msg=$TREE_MSG
+        if [ -z "$msg" ]; then
+            if [[ $CMD =~ $RE_HEAD || $CMD =~ $RE_STASH || $CMD =~ $RE_CHECKOUT ]]; then msg=msg_bashguard_head_move
+            elif [[ $CMD =~ $RE_MOVER || $CMD =~ $RE_RESET || $CMD =~ $RE_PUSH ]]; then msg=msg_bashguard_branch_move
+            elif [[ $CMD =~ $RE_SELF ]]; then msg=msg_bashguard_self_writer
+            else msg=msg_bashguard_formatter
+            fi
+        fi
+        decision ask "$($msg)"
+    fi
 fi
 
 exit 0
