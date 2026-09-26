@@ -234,12 +234,23 @@ as before. Next step: release it, then count its fires in the field again.
 
 Still open:
 
-- The `dirty-guard` blames no command for a write that lands after the
-  command returns, such as one from a background job. The next command's
-  record already holds that path. Two calls of one session that run at
-  the same time each see the other's writes. Next step: count in the field
-  how often a background command writes a protected path in the primary
-  tree, before anyone designs for it.
+- The `dirty-guard` blamed no command for a write that lands after the
+  command returns, such as one from a background job, because the next
+  command's record already held the path. Two calls of one session that
+  ran at the same time each reported the other's write. Fixed, not yet
+  released: a baseline per session in `.git/hone-dirty/` holds what the
+  session's last check saw. A change that is in no command's span blocks
+  the next check once, as outside the last command, with no restore. The
+  first command of a session only writes the baseline, so older work never
+  blocks. Parallel calls report a change once, and the block says another
+  call may have made it. Tests in `test/hooks_test.sh` cover both gaps.
+  What stays open: a background write that lands during a later command
+  is still blamed on that command. A session that is running when another
+  session leaves a merge half done gets one block for it. A command that
+  another hook denied leaves its record, and for ten minutes a block in
+  that session wrongly adds that another call ran at the same time.
+  Next step: release it, then count in the field how often the outside
+  block fires and whether its writer was a job, a person, or a session.
 
 - The `bash-guard` still asks when a protected adapter is the *source* of
   a copy, because its pattern reads any path after the verb. It still

@@ -268,7 +268,10 @@ neither. When you want that record, route the edit through the loop.
   command dirtied, edited again, or staged. A path dirty before and left alone
   passes. With no record, it blocks on every dirty protected path. It catches
   a writer the bash-guard's name list misses. It reports after the write, so
-  it stops the run before the commit. The record lives in `.git/hone-dirty/`.
+  it stops the run before the commit. The record lives in `.git/hone-dirty/`,
+  beside a baseline per session. A change between two commands, such as a
+  background job's, blocks the next check once, as outside a command. Work
+  older than the session never blocks. Parallel calls report a change once.
 - *gate* (Stop) runs `scripts/run-tests.sh`, plus `scripts/typecheck.sh`
   and `scripts/lint.sh` when they exist, and blocks the turn on any failure.
   - With an uncommitted change to any durable path it runs the fast unit
