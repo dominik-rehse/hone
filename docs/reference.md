@@ -168,9 +168,9 @@ file:
 - `.hone-grant/<change>` is the authorization for one irreversible change.
   Its text lands in the merge commit body. Delete the file to revoke. You
   write it, with `worktree.sh grant` (say who, when, and why) or your own
-  editor, and the loop never does. A green land deletes the spent file. A grant is not pinned to
-  a commit, so a leftover one would authorize a later change that reuses the
-  slug.
+  editor, and the loop never does. A green land deletes the spent file. A
+  grant is not pinned to a commit, so a leftover one would authorize a later
+  change that reuses the slug.
 - `.hone-proof/<change>` is the sign-off that the real-environment check for
   one change ran. It must contain the commit hash it applies to (short or
   full). After new commits it no longer counts. You write it, with
@@ -233,7 +233,7 @@ irreversible. When you want that record, route the edit through the loop.
   - It denies a command that would disable the gate: `--no-verify`,
     `core.hooksPath` in any case, or creating `.hone-off`.
   - It denies a command that hand-writes a grant or a proof sign-off past
-    the `worktree.sh` helpers.
+    the `worktree.sh` helpers, and it denies the loop the helpers too.
   - It asks before a command that modifies a protected artifact: an
     adapter, a hook, settings, a policy file, or a check config. The ask
     names the file. A check config written outside the repository passes.
