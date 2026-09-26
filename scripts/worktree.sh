@@ -189,9 +189,11 @@
 #   worktree.sh grant <change> "who/why"
 #       Record the authority grant for one irreversible change at
 #       .hone-grant/<change>, stamped with the git user and the current time.
-#       A person and the agent both run it, and the stamp says which (see
-#       signer_stamp). It is the only route to the file: both guards deny a
-#       raw write, because the stamp lives here.
+#       The human's act alone: the bash-guard denies the agent this helper,
+#       and the agent stops and hands over the diff and this command instead.
+#       A Plan authorizes nothing here, because the agent helped write it.
+#       It is the only route to the file: both guards deny a raw write,
+#       because the stamp lives here.
 #
 #   worktree.sh attest <change> "what you ran"
 #       Record the real-environment sign-off at .hone-proof/<change>, stamped
@@ -1486,12 +1488,13 @@ grant_is_placeholder() {
 # "name <email> | timestamp" for grant/attest stamps, with "agent " in front
 # when the agent ran the helper rather than a person.
 #
-# Both may run it, and the record has to say which. The git identity is the
+# The bash-guard denies both helpers to the agent, but that is a deterrent,
+# and the record has to say who ran it anyway. The git identity is the
 # repository owner's either way, so an unmarked stamp would read as a person's
-# authorization for every grant the loop records. CLAUDECODE is set in the
-# agent's shell and unset in a terminal the person drives, which is the one
-# signal available here. It is a label, not a lock: the agent could unset it,
-# and this is a record for a reader, not a defence against one.
+# act. CLAUDECODE is set in the agent's shell and unset in a terminal the
+# person drives, which is the one signal available here. It is a label, not a
+# lock: the agent could unset it, and this is a record for a reader, not a
+# defence against one.
 signer_stamp() {
     printf '%s%s <%s> | %s' \
         "${CLAUDECODE:+agent, on behalf of }" \

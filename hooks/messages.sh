@@ -59,7 +59,7 @@ msg_guard_signoff() {
     local rel="$1"
     cat <<EOF
 hone guard: $rel is a land-gate record, and only the helpers write one.
-Do: run worktree.sh grant or worktree.sh attest instead.
+Do: ask the human to run worktree.sh grant or worktree.sh attest.
 Why: the helper stamps the signer, binds a sign-off to the commit it proves, and refuses an empty text. A raw write gives a record nobody can trust.
 EOF
 }
@@ -112,8 +112,16 @@ EOF
 msg_bashguard_signoff() {
     cat <<'EOF'
 hone bash-guard: this command would write straight into .hone-grant/ or .hone-proof/.
-Do: run worktree.sh grant, or ask the human to run worktree.sh attest.
+Do: ask the human to run worktree.sh grant or worktree.sh attest.
 Why: the helper stamps the signer, binds a sign-off to the commit it proves, and refuses an empty text. A raw write gives a record nobody can trust.
+EOF
+}
+
+msg_bashguard_grant() {
+    cat <<'EOF'
+hone bash-guard: worktree.sh grant is the human's act, and the run never authorizes an irreversible change.
+Do: stop, and hand the human the diff command, the quoted statements, and the grant command from the land refusal.
+Why: a grant the run writes for itself stops nothing. A Plan cannot authorize it either, because the run helped write the Plan.
 EOF
 }
 
@@ -763,7 +771,7 @@ msg_wt_land_authority_missing() {
     local branch="$1" reasons="$2" diffstat="$3" review_cmd="$4" grant_cmd="$5"
     cat <<EOF
 hone worktree: $branch is an irreversible change with no authority grant.
-Do: review the diff, then record who authorized it and why.
+Do: review the diff yourself, then record your grant.
 Why: land stopped before the merge and kept the worktree.
 Signals:
 $(hone_msg_block "$reasons")
@@ -1446,6 +1454,7 @@ bash-guard|agent|msg_bashguard_unparsed
 bash-guard|agent|msg_bashguard_sabotage
 bash-guard|agent|msg_bashguard_signoff
 bash-guard|agent|msg_bashguard_attest
+bash-guard|agent|msg_bashguard_grant
 bash-guard|agent|msg_bashguard_protected|scripts/lint.sh
 bash-guard|agent|msg_bashguard_check_config|biome.json
 bash-guard|agent|msg_bashguard_head_move

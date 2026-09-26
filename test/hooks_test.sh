@@ -167,7 +167,7 @@ echo "$(bg 'git commit -m \"docs: explain why --no-verify is denied\"')" | grep 
 echo "$(bg 'git commit --message=\"see core.hooksPath\"')" | grep -q 'permissionDecision' && bad "a --message= value is prose" || ok "core.hooksPath inside --message= passes"
 echo "$(bg 'git commit -am \"chore: bun add dprint, then sed -i on scripts/lint.sh\"')" | grep -q 'permissionDecision' && bad "a message naming a writer and an adapter is prose" || ok "a writer and an adapter inside a message pass"
 echo "$(bg 'git commit -m \"$(cat <<'"'"'EOF'"'"'\nfix: x\n\nthe guard denies core.hooksPath and git reset --hard\nEOF\n)\"')" | grep -q 'permissionDecision' && bad "a heredoc message body is prose" || ok "a heredoc message body passes"
-echo "$(bg 'bash scripts/worktree.sh grant db-drop drops the table, git reset --hard cannot undo it')" | grep -q 'permissionDecision' && bad "a grant reason is prose" || ok "a HEAD-move named in a grant reason passes"
+echo "$(bg 'bash scripts/worktree.sh grant db-drop drops the table, git reset --hard cannot undo it')" | grep -q '"ask"' && bad "a grant reason is prose" || ok "a HEAD-move named in a grant reason is not read as one"
 echo "$(bg 'git commit -m x && touch .hone-off')" | grep -q '"deny"' && ok "the act after a message still denies" || bad "stripping the message must not hide the act"
 # The strip never blanks a quoted string elsewhere: a quoted path is a target.
 echo "$(bg 'sed -i s/x/y/ \"scripts/lint.sh\"')" | grep -q '"ask"' && ok "a quoted adapter target still asks" || bad "a quoted path is a real target"
@@ -185,11 +185,16 @@ echo "$(bg 'ls -la')" | grep -q 'permissionDecision' && bad "benign command shou
 # stamp, the commit binding, and the placeholder check live in the helper.
 echo "$(bg 'echo signed > .hone-proof/ui-flow')" | grep -q '"deny"' && ok "writing a proof sign-off denied" || bad "writing .hone-proof/ should be denied"
 echo "$(bg 'mkdir -p .hone-grant && touch .hone-grant/db-drop')" | grep -q '"deny"' && ok "creating a grant denied" || bad "creating .hone-grant/<change> should be denied"
-echo "$(bg 'bash scripts/worktree.sh grant db-drop reason')" | grep -q 'permissionDecision' && bad "the grant helper should pass" || ok "grant helper allowed"
-# The proof sign-off is the human's act: the attest helper is denied to the
-# agent whatever its text says, with the deny that tells it to hand the output
-# over. The grant helper stays the agent's to call. A mention of the word
-# inside a commit message stays prose.
+# The proof sign-off and the authority grant are the human's acts: both
+# helpers are denied to the agent whatever their text says, with the deny that
+# tells it to stop and hand the command over. A mention of either word inside a
+# commit message stays prose.
+out=$(bg 'bash scripts/worktree.sh grant db-drop reason')
+echo "$out" | grep -q '"deny"' && ok "grant helper denied to the agent" || bad "the grant helper should be denied"
+echo "$out" | grep -q "the human's act" && ok "the grant deny names the human" || bad "the grant deny should say whose act it is"
+echo "$out" | grep -q "grant command" && ok "the grant deny says to hand over the command" || bad "the grant deny should say to hand over the grant command"
+echo "$(bg 'bash \"$CLAUDE_PLUGIN_ROOT/scripts/worktree.sh\" grant db-drop reason')" | grep -q '"deny"' && ok "grant denied through a quoted plugin path" || bad "grant through a quoted path should be denied"
+echo "$(bg 'git commit -m \"docs: run worktree.sh grant db-drop yourself\"')" | grep -q 'permissionDecision' && bad "grant inside a commit message is prose" || ok "a grant command named in a commit message passes"
 out=$(bg 'bash scripts/worktree.sh attest db-drop ran-it')
 echo "$out" | grep -q '"deny"' && ok "attest helper denied to the agent" || bad "the attest helper should be denied"
 echo "$out" | grep -q "the human's act" && ok "the attest deny names the human" || bad "the attest deny should say whose act it is"
@@ -228,7 +233,7 @@ echo "$(bg 'sed -i s/x/y/ hooks/messages.sh')" | grep -q '"ask"' && ok "editing 
 # A redirect binds to the path right after it. An angle bracket inside a quoted
 # message is prose, and the sign-off text is prose the helper asks for. Reading
 # the two alike escalated the one helper the agent is meant to call by itself.
-echo "$(bg 'bash scripts/worktree.sh grant ui-flow ran PROOF_ROOT=<worktree> bash scripts/proof.sh ui-flow, exit 0')" | grep -q 'permissionDecision' && bad "prose naming an adapter after an angle bracket should pass" || ok "an angle bracket in a grant message passes"
+echo "$(bg 'git commit -m \"ran PROOF_ROOT=<worktree> bash scripts/proof.sh ui-flow, exit 0\"')" | grep -q 'permissionDecision' && bad "prose naming an adapter after an angle bracket should pass" || ok "an angle bracket in a quoted message passes"
 echo "$(bg 'git commit -m ran with PROOF_ROOT=<worktree> and then scripts/lint.sh')" | grep -q 'permissionDecision' && bad "a commit message is prose, not a write" || ok "an angle bracket in a commit message passes"
 # A real redirect into the same file still escalates, whatever precedes it.
 echo "$(bg 'echo x > scripts/lint.sh')" | grep -q '"ask"' && ok "a redirect into an adapter escalated" || bad "a redirect into scripts/lint.sh should ask"

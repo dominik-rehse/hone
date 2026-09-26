@@ -1213,14 +1213,18 @@ if echo "$CMD" | grep -Eq -e "$SIGNOFF_RE1" -e "$SIGNOFF_RE2"; then
     fi
 fi
 
-# 1c. The proof sign-off is the human's act, so `worktree.sh attest` stays
-# denied to the agent whatever text follows it. The run runs the check where
-# it can and hands the human its output, and the human signs. `grant` stays
-# allowed: the authority gate asks for a reading of the diff, and the stamp
-# says who read it. The sed above already stripped attest's free text, so
-# this matches the invocation alone, never a mention inside a message.
+# 1c. The proof sign-off and the authority grant are the human's acts, so
+# `worktree.sh attest` and `grant` stay denied to the agent whatever text
+# follows them. The run runs the check or reads the diff, then stops and hands
+# the human the command. An agent that may grant itself did so every time in
+# the field, and the gate stopped nothing. The sed above already stripped the
+# free text, so this matches the invocation alone, never a mention inside a
+# message.
 if echo "$CMD" | grep -Eq 'worktree\.sh"?[[:space:]]+attest([[:space:]]|$)'; then
     decision deny "$(msg_bashguard_attest)"
+fi
+if echo "$CMD" | grep -Eq 'worktree\.sh"?[[:space:]]+grant([[:space:]]|$)'; then
+    decision deny "$(msg_bashguard_grant)"
 fi
 
 # 2. A mutating operation aimed at a protected artifact → ask. The committed
