@@ -1190,12 +1190,12 @@ hone_analyze() {
 }
 
 # 1b. HAND-WRITING an authority grant or a proof sign-off → deny. The helpers
-# (worktree.sh grant and attest) are the only route to these files, for the
-# agent as much as for a person. They are what stamps the signer, binds a
-# sign-off to the commit it proves, and refuses an empty or placeholder text.
-# A raw write past them produces a file the gate may accept and no reader can
-# trust. So every shell route to the file itself stays denied. The rule allows
-# the helpers themselves.
+# (worktree.sh grant and attest) are the only route to these files, and only a
+# person runs them: rule 1c denies both to the agent. They are what stamps the
+# signer, binds a sign-off to the commit it proves, and refuses an empty or
+# placeholder text. A raw write past them produces a file the gate may accept
+# and no reader can trust. So every shell route to the file itself stays
+# denied. This rule does not match the helpers; rule 1c handles them.
 # The mutating-op list is a superset of rule 2's below (creation verbs plus
 # every mutator). So a token rule 2 treats as a write cannot pass here.
 #
