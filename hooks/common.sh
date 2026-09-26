@@ -35,8 +35,8 @@ hone_pretool_decision() {
         "$decision" "$reason"
 }
 
-# Emit a block decision for a Stop or a PostToolUse hook (both read the same two
-# fields). $1 = reason. The caller exits 0 afterwards.
+# Emit a block decision for a Stop, PostToolUse, or PostToolUseFailure hook (all
+# read the same two fields). $1 = reason. The caller exits 0 afterwards.
 hone_stop_block() {
     local reason
     reason=$(hone_json_escape "$1")

@@ -262,8 +262,8 @@ neither. When you want that record, route the edit through the loop.
   tree, it passes. Otherwise it asks. A command that names such a
   move or a push, but that no rule caught, gets the same test. The header
   of `hooks/bash-guard.sh` lists what it cannot model.
-- *dirty-guard* (PreToolUse and PostToolUse on Bash) reads the effect instead
-  of the command. In the primary tree it records the dirty protected paths
+- *dirty-guard* (PreToolUse, and PostToolUse or PostToolUseFailure on Bash)
+  reads the effect instead of the command. In the primary tree it records the dirty protected paths
   before the command, with a hash of each, and blocks on those that the
   command dirtied, edited again, or staged. A path dirty before and left alone
   passes. With no record, it blocks on every dirty protected path. It catches

@@ -1,6 +1,6 @@
 #!/bin/bash
-# PreToolUse and PostToolUse guard for Bash commands (Claude Code). It closes
-# the one hole the other two guards cannot see.
+# PreToolUse, PostToolUse, and PostToolUseFailure guard for Bash commands
+# (Claude Code). It closes the one hole the other two guards cannot see.
 #
 # guard.sh reads a file path, so it only fires when a FILE TOOL produces one.
 # bash-guard.sh reads the command text, so it only fires when the command SPELLS
@@ -11,8 +11,10 @@
 #
 # This hook checks the EFFECT instead of the command. In the primary tree it
 # records the dirty durable paths before the command (PreToolUse) and compares
-# them after it (PostToolUse). It blocks on a durable path the command made
-# dirty or changed again. It catches every writer, including an unknown one,
+# them after it (PostToolUse). A command that exits nonzero fires
+# PostToolUseFailure instead, and a failed command can still write, so the
+# comparison runs on that event too. It blocks on a durable path the command
+# made dirty or changed again. It catches every writer, including an unknown one,
 # because it never has to recognize the tool.
 #
 # It compares instead of reading the tree alone, because the tree also holds

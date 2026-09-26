@@ -77,7 +77,7 @@
     },
     "dirty-guard": {
       "kind": "hook",
-      "what": "PreToolUse and PostToolUse on Bash: it compares the primary tree before and after a command.",
+      "what": "PreToolUse, and PostToolUse or PostToolUseFailure, on Bash: it compares the primary tree before and after a command.",
       "means": "The hook never runs. The skills still name it.",
       "hook": "dirty-guard"
     },

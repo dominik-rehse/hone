@@ -1,5 +1,5 @@
 {
-  "description": "hone enforcement. PreToolUse: a guard on Write/Edit (test-first in a worktree, never the primary tree) and a bash-guard on shell commands (tamper resistance for the gate). The dirty-guard records the dirty protected paths before a shell command (PreToolUse) and compares after it (PostToolUse). So a tool that writes its own files cannot edit a durable path in the primary tree unseen, and a path that was already dirty is not blamed on the next command. PostToolUse and PostToolUseFailure on Bash, and Stop, also run the progress hook, which shows the loop's progress lines that worktree.sh queued. SessionStart injects the lean workflow rule and bootstraps a hone project. Stop runs the gate (tests + type-check + lint via the one adapter) and the nag (leftover Plan, oversized/orphan Note). Scripts run through bash so hook execution does not depend on executable bits.",
+  "description": "hone enforcement. PreToolUse: a guard on Write/Edit (test-first in a worktree, never the primary tree) and a bash-guard on shell commands (tamper resistance for the gate). The dirty-guard records the dirty protected paths before a shell command (PreToolUse) and compares after it (PostToolUse, or PostToolUseFailure when the command exits nonzero). So a tool that writes its own files cannot edit a durable path in the primary tree unseen, and a path that was already dirty is not blamed on the next command. PostToolUse and PostToolUseFailure on Bash, and Stop, also run the progress hook, which shows the loop's progress lines that worktree.sh queued. SessionStart injects the lean workflow rule and bootstraps a hone project. Stop runs the gate (tests + type-check + lint via the one adapter) and the nag (leftover Plan, oversized/orphan Note). Scripts run through bash so hook execution does not depend on executable bits.",
   "hooks": {
     "PreToolUse": [
       {
@@ -52,6 +52,12 @@
       {
         "matcher": "Bash",
         "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/dirty-guard.sh\"",
+            "timeout": 10,
+            "statusMessage": "◆ hone dirty-guard: checking the primary tree..."
+          },
           {
             "type": "command",
             "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/progress.sh\"",

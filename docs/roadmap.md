@@ -284,15 +284,14 @@ the next field window and count fires per hook again.
   that reaches land. The build step has no subcommand of its own, so its
   end shows only when verify starts.
 - Open points. A garden change (`garden/<slug>`) gets no line, because its
-  chain differs. The garden skill still asks the agent for it. The lab
-  transcripts log a nonzero exit as a tool error (`is_error: true`), and
-  Claude Code 2.1.283 has a `PostToolUseFailure` event for a failed tool.
-  So the hook is registered on both events. If a failed command skips
-  `PostToolUse`, then the `dirty-guard` never runs after one. Nobody has
-  checked that yet.
+  chain differs. The garden skill still asks the agent for it.
+- Settled on 2026-09-26: the Claude Code hooks reference says `PostToolUse`
+  fires only after a tool call succeeds, and a Bash command that exits
+  nonzero fires `PostToolUseFailure` instead. So the progress hook and the
+  `dirty-guard` check both run on both events. Before that, the
+  `dirty-guard` never ran after a failed command.
 - Next step: run the lab after the merge and read `progress_starts` and
-  `hook_lines` in each `result.json`. Check in one session whether a
-  failed command runs `PostToolUse`. Then decide on the garden chain.
+  `hook_lines` in each `result.json`. Then decide on the garden chain.
 
 #### The lab scenario `proof-gate` had a real fork at review
 

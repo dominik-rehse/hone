@@ -1462,7 +1462,7 @@ fi
 
 # 4. A tool that writes its OWN files, run in the PRIMARY tree → ask. This is
 # the preventive half of the primary-tree rule for the shell route, and
-# dirty-guard.sh (PostToolUse) is the half that catches what this list misses.
+# dirty-guard.sh (afterwards) is the half that catches what this list misses.
 # Rule 2 above cannot see these. A package manager rewrites package.json from
 # inside its own process, so the command text carries neither a write construct
 # nor the path.

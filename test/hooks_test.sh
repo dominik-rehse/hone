@@ -520,6 +520,13 @@ dgcmd() {
     (cd "$1" && eval "$2") >/dev/null 2>&1
     dg_event "$1" PostToolUse "toolu_$DG_N"
 }
+# A command that exits nonzero fires PostToolUseFailure instead of PostToolUse.
+dgfail() {
+    DG_N=$((DG_N+1))
+    dg_event "$1" PreToolUse "toolu_$DG_N"
+    (cd "$1" && eval "$2") >/dev/null 2>&1
+    dg_event "$1" PostToolUseFailure "toolu_$DG_N"
+}
 # The event with no ids and no snapshot, as an older harness would send it.
 dg() { echo '{"tool_input":{"command":"bun add -d dprint"}}' | (cd "$1" && bash "$DIRTY_GUARD"); }
 blocked() { echo "$1" | grep -q '"decision":"block"'; }
@@ -543,6 +550,17 @@ blocked "$out" && ok "a command that dirties a durable path blocks" || bad "shou
 echo "$out" | grep -q 'src/auth/.keep' && ok "the block names the changed path" || bad "the block should name the path"
 echo "$out" | grep -q 'git checkout HEAD --' && ok "the restore command names HEAD, not the index" || bad "the restore should name HEAD"
 [ -z "$(ls -A "$SNAPS" 2>/dev/null)" ] && ok "the hook deletes the snapshot it read" || bad "a used snapshot should be gone"
+
+# A failed command that still wrote a durable path blocks, and the harness
+# wires the check on the failure event, or it never runs after a failed command.
+git -C "$REPO" checkout HEAD -- src/auth/.keep
+out=$(dgfail "$REPO" 'echo "// touched" >> src/auth/.keep; false')
+blocked "$out" && ok "a failed command that dirties a durable path blocks" || bad "PostToolUseFailure should block like PostToolUse"
+[ -z "$(ls -A "$SNAPS" 2>/dev/null)" ] && ok "the failure event deletes the snapshot" || bad "a failed command left its snapshot"
+jq -e '.hooks.PostToolUseFailure[] | select(.matcher == "Bash") | .hooks[].command | select(test("/hooks/dirty-guard\\.sh"))' \
+    "$PLUGIN_ROOT/hooks/hooks.json" >/dev/null \
+    && ok "hooks.json runs the dirty-guard on PostToolUseFailure" || bad "hooks.json must wire the dirty-guard on PostToolUseFailure"
+echo "// touched" >> "$REPO/src/auth/.keep"
 
 # Field shape 1: one file left uncommitted blocked every later command, reads
 # included, 30 times over two days. A later command that changes nothing
