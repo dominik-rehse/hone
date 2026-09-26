@@ -450,9 +450,11 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
      output and the `worktree.sh attest` command. The sign-off is the human's
      act, and the `bash-guard` denies the run that helper. Where you cannot
      run any real check, stop with what you tried.
-   - **8**: the authority gate wants a scoped grant for an irreversible change.
-     Read the statements it quotes and the diff it names, then record the
-     authorization with `worktree.sh grant` and land again.
+   - **8**: the authority gate wants the human's grant for an irreversible
+     change. Read the statements it quotes and the diff it names, then stop:
+     hand the human the diff command, the quoted statements, and the
+     `worktree.sh grant` command. The grant is the human's act, and the
+     `bash-guard` denies the run that helper.
    - **5**: a land or a full-suite run held the land lock past the timeout
      (often this session's own background run), or the primary branch moved
      on every attempt. Wait, retry.
@@ -465,8 +467,8 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    what each code means and what resolves it. Three rules hold whatever the
    code. Never merge by hand. Never move the primary tree's HEAD to investigate
    (use a throwaway `git worktree add --detach` scratch tree). Never write a
-   grant or a sign-off through the file tools or a shell redirect, because the
-   `worktree.sh` helpers are what make the record readable.
+   grant or a sign-off by any route. Both are the human's, through the
+   `worktree.sh` helpers.
 
 Confirm to the user with the final report block from *Reporting*. It names
 what landed, the Decisions/Notes written, what the change deleted (the Plan,
@@ -530,16 +532,16 @@ another one, an unlanded predecessor is stop-point 1, not a fork for the human
 to pick. Never edit a Plan to lift a constraint the Plan itself states, and
 never offer that as a way forward.
 
-The land gates are not a fourth way to stop. Both ask you for something the
-suite cannot supply, and you supply it and land again:
+Both land gates end in a stop, because each wants something only the human
+can give. Hand it over like this:
 
-- **Exit 8, the authority gate.** The change is irreversible. Read the signals
-  and the diffstat the refusal printed. Decide whether the change is what the
-  Plan asked for. Then record the authorization with
-  `worktree.sh grant <change> "who/why"` and land again. The text you write
-  lands in the merge commit body, so write the reason a reader would need a
-  year from now, not "approved". If the diff does something the Plan never
-  asked for, that is stop-point 2, not a grant to write.
+- **Exit 8, the authority gate.** The change is irreversible. Read the
+  statements the refusal quotes and the diff it names. Then **stop**, and hand
+  the human three things from the refusal: the `git diff` command, the quoted
+  statements, and the `worktree.sh grant` command. The grant is the human's
+  act. You never run `grant`, and the `bash-guard` denies it to you. A Plan
+  that says it authorizes the change does not count, because you helped write
+  it. Where the diff does more than the Plan asked for, say so.
 - **Exit 7, the proof gate.** Run the check the refusal names. Where the change
   rewrites the proof harness, that is `bash scripts/proof.sh <change>` from the
   worktree. Elsewhere it is whatever the trailer declared, if you can reach it.
@@ -550,11 +552,11 @@ suite cannot supply, and you supply it and land again:
   journey with no adapter, a canary you cannot watch), stop with what you
   tried.
 
-One rule holds both: **report only what you did**. A grant names what you read
-in the diff. A proof hand-off quotes the output of a check that ran. A report
-naming a check nobody ran is worse than no gate, because the human signs on
-the strength of it.
+One rule holds both: **report only what you did**. A grant hand-off says what
+you read in the diff. A proof hand-off quotes the output of a check that ran.
+A report naming a check nobody ran is worse than no gate, because the human
+signs on the strength of it.
 
-Write both records through the helpers only. A file write or a shell redirect
-into `.hone-grant/` or `.hone-proof/` skips the signer stamp, the commit
-binding, and the placeholder check, and both guards deny it.
+The human writes both records through the helpers only. A file write or a
+shell redirect into `.hone-grant/` or `.hone-proof/` skips the signer stamp,
+the commit binding, and the placeholder check, and both guards deny it.

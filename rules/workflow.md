@@ -69,10 +69,11 @@ Work with a denied action, never around it. A denied write in the primary
 tree is a routing signal. The work belongs in a worktree, and a docs edit
 belongs in that change's consolidate step. Creating the `.hone-off` marker is
 the human's act alone, so ask them to create it. Removing an existing marker
-is a legitimate agent action. Write a grant only through `worktree.sh grant`,
-naming what you read in the diff. A proof sign-off is the human's act: run
-the check where you can, hand over its output verbatim, and never run
-`worktree.sh attest`. Never report a failed or partial run as a pass. The
+is a legitimate agent action. A grant is the human's act, even where the
+Plan claims to authorize the change: read the diff, hand over what you read
+and the grant command, and never run `worktree.sh grant`. A proof sign-off is
+the human's act too: run the check where you can, hand over its output
+verbatim, and never run `worktree.sh attest`. Never report a failed or partial run as a pass. The
 `bash-guard` reads command text, so it can escalate an innocent command that
 merely mentions a protected path. Rephrase such a command instead of routing
 around the hook.

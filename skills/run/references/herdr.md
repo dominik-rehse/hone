@@ -64,8 +64,8 @@ the design, not an obstacle:
   because the worktree under test lives with that SUB. The human splits a pane
   there when they need a shell.
 - MAIN never writes a grant or a sign-off, and never prompts a SUB to route
-  around a gate. A land gate belongs to the SUB that hit it, which discharges it
-  exactly as `run` does, or escalates.
+  around a gate. A land gate belongs to the SUB that hit it, which stops and
+  hands the human the command exactly as `run` does.
 - MAIN never trusts a SUB's report. The only completion signal is the
   repository:
 
@@ -154,10 +154,9 @@ and new approved Plans can join the set.
      herdr agent read <agent-name> --source recent-unwrapped --lines 120
      ```
 
-     - **A land gate fired (exit 7 or 8) and the SUB stopped there.** The SUB
-       discharges its own gates. A stop means it could not. Either the check is
-       out of its reach, or the diff is not what the Plan asked for. Notify the
-       human, then wait.
+     - **A land gate fired (exit 7 or 8) and the SUB stopped there.** That
+       is the expected stop: the grant and the sign-off are the human's.
+       Notify the human, name the tab, then wait.
      - **A question or an approval prompt.** Notify the human, name the tab,
        wait. Never answer for them.
      - **Blocked-unresolvable or genuinely ambiguous** (`run`'s stop points 1
@@ -175,9 +174,8 @@ and new approved Plans can join the set.
    ```
 
    Name the tab in the body, so the human goes to the SUB, not to MAIN. Probes
-   and proofs run from the SUB tab. A grant is the SUB's to record, from its
-   reading of the diff. The attest helper stays in the human's own terminal,
-   as always.
+   and proofs run from the SUB tab. The grant and attest helpers stay in the
+   human's own terminal, as always.
 
 5. **Chains.** Start a dependent Plan only when its predecessor's `landed`
    predicate prints `landed`. Never on the SUB's word, never on an idle state

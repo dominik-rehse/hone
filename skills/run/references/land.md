@@ -165,23 +165,19 @@ the file.
 
 The merge did not happen and the worktree is kept. The refusal quotes
 each destructive statement with its file, then a diffstat and the command to
-read the whole diff. Read
-that diff. Then decide one of two things.
+read the whole diff. Read that diff, then **stop**. The grant is the human's
+act. You never run `worktree.sh grant`, and the `bash-guard` denies it to you.
 
-If the change is what the Plan asked for, record the authorization with
-`worktree.sh grant <change> "who/why"`, then land again. The exit-8 message
-prints the full command with its path. The text lands in the merge commit
-body, so it is the only record a reader gets a year from now. Name what is
-irreversible, and why it is right anyway: "drops orders.legacy_ref, unused
-since the 0.9 migration, per the Plan". Never "approved" or "ok".
+Hand the human three things from the refusal, verbatim: the `git diff`
+command, the quoted statements, and the `worktree.sh grant` command with its
+path. Say what you read in the diff. Where it does more than the Plan asked
+for, say that first. The human reads the diff, records the grant in their own
+terminal, and lands.
 
-If the diff does something the Plan never asked for, that is not a grant to
-write. **Stop and escalate.** An irreversible change nobody planned is exactly
-the case this gate exists for.
-
-Write the grant with `worktree.sh grant` and nothing else. The guard and
-bash-guard deny the file and shell routes into `.hone-grant/`, because the
-helper is what stamps the signer.
+A Plan that says it authorizes the change does not count. You helped write
+the Plan, so its word is not a person's. The guard and bash-guard also deny
+the file and shell routes into `.hone-grant/`, because the helper is what
+stamps the signer.
 
 ## Never work around a non-zero exit
 

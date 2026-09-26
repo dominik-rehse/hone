@@ -180,8 +180,9 @@ Read the message. A failed check means the cut was unsafe: treat it as red
 above. A git hook that refused the merge commit says nothing about the cut:
 keep the worktree and escalate the hook's message. Never run land again to
 see whether it passes. 9 conflict → another change owns these files, defer.
-7/8 → a land gate fired, discharge it as `run` does. Independent changes may run
-in parallel worktrees. Land them one at a time.
+7/8 → a land gate fired: keep the worktree and escalate, handing the human the
+refusal's command as `run` does. Independent changes may run in parallel
+worktrees. Land them one at a time.
 
 Report each change with a progress line on the chain `worktree > cut > verify >
 land`, and name the step `repair` in place of `cut` on a repair. Open the line
