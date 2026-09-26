@@ -480,6 +480,35 @@ asks "$(bgj "git clone -q $REPO $SCR/c2 && git -C $SCR/c2 push origin HEAD:main"
 passes "$(bgj "git -C $SCR/clone push up HEAD:main")" "a push from a clone to another host passes"
 passes "$(bgj "cd $SCR/clone && git push $SCR/bare.git HEAD:main")" "a push from a clone to another local repository passes"
 
+# (e) A move hidden in a shape the walk gives up on. Rule 5 reads that part
+# without order, so a cd in a loop body, a branch, or a function reaches every
+# command after it. Each ask passed on 0.64.0, and its twin in a scratch
+# worktree passes.
+for c in 'for x in 1; do cd @P; done; git merge y' 'while true; do cd @P; break; done; git merge y' \
+         'if true; then cd @P; fi; git merge y' 'case x in x) cd @P;; esac; git merge y' \
+         'f() { cd @P; }; f; git merge y' 'function f { cd @P; }; f; git merge y' \
+         'for x in 1; do cd @P; done && bun add left-pad' "for d in $SCR/wt @P; do git -C \$d merge y; done" \
+         "for d in $SCR/wt @P; do (cd \$d && git merge y); done" "X=$SCR/wt; for x in 1; do X=@P; done; cd \$X; git merge y"; do
+    asks "$(bgj "${c//@P/$REPO}" "$WT")" "a hidden cd into the primary tree asks: ${c//$SCR/<scr>}"
+    passes "$(bgj "${c//@P/$SCR/wt}" "$WT")" "a hidden cd into a scratch worktree passes: ${c//$SCR/<scr>}"
+done
+asks "$(bgj 'for x in 1 2; do git merge y; cd ..; done' "$WT")" "a cd out of a worktree into the primary tree in a loop asks"
+asks "$(bgj 'for x in 1; do cd "$UNSET"; done; git merge y' "$WT")" "a hidden cd to an unknown directory asks"
+asks "$(bgj 'for x in 1; do read X; done; cd "$X" && git merge y' "$WT")" "a directory read into a variable asks"
+asks "$(bgj 'for x in 1; do sudo git merge y; done' "$WT")" "sudo git in a loop asks"
+asks "$(bgj "for x in 1; do eval \"cd $REPO\"; done; git merge y" "$WT")" "a cd inside eval in a loop asks"
+asks "$(bgj 'for x in 1; do git branch -f main HEAD; done' "$WT")" "a branch move in a loop from a worktree asks"
+asks "$(bgj 'for b in a c; do git push origin $b; done' "$SCR/clone")" "a push in a loop from a clone of the primary tree asks"
+passes "$(bgj 'for b in a c; do git push up $b; done' "$SCR/clone")" "a push in a loop from a clone to another host passes"
+asks "$(bgj 'echo $((x=1)); for x in 1; do git merge y; done' "$WT")" "an assignment in arithmetic fails closed"
+passes "$(bgj 'echo $((1+2)) $'"'a\\\\tb'"'; for x in 1; do git merge y; done' "$WT")" "plain arithmetic and an ansi-c quote pass"
+# The walk stays exact up to the part it gives up on, and a harmless loop
+# after a move does not taint it.
+passes "$(bgj "cd $WT && git merge main; for f in a; do echo \$f; done")" "a loop after a move in a worktree passes"
+asks "$(bgj "cd $REPO && git merge main; for f in a; do echo \$f; done" "$WT")" "a loop after a move in the primary tree asks"
+passes "$(bgj 'for f in README.md; do git checkout -- "$f"; done')" "a restore in a loop in the primary tree passes"
+asks "$(bgj 'for f in README.md; do git checkout "$f"; done')" "a checkout without -- in a loop in the primary tree asks"
+
 echo "== bash-guard: a check config asks inside the repository, names the file, and passes outside =="
 # Unattended runs stalled up to seven hours on an unnamed ask about a scratch
 # mutation-check config. A person approved one without knowing which file it

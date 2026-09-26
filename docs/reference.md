@@ -260,8 +260,11 @@ neither. When you want that record, route the edit through the loop.
   `$TMPDIR`, `$(mktemp -d)`, or the one directory an `ls -d <glob>` finds.
   If it models the whole command and nothing moves or writes the primary
   tree, it passes. Otherwise it asks. A command that names such a
-  move or a push, but that no rule caught, gets the same test. The header
-  of `hooks/bash-guard.sh` lists what it cannot model.
+  move or a push, but that no rule caught, gets the same test. Where the
+  analysis cannot model a part, such as a loop body, it judges each
+  command there in every directory it may reach, and asks on what it
+  cannot place. The header of `hooks/bash-guard.sh`
+  lists what it cannot model.
 - *dirty-guard* (PreToolUse, and PostToolUse or PostToolUseFailure on Bash)
   reads the effect instead of the command. In the primary tree it records the dirty protected paths
   before the command, with a hash of each, and blocks on those that the

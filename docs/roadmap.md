@@ -232,6 +232,26 @@ test replays that bypass. With no record of the tree before the command
 (no ids in the hook input), the hook blocks on every dirty protected path,
 as before. Next step: release it, then count its fires in the field again.
 
+Fixed after 0.64.0, not yet released:
+
+- Rule 5 of the `bash-guard` fails closed where the analysis gives up.
+  A move hidden in a loop body, an `if` or `case` branch, or a function
+  passed before, as in `cd <worktree>; for x in 1; do cd <primary>; done;
+  git merge y`, because the analysis stopped reading at the loop. Now
+  rule 5 reads the rest of the command without order (the "reach" in
+  `hooks/bash-guard.sh`). It collects every directory the shell may stand
+  in there, judges each guarded command in all of them, and asks on a
+  directory or a push it cannot resolve. Before the point where the
+  analysis gives up, it keeps the exact order, so a harmless loop after a
+  merge in a worktree still passes.
+
+Each shape has a test in `test/hooks_test.sh` that fails on 0.64.0.
+Next step: replay the real commands of
+[the 2026-09-26 note](spikes/2026-09-26-bash-guard-holes-replay.md) on the
+new hook and read every new ask. That replay needs the Claude Code
+transcripts on the maintainer's machine, and this session could not read
+them. Then release.
+
 Still open:
 
 - The `dirty-guard` blamed no command for a write that lands after the
@@ -262,11 +282,6 @@ Still open:
   fails, so a later command after `;` runs in the shell's directory, and
   `git -C ""` stays in it. The fix is on the agent's side: set the
   variable in the same command.
-- The analysis still gives up on control flow, `bash -c`, and the other
-  shapes the header of `hooks/bash-guard.sh` lists. Where the old rules
-  saw no primary tree, a move hidden in such a shape still passes, as in
-  `cd <worktree>; for x in 1; do cd <primary>; done; git merge y`. Next
-  step: none now. If the field shows such a move, model that shape.
 
 How we know that the fixes hold in the field: we do not yet. The tests
 replay each shape from the transcripts. Next step: after the release, read

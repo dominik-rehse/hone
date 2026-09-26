@@ -196,12 +196,15 @@ hone_fmt_scoped() (
 # and a push by the repository it writes to.
 #
 # Rule 5 at the end also runs it on a guarded command that no rule caught,
-# and there it can add an ask (rule 5 says when).
+# and there it can add an ask (rule 5 says when). Where it gives up, rule 5
+# reads the rest of the command without order (THE REACH, below).
 #
 # It gives up (and the old rule decides) on:
-#   - `&`, `if`/`for`/`while`/`case`, functions, `{ }`, backticks, arithmetic,
-#     `eval`, `source`, `exec`, `read`, and any other builtin that moves the
-#     shell or sets a variable in a way it does not track
+#   - `&`, `if`/`for`/`while`/`case`, functions, `{ }`, backticks, arithmetic
+#     that assigns or runs a command, `eval`, `source`, `exec`, `read`, and
+#     any other builtin that moves the shell or sets a variable in a way it
+#     does not track. It still reads the commands inside a loop, a branch, or
+#     a function, and plain `$((...))` and `$'...'` are words it cannot expand.
 #   - a `cd`, `export`, or assignment inside a pipeline or after `||`
 #   - a cd target it cannot resolve to an existing directory, a fresh
 #     `$(mktemp -d)`, the one directory an `ls -d <glob>` finds, or a
@@ -250,6 +253,30 @@ function param(dq,   j, t) {
     if (!j || t ~ /[`"]|\$\(/) { bad("a parameter expansion"); i = n + 1; return }
     WR = WR t; WM = WM t; i += j
 }
+# `$((...))` is a word whose value the hook does not know. One that assigns
+# or runs a command stays out of reach.
+function arith(   d, j, c, t) {
+    d = 0
+    for (j = i + 1; j <= n; j++) {
+        c = ch(j)
+        if (c == "(") d++
+        else if (c == ")" && --d == 0) break
+    }
+    if (j > n) { bad("arithmetic"); i = n + 1; return }
+    t = substr(s, i, j - i + 1)
+    if (substr(t, 4, length(t) - 5) ~ /[^=!<>]=[^=]|<<=|>>=|\+\+|--|\$|`/) bad("arithmetic")
+    WR = WR t; WM = WM t; i = j + 1
+}
+# `$'...'` is a word whose value the hook does not know.
+function ansic(   j, c) {
+    for (j = i + 2; j <= n; j++) {
+        c = ch(j)
+        if (c == "\\") { j++; continue }
+        if (c == "\047") break
+    }
+    if (j > n) { bad("an unbalanced quote"); i = n + 1; return }
+    WR = WR substr(s, i, j - i + 1); WM = WM substr(s, i, j - i + 1); i = j + 1
+}
 function scan_word(   c, j, t, q) {
     WR = ""; WM = ""
     while (i <= n) {
@@ -267,11 +294,12 @@ function scan_word(   c, j, t, q) {
         if (c == "`") { bad("a backtick"); i++; continue }
         if (c == "$") {
             if (ch(i + 1) == "(") {
-                if (ch(i + 2) == "(") { bad("arithmetic"); i += 3; continue }
+                if (ch(i + 2) == "(") { arith(); continue }
                 subst(); continue
             }
             if (ch(i + 1) == "{") { param(0); continue }
-            if (ch(i + 1) == "\047" || ch(i + 1) == "[") { bad("an ansi-c quote or arithmetic"); i += 2; continue }
+            if (ch(i + 1) == "\047") { ansic(); continue }
+            if (ch(i + 1) == "[") { bad("arithmetic"); i += 2; continue }
         }
         if (c == "\"") {
             WR = WR c; WM = WM c; i++; q = 1
@@ -281,7 +309,7 @@ function scan_word(   c, j, t, q) {
                 if (c == "\\") { WR = WR substr(s, i, 2); WM = WM substr(s, i, 2); i += 2; continue }
                 if (c == "`") { bad("a backtick"); i++; continue }
                 if (c == "$" && ch(i + 1) == "(") {
-                    if (ch(i + 2) == "(") { bad("arithmetic"); i += 3; continue }
+                    if (ch(i + 2) == "(") { arith(); continue }
                     subst(); continue
                 }
                 if (c == "$" && ch(i + 1) == "{") { param(1); continue }
@@ -302,7 +330,8 @@ function scan_list(closer,   c, rest, op, j, delim, start) {
         if (substr(s, i, 2) == "\\\n") { i += 2; continue }
         if (c == "\n") { emit("p" SEP "nl"); i++; if (NH) read_heredocs(); continue }
         if (c == "#") { while (i <= n && ch(i) != "\n") i++; continue }
-        if (c == ")") { i++; if (closer == ")") return 1; bad("a stray paren"); continue }
+        # A `)` with no `(` ends a case pattern.
+        if (c == ")") { i++; if (closer == ")") return 1; emit("p" SEP ")"); continue }
         if ((c == "<" || c == ">") && ch(i + 1) == "(") {
             start = i; i += 2
             emit("o" SEP c "("); if (!scan_list(")")) bad("an unbalanced substitution"); emit("c")
@@ -374,7 +403,27 @@ RE_DOTGIT="(^|[/\"'])\\.git(\$|[/\"'])"
 # tree by name.
 RE_LSGLOB='^"?\$\(ls( +-[1dtr]+)+ +([^][ ;&|<>()`"'"'"'$\\{}]+)( +2>/dev/null)?( *\| *(tail|head) +(-1|-n *1))?\)"?$'
 
-an_fail() { [ -n "$AN_WHY" ] || AN_WHY=$1; AN_OK=0; }
+# Where the walk first gave up, for rule 5's reach (see hone_an_reach): the
+# record that starts the top-level simple command, the directories and
+# variables the walk knew there, and every value a variable takes from there on.
+POINT=-1; TOP_START=0; WALK_DEPTH=0; SNAP_CURSET=""; SNAP_VN=(); SNAP_VV=()
+declare -A ALLV=()
+ALLV_ALL=0         # a builtin that may set any variable ran after the point
+REACH_WHY=""       # the first part the reach cannot place
+
+an_fail() { [ -n "$AN_WHY" ] || AN_WHY=$1; AN_OK=0; [ "$POINT" -ge 0 ] || POINT=$TOP_START; }
+
+# Variable $1 takes value $2 (\001 unknown, \002 a set of candidates).
+hone_an_record() {
+    local v c cur
+    [ "${ALLV[$1]-}" = $'\001' ] && return
+    [ "$2" = $'\001' ] && { ALLV[$1]=$'\001'; return; }
+    v=${2#$'\002'}; cur=${ALLV[$1]-}
+    while IFS= read -r c; do
+        [[ $cur$'\n' == *$'\n'"$c"$'\n'* ]] || cur+=$'\n'$c
+    done <<<"$v"
+    ALLV[$1]=$cur
+}
 
 # Physical path of existing directory $1, in AN_P. Cached: a long command
 # names the same few directories many times.
@@ -578,7 +627,7 @@ hone_an_assign() {
             an_fail "an assignment to $name"; return ;;
     esac
     if [[ $val =~ $RE_LSGLOB ]] && hone_an_lsglob; then
-        hone_an_setvar "$name" "$AN_SET"
+        hone_an_setvar "$name" "$AN_SET"; hone_an_record "$name" "$AN_SET"
         [ "$COND" -eq 1 ] && CONDV+=" $name"
         return
     fi
@@ -592,7 +641,7 @@ hone_an_assign() {
         *'$('*|*'`'*) v=$'\001'; A_CERTAIN=0 ;;
         *) if hone_an_expand "$val"; then v=$AN_E; else v=$'\001'; fi ;;
     esac
-    hone_an_setvar "$name" "$v"
+    hone_an_setvar "$name" "$v"; hone_an_record "$name" "$v"
     [ "$COND" -eq 1 ] && CONDV+=" $name"
 }
 
@@ -899,11 +948,51 @@ hone_an_redirs() {
     done
 }
 
+# `for NAME in WORD...`: NAME takes each word. A word the hook cannot read,
+# or no `in`, makes it unknown.
+hone_an_forvar() {
+    local j vals="" name=${W[1]:-}
+    [[ $name =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || return 0
+    hone_an_setvar "$name" $'\001'
+    if [ "${W[2]:-}" != in ]; then hone_an_record "$name" $'\001'; return 0; fi
+    for ((j = 3; j < ${#W[@]}; j++)); do
+        if ! hone_an_expand "${W[$j]}" || [[ $AN_E =~ [[:space:]*?[] ]]; then
+            hone_an_record "$name" $'\001'; return 0
+        fi
+        vals+=${vals:+$'\n'}$AN_E
+    done
+    [ -n "$vals" ] && hone_an_record "$name" $'\002'"$vals"
+}
+
 # One simple command: W and WM (its words), RDOP/RD (its redirections), HB/HQ
 # (its heredoc bodies). $1 and $2 are the operators before and after it.
 hone_an_simple() {
-    local prev=$1 nx=$2 n=${#W[@]} a=0 j k w cw="" base="" tt="" line="" skip=0 d t
+    local prev=$1 nx=$2 n a=0 j k w cw="" base="" tt="" line="" skip=0 d t
     local mdrop=0 dataok=0
+    # A reserved word the walk does not model. The command after it is still
+    # read, so a loop body or a branch records its variables and its moves.
+    while [ "${#W[@]}" -gt 0 ]; do
+        case ${W[0]} in
+            'do'|'then'|'else'|'elif'|'if'|'while'|'until'|'!'|'{'|'}'|'time'|'done'|'fi'|'esac') k=1 ;;
+            'function') k=2 ;;
+            'for'|'select')
+                an_fail "the shell construct ${W[0]}"
+                hone_an_forvar; W=(); WM=(); break ;;
+            'case'|'in') an_fail "the shell construct ${W[0]}"; W=(); WM=(); break ;;
+            *) break ;;
+        esac
+        an_fail "the shell construct ${W[0]}"
+        W=("${W[@]:k}"); WM=("${WM[@]:k}")
+    done
+    n=${#W[@]}
+    # Assignments the walk does not follow make the variable unknown.
+    for ((j = 0; j < n; j++)); do
+        [[ ${W[$j]} =~ ^([A-Za-z_][A-Za-z0-9_]*)\+= ]] && hone_an_record "${BASH_REMATCH[1]}" $'\001'
+        w=${W[$j]}
+        while [[ $w =~ \$\{([A-Za-z_][A-Za-z0-9_]*):?=(.*) ]]; do
+            hone_an_record "${BASH_REMATCH[1]}" $'\001'; w=${BASH_REMATCH[2]}
+        done
+    done
     # Leading assignments.
     while [ "$a" -lt "$n" ] && [[ ${W[$a]} =~ ^[A-Za-z_][A-Za-z0-9_]*= ]]; do a=$((a + 1)); done
     AN_A=$a
@@ -973,6 +1062,11 @@ hone_an_simple() {
         case ${RDOP[$k]} in *'>'*) [ "${RD[$k]}" = /dev/null ] || AN_WROTE=1 ;; esac
     done
 
+    for ((j = 0; j < a; j++)); do
+        [ "$a" -lt "$n" ] || [ "$LIST_OR" -eq 1 ] \
+            || [[ $prev == '|' || $prev == '|&' || $nx == '|' || $nx == '|&' ]] || continue
+        hone_an_record "${W[$j]%%=*}" $'\001'
+    done
     if [ "$a" -eq "$n" ]; then
         [ "$n" -gt 0 ] || return 0
         hone_an_state_ok "$prev" "$nx" || return 0
@@ -986,7 +1080,12 @@ hone_an_simple() {
     case $cw in
         cd) hone_an_cd "$prev" "$nx" "$a"; return 0 ;;
         export)
-            hone_an_state_ok "$prev" "$nx" || return 0
+            if ! hone_an_state_ok "$prev" "$nx"; then
+                for ((j = a + 1; j < n; j++)); do
+                    [[ ${W[$j]} =~ ^[A-Za-z_][A-Za-z0-9_]* ]] && hone_an_record "${BASH_REMATCH[0]}" $'\001'
+                done
+                return 0
+            fi
             for ((j = a + 1; j < n; j++)); do
                 case ${W[$j]} in
                     -*) an_fail "an export option"; return 0 ;;
@@ -997,11 +1096,22 @@ hone_an_simple() {
             done
             return 0 ;;
         true|:) CERTAIN=1 ;;
-        pushd|popd|eval|source|.|exec|builtin|command|alias|unalias|trap|shopt|set|enable|hash|unset|declare|typeset|local|readonly|let|read|mapfile|readarray|getopts|'if'|'then'|'elif'|'else'|'fi'|'for'|'while'|'until'|'do'|'done'|'case'|'esac'|'select'|'function'|'time'|'coproc'|'{'|'}'|'!'|'[['|']]'|'in')
+        pushd|popd|eval|source|.|exec|builtin|command|alias|unalias|trap|shopt|set|enable|hash|unset|declare|typeset|local|readonly|let|read|mapfile|readarray|getopts|coproc|'[['|']]')
             an_fail "the shell construct $cw"
+            case $cw in
+                eval|source|.|let) ALLV_ALL=1 ;;
+                unset|declare|typeset|local|readonly|read|mapfile|readarray|getopts)
+                    for ((j = a + 1; j < n; j++)); do
+                        [[ ${W[$j]} =~ ^[A-Za-z_][A-Za-z0-9_]* ]] && hone_an_record "${BASH_REMATCH[0]}" $'\001'
+                    done ;;
+            esac
             [[ $RUNNERS == *" $cw "* ]] && hone_an_triggers "$tt" && WRAP=1
             return 0 ;;
-        printf) for ((j = a + 1; j < n; j++)); do [[ ${W[$j]} == -v* ]] && an_fail "printf -v"; done ;;
+        printf)
+            for ((j = a + 1; j < n; j++)); do
+                [[ ${W[$j]} == -v* ]] || continue
+                an_fail "printf -v"; ALLV_ALL=1
+            done ;;
         ln) LN_SEEN=1 ;;
         cp) for ((j = a + 1; j < n; j++)); do [[ ${W[$j]} =~ ^(-[A-Za-z]*s|--symbolic-link)$ ]] && LN_SEEN=1; done ;;
     esac
@@ -1125,10 +1235,18 @@ hone_an_walk() {
     local -a VN=("${VN[@]+"${VN[@]}"}") VV=("${VV[@]+"${VV[@]}"}")
     local CURSET=$CURSET MADE="" ALT="" CONDV="" LIST_OR=0 COND=0 PREV=start GROUP=0
     local -a W=() WM=() RDOP=() RD=() RDM=() HB=() HQ=()
-    local rec k rest
+    local rec k rest new=1
+    WALK_DEPTH=$((WALK_DEPTH + 1))
     while [ "$AP" -lt "$AN" ]; do
         rec=${AR[$AP]}; AP=$((AP + 1))
         k=${rec%%$'\037'*}; rest=${rec#*$'\037'}
+        # A top-level command starts: until the walk gives up, keep what it
+        # knows here, and only the values set from here on.
+        if [ "$new" -eq 1 ] && [ "$WALK_DEPTH" -eq 1 ] && [ "$POINT" -lt 0 ] && [ "$k" != p ]; then
+            TOP_START=$((AP - 1)); SNAP_CURSET=$CURSET${ALT:+$'\n'$ALT}
+            SNAP_VN=("${VN[@]+"${VN[@]}"}"); SNAP_VV=("${VV[@]+"${VV[@]}"}"); ALLV=()
+        fi
+        [ "$k" = p ] && new=1 || new=0
         case $k in
             w) W+=("${rest%%$'\037'*}"); WM+=("${rest#*$'\037'}") ;;
             r) RDOP+=("${rest%%$'\037'*}"); rest=${rest#*$'\037'}
@@ -1138,12 +1256,17 @@ hone_an_walk() {
             x) LEX_OK=0; an_fail "$rest" ;;
             o)
                 if [ "$rest" = "(" ]; then
-                    [ "${#W[@]}" -eq 0 ] && [ "$GROUP" -eq 0 ] || an_fail "a function or a group after a word"
-                    hone_an_walk; GROUP=1
+                    if [ "${#W[@]}" -eq 0 ] && [ "$GROUP" -eq 0 ]; then
+                        hone_an_walk; GROUP=1
+                    else
+                        # `name()`: the body that follows is read as commands.
+                        an_fail "a function or a group after a word"
+                        hone_an_walk; W=(); WM=(); GROUP=0
+                    fi
                 else
                     hone_an_walk
                 fi ;;
-            c) hone_an_end_cmd end; hone_an_end_list; return 0 ;;
+            c) hone_an_end_cmd end; hone_an_end_list; WALK_DEPTH=$((WALK_DEPTH - 1)); return 0 ;;
             p)
                 hone_an_end_cmd "$rest"
                 case $rest in
@@ -1160,6 +1283,7 @@ hone_an_walk() {
         esac
     done
     hone_an_end_cmd end; hone_an_end_list
+    WALK_DEPTH=$((WALK_DEPTH - 1))
 }
 
 hone_analyze() {
@@ -1174,7 +1298,7 @@ hone_analyze() {
             PRIMARY_TOP=$AN_P
             PRIMARY_HEAD=$(git -C "$PRIMARY_TOP" symbolic-ref -q HEAD 2>/dev/null)
         else
-            an_fail "no primary tree"
+            an_fail "no primary tree"; REACH_WHY="no primary tree"
         fi
     elif hone_an_phys "$PROJECT_ROOT"; then
         PRIMARY_TOP=$AN_P
@@ -1183,10 +1307,274 @@ hone_analyze() {
     hone_an_phys "${TMPDIR:-/tmp}" && AN_TMP=$AN_P
     CURSET=""
     hone_an_phys "$SHELL_CWD" && CURSET=$AN_P
-    [ -n "$CURSET" ] || { an_fail "no shell directory"; CURSET=/nonexistent; }
+    [ -n "$CURSET" ] || { an_fail "no shell directory"; REACH_WHY="no shell directory"; CURSET=/nonexistent; }
+    SNAP_CURSET=$CURSET
     mapfile -d $'\036' -t AR < <(printf '%s' "$ORIG_CMD" | awk "$HONE_LEX_AWK")
     AN=${#AR[@]}; AP=0
     hone_an_walk
+}
+
+# ------------------------------------------------------------------------
+# THE REACH. Rule 5 runs it where the walk gave up. From the top-level command
+# where the walk first gave up, order no longer holds: a loop body runs again,
+# a branch may not run, a function runs where it is called. So the reach reads
+# that part without order. It collects every directory the shell may stand in
+# there: the ones the walk knew at that point, and each cd or pushd target,
+# resolved from every directory found so far, until the set stops growing. A
+# variable may hold any value the command gives it from that point on. Then
+# it judges each guarded command in every one of those directories, and each
+# push by where it writes from each. REACH_WHY names the first part it cannot
+# place, and rule 5 then asks.
+
+hone_an_reach_fail() { [ -n "$REACH_WHY" ] || REACH_WHY=$1; }
+
+# Absolute path $1 with `.` and `..` read lexically, in AN_P.
+hone_an_lex() {
+    local IFS=/ part out=""
+    local -a parts
+    case $1 in *$'\n'*) return 1 ;; esac
+    read -r -a parts <<<"$1"
+    for part in "${parts[@]}"; do
+        case $part in ''|.) ;; ..) out=${out%/*} ;; *) out+="/$part" ;; esac
+    done
+    AN_P=${out:-/}
+}
+
+# Add directory $1 to RSET. Past 64 directories, relative cds in a loop are
+# multiplying, and the hook gives up rather than run out of time.
+hone_an_reach_add() {
+    [ -n "${RSEEN[$1]+x}" ] && return 0
+    [ "${#RSEEN[@]}" -lt 64 ] || { hone_an_reach_fail "too many directories"; return 1; }
+    RSEEN[$1]=1; RSET+=$'\n'$1; RGREW=1
+}
+
+# The simple commands from POINT on, each as its raw words joined by \037, in
+# RC. Heredoc bodies and here-strings go to RCH. A command substitution is a
+# command of its own, and `name()` drops the name so its body reads as one.
+hone_an_reach_cmds() {
+    local i rec k rest cur="" curh="" t
+    local -a sw=() sh=() st=()
+    RC=(); RCH=()
+    for ((i = POINT; i < AN; i++)); do
+        rec=${AR[$i]}; k=${rec%%$'\037'*}; rest=${rec#*$'\037'}
+        case $k in
+            w) cur+=${rest%%$'\037'*}$'\037' ;;
+            h) curh+=${rest#*$'\037'}$'\037' ;;
+            r) case ${rest%%$'\037'*} in *'<<<') t=${rest#*$'\037'}; curh+=${t%%$'\037'*}$'\037' ;; esac ;;
+            o) sw+=("$cur"); sh+=("$curh"); st+=("$rest"); cur=""; curh="" ;;
+            c|p|x)
+                [ -z "$cur$curh" ] || { RC+=("$cur"); RCH+=("$curh"); }
+                cur=""; curh=""
+                if [ "$k" = c ] && [ "${#sw[@]}" -gt 0 ]; then
+                    t=$((${#sw[@]} - 1))
+                    if [ "${st[$t]}" != "(" ] || [ -z "${sw[$t]}" ]; then cur=${sw[$t]}; curh=${sh[$t]}; fi
+                    unset "sw[$t]" "sh[$t]" "st[$t]"
+                fi ;;
+        esac
+    done
+    [ -z "$cur$curh" ] || { RC+=("$cur"); RCH+=("$curh"); }
+}
+
+# Command $1 of RC as words in R, reserved words dropped, and the index of the
+# first word after its assignments in RA. Fails for a command with nothing to
+# judge (a `for` or `case` head, or assignments alone).
+hone_an_reach_words() {
+    local w=${RC[$1]}
+    R=()
+    while [ -n "$w" ]; do R+=("${w%%$'\037'*}"); w=${w#*$'\037'}; done
+    while [ "${#R[@]}" -gt 0 ]; do
+        case ${R[0]} in
+            'do'|'then'|'else'|'elif'|'if'|'while'|'until'|'!'|'{'|'}'|'time'|'done'|'fi'|'esac') R=("${R[@]:1}") ;;
+            'function') R=("${R[@]:2}") ;;
+            'for'|'select'|'case'|'in') return 1 ;;
+            *) break ;;
+        esac
+    done
+    RA=0
+    while [ "$RA" -lt "${#R[@]}" ] && [[ ${R[$RA]} =~ ^[A-Za-z_][A-Za-z0-9_]*\+?= ]]; do RA=$((RA + 1)); done
+    [ "$RA" -lt "${#R[@]}" ]
+}
+
+# The directories a cd or pushd in command R may move to, added to RSET.
+hone_an_reach_cd() {
+    local j tgt="" cnt=0 v p q vals base
+    for ((j = RA + 1; j < ${#R[@]}; j++)); do
+        case ${R[$j]} in
+            -L|-P|-e|-@) ;;
+            -) hone_an_reach_fail "cd -"; return ;;
+            [+-][0-9]*) [ "$RBASE" = pushd ] && return ;;
+            -*) hone_an_reach_fail "a cd option"; return ;;
+            *) tgt=${R[$j]}; cnt=$((cnt + 1)) ;;
+        esac
+    done
+    [ "$cnt" -le 1 ] || { hone_an_reach_fail "a cd with two targets"; return; }
+    if [ "$cnt" -eq 0 ]; then
+        [ "$RBASE" = cd ] || return
+        [ -n "${HOME:-}" ] || { hone_an_reach_fail "a cd to an unset HOME"; return; }
+        vals=$HOME
+    elif hone_an_setref "$tgt"; then
+        vals=$AN_SET
+    elif hone_an_expand "$tgt"; then
+        vals=$AN_E
+    else
+        hone_an_reach_fail "a cd target the hook cannot resolve"; return
+    fi
+    while IFS= read -r v; do
+        [ -n "$v" ] || continue
+        if [[ $v != /* ]] && [ "$RCDPATH" -eq 1 ] && [[ $v != ./* ]]; then
+            hone_an_reach_fail "a relative cd under CDPATH"; return
+        fi
+        while IFS= read -r base; do
+            [ -n "$base" ] || continue
+            case $v in /*) p=$v ;; *) p=$base/$v ;; esac
+            hone_an_lex "$p" || { hone_an_reach_fail "a cd target the hook cannot read"; return; }
+            hone_an_reach_add "$AN_P" || return
+            # cd reads `..` lexically, and git -C physically.
+            if [[ $p == *..* ]] && q=$(cd -P -- "$p" 2>/dev/null && pwd -P); then hone_an_reach_add "$q" || return; fi
+            [[ $v == /* ]] && break
+        done <<<"$RSET"
+    done <<<"$vals"
+}
+
+# Judge command R in every directory of RSET, as the walk judges one command
+# in its directory.
+hone_an_reach_judge() {
+    local j w d a=$RA n=${#R[@]} tt="" skip=0 mdrop=0
+    W=("${R[@]}"); WM=("${R[@]}"); AN_A=$a; CURSET=${RSET#$'\n'}
+    GSUB=""; GSUBI=-1; GFAIL=""
+    [ "$RBASE" = git ] && hone_an_git "$a"
+    case $GSUB in commit|tag|merge|notes|stash) mdrop=1 ;; esac
+    for ((j = a; j < n; j++)); do
+        w=${R[$j]}
+        if [ "$skip" -eq 1 ]; then skip=0; tt+=" ''"; continue; fi
+        if [ "$mdrop" -eq 1 ] && [ "$j" -gt "$GSUBI" ]; then
+            case $w in -m|--message|-[A-Za-z]*m) skip=1 ;; --message=*|-m?*) w="-m''" ;; esac
+        fi
+        tt+=" $w"
+    done
+    tt=${tt# }
+    if [ "$RBASE" = git ] && [ "$GSUB" = push ]; then
+        hone_an_env_ok "$a" || { hone_an_reach_fail "an environment prefix on a push"; return; }
+        hone_an_push "$a"; return
+    fi
+    hone_an_triggers "$tt" || return 0
+    hone_an_env_ok "$a" || { hone_an_reach_fail "an environment prefix on a guarded command"; return; }
+    case $RBASE in
+        git)
+            [ -z "$GFAIL" ] || { hone_an_reach_fail "$GFAIL"; return; }
+            case $GSUB in bisect|submodule|filter-branch|filter-repo) hone_an_reach_fail "git $GSUB"; return ;; esac
+            for ((j = GSUBI + 1; j < n; j++)); do
+                case ${R[$j]} in --exec|--exec=*|-x|--ignore-other-worktrees) hone_an_reach_fail "git ${R[$j]}"; return ;; esac
+            done
+            while IFS= read -r d; do
+                hone_an_kind "$d" || { hone_an_reach_fail "a tree the hook cannot tell"; return; }
+                case $KIND in
+                    primary) hone_an_primary_unsafe "$tt" "$d" && hone_an_unsafe ;;
+                    linked) [[ $tt =~ $RE_REF_MOVER ]] && { AN_MSG=msg_bashguard_branch_move; hone_an_unsafe; } ;;
+                esac
+            done <<<"$GTD" ;;
+        npm|pnpm|yarn|bun|bunx|npx|pnpx|deno|pip|pip3|uv|uvx|poetry|cargo|bundle|gem|mix|composer|go|biome|eslint|prettier|dprint|ruff|black|isort|rustfmt|gofmt|jscodeshift|codemod)
+            while IFS= read -r d; do
+                hone_an_kind "$d" || { hone_an_reach_fail "a tree the hook cannot tell"; return; }
+                if [ "$KIND" = primary ]; then
+                    hone_an_primary_unsafe "$tt" "$d" && hone_an_unsafe
+                    continue
+                fi
+                for ((j = a + 1; j < n; j++)); do
+                    w=${R[$j]}
+                    case $w in
+                        -C|-t|--cwd*|--prefix*|--dir|--dir=*|--directory*|--manifest-path*|--project*|--root*|--target*|--global-dir*|--modules-folder*)
+                            hone_an_reach_fail "a tool option that names a directory"; return ;;
+                    esac
+                    if hone_an_expand "$w"; then w=$AN_E; elif [[ $w == *'$'* ]]; then hone_an_reach_fail "a tool argument the hook cannot read"; return; fi
+                    case $w in /*|'~'*|*..*) hone_an_reach_fail "a tool argument outside its directory"; return ;; esac
+                done
+            done <<<"$CURSET" ;;
+        *)
+            while IFS= read -r d; do
+                hone_an_kind "$d" || { hone_an_reach_fail "a tree the hook cannot tell"; return; }
+                [ "$KIND" = primary ] && hone_an_primary_unsafe "$tt" "$d" && hone_an_unsafe
+            done <<<"$CURSET" ;;
+    esac
+}
+
+hone_an_reach() {
+    local i j name v sv vals round
+    local -A RSEEN=()
+    local RSET="" RGREW RCDPATH=0 RBASE t
+    local -a RC=() RCH=() R=()
+    [ -n "$REACH_WHY" ] && return
+    [ "$LEX_OK" -eq 1 ] || { hone_an_reach_fail "a command the lexer cannot read"; return; }
+    [ "$LN_SEEN" -eq 0 ] || { hone_an_reach_fail "a symlink the command creates"; return; }
+    [ -z "${CDPATH:-}" ] || RCDPATH=1
+    # The variables: what the walk knew at the point, joined with every value
+    # given from there on.
+    VN=(); VV=()
+    if [ "$ALLV_ALL" -eq 0 ]; then
+        VN=("${SNAP_VN[@]+"${SNAP_VN[@]}"}"); VV=("${SNAP_VV[@]+"${SNAP_VV[@]}"}")
+        for name in "${!ALLV[@]}"; do
+            vals=${ALLV[$name]}
+            if [ "$vals" != $'\001' ]; then
+                vals=${vals#$'\n'}
+                sv=""
+                for ((j = ${#VN[@]} - 1; j >= 0; j--)); do
+                    [ "${VN[$j]}" = "$name" ] && { sv=${VV[$j]}; break; }
+                done
+                if [ "$sv" = $'\001' ]; then vals=$'\001'
+                elif [ "$j" -ge 0 ]; then
+                    sv=${sv#$'\002'}
+                    [[ $'\n'$vals$'\n' == *$'\n'"$sv"$'\n'* ]] || vals+=$'\n'$sv
+                fi
+                [[ $vals == *$'\n'* ]] && vals=$'\002'$vals
+            fi
+            hone_an_setvar "$name" "$vals"
+        done
+    fi
+    while IFS= read -r v; do [ -z "$v" ] || hone_an_reach_add "$v"; done <<<"$SNAP_CURSET"
+    hone_an_reach_cmds
+    # Assignments that change what cd or git reads.
+    for i in "${!RC[@]}"; do
+        hone_an_reach_words "$i" || true
+        for ((j = 0; j < ${#R[@]}; j++)); do
+            case ${R[$j]} in
+                CDPATH=*|CDPATH+=*) RCDPATH=1 ;;
+                GIT_EDITOR=*|GIT_SEQUENCE_EDITOR=*|GIT_PAGER=*|GIT_TERMINAL_PROMPT=*|GIT_AUTHOR_*|GIT_COMMITTER_*) ;;
+                GIT_*=*) hone_an_reach_fail "an assignment to ${R[$j]%%=*}"; return ;;
+                cdable_vars|autocd) hone_an_reach_fail "the shell option ${R[$j]}"; return ;;
+            esac
+        done
+    done
+    # The directories, until the set stops growing.
+    for ((round = 1; ; round++)); do
+        RGREW=0
+        for i in "${!RC[@]}"; do
+            hone_an_reach_words "$i" || continue
+            if ! hone_an_expand "${R[$RA]}" || [[ ${R[$RA]} == *'$'* ]]; then continue; fi
+            RBASE=${AN_E##*/}
+            case $RBASE in cd|pushd) hone_an_reach_cd ;; esac
+            [ -z "$REACH_WHY" ] || return
+        done
+        [ "$RGREW" -eq 1 ] || break
+        [ "$round" -lt 6 ] || { hone_an_reach_fail "a cd that keeps finding new directories"; return; }
+    done
+    # Each command, judged in all of them.
+    for i in "${!RC[@]}"; do
+        hone_an_reach_words "$i" || continue
+        t=${RC[$i]//$'\037'/ }${RCH[$i]//$'\037'/ }
+        if ! hone_an_expand "${R[$RA]}" || [[ ${R[$RA]} == *'$'* ]]; then
+            if hone_an_triggers "$t" || [[ $t =~ $RE_PUSH ]]; then hone_an_reach_fail "a command word the hook cannot read"; return; fi
+            continue
+        fi
+        RBASE=${AN_E##*/}
+        if [[ $RUNNERS == *" $RBASE "* ]]; then
+            if hone_an_triggers "$t" || [[ $t =~ $RE_PUSH ]] || [[ $t =~ (^|[^A-Za-z0-9_])(cd|pushd)([[:space:]]|$) ]]; then
+                hone_an_reach_fail "a guarded command inside $RBASE"; return
+            fi
+            continue
+        fi
+        hone_an_reach_judge
+        [ -z "$REACH_WHY" ] || return
+    done
 }
 
 # 1b. HAND-WRITING an authority grant or a proof sign-off → deny. The helpers
@@ -1539,13 +1927,17 @@ fi
 # or `bash -c` hides the tree of a guarded command, and on a push it cannot
 # resolve.
 #
-# It does not ask on every command the analysis gives up on. In a replay of
-# real commands, most such asks were false: a push to the team's remote
-# inside a loop, a script whose text names a checkout. See
-# docs/spikes/2026-09-26-bash-guard-holes-replay.md.
+# Where the analysis gives up, it fails closed through the reach above: a
+# move hidden in a loop body, a branch, or a function passed the old rules and
+# the walk alike. The reach asks unless it shows that no guarded command there
+# runs in the primary tree and no push writes into this repository. Asking on
+# every command the analysis gives up on was mostly false in a replay of real
+# commands: a push to the team's remote inside a loop, a script whose text
+# names a checkout. See docs/spikes/2026-09-26-bash-guard-holes-replay.md.
 if hone_an_triggers "$CMD" || [[ $CMD =~ $RE_PUSH ]]; then
     hone_analyze
-    if [ "$WRAP" -eq 1 ] || [ "$TREE_OK" -eq 0 ]; then
+    [ "$AN_OK" -eq 1 ] || hone_an_reach
+    if [ "$WRAP" -eq 1 ] || [ "$TREE_OK" -eq 0 ] || [ -n "$REACH_WHY" ]; then
         msg=$TREE_MSG
         if [ -z "$msg" ]; then
             if [[ $CMD =~ $RE_HEAD || $CMD =~ $RE_STASH || $CMD =~ $RE_CHECKOUT ]]; then msg=msg_bashguard_head_move
