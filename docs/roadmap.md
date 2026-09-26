@@ -313,15 +313,22 @@ the next field window and count fires per hook again.
   `hook_lines` counts them. The goal is 5/6 or better in every scenario
   that reaches land. The build step has no subcommand of its own, so its
   end shows only when verify starts.
-- Open points. A garden change (`garden/<slug>`) gets no line, because its
-  chain differs. The garden skill still asks the agent for it.
+- Garden, after 0.64.0: a garden change (`garden/<slug>`) now gets its own
+  line too, on the chain the garden skill names: `worktree > cut > verify >
+  land`. `add`, `verify`, and `land` queue it. The middle step reads
+  `cut/repair` until the diff exists, then `repair` if the diff adds a line
+  and `cut` if it only deletes. The garden skill no longer asks the agent
+  for the line. No lab scenario runs garden, so only the tests
+  (`test/e2e_land_test.sh`, `test/lab_test.sh`) show it works. The lab
+  measure counts a garden line against four steps.
 - Settled on 2026-09-26: the Claude Code hooks reference says `PostToolUse`
   fires only after a tool call succeeds, and a Bash command that exits
   nonzero fires `PostToolUseFailure` instead. So the progress hook and the
   `dirty-guard` check both run on both events. Before that, the
   `dirty-guard` never ran after a failed command.
 - Next step: run the lab after the merge and read `progress_starts` and
-  `hook_lines` in each `result.json`. Then decide on the garden chain.
+  `hook_lines` in each `result.json`. For garden, watch the next field
+  pass for the line, or add a lab scenario that runs `/hone:garden`.
 
 #### The lab scenario `proof-gate` had a real fork at review
 
