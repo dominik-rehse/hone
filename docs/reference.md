@@ -559,7 +559,7 @@ The plugin itself:
 hone/
 ├── rules/workflow.md            # injected at session start
 ├── skills/{setup,plan,run,garden}/ # the four commands; run/references/ loads on demand
-├── hooks/                       # guard, bash-guard, dirty-guard, gate, nag, session-start
+├── hooks/                       # guard, bash-guard, dirty-guard, gate, nag, progress, session-start
 │   └── messages.sh              # every message hone prints, one template each
 ├── scripts/{worktree,setup}.sh
 ├── agents/                      # plan-critic, consolidate-critic

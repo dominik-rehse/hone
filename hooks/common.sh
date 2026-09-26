@@ -1,6 +1,6 @@
 #!/bin/bash
 # Shared helpers for hone's hooks. The hooks (guard.sh, bash-guard.sh, gate.sh,
-# nag.sh, session-start.sh) and the scripts that share their checks (setup.sh,
+# nag.sh, session-start.sh, progress.sh) and the scripts that share their checks (setup.sh,
 # worktree.sh) SOURCE this file, and nothing executes it directly. It defines
 # functions only, and it has no side effects at source time. Keeping the JSON
 # emit/escape, the stdin-field parse, and the deny-rule comparison in one place
