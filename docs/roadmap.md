@@ -307,21 +307,17 @@ the next field window and count fires per hook again.
   it states that one 503 is the whole outage. Then the review has nothing
   to fork on, and the scenario tests the proof gate again.
 
-#### The authority gate caught nothing in the field
+#### The authority gate fires on a table rewrite
 
-- What happens: land refuses an irreversible change (exit 8) until a grant
-  names who authorized it. The run skill tells an unattended run to write
-  that grant itself when the Plan asked for the change. So the agent grants
-  itself, and the gate asks no person.
+- What happens: land treats SQLite's table-rewrite idiom (new table, copy,
+  drop, rename) as destructive SQL and refuses with exit 8. Since only a
+  person may grant, each such fire stops an unattended run.
 - How we know: in [the 2026-09-25 note](spikes/2026-09-25-field-data-since-0-58.md)
-  the gate fired 3 times and caught nothing real. Twice it fired on
-  SQLite's table-rewrite idiom (new table, copy, drop, rename), and once
-  on a defect of the old land rollback. Since 0.60.0 the refusal quotes
-  each destructive statement with its file, so a reader sees what fired.
-  That does not change the false fires on the idiom.
-- Next step: the maintainer decides whether exit 8 should need a person,
-  like the proof sign-off. Until then the gate is a record in the merge
-  commit, not a stop.
+  two of the gate's three fires were this idiom. The refusal quotes each
+  statement with its file, so the person sees what fired.
+- Next step: count the exit-8 stops in the maintainer's repos after the
+  next release. If rewrites still dominate, decide whether land should read
+  a rewrite that keeps every column as reversible.
 
 #### The `consolidate-critic` once proposed cutting code that a Plan requires
 
@@ -504,3 +500,8 @@ probe shows a gap.
 - *A lab fail in a part that a release does not touch does not block the
   release* (2026-09-19). Someone must first read the failed run in its
   sandbox. The fail then goes on this page.
+- *Only a person records a grant* (2026-09-26). In the field the agent
+  granted itself each of the 3 times the authority gate fired
+  ([note](spikes/2026-09-25-field-data-since-0-58.md)), so exit 8 stopped
+  nothing. The run now stops at exit 8 like at exit 7, and a Plan cannot
+  authorize the change, because the agent helped write it.

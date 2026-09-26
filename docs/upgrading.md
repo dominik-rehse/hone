@@ -106,6 +106,11 @@ mechanical steps.
      neither tracks nor ignores, because the suite would test them and the
      merge would leave them out. If your suite or your checks write such
      files, add them to `.gitignore`.
+   - *Only you grant since 0.64*: an unattended run no longer records its
+     own grant at the authority gate (exit 8), and a Plan cannot authorize
+     one. The run stops and hands you the diff and the grant command. Plan
+     for a person to review each irreversible change: run the printed
+     `worktree.sh grant` command in your own terminal, then land.
 
 After that, run `worktree.sh status`. It shows what is present and what is
 missing. It also flags a policy file that is still uncommitted, and a

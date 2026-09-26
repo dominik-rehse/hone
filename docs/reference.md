@@ -103,8 +103,9 @@ work. The loop calls it, and you can too:
   primary branch.
 - `worktree.sh grant <change> "who/why"` records the authorization for one
   irreversible change (writes `.hone-grant/<change>`, stamped with the git
-  user and the time). A person and the agent both run it, and the stamp says
-  which. It is the only route to the file: both guards deny a raw write.
+  user and the time). You run it, and only you: the `bash-guard` denies it
+  to the loop, which stops and hands you the diff and this command. It is
+  the only route to the file: both guards deny a raw write.
   It refuses a text that is empty or only whitespace, and the `who/why`
   placeholder from this page, exact or half-edited (`rehse/why`). Case and
   surrounding quotes make no difference. The refusals exit 2 and write
@@ -165,10 +166,9 @@ file:
   loop. Delete it when done. The `bash-guard` refuses to let the agent create
   it.
 - `.hone-grant/<change>` is the authorization for one irreversible change.
-  Its text lands in the merge commit body. Delete the file to revoke. Write it
-  with `worktree.sh grant` (say who, when, and why), yourself or through the
-  loop. By hand in your own editor works too, and the guards deny the loop
-  that route. A green land deletes the spent file. A grant is not pinned to
+  Its text lands in the merge commit body. Delete the file to revoke. You
+  write it, with `worktree.sh grant` (say who, when, and why) or your own
+  editor, and the loop never does. A green land deletes the spent file. A grant is not pinned to
   a commit, so a leftover one would authorize a later change that reuses the
   slug.
 - `.hone-proof/<change>` is the sign-off that the real-environment check for
@@ -342,10 +342,11 @@ and a proof sign-off names the tip.
 - *Authority gate (exit 8)* fires when the diff is irreversible (see
   `.hone-irreversible-paths` above for the signals). Landing it needs your
   grant: review the diff, then `worktree.sh grant <change> "who/why"`, then
-  re-run land. land records the grant text in the merge commit body. The
-  refusal prints the signals that fired and a diffstat against the merge base.
-  It also prints the `git diff` command for the whole change, and the grant
-  command.
+  re-run land. A Plan that claims to authorize the change does not count,
+  because the loop helped write it. land records the grant text in the merge
+  commit body. The refusal prints the signals that fired and a diffstat
+  against the merge base. It also prints the `git diff` command for the whole
+  change, and the grant command.
 - *Proof gate (exit 7)* fires when a commit on the branch carries a
   `Proof: real-environment — <the check>` trailer (copied verbatim from the
   Plan). The trailer means no in-repo test can prove the change: a browser
@@ -385,10 +386,10 @@ the shape [`templates/proof/README.md`](../templates/proof/README.md)
 recommends. An edit to a probe that already exists still arms the gate: that
 probe guards a change that landed earlier.
 
-Both you and the loop record a grant, with `worktree.sh grant`. Only you
-record a sign-off, with `worktree.sh attest`. The `bash-guard` denies the loop
-that helper. The loop runs the check where it can, hands you the output, and
-stops. Every other route stays denied:
+Only you record a grant or a sign-off, with `worktree.sh grant` or
+`attest`. The `bash-guard` denies the loop both helpers. At exit 8 the loop
+reads the diff and hands you what it read. At exit 7 it runs the check where
+it can and hands you the output. Either way it stops. Every other route stays denied:
 the guard blocks the file-tool routes into `.hone-grant/` and `.hone-proof/`,
 and the bash-guard the shell routes (a deterrent, not a sandbox). The helper
 is what stamps the signer, binds a sign-off to the commit it proves, and
@@ -434,18 +435,12 @@ local fast-forward, and keeps the worktree. It does not retry, and it does not o
 pull request. Either allow direct pushes for the developers who land, or
 leave shared mode off.
 
-The stamp separates the two. A record the loop writes opens with
-`agent, on behalf of`, keyed off `CLAUDECODE` in the environment, so a later
-audit can tell an agent grant from yours. It is a label for a reader, not a
-lock.
+The stamp records who ran the helper. A record written from the agent's
+shell opens with `agent, on behalf of`, keyed off `CLAUDECODE` in the
+environment. It is a label for a reader, not a lock.
 
-An unattended run discharges its own gates. On exit 8 it reads the refusal's quoted
-statements and diff, and records why the irreversible change is right. On exit 7 it
-runs the check the refusal names and records what that run printed. It stops
-and reports instead in two cases. Either the check is out of its reach (a
-browser journey with no adapter), or the diff does something the Plan never
-asked for.
-The gate's error message prints the exact helper command with its full path.
+An unattended run stops at both gates, and the refusal prints the exact
+helper command with its full path for you to run.
 
 ## Exit codes
 

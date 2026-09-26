@@ -429,14 +429,12 @@ for one change, revocable by deleting it. The merge commit body records
 its text, so the authorization ends up in history rather than in a chat
 log.
 
-The loop may record that grant itself, after reading the diff the refusal
-printed. The gate does not guarantee that a person is present. It forces
-a stop and makes the signer read the diff. It then puts a sentence in
-history that names what is irreversible, and why the change is right
-anyway. The stamp says whether the agent or a person signed, so a later
-audit can separate them. A diff that does something the Plan never asked
-for is an escalation, not a grant. Both guards still deny every route
-into `.hone-grant/` except the helper, which is what stamps the record.
+Only a person records that grant. The loop reads the diff, hands the
+person what it read and the grant command, and stops. A Plan cannot
+authorize the change ahead of time, because the agent helped write it.
+When the loop could grant itself, it did so every time the gate fired in
+the field, and the gate stopped nothing. The bash-guard denies the loop
+the helper, and both guards deny every other route into `.hone-grant/`.
 Mechanics are in [`reference.md`](reference.md).
 
 The guards assume an agent that makes a mistake, skips a step, or takes a

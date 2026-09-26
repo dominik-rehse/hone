@@ -43,7 +43,7 @@ that list. Code review reuses Claude Code's built-in `/code-review`.
 
 The merge step refuses a change whose commits do not say what the change
 deleted, in a `Cut:` line. Two land gates then stop an irreversible or
-real-environment change until a person or the run signs it off in writing
+real-environment change until a person signs it off in writing
 (see *Use* below).
 
 hone ships no code analyzer. A project enforces code quality through its
@@ -196,22 +196,22 @@ of proceeding in exactly three cases:
 
 - A check stays red after the run has tried every fix.
 - The change turns out to be genuinely ambiguous.
-- Landing the change needs a real-environment check the run cannot reach:
-  a browser journey with no adapter, a canary it cannot watch. A green
+- Landing the change needs a person: it is irreversible, or it needs a
+  real-environment check such as a browser journey or a canary. A green
   test suite proves nothing about a deployed service.
 
 The land gates back the third case. An irreversible change stops at the
 authority gate, because `git revert` does not undo a dropped column. The
-run then reads the diff and records a grant that names what is
-irreversible and why. A real-environment change stops at the proof gate
-until the check has actually run. The run executes the check where it
-can and hands you the output, and you sign off. It never signs a proof
-off itself. `worktree.sh` stamps each record with its signer, and the
+run reads the diff and hands it to you with the grant command, and you
+record who authorized it and why. A real-environment change stops at the
+proof gate until the check has actually run. The run executes the check
+where it can and hands you the output, and you sign off. It never grants
+or signs off itself. `worktree.sh` stamps each record with its signer, and the
 text of a grant or a sign-off lands in the merge commit.
 
 The run never weakens a check to get through. On a stop, the worktree
 stays for inspection. `worktree.sh grant` and `worktree.sh attest` are
-the way to let the run proceed.
+yours to run, and they let the change land.
 
 ## Teams
 
