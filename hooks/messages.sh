@@ -155,6 +155,7 @@ Do: for a scratch config, such as one for a mutation check, write it outside the
 Why: the test, lint, format, and type-check runs are only as strict as their config. An edit here can turn a red check green without touching the code.
 EOF
 }
+
 msg_bashguard_head_move() {
     cat <<'EOF'
 hone bash-guard: this command moves HEAD in the primary tree.
@@ -177,6 +178,7 @@ Do: for a hone change, run 'bash "$(hone_msg_plugin_root)/scripts/worktree.sh" l
 Why: land holds the land lock and clears the shape, authority, and proof gates. It re-runs the whole suite on the merge, and publishes nothing when it reds. A merge here skips the review and all of that.
 EOF
 }
+
 msg_bashguard_self_writer() {
     cat <<'EOF'
 hone bash-guard: this command runs a tool that writes its own files in the primary tree.
