@@ -132,7 +132,9 @@ file:
   paths, never remove built-ins.
 - `.hone-irreversible-paths` lists path globs that make a change count as
   irreversible, beyond the built-in signals (destructive SQL in a migration
-  or `db/` file, a deletion under `db/`). One glob per line, `#` comments.
+  or `db/` file, a deletion under `db/`). A table rewrite whose migration
+  text proves that every row and column is copied is not destructive, and
+  land names it. One glob per line, `#` comments.
   The pre-0.19 name `.hone-consequential-paths` still works.
 - `.hone-review-always` lists path globs that force `review-scope` to answer
   `full` even when the whole diff sits under `docs/`. One glob per line, `#`

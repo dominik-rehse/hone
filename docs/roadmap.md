@@ -347,15 +347,33 @@ the next field window and count fires per hook again.
 
 #### The authority gate fires on a table rewrite
 
-- What happens: land treats SQLite's table-rewrite idiom (new table, copy,
-  drop, rename) as destructive SQL and refuses with exit 8. Since only a
-  person may grant, each such fire stops an unattended run.
+- What happens: SQLite cannot drop or change most columns in place, so a
+  migration rewrites the table: create a new table, copy, drop the old one,
+  rename. land read the drop as destructive SQL and refused with exit 8
+  (the authority gate). Only a person may grant, so each such refusal
+  stopped an unattended run.
 - How we know: in [the 2026-09-25 note](spikes/2026-09-25-field-data-since-0-58.md)
-  two of the gate's three fires were this idiom. The refusal quotes each
-  statement with its file, so the person sees what fired.
-- Next step: count the exit-8 stops in the maintainer's repos after the
-  next release. If rewrites still dominate, decide whether land should read
-  a rewrite that keeps every column as reversible.
+  two of the gate's three fires were this idiom.
+- What changed: land now reads a rewrite in a new migration file with
+  `scripts/sql-rewrite.awk`. It lets the drop through only when the text
+  shows five things. The file drops exactly the table it copied from. The
+  copy has no filter. The new table is renamed to the old name. Every old
+  column is copied under its own name with the same type affinity (SQLite's
+  per-column type class, which decides whether a value is converted). And
+  the old columns are known from the earlier migrations or a `schema.sql`.
+  It also refuses on the loss paths it found: a cascading foreign key, an
+  `INSERT OR IGNORE` or `ON CONFLICT` clause, a down section, and an
+  earlier migration edited on the branch. The receipt or the refusal names
+  each rewrite and the verdict. `test/sql_rewrite_test.sh` lists the cases.
+- What the text cannot show: a column in the live database that no
+  migration created, say one added by hand. An explicit copy list then
+  drops it with no error. A copy written as `SELECT *` fails loudly
+  instead. We accepted this because the repo is the schema's source of
+  truth everywhere else in hone.
+- Next step: after the next release, count the exit-8 stops in the
+  maintainer's repos, and read every rewrite that land let through. A
+  rewrite that should have fired is a defect in the reader, and it goes in
+  `test/sql_rewrite_test.sh` first.
 
 #### The `consolidate-critic` once proposed cutting code that a Plan requires
 

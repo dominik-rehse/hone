@@ -431,6 +431,15 @@ for one change, revocable by deleting it. The merge commit body records
 its text, so the authorization ends up in history rather than in a chat
 log.
 
+One destructive statement is judged from the text. Some databases, SQLite
+among them, change most columns by a table rewrite: create a new table,
+copy, drop the old one, rename. The drop loses nothing when the copy keeps
+every row and every column. `land` lets such a rewrite through only when
+the migration proves that, with the old columns replayed from the earlier
+migrations. Any doubt fires the gate, because a wrong pass lands data loss
+unattended. A column in the live database that no migration created is
+beyond what the text can show.
+
 Only a person records that grant. The loop reads the diff, hands the
 person what it read and the grant command, and stops. A Plan cannot
 authorize the change ahead of time, because the agent helped write it.
