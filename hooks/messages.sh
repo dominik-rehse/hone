@@ -212,11 +212,12 @@ hone_msg_dirty_restore() {
 }
 
 # $1 = the paths this command changed, $2 = the restore command for those of
-# them that were clean before it, $3 = those that were already dirty. A
-# checkout of an already-dirty path would also discard the earlier edit,
-# which in the field was a person's own work, so no command covers them.
+# them that were clean before it, $3 = those that were already dirty, $4 = set
+# when another call of the session ran at the same time. A checkout of an
+# already-dirty path would also discard the earlier edit, which in the field
+# was a person's own work, so no command covers them.
 msg_dirtyguard_primary_tree() {
-    local dirty="$1" restore="$2" prior="$3"
+    local dirty="$1" restore="$2" prior="$3" overlap="${4:-}"
     cat <<EOF
 hone dirty-guard: this command changed a protected path in the primary tree.
 Do: undo this command's change to the paths below, then redo the work in a worktree.
@@ -224,10 +225,32 @@ Why: the primary tree only receives merges. A tool that writes its own files rea
 Paths this command changed:
 $(hone_msg_block "$dirty")
 EOF
+    hone_msg_dirty_overlap "$overlap"
     hone_msg_dirty_restore "$restore"
     [ -n "$prior" ] || return 0
     printf "These paths were already dirty before this command. A checkout would also discard the earlier edit, so undo only this command's change:\n"
     hone_msg_block "$prior"
+}
+
+hone_msg_dirty_overlap() {
+    [ -n "$1" ] || return 0
+    printf 'Another call of this session ran at the same time, so the change may be its own. Undo each change once.\n'
+}
+
+# $1 = the paths that changed between two checks of this session, $2 = the
+# overlap mark. No command's record holds such a change. A background job
+# writes this way, and so do a person and another session, so no restore is
+# offered.
+msg_dirtyguard_outside() {
+    local dirty="$1" overlap="${2:-}"
+    cat <<EOF
+hone dirty-guard: a protected path in the primary tree changed outside the last command.
+Do: if a job you started wrote the paths below, stop it and undo its change. Then redo the work in a worktree. Otherwise leave the paths alone and tell the person.
+Why: the change landed between two commands, as a background job's write does. An edit by a person or another session looks the same, so check each path before you restore it.
+Paths that changed outside a command:
+$(hone_msg_block "$dirty")
+EOF
+    hone_msg_dirty_overlap "$overlap"
 }
 
 # No record of the tree before the command, so the hook cannot tell this
@@ -1464,6 +1487,7 @@ bash-guard|agent|msg_bashguard_branch_move
 bash-guard|agent|msg_bashguard_self_writer
 bash-guard|agent|msg_bashguard_formatter
 dirty-guard|agent|msg_dirtyguard_primary_tree|src/<area>/<file>|git checkout HEAD -- 'src/<area>/<file>'|docs/<topic>.md
+dirty-guard|agent|msg_dirtyguard_outside|src/<area>/<file>
 dirty-guard|agent|msg_dirtyguard_no_snapshot|src/<area>/<file>
 gate|agent|msg_gate_step_failed|<check>|<code>|<output-tail>
 gate|agent|msg_gate_suite_lock

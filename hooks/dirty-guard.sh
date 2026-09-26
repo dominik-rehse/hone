@@ -32,8 +32,20 @@
 # parallel sessions and parallel calls of one session never share one. With no
 # snapshot (no ids in the input, or the step before did not run) the hook
 # fails closed: it blocks on every dirty durable path, as before the
-# comparison existed. Parallel calls of one session each own their snapshot,
-# but a write by one lands in the other's comparison too if both span it.
+# comparison existed.
+#
+# A write that lands between two commands, such as one from a background job,
+# is in the next command's snapshot, so the comparison alone never reports
+# it. The session's baseline, <git-dir>/hone-dirty/<session>, holds the
+# records its last check saw. Each check rewrites it. A record in a snapshot
+# but not in the baseline changed outside any command, and that call's check
+# reports it, once, with no restore, since a person's edit looks the same.
+# The session's first command only writes the baseline, so work older than
+# the session never blocks. Parallel calls of one session share the
+# baseline, so the first check to see a write reports it and the others skip
+# it. A write that lands during a command is still blamed on it. When
+# another call of the session ran at the same time, the block says the
+# change may be that call's. Baselines go after 30 days.
 #
 # It reports AFTER the write, so it cannot prevent the edit. It stops the run
 # before the commit, which is where the damage happens. bash-guard.sh rule 4 is
@@ -76,10 +88,13 @@ COMMON_DIR=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && p
 # The ids become a file name, so only safe characters survive. Both must be
 # present, or two calls could share a name.
 SNAP_DIR="$GIT_DIR/hone-dirty"
-SNAP=""
+SNAP=""; BASE=""
 SESSION="${SESSION//[^A-Za-z0-9_-]/}"
 TOOL_USE="${TOOL_USE//[^A-Za-z0-9_-]/}"
 [ -n "$SESSION" ] && [ -n "$TOOL_USE" ] && SNAP="$SNAP_DIR/$SESSION.$TOOL_USE"
+# The session's baseline: the records its last check saw, with no dot in the
+# name, so the one-day prune of the snapshots passes it by.
+[ -n "$SESSION" ] && BASE="$SNAP_DIR/$SESSION"
 
 # The dirty durable paths, into PATHS, XYS, and RECORDS (one per path, in the
 # same order). --no-optional-locks keeps this read out of the index lock. This
@@ -132,37 +147,91 @@ collect() {
 }
 collect
 
+# Other calls of this session in flight now: their snapshots, less this one's.
+# A snapshot older than the longest foreground call is a denied command's, so
+# it does not count.
+others_in_flight() {
+    [ -n "$SESSION" ] && [ -d "$SNAP_DIR" ] || return 1
+    find "$SNAP_DIR" -maxdepth 1 -type f -name "$SESSION.*" ! -name '*.tmp*' \
+        ! -path "$SNAP" -mmin -10 2>/dev/null | grep -q .
+}
+
+# Write the records $@ to file $BASE, atomically, since parallel calls share it.
+write_base() {
+    [ -n "$BASE" ] || return 0
+    if [ "$#" -gt 0 ]; then
+        printf '%s\0' "$@" > "$BASE.tmp.$$" 2>/dev/null
+    else
+        : > "$BASE.tmp.$$" 2>/dev/null
+    fi && mv -f "$BASE.tmp.$$" "$BASE"
+}
+
 if [ "$EVENT" = "PreToolUse" ]; then
     # Record, never block. A write that fails leaves no snapshot, and the step
-    # after then fails closed.
+    # after then fails closed. The snapshot holds the records, then an empty
+    # separator, then the records that changed since the session's last
+    # check, then an empty separator and a mark when another call was in
+    # flight.
     [ -n "$SNAP" ] || exit 0
     mkdir -p "$SNAP_DIR" 2>/dev/null || exit 0
-    if [ "${#RECORDS[@]}" -gt 0 ]; then
-        printf '%s\0' "${RECORDS[@]}" > "$SNAP.tmp" 2>/dev/null && mv -f "$SNAP.tmp" "$SNAP"
-    else
-        : > "$SNAP" 2>/dev/null
+    OUTSIDE=()
+    if [ -f "$BASE" ]; then
+        declare -A SEEN=()
+        while IFS= read -r -d '' rec; do SEEN["$rec"]=1; done < "$BASE"
+        for rec in "${RECORDS[@]}"; do
+            [ -n "${SEEN[$rec]:-}" ] || OUTSIDE+=("$rec")
+        done
     fi
+    OVERLAP=""
+    others_in_flight && OVERLAP=1
+    write_base "${RECORDS[@]}"
+    { [ "${#RECORDS[@]}" -eq 0 ] || printf '%s\0' "${RECORDS[@]}"
+      printf '\0'
+      [ "${#OUTSIDE[@]}" -eq 0 ] || printf '%s\0' "${OUTSIDE[@]}"
+      [ -z "$OVERLAP" ] || printf '\0overlap\0'
+    } > "$SNAP.tmp" 2>/dev/null && mv -f "$SNAP.tmp" "$SNAP"
     exit 0
 fi
 
 # After the command. Read this call's snapshot and delete it. A denied command
 # never reaches this step, so its snapshot stays, and a day later it goes.
-HAVE_SNAP=0
-declare -A BEFORE=() BEFORE_PATH=()
+HAVE_SNAP=0; OVERLAP=""
+declare -A BEFORE=() BEFORE_PATH=() OUT=() SEEN=()
 if [ -n "$SNAP" ] && [ -f "$SNAP" ]; then
     HAVE_SNAP=1
+    part=0
     while IFS= read -r -d '' rec; do
-        BEFORE["$rec"]=1
-        BEFORE_PATH["${rec#*|*|*|}"]=1
+        if [ -z "$rec" ]; then part=$((part+1)); continue; fi
+        case "$part" in
+            0) BEFORE["$rec"]=1; BEFORE_PATH["${rec#*|*|*|}"]=1 ;;
+            1) OUT["$rec"]=1 ;;
+            *) OVERLAP=1 ;;
+        esac
     done < "$SNAP"
+    # Another call of this session began or ended during this one when it
+    # rewrote the baseline after this snapshot, or is still running.
+    { [ -f "$BASE" ] && [ "$BASE" -nt "$SNAP" ]; } && OVERLAP=1
+    others_in_flight && OVERLAP=1
     rm -f "$SNAP"
+    # A record already in the baseline was reported by a parallel call's
+    # check, or is one this call saw before it ran.
+    if [ -f "$BASE" ]; then
+        while IFS= read -r -d '' rec; do SEEN["$rec"]=1; done < "$BASE"
+    fi
 fi
-[ -d "$SNAP_DIR" ] && find "$SNAP_DIR" -type f -mmin +1440 -delete 2>/dev/null
+[ -d "$SNAP_DIR" ] && find "$SNAP_DIR" -maxdepth 1 -type f \( -name '*.*' -mmin +1440 -o -mmin +43200 \) -delete 2>/dev/null
 
-CHANGED=""; RESTORE=""; PRIOR=""
+CHANGED=""; RESTORE=""; PRIOR=""; OUTSIDE=""
 for i in "${!RECORDS[@]}"; do
-    [ -n "${BEFORE[${RECORDS[$i]}]:-}" ] && continue
+    rec="${RECORDS[$i]}"
     path="${PATHS[$i]}"
+    if [ -n "${BEFORE[$rec]:-}" ]; then
+        # Present before this command. It changed between two checks if the
+        # session had not seen it then.
+        [ -n "${OUT[$rec]:-}" ] && OUTSIDE+="${OUTSIDE:+$'\n'}$path"
+        continue
+    fi
+    [ -n "${SEEN[$rec]:-}" ] && continue
     CHANGED+="${CHANGED:+$'\n'}$path"
     if [ -n "${BEFORE_PATH[$path]:-}" ]; then
         PRIOR+="${PRIOR:+$'\n'}$path"
@@ -176,11 +245,17 @@ for i in "${!RECORDS[@]}"; do
     fi
 done
 
-[ -n "$CHANGED" ] || exit 0
+# The session has now seen the tree as it is, reported or not.
+write_base "${RECORDS[@]}"
 
-if [ "$HAVE_SNAP" -eq 1 ]; then
-    hone_stop_block "$(msg_dirtyguard_primary_tree "$CHANGED" "$RESTORE" "$PRIOR")"
-else
+[ -n "$CHANGED" ] || [ -n "$OUTSIDE" ] || exit 0
+
+if [ "$HAVE_SNAP" -eq 0 ]; then
     hone_stop_block "$(msg_dirtyguard_no_snapshot "$CHANGED")"
+    exit 0
 fi
+REASON=""
+[ -z "$CHANGED" ] || REASON=$(msg_dirtyguard_primary_tree "$CHANGED" "$RESTORE" "$PRIOR" "$OVERLAP")
+[ -z "$OUTSIDE" ] || REASON+="${REASON:+$'\n\n'}$(msg_dirtyguard_outside "$OUTSIDE" "$OVERLAP")"
+hone_stop_block "$REASON"
 exit 0

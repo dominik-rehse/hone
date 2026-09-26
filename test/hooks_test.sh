@@ -506,11 +506,17 @@ rm -rf "$SCR" "$REPO/docs/spikes/probe"
 
 echo "== dirty-guard: what a shell command changes in the primary tree =="
 # One event of the hook, as the harness sends it. $1 = tree, $2 = event,
-# $3 = tool-use id, $4 = session id.
+# $3 = tool-use id, $4 = session id (default $DG_SESSION). A write made
+# between two commands of one session is reported once, as outside the last
+# command, so a fixture that stands for older work starts a new session.
+DG_SESSION=sess-1
 dg_event() {
     printf '{"hook_event_name":"%s","session_id":"%s","tool_use_id":"%s","tool_input":{"command":"x"}}' \
-        "$2" "${4:-sess-1}" "$3" | (cd "$1" && bash "$DIRTY_GUARD")
+        "$2" "${4:-$DG_SESSION}" "$3" | (cd "$1" && bash "$DIRTY_GUARD")
 }
+# This session's snapshots of single calls, which carry a dot. The baseline
+# of the session does not.
+dg_snaps() { ls "$SNAPS" 2>/dev/null | grep '\.'; }
 # One shell command $2 in tree $1, between its two events. Prints what the
 # hook said on either event.
 DG_N=0
@@ -549,22 +555,26 @@ out=$(dgcmd "$REPO" 'echo "// touched" >> src/auth/.keep')
 blocked "$out" && ok "a command that dirties a durable path blocks" || bad "should block a dirty durable path"
 echo "$out" | grep -q 'src/auth/.keep' && ok "the block names the changed path" || bad "the block should name the path"
 echo "$out" | grep -q 'git checkout HEAD --' && ok "the restore command names HEAD, not the index" || bad "the restore should name HEAD"
-[ -z "$(ls -A "$SNAPS" 2>/dev/null)" ] && ok "the hook deletes the snapshot it read" || bad "a used snapshot should be gone"
+[ -z "$(dg_snaps)" ] && ok "the hook deletes the snapshot it read" || bad "a used snapshot should be gone"
 
 # A failed command that still wrote a durable path blocks, and the harness
 # wires the check on the failure event, or it never runs after a failed command.
 git -C "$REPO" checkout HEAD -- src/auth/.keep
 out=$(dgfail "$REPO" 'echo "// touched" >> src/auth/.keep; false')
 blocked "$out" && ok "a failed command that dirties a durable path blocks" || bad "PostToolUseFailure should block like PostToolUse"
-[ -z "$(ls -A "$SNAPS" 2>/dev/null)" ] && ok "the failure event deletes the snapshot" || bad "a failed command left its snapshot"
+[ -z "$(dg_snaps)" ] && ok "the failure event deletes the snapshot" || bad "a failed command left its snapshot"
 jq -e '.hooks.PostToolUseFailure[] | select(.matcher == "Bash") | .hooks[].command | select(test("/hooks/dirty-guard\\.sh"))' \
     "$PLUGIN_ROOT/hooks/hooks.json" >/dev/null \
     && ok "hooks.json runs the dirty-guard on PostToolUseFailure" || bad "hooks.json must wire the dirty-guard on PostToolUseFailure"
 echo "// touched" >> "$REPO/src/auth/.keep"
 
 # Field shape 1: one file left uncommitted blocked every later command, reads
-# included, 30 times over two days. A later command that changes nothing
+# included, 30 times over two days. The file predates the session, so the
+# session's first command sees it and a later command that changes nothing
 # passes.
+DG_SESSION=sess-old
+out=$(dgcmd "$REPO" 'cat src/auth/.keep')
+blocked "$out" && bad "the session's first command should not be blamed for an old dirty file" || ok "a dirty file older than the session does not block its first command"
 out=$(dgcmd "$REPO" 'cat src/auth/.keep')
 blocked "$out" && bad "a read should not be blamed for an old dirty file" || ok "a stale dirty file does not block a later read"
 
@@ -600,16 +610,63 @@ out=$(dgcmd "$REPO" 'echo 2 > src/fresh/a.ts')
 blocked "$out" && ok "a second write inside an untracked directory blocks" || bad "an untracked directory hides its files' changes"
 rm -rf "$REPO/src/auth/extra.ts" "$REPO/src/fresh"
 
-# Parallel calls keep their own snapshots. Call A starts on a clean tree, a
-# write lands, and call B starts after it. B did not make that write, and A
-# may have. One shared snapshot would have let A through.
+# Gap 1: a background job writes after its command returned. The next
+# command's record already holds the path, so before the baseline no check
+# reported it. The next check reports it once, as outside the last command,
+# with no restore, since a person's edit looks the same.
+DG_SESSION=sess-bg
+dgcmd "$REPO" 'true' >/dev/null
+out=$(dgcmd "$REPO" '(sleep 1; echo "// late" >> src/auth/.keep) &')
+blocked "$out" && bad "the write had not landed when the command returned" || ok "a background job's command returns before its write"
+sleep 2
+out=$(dgcmd "$REPO" 'cat README.md')
+blocked "$out" && ok "a write between two commands blocks the next check" || bad "a background job's write went unreported"
+echo "$out" | grep -q 'changed outside the last command' && ok "the block says the path changed outside a command" || bad "the block should not blame the command: $out"
+echo "$out" | grep -q 'src/auth/.keep' && ok "the block names the path written outside a command" || bad "the block should name src/auth/.keep"
+echo "$out" | grep -q 'git checkout HEAD --' && bad "no restore for a write that may be a person's" || ok "no restore offered for a write outside a command"
+out=$(dgcmd "$REPO" 'cat README.md')
+blocked "$out" && bad "a write outside a command is reported once" || ok "the command after the report passes"
+# The same holds when the write lands before the next command's record,
+# which is the order the old hook missed: its record held the path.
+git -C "$REPO" checkout HEAD -- src/auth/.keep
+dgcmd "$REPO" 'true' >/dev/null
+echo "// by a job" >> "$REPO/src/auth/.keep"
+out=$(dg_event "$REPO" PreToolUse toolu_bg1)
+[ -z "$out" ] && ok "the check before a command stays silent on a write outside it" || bad "PreToolUse must print nothing: $out"
+out=$(dg_event "$REPO" PostToolUse toolu_bg1)
+echo "$out" | grep -q 'changed outside the last command' && ok "the next check after it reports the write" || bad "the write outside a command was lost: $out"
+git -C "$REPO" checkout HEAD -- src/auth/.keep
+dgcmd "$REPO" 'true' >/dev/null
+
+# Gap 2: two calls of one session run at the same time. Each saw the
+# other's write, so it was reported twice, and by the wrong call. Now one
+# check reports it, and says another call may have made it.
+DG_SESSION=sess-par
+dgcmd "$REPO" 'true' >/dev/null
 dg_event "$REPO" PreToolUse toolu_A >/dev/null
-echo "// by A" >> "$REPO/src/auth/.keep"
 dg_event "$REPO" PreToolUse toolu_B >/dev/null
-out=$(dg_event "$REPO" PostToolUse toolu_B)
-blocked "$out" && bad "call B did not change the path" || ok "a later call is not blamed for an earlier call's write"
-out=$(dg_event "$REPO" PostToolUse toolu_A)
-blocked "$out" && ok "the earlier call is still blamed" || bad "call A's snapshot was lost"
+echo "// by A" >> "$REPO/src/auth/.keep"
+outB=$(dg_event "$REPO" PostToolUse toolu_B)
+outA=$(dg_event "$REPO" PostToolUse toolu_A)
+blocked "$outB" && ok "the first check to end reports the parallel write" || bad "the parallel write should block call B"
+echo "$outB" | grep -q 'Another call of this session ran at the same time' && ok "the block says another call may have made the change" || bad "the block should name the parallel call: $outB"
+blocked "$outA" && bad "the parallel write was reported twice" || ok "the other call does not report it again"
+# A write between A's record and B's record belongs to A's span. B's check
+# sees it as outside a command, and says so. A does not report it again.
+git -C "$REPO" checkout HEAD -- src/auth/.keep
+dgcmd "$REPO" 'true' >/dev/null
+dg_event "$REPO" PreToolUse toolu_A2 >/dev/null
+echo "// by A" >> "$REPO/src/auth/.keep"
+dg_event "$REPO" PreToolUse toolu_B2 >/dev/null
+outB=$(dg_event "$REPO" PostToolUse toolu_B2)
+outA=$(dg_event "$REPO" PostToolUse toolu_A2)
+echo "$outB" | grep -q 'changed outside the last command' && ok "a later call does not blame itself for an earlier call's write" || bad "call B should report the write as outside its command: $outB"
+echo "$outB" | grep -q 'Another call of this session' && ok "that block names the parallel call" || bad "the block should name the parallel call"
+blocked "$outA" && bad "the earlier call reported the write again" || ok "the earlier call does not report it twice"
+# A call that runs alone gets no line about a parallel call.
+out=$(dgcmd "$REPO" 'echo "// again" >> src/auth/.keep')
+echo "$out" | grep -q 'Another call' && bad "a lone call has no parallel call" || ok "a lone call's block names no parallel call"
+DG_SESSION=sess-1
 # The same ids from another session do not reach this session's snapshot.
 dg_event "$REPO" PreToolUse toolu_C sess-2 >/dev/null
 out=$(dg_event "$REPO" PostToolUse toolu_C sess-1)
@@ -647,6 +704,15 @@ echo "// main" >> "$REPO/src/auth/.keep"
 (cd "$REPO" && git commit -qam "main")
 git -C "$REPO" merge -q --no-ff --no-commit dg-side >/dev/null 2>&1
 [ -f "$REPO/.git/MERGE_HEAD" ] || bad "the fixture should leave a merge in progress"
+# A session that was running when the merge landed reports it once, as
+# outside its commands, and names no command.
+out=$(dgcmd "$REPO" 'ls docs')
+echo "$out" | grep -q 'changed outside the last command' && ok "a running session reports the merge once, as outside a command" || bad "the merge should be reported as outside a command: $out"
+echo "$out" | grep -q 'this command changed' && bad "the merge is not this command's write" || ok "the merge is not blamed on the command"
+out=$(dgcmd "$REPO" 'ls docs')
+blocked "$out" && bad "the merge was reported twice" || ok "the merge is reported once per session"
+# A session that starts after the merge is not blamed for it.
+DG_SESSION=sess-merge
 out=$(dgcmd "$REPO" 'ls docs')
 blocked "$out" && bad "another session's merge is not this command's write" || ok "a merge in progress is not blamed on an unrelated command"
 out=$(dgcmd "$REPO" 'echo "// a command of its own" > tests/x.test.ts')
