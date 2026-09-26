@@ -406,6 +406,11 @@ hook_says() { jq -cn --arg t "$1" '{type: "system", subtype: "informational", co
   hook_says 'PostToolUseFailure:Bash says: ◆ [a] worktree ✓ > build ✓ > verify ✓ > consolidate ✓ > review ✓ > land ✗ (exit 7, proof gate)'; } > "$W/t.jsonl"
 [ "$(progress_of)" = "measureprogress_lines=4 measurehook_lines=4 measureprogress_starts=4/6 " ] \
     && ok "the hook's lines count, and add's line starts the worktree step" || bad "hook lines should measure 4 lines and 4/6 (got $(progress_of))"
+{ hook_says 'PostToolUse:Bash says: ◆ [garden/g] worktree ✓ > cut/repair ... > verify > land'
+  hook_says 'PostToolUse:Bash says: ◆ [garden/g] worktree ✓ > repair ✓ > verify ... > land'
+  hook_says 'PostToolUse:Bash says: ◆ [garden/g] worktree ✓ > repair ✓ > verify ✓ > land ✓ (merged 3f2a1c9)'; } > "$W/t.jsonl"
+[ "$(progress_of)" = "measureprogress_lines=3 measurehook_lines=3 measureprogress_starts=3/4 " ] \
+    && ok "a garden change measures over its own four steps" || bad "garden lines should measure 3/4 (got $(progress_of))"
 
 echo "== a scenario with a by-name file stays out of a pass that names none =="
 mkdir -p "$W/scenarios/toy-byname"

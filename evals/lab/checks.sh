@@ -216,7 +216,7 @@ reached() {
 # A step is reached in a line that marks it
 # at all. Three measures: `progress_lines` counts the lines from both sources,
 # `hook_lines` the hook's share, and `progress_starts` is STARTED/REACHED over
-# the six steps. Before the hook, 10 of 23 field runs showed fewer than 5 of 6
+# the six steps, or over garden's four when a line names a `[garden/` change. Before the hook, 10 of 23 field runs showed fewer than 5 of 6
 # starts, with silences of up to 50 minutes. It only measures.
 #
 # The agent's line can wrap, as the skill's old examples did. So a line that
@@ -240,9 +240,13 @@ progress_lines() {
                   | .content // empty | strings | split("\n")[]
                   | select(contains("◆")) | sub("^.*? says: "; "")' "$LAB_TRANSCRIPT" 2>/dev/null)
     lines=$(printf '%s\n%s\n' "$agent" "$hook")
-    for s in worktree build verify consolidate review land; do
+    local steps="worktree build verify consolidate review land" second=build
+    if grep -q '\[garden/' <<<"$lines"; then
+        steps="worktree (cut|repair) verify land" second='(cut/repair|cut|repair)'
+    fi
+    for s in $steps; do
         if [ "$s" = worktree ]; then
-            grep -qE "(^|[^a-z])worktree (✗|\.\.\.|…|✓ > \`?build (\.\.\.|…))" <<<"$lines" && started=$((started+1))
+            grep -qE "(^|[^a-z])worktree (✗|\.\.\.|…|✓ > \`?$second (\.\.\.|…))" <<<"$lines" && started=$((started+1))
         else
             grep -qE "(^|[^a-z])$s (\.\.\.|…)" <<<"$lines" && started=$((started+1))
         fi
