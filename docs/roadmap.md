@@ -189,7 +189,7 @@ the shape:
   and it counts toward the cap of three blocks. About 20 blocks had blamed
   another session for the run's own background land.
 
-Reverted in 0.62.1, and rebuilt after it (not yet released). 0.62.0 made
+Reverted in 0.62.1, and rebuilt in 0.63.0. 0.62.0 made
 the `bash-guard` judge each simple command in the tree it runs in, and a
 review then let about twenty command shapes that move the primary branch or
 HEAD past it: a `cd` after `&&`, `||`, or `|`, a `git` command inside
@@ -203,6 +203,22 @@ worktree or clone, a path-scoped unstage, a package install in a scratch
 directory, a formatter on a variable set to a Plan, a heredoc commit
 message, a read of `.hone-grant/` inside `$(...)`, and a scratch check
 config outside the repository. The check-config ask now names the file.
+
+Fixed after 0.63.0 (not yet released): moves in the primary tree that the
+old whole-line rules missed. They read the tree from one leading `cd` and
+from literal `-C` paths, and the analysis only ran where they already
+asked. So these passed: `(cd <scratch> && git merge x); git merge y`, a
+`git -C "$X" merge` with `X` set to the primary tree after a `cd`, `sudo
+git merge` or `command git merge` after a `cd`, a push from a scratch
+clone whose origin is the primary tree, any command in a subdirectory of
+the primary tree, and `git -C <primary> checkout`. A new last rule runs the
+analysis on any command that names a guarded command or a push. It asks
+when the analysis finds a move in the primary tree, or a guarded command
+inside a runner such as `sudo`. A push counts when its destination is this
+repository. A replay of 639 real commands added 5 asks, all right
+([the 2026-09-26 note](spikes/2026-09-26-bash-guard-holes-replay.md)).
+The same change lets `T=$(ls -d <glob> | tail -1); cd "$T"` pass when the
+glob finds one scratch tree. Each shape has a test.
 Next step: release it, then count the asks in the field again.
 
 Fixed, not yet released: the `dirty-guard` now records the dirty protected
@@ -228,17 +244,18 @@ Still open:
 - The `bash-guard` still asks when a protected adapter is the *source* of
   a copy, because its pattern reads any path after the verb. It still
   denies a sabotage token anywhere outside a commit message or a sign-off
-  text, a read of the hooks-path key included. A variable set outside the
-  command cannot be resolved, so its tree counts as the primary tree.
-- The old whole-line scan of the `bash-guard` misses some real moves of
-  the primary branch, and the analysis only ever turns an ask into an
-  allow, so they still pass. Examples: `(cd <scratch> && git merge x); git
-  merge y`, a leading `cd <worktree>` followed by `git -C "$X" merge` with
-  `X` set to the primary tree, `sudo git merge` after such a `cd`, and a
-  `git push origin HEAD:main` from a scratch clone whose origin is the
-  primary tree. Found while building the analysis on 2026-09-25. Next step:
-  decide whether the analysis may also add an ask when it models the whole
-  command and finds a move in the primary tree.
+  text, a read of the hooks-path key included.
+- The `bash-guard` still asks when a command uses a variable set in an
+  earlier Bash call. This ask is right, and nothing is left to fix. Each
+  call starts a fresh shell, so the variable is empty there. `cd ""` then
+  fails, so a later command after `;` runs in the shell's directory, and
+  `git -C ""` stays in it. The fix is on the agent's side: set the
+  variable in the same command.
+- The analysis still gives up on control flow, `bash -c`, and the other
+  shapes the header of `hooks/bash-guard.sh` lists. Where the old rules
+  saw no primary tree, a move hidden in such a shape still passes, as in
+  `cd <worktree>; for x in 1; do cd <primary>; done; git merge y`. Next
+  step: none now. If the field shows such a move, model that shape.
 
 How we know that the fixes hold in the field: we do not yet. The tests
 replay each shape from the transcripts. Next step: after the release, read
