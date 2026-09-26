@@ -611,6 +611,98 @@ rm -f "$REPO/.hone-consequential-paths"
 bash "$WSH" land infra-change >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "infra change should land once the path list is gone (got $rc)"
 step ".hone-irreversible-paths (and its legacy name) gate a listed path (exit 8)"
+# (e) A table rewrite (create, copy, drop, rename) lands without a grant only
+# when the migration text shows that no row and no column is lost. The old
+# columns come from the earlier migrations. Each missing fact still exits 8,
+# and the refusal names it.
+mkdir -p "$REPO/db/migrations"
+cat > "$REPO/db/migrations/0100_users.sql" <<'SQL'
+CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+ALTER TABLE users ADD COLUMN email TEXT;
+SQL
+git add -A && git commit -qm "chore(db): the users table" || die "commit the users migration"
+# rewrite <change> <sql>: add the SQL as a new migration on its own branch and
+# land it. Sets out and rc.
+rewrite() {
+    local wt
+    wt=$(bash "$WSH" add "$1") || die "worktree add $1"
+    printf '%s\n' "$2" > "$wt/db/migrations/0110_$1.sql"
+    (cd "$wt" && git add -A && git commit -qm "feat(db): $1" -m "Cut: nothing, a test change")
+    out=$(bash "$WSH" land "$1" 2>&1); rc=$?
+}
+# refused <change> <text>: the rewrite exited 8 and its refusal says why.
+refused() {
+    [ "$rc" -eq 8 ] || die "$1 should exit 8 (got $rc): $out"
+    echo "$out" | grep -qF -- "$2" || die "the refusal for $1 should say '$2': $out"
+    bash "$WSH" remove "$1" >/dev/null 2>&1; git branch -D "hone/$1" >/dev/null 2>&1
+}
+NEW='CREATE TABLE users_new (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT UNIQUE);'
+rewrite rw-filter "$NEW
+INSERT INTO users_new (id, name, email) SELECT id, name, email FROM users WHERE email IS NOT NULL;
+DROP TABLE users;
+ALTER TABLE users_new RENAME TO users;"
+refused rw-filter "the copy filters or joins rows (WHERE after FROM users)"
+rewrite rw-column "CREATE TABLE users_new (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
+INSERT INTO users_new SELECT id, name FROM users;
+DROP TABLE users;
+ALTER TABLE users_new RENAME TO users;"
+refused rw-column "the copy leaves out column email"
+rewrite rw-other "$NEW
+INSERT INTO users_new SELECT id, name, email FROM users;
+DROP TABLE accounts;
+ALTER TABLE users_new RENAME TO accounts;"
+refused rw-other "the copy reads from users, not accounts"
+rewrite rw-norename "$NEW
+INSERT INTO users_new SELECT id, name, email FROM users;
+DROP TABLE users;"
+refused rw-norename "no single ALTER TABLE ... RENAME TO users"
+rewrite rw-unknown "CREATE TABLE sessions_new (id INTEGER PRIMARY KEY);
+INSERT INTO sessions_new SELECT id FROM sessions;
+DROP TABLE sessions;
+ALTER TABLE sessions_new RENAME TO sessions;"
+refused rw-unknown "no earlier migration or schema file defines sessions"
+rewrite rw-cascade "CREATE TABLE posts (id INTEGER, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE);
+$NEW
+INSERT INTO users_new SELECT id, name, email FROM users;
+DROP TABLE users;
+ALTER TABLE users_new RENAME TO users;"
+refused rw-cascade "references users with ON DELETE CASCADE"
+rewrite rw-affinity "CREATE TABLE users_new (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email INTEGER);
+INSERT INTO users_new SELECT id, name, email FROM users;
+DROP TABLE users;
+ALTER TABLE users_new RENAME TO users;"
+refused rw-affinity "email changes type affinity from TEXT to INTEGER"
+# A lossless rewrite beside a second destructive statement: the second still
+# fires, and the refusal names the rewrite it read as lossless.
+rewrite rw-extra "$NEW
+INSERT INTO users_new SELECT id, name, email FROM users;
+DROP TABLE users;
+ALTER TABLE users_new RENAME TO users;
+DROP TABLE audit_log;"
+echo "$out" | grep -qF "DROP TABLE users;" && die "a lossless rewrite's DROP should not be a signal: $out"
+echo "$out" | grep -qF "users_new copies all 3 columns of users" || die "the refusal should name the lossless rewrite: $out"
+refused rw-extra "DROP TABLE audit_log;"
+# An earlier migration edited on the branch ran in its old form somewhere,
+# so its text no longer tells what the table holds.
+WT_E=$(bash "$WSH" add rw-edited) || die "worktree add rw-edited"
+echo "ALTER TABLE users ADD COLUMN phone TEXT;" >> "$WT_E/db/migrations/0100_users.sql"
+printf '%s\n' "CREATE TABLE users_new (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT, phone TEXT);" \
+    "INSERT INTO users_new SELECT id, name, email, phone FROM users;" "DROP TABLE users;" \
+    "ALTER TABLE users_new RENAME TO users;" > "$WT_E/db/migrations/0110_rw-edited.sql"
+(cd "$WT_E" && git add -A && git commit -qm "feat(db): rw-edited" -m "Cut: nothing, a test change")
+out=$(bash "$WSH" land rw-edited 2>&1); rc=$?
+refused rw-edited "db/migrations/0100_users.sql changed on the branch"
+# The lossless rewrite lands with no grant, and the receipt names it.
+rewrite rw-ok "PRAGMA foreign_keys = OFF;
+$NEW
+INSERT INTO users_new (id, name, email) SELECT id, name, email FROM users;
+DROP TABLE users;
+ALTER TABLE users_new RENAME TO users;
+CREATE INDEX users_name ON users (name);"
+[ "$rc" -eq 0 ] || die "a lossless table rewrite should land without a grant (got $rc): $out"
+echo "$out" | grep -qF "db/migrations/0110_rw-ok.sql: users_new copies all 3 columns of users (id, name, email) with no filter" \
+    || die "the receipt should name the rewrite land read as lossless: $out"
+step "a lossless table rewrite lands without a grant; each missing fact still exits 8"
 
 echo "== 5f. proof gate: real-environment changes need proof or a sign-off =="
 # (a) An assertion-class change (no Proof: trailer) is never gated.

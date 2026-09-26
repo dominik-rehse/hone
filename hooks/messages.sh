@@ -793,7 +793,7 @@ EOF
 }
 
 msg_wt_land_authority_missing() {
-    local branch="$1" reasons="$2" diffstat="$3" review_cmd="$4" grant_cmd="$5"
+    local branch="$1" reasons="$2" diffstat="$3" review_cmd="$4" grant_cmd="$5" lossless="${6:-}"
     cat <<EOF
 hone worktree: $branch is an irreversible change with no authority grant.
 Do: review the diff yourself, then record your grant.
@@ -806,6 +806,10 @@ Review the change:
 $(hone_msg_block "$review_cmd")
 Record the grant, then re-run land:
 $(hone_msg_block "$grant_cmd")
+EOF
+    [ -z "$lossless" ] || cat <<EOF
+land read these table rewrites as lossless, and they need no grant:
+$(hone_msg_block "$lossless")
 EOF
 }
 
@@ -1067,7 +1071,7 @@ EOF
 }
 
 msg_wt_land_receipt() {
-    local sha="$1" branch="$2" consumed="${3:-}" kept="${4:-}"
+    local sha="$1" branch="$2" consumed="${3:-}" kept="${4:-}" lossless="${5:-}"
     cat <<EOF
 hone worktree: landed $branch as merge commit $sha.
 The suite ran on that merge commit in the worktree and passed.
@@ -1081,6 +1085,11 @@ EOF
     if [ -n "$consumed" ]; then cat <<EOF
 land deleted the spent record(s): $consumed. The text of every record that
 opened a gate is in the merge commit body.
+EOF
+    fi
+    if [ -n "$lossless" ]; then cat <<EOF
+land read these table rewrites as lossless, so they needed no grant:
+$(hone_msg_block "$lossless")
 EOF
     fi
 }
@@ -1549,7 +1558,7 @@ worktree|human|msg_wt_governed_no_branch|hone/<change>
 worktree|human|msg_wt_land_no_branch|hone/<change>
 worktree|human|msg_wt_land_detached
 worktree|human|msg_wt_land_no_cut_line|hone/<change>|<main-root>/.worktrees/<change>
-worktree|human|msg_wt_land_authority_missing|hone/<change>|- <signal>|<diffstat>|git -C <main-root> diff <base>...hone/<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "who/why"
+worktree|human|msg_wt_land_authority_missing|hone/<change>|- <signal>|<diffstat>|git -C <main-root> diff <base>...hone/<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "who/why"|db/migrations/<file>.sql: <new> copies all <n> columns of <table> (<columns>) with no filter
 worktree|human|msg_wt_land_grant_empty|<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "who/why"
 worktree|human|msg_wt_land_proof_adapter_failed|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_proof_signoff_stale|<change>|hone/<change>|<tip>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
@@ -1573,7 +1582,7 @@ worktree|human|msg_wt_land_setup_tree_primary_failed|- <lockfile>|<git-common-di
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_adapter_red|<typecheck or lint>|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_tier_empty|- <tier>
-worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>|.hone-grant/<change> .hone-proof/<change>
+worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>|.hone-grant/<change> .hone-proof/<change>||db/migrations/<file>.sql: <new> copies all <n> columns of <table> (<columns>) with no filter
 worktree|human|msg_wt_land_worktree_kept|<main-root>/.worktrees/<change>|bash <plugin-root>/scripts/worktree.sh remove <change>|?? <path>
 worktree|human|msg_wt_land_lockfile|- <lockfile>
 worktree|human|msg_wt_add_remote_claimed|<change>|origin

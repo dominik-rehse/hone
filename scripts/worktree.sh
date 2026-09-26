@@ -44,7 +44,10 @@
 #       commit, and that moves the tip a proof sign-off names.
 #       Authority gate: an IRREVERSIBLE change (destructive SQL, a db/ deletion,
 #       or a .hone-irreversible-paths match) may not merge without a scoped
-#       grant at .hone-grant/<change>. Without it land refuses BEFORE the merge
+#       grant at .hone-grant/<change>. The DROP of a table rewrite (create,
+#       copy, drop, rename) is not destructive when the migration text proves
+#       that every row and column is copied (scripts/sql-rewrite.awk). The
+#       receipt or the refusal names each such rewrite. Without it land refuses BEFORE the merge
 #       and keeps the worktree as evidence. The grant's text goes into the
 #       merge commit body, so the authorization lives in durable history rather
 #       than a chat. A green land then deletes the spent grant file: a grant
@@ -528,19 +531,33 @@ cmd_governed() {
 land_irreversible() {
     local root="$1" base="$2" branch="$3" reasons=""
     [ -n "$base" ] || return 0
+    # A table rewrite that sql-rewrite.awk proves lossless exempts the line
+    # of its DROP. Any rewrite it cannot prove becomes a signal of its own.
+    local rw exempt no
+    rw=$(land_rewrites "$root" "$base" "$branch")
+    exempt=$(printf '%s\n' "$rw" | awk -F'\t' '$1 == "ok" { print $2 "\t" $4 }')
+    no=$(printf '%s\n' "$rw" | awk -F'\t' '$1 == "no" { print "    " $2 ": " $3 ": " $5 }')
     # The final grep runs without -q on purpose. With -q it quit on its first
     # match, the diff writer took SIGPIPE on a migration larger than the pipe,
     # and this gate stayed quiet on exactly the diff that carried a real DROP.
     #
     # The signal carries the matched statements with their files, up to ten.
     # Whoever records the grant then judges the statement, not a file name.
-    # A table rewrite (create, copy, drop, rename) is the common case, and it
-    # loses data exactly when the copy leaves a column out.
+    # The DROP of a table rewrite that land_rewrites proved lossless is left
+    # out, by its line.
     local sql
     sql=$(git -C "$root" diff -U0 "$base" "$branch" -- db ':(glob)**/migrations/**' 2>/dev/null \
-        | awk '
+        | LAND_RW_EXEMPT="$exempt" awk '
+            BEGIN {
+                n = split(ENVIRON["LAND_RW_EXEMPT"], ex, "\n")
+                for (i = 1; i <= n; i++) if (ex[i] != "") skip[ex[i]] = 1
+                n = 0
+            }
             /^\+\+\+ / { f = substr($0, 7); next }
+            /^@@ / { split($0, h, " "); ln = h[3]; sub(/^\+/, "", ln); sub(/,.*/, "", ln); ln--; next }
             /^\+/ {
+                ln++
+                if ((f "\t" ln) in skip) next
                 line = substr($0, 2); u = toupper(line)
                 if (u ~ /DROP[ \t]+(TABLE|COLUMN)|TRUNCATE|DELETE[ \t]+FROM|ALTER[ \t].*DROP/) {
                     n++
@@ -550,6 +567,9 @@ land_irreversible() {
             END { if (n > 10) print "    ... and " n - 10 " more" }')
     if [ -n "$sql" ]; then
         reasons+="- destructive SQL (DROP/TRUNCATE/DELETE/ALTER...DROP) in a migration or db/ file:"$'\n'"$sql"$'\n'
+    fi
+    if [ -n "$no" ]; then
+        reasons+="- a table rewrite that land could not show to be lossless:"$'\n'"$no"$'\n'
     fi
     if [ -n "$(git -C "$root" diff --diff-filter=D --name-only "$base" "$branch" -- db 2>/dev/null)" ]; then
         reasons+="- a file under db/ is deleted"$'\n'
@@ -566,6 +586,63 @@ land_irreversible() {
         done < "$root/$pf"
     done
     printf '%s' "$reasons"
+}
+
+# Judge each table rewrite (create, copy, drop, rename) in a migration file the
+# branch adds, and print one verdict line per rewritten table:
+#   ok<TAB><file><TAB><table><TAB><line of the DROP><TAB><what was proven>
+#   no<TAB><file><TAB><table><TAB>0<TAB><the fact that could not be shown>
+# scripts/sql-rewrite.awk does the reading and says what "lossless" takes.
+# This feeds it the old schema from the repo: a schema.sql at the merge base,
+# then the earlier migrations of the same set, in version order. A set whose
+# history cannot be replayed goes in as "opaque", and every verdict is "no".
+land_rewrites() {
+    local root="$1" base="$2" branch="$3" f set sch schema p b opaque
+    [ -n "$base" ] || return 0
+    while IFS= read -r f; do
+        case "$f" in *.sql|*.SQL) ;; *) continue ;; esac
+        git -C "$root" show "$branch:$f" 2>/dev/null | grep -qiE 'DROP[[:space:]]+TABLE' || continue
+        # The set is the tree under the nearest migrations/ directory, or
+        # the file's own directory under db/.
+        case "$f" in
+            migrations/*) set="migrations/" ;;
+            */migrations/*) set="${f%/migrations/*}/migrations/" ;;
+            */*) set="${f%/*}/" ;;
+            *) set="" ;;
+        esac
+        schema=""
+        for sch in "$(dirname "$set")/schema.sql" "${set}schema.sql"; do
+            sch="${sch#./}"
+            git -C "$root" cat-file -e "$base:$sch" 2>/dev/null && { schema="$sch"; break; }
+        done
+        # An edited or deleted migration has already run in its old form
+        # somewhere, so its new text does not tell what the table holds.
+        opaque=$(git -C "$root" diff --no-renames --name-status "$base" "$branch" -- "$set" 2>/dev/null \
+            | awk '$1 != "A" { print $2 " changed on the branch"; exit }')
+        {
+            [ -n "$schema" ] && { printf '\001schema\t%s\n' "$schema"; git -C "$root" show "$base:$schema"; echo; }
+            while IFS= read -r p; do
+                [ "$p" = "$f" ] && break
+                b="${p##*/}"
+                case "$b" in
+                    schema.sql|.gitkeep|.keep|*.md|*.txt|*.json|*.toml|*.yaml|*.yml|*.lock|*.sum) continue ;;
+                    down.sql|*[._-]down.sql) continue ;;
+                    [Uu][0-9]*) [ -n "$opaque" ] || opaque="$p is an undo migration" ;;
+                    *.sql|*.SQL) printf '\001prior\t%s\n' "$p"; git -C "$root" show "$branch:$p"; echo; continue ;;
+                    *) [ -n "$opaque" ] || opaque="$p is not SQL" ;;
+                esac
+            done < <(git -C "$root" ls-tree -r --name-only "$branch" -- "$set" 2>/dev/null | sort -V)
+            [ -n "$opaque" ] && printf '\001opaque\t%s\n' "$opaque"
+            printf '\001target\t%s\n' "$f"; git -C "$root" show "$branch:$f"; echo
+        } | awk -f "$HONE_PLUGIN_ROOT/scripts/sql-rewrite.awk" \
+          | awk -F'\t' -v f="$f" 'BEGIN { OFS = "\t" } { print $1, f, $2, $3, $4 }'
+    done < <(git -C "$root" diff --no-renames --diff-filter=A --name-only "$base" "$branch" \
+                 -- db ':(glob)**/migrations/**' 2>/dev/null)
+}
+
+# The lossless verdicts of land_rewrites, as lines for a receipt or a refusal.
+land_lossless() {
+    land_rewrites "$@" | awk -F'\t' '$1 == "ok" { print $2 ": " $5 }'
 }
 
 # Print the branch's diffstat against its merge base, for the authority gate's
@@ -803,9 +880,12 @@ cmd_land() {
     # touches the trunk. The grant is scoped (one change), revocable (delete
     # the file), auditable (its text lands in the merge body below), and
     # recoverable (the worktree stays until granted).
-    local grant_note="" signoff_note="" reasons grant grant_cmd
+    local grant_note="" signoff_note="" reasons grant grant_cmd lossless
     grant_cmd="bash $HONE_WSH grant $change \"$(hone_msg_grant_why)\""
     reasons=$(land_irreversible "$main_root" "$base" "$branch")
+    # A rewrite read as lossless is named in the refusal and the receipt,
+    # so a person can check what land decided without asking.
+    lossless=$(land_lossless "$main_root" "$base" "$branch")
     if [ -n "$reasons" ]; then
         grant="$main_root/.hone-grant/$change"
         if [ ! -f "$grant" ]; then
@@ -817,7 +897,7 @@ cmd_land() {
             msg_wt_land_authority_missing "$branch" "$reasons" \
                 "$(land_diffstat "$main_root" "$base" "$branch")" \
                 "git -C $main_root diff $base...$branch" \
-                "$grant_cmd" >&2
+                "$grant_cmd" "$lossless" >&2
             return 8
         fi
         grant_note=$(cat "$grant" 2>/dev/null)
@@ -1235,7 +1315,7 @@ cmd_land() {
     # and the cleanup. It goes to stdout, because it is the success path.
     local kept=""
     [ "$remove_rc" -eq 0 ] || kept="$wt"
-    msg_wt_land_receipt "$merge_sha" "$branch" "$consumed" "$kept"
+    msg_wt_land_receipt "$merge_sha" "$branch" "$consumed" "$kept" "$lossless"
     [ -n "$kept" ] && msg_wt_land_worktree_kept "$kept" "bash $HONE_WSH remove $change" "$leftovers"
     [ -n "$remote" ] && msg_wt_land_pushed "$remote" "$primary"
     if [ -n "$lockfiles" ]; then

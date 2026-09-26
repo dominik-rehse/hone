@@ -1,7 +1,7 @@
 #!/bin/bash
 # Run hone's mechanical test suite: the hook unit tests, the end-to-end land
-# path (solo and shared mode), the shipped test adapters, the plumbing of the
-# eval harness, of the scenario lab, and of the candidate procedure, the
+# path (solo and shared mode), the table-rewrite reader, the shipped test
+# adapters, the plumbing of the eval harness, of the scenario lab, and of the candidate procedure, the
 # section splitter and the GEPA adapter the prose search uses, the prose
 # integrity checks, and the
 # two checks on the message templates (prose and shape). These are
@@ -15,6 +15,9 @@ bash "$DIR/hooks_test.sh" || rc=1
 echo
 echo "### e2e_land_test.sh"
 bash "$DIR/e2e_land_test.sh" || rc=1
+echo
+echo "### sql_rewrite_test.sh"
+bash "$DIR/sql_rewrite_test.sh" || rc=1
 echo
 echo "### e2e_shared_test.sh"
 bash "$DIR/e2e_shared_test.sh" || rc=1
