@@ -286,26 +286,27 @@ the next field window and count fires per hook again.
   or a hook prints it. Else more lab runs, until a gain can show above the
   spread.
 
-#### The lab scenario `proof-gate` has a real fork at review
+#### The lab scenario `proof-gate` had a real fork at review
 
-- What happens: the Plan asks `deliver` to retry a 5xx up to three
-  attempts, and says the staging receiver answers 503 "for a few seconds".
-  The nested `/code-review` finds that the three attempts have no delay
+- What happened: the Plan asked `deliver` to retry a 5xx up to three
+  attempts, and said the staging receiver answers 503 "for a few seconds".
+  The nested `/code-review` found that the three attempts have no delay
   between them, so all three can fall inside that outage. Some runs then
-  add a backoff, some decline the finding, and some stop at review. A run
-  that stops at review never reaches land's exit 7, which is what the
-  scenario tests.
-- How we know: lab runs of `proof-gate` on claude-opus-5-5 end in all
-  three ways. The finding is right, and each ending can be defended, so
-  the variance is in the fixture and not in hone. The stop grew more
-  common on 2026-09-25: none in the passes of 0.59.1 and 0.60.0, then 3
-  of 5 runs on 0.61.0 to 0.63.0. The review and stop prose did not
-  change in those releases. The same passes kept a duplicate once in
-  `python-structure` (measure `dup=kept`), when the run declined the
-  review's finding as cosmetic.
-- Next step: fix the fixture's Plan. Either it gives a delay schedule, or
-  it states that one 503 is the whole outage. Then the review has nothing
-  to fork on, and the scenario tests the proof gate again.
+  added a backoff, some declined the finding, and some stopped at review.
+  A run that stops at review never reaches land's exit 7 (the proof gate),
+  which is what the scenario tests.
+- How we know: lab runs of `proof-gate` on claude-opus-5-5 ended in all
+  three ways. The stop grew more common on 2026-09-25: none in the passes
+  of 0.59.1 and 0.60.0, then 3 of 5 runs on 0.61.0 to 0.63.0. The same
+  passes kept a duplicate once in `python-structure` (measure `dup=kept`),
+  when the run declined the review's finding as cosmetic.
+- What changed on 2026-09-26: the Plan in the scenario's `seed.sh` now says
+  that the receiver's restart answers 503 to exactly one request, and asks
+  for an immediate retry with no delay. So one 503 is the whole outage,
+  and the review has nothing to fork on. The unit tests and the proof line
+  are unchanged.
+- Next step: in the next lab pass, confirm that `proof-gate` reaches exit
+  7 in every run. Then delete this item.
 
 #### The authority gate fires on a table rewrite
 

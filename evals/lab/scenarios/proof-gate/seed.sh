@@ -30,11 +30,14 @@ cat > .plans/notify/webhook-retry.md <<'PLAN'
 `delivered: false` on any status of 300 or above. Make it retry a 5xx
 response up to three attempts in total, and report the number of attempts. A
 4xx response still fails after one attempt, because the subscriber rejected
-the event and a retry cannot change that.
+the event and a retry cannot change that. Retry at once, with no delay
+between attempts.
 
 ## Why
-The largest subscriber restarts its receiver every night, and each restart
-answers 503 for a few seconds. Those events are lost today, and support
+The largest subscriber restarts its receiver every night. The restart
+answers 503 to exactly one request, and the next request already succeeds.
+So one 503 is the whole outage, and an immediate retry gets through. A delay
+would only hold up the queue. Those events are lost today, and support
 re-sends them by hand each morning.
 
 ## How I'll know it works
