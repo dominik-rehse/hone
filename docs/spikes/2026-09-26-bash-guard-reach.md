@@ -44,10 +44,29 @@ on 0.64.0, because the new rule reads all of it again without order. A
 loop of 40 relative cds stops at 64 directories and asks, in 0.15 s. The
 hook's timeout is 5 s.
 
-## Not measured
+## Replay of real commands
 
-The replay of the 639 real commands of
-[the note before](2026-09-26-bash-guard-holes-replay.md) did not run. It
-reads the Claude Code transcripts on the maintainer's machine, and this
-session was refused that read. So the count of new asks on real work is
-unknown.
+The replay reads 705 real commands (the 639 of
+[the note before](2026-09-26-bash-guard-holes-replay.md) and newer ones)
+and runs each through 0.64.0 and the new hook, from the directory it ran
+in. The main session ran it on the first version of the reach, and a
+later session ran it again on the same saved commands after the fix.
+
+The first version of the reach added 20 asks and removed 3. One new ask
+was right: a copy into `hooks/`. Seventeen were a loop over the
+maintainer's repositories after a push, as in `for r in a b; do (cd
+~/repos/$r && ...); done`. The walk knew each value of `r`, but the
+reach's `cd` read a variable only when the whole word was `"$r"`. The
+other two were a `cd ..` in a plain chain, which the walk refused, and a
+lease test that cds into a directory its own `mkdir` and `git clone`
+make.
+
+After the fix, over 705 commands:
+
+- 556 pass on both hooks, 131 ask on both, 12 are denied on both.
+- 4 asks became passes, all right: three copies that only read a settings
+  file, and a package install in a scratch directory the command makes.
+- 2 passes became asks. The copy into `hooks/` is right. The lease test
+  asks because its scratch directory has been deleted since, so its first
+  `cd` goes nowhere the hook can place. With the directory in place it
+  passes.
