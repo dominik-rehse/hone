@@ -132,9 +132,8 @@ file:
   paths, never remove built-ins.
 - `.hone-irreversible-paths` lists path globs that make a change count as
   irreversible, beyond the built-in signals (destructive SQL in a migration
-  or `db/` file, a deletion under `db/`). A table rewrite whose migration
-  text proves that every row and column is copied is not destructive, and
-  land names it. One glob per line, `#` comments.
+  or `db/` file, a deletion under `db/`). A table rewrite that provably
+  copies every row and column passes, and land names it. One glob per line, `#` comments.
   The pre-0.19 name `.hone-consequential-paths` still works.
 - `.hone-review-always` lists path globs that force `review-scope` to answer
   `full` even when the whole diff sits under `docs/`. One glob per line, `#`
@@ -236,8 +235,8 @@ neither. When you want that record, route the edit through the loop.
     the `worktree.sh` helpers, and it denies the loop the helpers too.
   - It asks before a command that modifies a protected artifact: an
     adapter, a hook, settings, a policy file, or a check config. The ask
-    names the file. A check config written outside the repository passes,
-    as does a copy that only reads a protected file.
+    names the file. A config outside the repository, or a copy that only
+    reads, passes.
   - It asks before a command that moves HEAD in the primary tree.
     `git checkout -- <paths>` and `git checkout <ref> -- <paths>` restore
     files and move no HEAD, so both pass.
@@ -266,19 +265,15 @@ neither. When you want that record, route the edit through the loop.
   tree, it passes. Otherwise it asks. A move or a push that no rule
   caught gets the same test. Where the
   analysis cannot model a part, such as a loop body, it judges each
-  command there in every directory it may reach, and asks on what it
-  cannot place. The header of `hooks/bash-guard.sh`
-  lists what it cannot model.
+  command there in every directory it may reach, and asks on the rest.
 - *dirty-guard* (PreToolUse, and PostToolUse or PostToolUseFailure on Bash)
   reads the effect instead of the command. In the primary tree it records the dirty protected paths
   before the command, with a hash of each, and blocks on those that the
   command dirtied, edited again, or staged. A path dirty before and left alone
   passes. With no record, it blocks on every dirty protected path. It catches
   a writer the bash-guard's name list misses. It reports after the write, so
-  it stops the run before the commit. The record lives in `.git/hone-dirty/`,
-  beside a baseline per session. A change between two commands, such as a
-  background job's, blocks the next check once, as outside a command. Work
-  older than the session never blocks. Parallel calls report a change once.
+  it stops the run before the commit. A change between two commands, such as a
+  background job's, blocks the next check once. Older work never blocks.
 - *gate* (Stop) runs `scripts/run-tests.sh`, plus `scripts/typecheck.sh`
   and `scripts/lint.sh` when they exist, and blocks the turn on any failure.
   - With an uncommitted change to any durable path it runs the fast unit
@@ -327,9 +322,8 @@ neither. When you want that record, route the edit through the loop.
   changes. Otherwise it prints the count.
 - *progress* (after each Bash call, and Stop) shows the loop's progress
   line: `◆ [csv-export] worktree ✓ > build ... > verify > …`. A garden
-  change gets `worktree > cut > verify > land`, with `repair` for a diff
-  that adds a line. The step subcommands of `worktree.sh` queue it per
-  session in `<git-common-dir>/hone-progress/`, and it never blocks.
+  change gets `worktree > cut > verify > land`. The step subcommands of
+  `worktree.sh` queue it, and it never blocks.
 - *session-start* injects the workflow rule from the plugin. It warns when
   the test adapter or the `src/` layout is missing. It also warns, naming
   the missing rules, when the settings lack any rule from the canonical deny
@@ -409,16 +403,13 @@ refuses an empty or placeholder text.
 
 ### Shared mode
 
-With `.hone-shared` committed, land is the team's merge queue, and git is
-the lock. Under its own land lock, land first levels the primary tree with
-the remote: it fetches, then fast-forwards, or rebases local-only commits on
-top. A rebase that conflicts aborts and refuses. Then it merges the branch,
-runs the suite, and pushes the primary branch. Git rejects the push when
-another developer landed while the suite ran. land then undoes its local
-fast-forward, levels again, and redoes merge and suite. It gives up after
-`HONE_LAND_RETRIES` attempts with exit 5, nothing published and the
-worktree kept. So a commit never reaches the remote unless the suite passed
-on exactly that tree.
+With `.hone-shared` committed, land is the team's merge queue. Under its
+land lock, land first levels the primary tree with the remote: it
+fast-forwards, or rebases local-only commits on top, and refuses on a
+conflict. Then it merges, runs the suite, and pushes. When another
+developer landed meanwhile, git rejects the push, and land undoes its
+fast-forward and tries again, up to `HONE_LAND_RETRIES` times (then exit 5,
+nothing published). No commit reaches the remote untested.
 
 The undo fails when the primary tree holds an edit to a file the merge
 changed, or a commit sits on top. land then exits 2 and prints a recovery

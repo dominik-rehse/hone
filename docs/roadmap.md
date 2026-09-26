@@ -232,7 +232,7 @@ test replays that bypass. With no record of the tree before the command
 (no ids in the hook input), the hook blocks on every dirty protected path,
 as before. Next step: release it, then count its fires in the field again.
 
-Fixed after 0.64.0, not yet released:
+Fixed in 0.65.0:
 
 - Rule 5 of the `bash-guard` fails closed where the analysis gives up.
   A move hidden in a loop body, an `if` or `case` branch, or a function
@@ -258,13 +258,19 @@ that, the replay adds 2 asks and removes 4, and every change is right
 ([the reach note](spikes/2026-09-26-bash-guard-reach.md)).
 Next step: release it.
 
+One older gap stays open. A push to a local path that does not exist yet
+passes, even when an earlier `git worktree add` of the primary tree in the
+same command makes that path. It predates 0.65 and did not show in the
+replay. Next step: record the path that a `git worktree add` makes, and
+judge a push to it as a push into this repository.
+
 Still open:
 
 - The `dirty-guard` blamed no command for a write that lands after the
   command returns, such as one from a background job, because the next
   command's record already held the path. Two calls of one session that
-  ran at the same time each reported the other's write. Fixed, not yet
-  released: a baseline per session in `.git/hone-dirty/` holds what the
+  ran at the same time each reported the other's write. Fixed in 0.65.0:
+  a baseline per session in `.git/hone-dirty/` holds what the
   session's last check saw. A change that is in no command's span blocks
   the next check once, as outside the last command, with no restore. The
   first command of a session only writes the baseline, so older work never
