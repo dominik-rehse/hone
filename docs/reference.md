@@ -234,7 +234,8 @@ neither. When you want that record, route the edit through the loop.
     the `worktree.sh` helpers, and it denies the loop the helpers too.
   - It asks before a command that modifies a protected artifact: an
     adapter, a hook, settings, a policy file, or a check config. The ask
-    names the file. A check config written outside the repository passes.
+    names the file. A check config written outside the repository passes,
+    as does a copy that only reads a protected file.
   - It asks before a command that moves HEAD in the primary tree.
     `git checkout -- <paths>` and `git checkout <ref> -- <paths>` restore
     files and move no HEAD, so both pass.

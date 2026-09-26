@@ -509,6 +509,23 @@ asks "$(bgj "cd $REPO && git merge main; for f in a; do echo \$f; done" "$WT")" 
 passes "$(bgj 'for f in README.md; do git checkout -- "$f"; done')" "a restore in a loop in the primary tree passes"
 asks "$(bgj 'for f in README.md; do git checkout "$f"; done')" "a checkout without -- in a loop in the primary tree asks"
 
+echo "== bash-guard: a copy asks where it writes a protected path, not where it reads one =="
+# The rule read any path after the verb, so copying an adapter out to a
+# scratch file asked. A copy into the adapter's directory passed, because the
+# text never named the adapter.
+for c in 'cp scripts/proof.sh /tmp/x' 'cp -a scripts/proof.sh hooks/gate.sh /tmp/' 'cp -t /tmp scripts/proof.sh' \
+         'install -m 755 scripts/proof.sh /tmp/x' 'dd of=/tmp/x if=scripts/proof.sh' '(cp scripts/proof.sh /tmp/x)' \
+         'cp scripts/proof.sh /tmp/x -S scripts/proof.sh'; do
+    passes "$(bgj "$c")" "a copy that only reads an adapter passes: $c"
+done
+for c in 'cp /tmp/x scripts/proof.sh' 'cp /tmp/proof.sh scripts/' 'cp -t scripts /tmp/proof.sh' 'cp -tscripts /tmp/proof.sh' \
+         'install -m 755 /tmp/x scripts/proof.sh' 'dd of=scripts/proof.sh if=/tmp/x' 'cp /tmp/a scripts/proof.sh -S x' \
+         'cp -s scripts/proof.sh /tmp/l' 'cp --link scripts/proof.sh /tmp/l' 'ln -s scripts/proof.sh /tmp/l' \
+         'mv scripts/proof.sh /tmp/x' 'cp --weird scripts/proof.sh /tmp/x' 'cp scripts/proof.sh /tmp/x > scripts/lint.sh'; do
+    asks "$(bgj "$c")" "a copy that writes or links an adapter asks: $c"
+done
+bgj 'cp /tmp/proof.sh scripts/' | grep -q 'scripts/proof.sh' && ok "the copy ask names the written file" || bad "the copy ask should name scripts/proof.sh"
+
 echo "== bash-guard: a check config asks inside the repository, names the file, and passes outside =="
 # Unattended runs stalled up to seven hours on an unnamed ask about a scratch
 # mutation-check config. A person approved one without knowing which file it

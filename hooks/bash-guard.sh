@@ -179,6 +179,88 @@ hone_fmt_scoped() (
     [ "$n" -ge 1 ]
 )
 
+# The first protected path that the cp, install, or dd in segment $1 writes,
+# printed. The written paths are the target, and the target joined with each
+# source's name, because the target may be a directory. With `--parents`, the
+# target joined with each source. dd writes its `of=`. A link writes, because
+# a later write through it lands in the file it names. Returns 1 when it
+# writes none, 2 when the parse cannot tell (an option it does not know, a
+# word it cannot read), and 3 when the segment runs no copy. A subshell body,
+# so `set -f` does not leak.
+hone_copy_written() (
+    set -f
+    local -a t ops=() wr=()
+    local i v=-1 tok verb tdir="" opts=1 parents=0 f s dest
+    read -r -a t <<<"$1"
+    for i in "${!t[@]}"; do
+        tok=${t[$i]#\(}
+        case ${tok##*/} in cp|install|dd) v=$i; verb=${tok##*/}; break ;; esac
+    done
+    [ "$v" -ge 0 ] || return 3
+    for ((i = v + 1; i < ${#t[@]}; i++)); do
+        tok=${t[$i]}
+        case $tok in
+            [0-9]*'>'*|'>'*|[0-9]*'<'*|'<'*|'&>'*)
+                case $tok in *'>'|*'<') i=$((i + 1)) ;; esac
+                continue ;;
+        esac
+        tok=${tok%)}
+        # shellcheck disable=SC2016  # a literal backtick and $( are matched
+        case $tok in *'`'*|*'$('*) return 2 ;; esac
+        case $tok in \"*\"|\'*\') tok=${tok:1:${#tok}-2} ;; esac
+        case $tok in *[\"\']*) return 2 ;; esac
+        if [ "$verb" = dd ]; then
+            case $tok in of=*) wr+=("${tok#of=}") ;; esac
+            continue
+        fi
+        if [ "$opts" -eq 1 ] && [[ $tok == -?* ]]; then
+            case $verb:$tok in
+                *:--) opts=0 ;;
+                *:-t|*:--target-directory) i=$((i + 1)); tdir=${t[$i]:-} ;;
+                *:--target-directory=*) tdir=${tok#*=} ;;
+                cp:-t?*|install:-t?*) tdir=${tok#-t} ;;
+                *:-S|*:--suffix|install:-[mog]|install:--mode|install:--owner|install:--group|install:--strip-program) i=$((i + 1)) ;;
+                *:--parents) parents=1 ;;
+                *:--suffix=*|*:--backup|*:--backup=*|*:--sparse=*|*:--reflink|*:--reflink=*|*:--preserve|*:--preserve=*|*:--no-preserve=*|*:--update|*:--update=*) ;;
+                *:--archive|*:--recursive|*:--force|*:--verbose|*:--no-clobber|*:--no-target-directory|*:--dereference|*:--no-dereference|*:--interactive|*:--remove-destination|*:--one-file-system|*:--attributes-only|*:--strip-trailing-slashes|*:--debug) ;;
+                install:--compare|install:--preserve-timestamps|install:--strip|install:--preserve-context) ;;
+                cp:-*) f=${tok#-}
+                    [[ $f =~ ^[abdfiHLnPpRruvxTZ]*[tS]?$ ]] || return 2
+                    case $f in *t) i=$((i + 1)); tdir=${t[$i]:-} ;; *S) i=$((i + 1)) ;; esac ;;
+                install:-*) f=${tok#-}
+                    [[ $f =~ ^[bcCDpsTvZ]*[gmoStT]?$ ]] || return 2
+                    case $f in *t) i=$((i + 1)); tdir=${t[$i]:-} ;; *[gmoS]) i=$((i + 1)) ;; esac ;;
+                *) return 2 ;;
+            esac
+            continue
+        fi
+        ops+=("$tok")
+    done
+    case $tdir in \"*\"|\'*\') tdir=${tdir:1:${#tdir}-2} ;; esac
+    while [[ $tdir == */ ]]; do tdir=${tdir%/}; done
+    if [ "$verb" = dd ]; then
+        :
+    elif [ -n "$tdir" ]; then
+        [ "${#ops[@]}" -ge 1 ] || return 2
+        for s in "${ops[@]}"; do
+            wr+=("$tdir/${s##*/}")
+            [ "$parents" -eq 0 ] || wr+=("$tdir/$s")
+        done
+    else
+        [ "${#ops[@]}" -ge 2 ] || return 2
+        dest=${ops[${#ops[@]}-1]}; wr+=("$dest")
+        while [[ $dest == */ ]]; do dest=${dest%/}; done
+        for s in "${ops[@]:0:${#ops[@]}-1}"; do
+            wr+=("$dest/${s##*/}")
+            [ "$parents" -eq 0 ] || wr+=("$dest/$s")
+        done
+    fi
+    for s in "${wr[@]+"${wr[@]}"}"; do
+        [[ $s =~ $PROT ]] && { printf '%s\n' "$s"; return 0; }
+    done
+    return 1
+)
+
 # ------------------------------------------------------------------------
 # THE ANALYSIS. The rules below read the whole command as one line, and that
 # stays the default and the fail-closed backstop. Read that way, a merge in a
@@ -1645,7 +1727,27 @@ fi
 #
 # Each ask names the file. A person approved an unnamed ask without knowing
 # which file it meant, and one tracked config was overwritten.
+#
+# A copy reads its sources and writes its target, so a protected path that a
+# cp, an install, or a dd only reads passes. The rule used to read any path
+# after the verb, and a copy of an adapter out to a scratch file asked. A copy
+# into a protected path by its directory (`cp x.sh scripts/`) passed.
+# hone_copy_written reads the direction per segment.
 hit=$(printf '%s\n' "$CMD" | grep -Eo -e "${REDIR_PRE}(${PROT})" -e "${VERB_PRE}(${PROT})" | head -n 1)
+if [ -n "$hit" ] || [[ $CMD =~ (^|[^A-Za-z0-9_.-])(cp|install|dd)[[:space:]] ]]; then
+    hit=""
+    while IFS= read -r seg; do
+        if [[ $seg =~ ${REDIR_PRE}(${PROT}) ]]; then hit=${BASH_REMATCH[0]}; break; fi
+        h=""
+        [[ $seg =~ ${VERB_PRE}(${PROT}) ]] && h=${BASH_REMATCH[0]}
+        if [[ $seg =~ (^|[^A-Za-z0-9_.-])(cp|install|dd)[[:space:]] ]] \
+           && [[ -z $h || $h == 'cp '* || $h == 'install '* || $h == 'dd of='* ]]; then
+            r=$(hone_copy_written "$seg"); rc=$?
+            case $rc in 0) h=$r ;; 1) h="" ;; esac
+        fi
+        [ -z "$h" ] || { hit=$h; break; }
+    done < <(printf '%s\n' "$CMD" | tr '|;&' '\n\n\n')
+fi
 if [ -n "$hit" ]; then
     decision ask "$(msg_bashguard_protected "$(printf '%s\n' "$hit" | grep -Eo "(${PROT})" | tail -n 1)")"
 fi

@@ -244,6 +244,10 @@ Fixed after 0.64.0, not yet released:
   directory or a push it cannot resolve. Before the point where the
   analysis gives up, it keeps the exact order, so a harmless loop after a
   merge in a worktree still passes.
+- A copy that only reads a protected file passes (`cp scripts/proof.sh
+  /tmp/x`). A copy into one asks, also by its directory (`cp x/proof.sh
+  scripts/`, `cp -t scripts x/proof.sh`), which passed before. A link to
+  one still asks, because a write through the link lands in the file.
 
 Each shape has a test in `test/hooks_test.sh` that fails on 0.64.0.
 Next step: replay the real commands of
@@ -272,10 +276,8 @@ Still open:
   Next step: release it, then count in the field how often the outside
   block fires and whether its writer was a job, a person, or a session.
 
-- The `bash-guard` still asks when a protected adapter is the *source* of
-  a copy, because its pattern reads any path after the verb. It still
-  denies a sabotage token anywhere outside a commit message or a sign-off
-  text, a read of the hooks-path key included.
+- The `bash-guard` still denies a sabotage token anywhere outside a commit
+  message or a sign-off text, a read of the hooks-path key included.
 - The `bash-guard` still asks when a command uses a variable set in an
   earlier Bash call. This ask is right, and nothing is left to fix. Each
   call starts a fresh shell, so the variable is empty there. `cd ""` then
