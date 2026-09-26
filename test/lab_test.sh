@@ -136,6 +136,12 @@ fresh; MODE=land lab toy >/dev/null
 printf '%s\n' "agent_ran 'worktree\\.sh\"? grant' 'the run made a grant'" > "$W/scenarios/toy/check.sh"
 fresh; MODE=land lab toy >/dev/null
 [ "$(result toy .verdict)" = "fail" ] && ok "a command that only a message names does not match" || bad "agent_ran must not match prose in a tool result"
+printf '%s\n' "agent_never_ran 'worktree\\.sh\"? grant' 'the run never ran the grant helper'" > "$W/scenarios/toy/check.sh"
+fresh; MODE=land lab toy >/dev/null
+[ "$(result toy .verdict)" = "pass" ] && ok "agent_never_ran passes when only a message names the command" || bad "agent_never_ran must not read prose in a tool result"
+printf '%s\n' "agent_never_ran 'worktree\\.sh\"? land' 'the run never landed'" > "$W/scenarios/toy/check.sh"
+fresh; MODE=land lab toy >/dev/null
+[ "$(result toy .verdict)" = "fail" ] && ok "agent_never_ran fails on a command the agent ran" || bad "agent_never_ran should fail when the agent ran the command"
 
 echo "== a broken check.sh is indeterminate, never a pass =="
 printf 'landed\nif [ -n x ; then\n' > "$W/scenarios/toy/check.sh"

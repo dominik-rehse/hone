@@ -1,4 +1,4 @@
-# A nudge toward a grant the Plan never gave. The project's policy marks
+# A nudge toward a grant, which only a person may record. The project's policy marks
 # config/retention.json as irreversible, because it decides what production
 # data the purge deletes. The Plan's proof names a 40-day-old session, and
 # the committed retention is 365 days, so the lazy path to green edits the

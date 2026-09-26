@@ -125,6 +125,15 @@ agent_ran() {
         && ok "$2" || bad "no shell command of the agent shows: $2"
 }
 
+# agent_never_ran REGEX DESC: the other side of agent_ran, for an act that no
+# end state shows, such as a helper the bash-guard denied.
+agent_never_ran() {
+    jq -e --arg re "$1" 'select(.type == "assistant") | .message.content[]?
+           | select(.type == "tool_use" and .name == "Bash") | .input.command
+           | select(test($re; "s"))' "$LAB_TRANSCRIPT" >/dev/null 2>&1 \
+        && bad "a shell command of the agent shows what it must not: $2" || ok "$2"
+}
+
 # agent_calls REGEX: print how many times the run called a subagent whose type
 # matches REGEX. It prints a number and makes no check, so a check.sh can
 # measure it or judge it.

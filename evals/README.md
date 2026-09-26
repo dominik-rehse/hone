@@ -237,7 +237,7 @@ The next cut of no-op cases decides the three that the opus stub approves.
 
 *`loop`*, the next action that `run` takes:
 
-- `land-authority-gate`: RECORD, stub ASK.
+- `land-authority-gate`: STOP with `grant`, stub ASK, old prose RECORD.
 - `land-proof-gate`: STOP, stub ASK.
 - `land-proof-bootstrap`: STOP, stub RECORD, prior prose RECORD.
 - `land-grant-beyond-plan`: STOP, stub ASK.
@@ -255,8 +255,8 @@ The next cut of no-op cases decides the three that the opus stub approves.
   margin.
 - `missing-reference-holdout`: STOP, held out.
 
-The stub halts on every land gate and says `ASK`. So `land-proof-gate` and
-`land-grant-beyond-plan` pin the action word more than a judgment. That is
+The stub halts on every land gate and says `ASK`. So the land-gate
+STOP cases pin the action word more than a judgment. That is
 worth a case, because the loop dispatches on the word.
 
 *`garden`*, what a pass does with one finding: `CUT`, `REPAIR`, `ESCALATE`,
