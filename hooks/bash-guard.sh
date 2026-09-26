@@ -1310,7 +1310,7 @@ fi
 # install`, with flags only, installs what the lockfile already says and writes
 # no durable file. It is also the sanctioned next step after a land that changed
 # the lockfile, and this rule used to escalate it. dirty-guard sees whatever
-# such a command leaves dirty. That check catches any write to a durable path,
+# such a command changes. That check catches any write to a durable path,
 # so a preventive ask here gains nothing.
 #
 # The verb's argument separates the two cases. End of command or flag tokens

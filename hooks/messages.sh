@@ -201,16 +201,37 @@ hone_msg_dirty_restore() {
     hone_msg_block "$1"
 }
 
+# $1 = the paths this command changed, $2 = the restore command for those of
+# them that were clean before it, $3 = those that were already dirty. A
+# checkout of an already-dirty path would also discard the earlier edit,
+# which in the field was a person's own work, so no command covers them.
 msg_dirtyguard_primary_tree() {
-    local dirty="$1" restore="$2"
+    local dirty="$1" restore="$2" prior="$3"
     cat <<EOF
 hone dirty-guard: this command changed a protected path in the primary tree.
-Do: restore or remove the paths below, then redo the work in a worktree.
-Why: the primary tree only receives merges. A tool that writes its own files reaches paths the guard never sees, so this check reads the tree and not the command.
-Paths this command left dirty:
+Do: undo this command's change to the paths below, then redo the work in a worktree.
+Why: the primary tree only receives merges. A tool that writes its own files reaches paths the guard never sees, so this check compares the tree before and after the command.
+Paths this command changed:
 $(hone_msg_block "$dirty")
 EOF
     hone_msg_dirty_restore "$restore"
+    [ -n "$prior" ] || return 0
+    printf "These paths were already dirty before this command. A checkout would also discard the earlier edit, so undo only this command's change:\n"
+    hone_msg_block "$prior"
+}
+
+# No record of the tree before the command, so the hook cannot tell this
+# command's writes from older ones. It blocks on all of them and offers no
+# restore.
+msg_dirtyguard_no_snapshot() {
+    local dirty="$1"
+    cat <<EOF
+hone dirty-guard: the primary tree holds uncommitted changes to protected paths.
+Do: find which of the paths below this command changed, undo that change, and redo the work in a worktree.
+Why: hone has no record of the tree before this command, so some of these changes may be older. Check each one before you restore it.
+Dirty protected paths:
+$(hone_msg_block "$dirty")
+EOF
 }
 
 # ----------------------------------------------------------------- gate
@@ -1431,7 +1452,8 @@ bash-guard|agent|msg_bashguard_head_move
 bash-guard|agent|msg_bashguard_branch_move
 bash-guard|agent|msg_bashguard_self_writer
 bash-guard|agent|msg_bashguard_formatter
-dirty-guard|agent|msg_dirtyguard_primary_tree|src/<area>/<file>|git checkout HEAD -- 'src/<area>/<file>'
+dirty-guard|agent|msg_dirtyguard_primary_tree|src/<area>/<file>|git checkout HEAD -- 'src/<area>/<file>'|docs/<topic>.md
+dirty-guard|agent|msg_dirtyguard_no_snapshot|src/<area>/<file>
 gate|agent|msg_gate_step_failed|<check>|<code>|<output-tail>
 gate|agent|msg_gate_suite_lock
 gate|agent|msg_gate_report_now|<check>|<count>

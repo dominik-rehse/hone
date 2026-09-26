@@ -469,34 +469,159 @@ git -C "$REPO" worktree remove --force "$SCR/wt"
 git -C "$REPO" worktree prune
 rm -rf "$SCR" "$REPO/docs/spikes/probe"
 
-echo "== dirty-guard: what a shell command leaves dirty in the primary tree =="
+echo "== dirty-guard: what a shell command changes in the primary tree =="
+# One event of the hook, as the harness sends it. $1 = tree, $2 = event,
+# $3 = tool-use id, $4 = session id.
+dg_event() {
+    printf '{"hook_event_name":"%s","session_id":"%s","tool_use_id":"%s","tool_input":{"command":"x"}}' \
+        "$2" "${4:-sess-1}" "$3" | (cd "$1" && bash "$DIRTY_GUARD")
+}
+# One shell command $2 in tree $1, between its two events. Prints what the
+# hook said on either event.
+DG_N=0
+dgcmd() {
+    DG_N=$((DG_N+1))
+    dg_event "$1" PreToolUse "toolu_$DG_N"
+    (cd "$1" && eval "$2") >/dev/null 2>&1
+    dg_event "$1" PostToolUse "toolu_$DG_N"
+}
+# The event with no ids and no snapshot, as an older harness would send it.
 dg() { echo '{"tool_input":{"command":"bun add -d dprint"}}' | (cd "$1" && bash "$DIRTY_GUARD"); }
 blocked() { echo "$1" | grep -q '"decision":"block"'; }
+SNAPS="$REPO/.git/hone-dirty"
 
-# A clean primary tree passes. The hook reads the tree, never the command.
-out=$(dg "$REPO")
+# A clean primary tree passes.
+out=$(dgcmd "$REPO" 'cat README.md')
 blocked "$out" && bad "clean primary tree should pass" || ok "clean primary tree passes"
 
-# A tracked durable path left dirty → block, naming the path and the restore.
+# The snapshot before the command never blocks, however dirty the tree is.
 echo "// touched" >> "$REPO/src/auth/.keep"
-out=$(dg "$REPO")
-blocked "$out" && ok "dirty durable path in the primary tree blocks" || bad "should block a dirty durable path"
-echo "$out" | grep -q 'src/auth/.keep' && ok "the block names the dirty path" || bad "the block should name the path"
+out=$(dg_event "$REPO" PreToolUse toolu_pre)
+[ -z "$out" ] && ok "the snapshot before a command is silent" || bad "PreToolUse must print nothing: $out"
+rm -f "$SNAPS/sess-1.toolu_pre"
+git -C "$REPO" checkout HEAD -- src/auth/.keep
+
+# A tracked durable path the command changed → block, naming the path and the
+# restore.
+out=$(dgcmd "$REPO" 'echo "// touched" >> src/auth/.keep')
+blocked "$out" && ok "a command that dirties a durable path blocks" || bad "should block a dirty durable path"
+echo "$out" | grep -q 'src/auth/.keep' && ok "the block names the changed path" || bad "the block should name the path"
 echo "$out" | grep -q 'git checkout HEAD --' && ok "the restore command names HEAD, not the index" || bad "the restore should name HEAD"
+[ -z "$(ls -A "$SNAPS" 2>/dev/null)" ] && ok "the hook deletes the snapshot it read" || bad "a used snapshot should be gone"
+
+# Field shape 1: one file left uncommitted blocked every later command, reads
+# included, 30 times over two days. A later command that changes nothing
+# passes.
+out=$(dgcmd "$REPO" 'cat src/auth/.keep')
+blocked "$out" && bad "a read should not be blamed for an old dirty file" || ok "a stale dirty file does not block a later read"
+
+# A second edit to that already-dirty file is this command's change. The
+# restore command would also discard the earlier edit, so it is not offered.
+out=$(dgcmd "$REPO" 'echo "// again" >> src/auth/.keep')
+blocked "$out" && ok "a second edit to a dirty file blocks" || bad "a changed hash should block"
+echo "$out" | grep -q 'git checkout HEAD --' && bad "no checkout for a path that was dirty before" || ok "no restore offered for a path that was already dirty"
+echo "$out" | grep -q 'already dirty' && ok "the block says the path was dirty before" || bad "the block should say the path predates the command"
+
+# Staging a dirty file changes its status, so it counts too.
+out=$(dgcmd "$REPO" 'git add src/auth/.keep')
+blocked "$out" && ok "staging a dirty durable path blocks" || bad "a git add should block"
+
+# A write beside an old dirty file blocks, and the block names only the new
+# path.
+out=$(dgcmd "$REPO" 'echo "// new" > tests/y.test.ts')
+blocked "$out" && ok "a new write beside an old dirty file blocks" || bad "the new write should block"
+echo "$out" | grep -q 'tests/y.test.ts' && ok "the block names the new path" || bad "the block should name tests/y.test.ts"
+echo "$out" | grep -q 'src/auth/.keep' && bad "the block should not name the old path" || ok "the block leaves out the old dirty path"
+rm -f "$REPO/tests/y.test.ts"
+git -C "$REPO" reset -q HEAD -- src/auth/.keep
 git -C "$REPO" checkout HEAD -- src/auth/.keep
 
 # An untracked durable path blocks too, and no checkout brings it back, so the
 # message must not offer one.
-echo "// new" > "$REPO/src/auth/extra.ts"
-out=$(dg "$REPO")
+out=$(dgcmd "$REPO" 'echo "// new" > src/auth/extra.ts')
 blocked "$out" && ok "untracked durable path blocks" || bad "should block an untracked durable path"
 echo "$out" | grep -q 'git checkout HEAD --' && bad "no checkout restores an untracked path" || ok "no restore command offered for an untracked path"
-rm -f "$REPO/src/auth/extra.ts"
+# A second write to an untracked file in an untracked directory counts too.
+out=$(dgcmd "$REPO" 'mkdir -p src/fresh && echo 1 > src/fresh/a.ts')
+out=$(dgcmd "$REPO" 'echo 2 > src/fresh/a.ts')
+blocked "$out" && ok "a second write inside an untracked directory blocks" || bad "an untracked directory hides its files' changes"
+rm -rf "$REPO/src/auth/extra.ts" "$REPO/src/fresh"
+
+# Parallel calls keep their own snapshots. Call A starts on a clean tree, a
+# write lands, and call B starts after it. B did not make that write, and A
+# may have. One shared snapshot would have let A through.
+dg_event "$REPO" PreToolUse toolu_A >/dev/null
+echo "// by A" >> "$REPO/src/auth/.keep"
+dg_event "$REPO" PreToolUse toolu_B >/dev/null
+out=$(dg_event "$REPO" PostToolUse toolu_B)
+blocked "$out" && bad "call B did not change the path" || ok "a later call is not blamed for an earlier call's write"
+out=$(dg_event "$REPO" PostToolUse toolu_A)
+blocked "$out" && ok "the earlier call is still blamed" || bad "call A's snapshot was lost"
+# The same ids from another session do not reach this session's snapshot.
+dg_event "$REPO" PreToolUse toolu_C sess-2 >/dev/null
+out=$(dg_event "$REPO" PostToolUse toolu_C sess-1)
+blocked "$out" && ok "a snapshot of another session is not read" || bad "sessions must not share a snapshot"
+rm -f "$SNAPS"/*
+git -C "$REPO" checkout HEAD -- src/auth/.keep
+
+# No snapshot (no ids, or the step before did not run): fail closed and
+# report every dirty durable path, without a restore, because some of them
+# may predate the command.
+echo "// touched" >> "$REPO/src/auth/.keep"
+out=$(dg "$REPO")
+blocked "$out" && ok "no snapshot blocks every dirty durable path" || bad "a missing snapshot must fail closed"
+echo "$out" | grep -q 'src/auth/.keep' && ok "the fail-closed block names the path" || bad "the fail-closed block should name the path"
+echo "$out" | grep -q 'git checkout HEAD --' && bad "no restore without a snapshot" || ok "no restore offered without a snapshot"
+out=$(dg_event "$REPO" PostToolUse toolu_never)
+blocked "$out" && ok "a missing snapshot for a known id blocks too" || bad "a missing snapshot file must fail closed"
+git -C "$REPO" checkout HEAD -- src/auth/.keep
+
+# A snapshot left by a command that never ran (a deny) is pruned once stale.
+mkdir -p "$SNAPS" && : > "$SNAPS/sess-1.toolu_old"
+touch -d '2 days ago' "$SNAPS/sess-1.toolu_old"
+dgcmd "$REPO" 'true' >/dev/null
+[ -e "$SNAPS/sess-1.toolu_old" ] && bad "a stale snapshot should be pruned" || ok "a stale snapshot is pruned"
+
+# Field shape 2: another session's half-finished merge in the primary tree
+# left its results staged and its conflicts unmerged, and the hook blamed
+# unrelated commands for them in two sessions.
+git -C "$REPO" checkout -q -b dg-side
+echo "// side" >> "$REPO/src/auth/.keep"
+echo "// side" > "$REPO/src/auth/merged.ts"
+(cd "$REPO" && git add -A && git commit -qm "side")
+git -C "$REPO" checkout -q main
+echo "// main" >> "$REPO/src/auth/.keep"
+(cd "$REPO" && git commit -qam "main")
+git -C "$REPO" merge -q --no-ff --no-commit dg-side >/dev/null 2>&1
+[ -f "$REPO/.git/MERGE_HEAD" ] || bad "the fixture should leave a merge in progress"
+out=$(dgcmd "$REPO" 'ls docs')
+blocked "$out" && bad "another session's merge is not this command's write" || ok "a merge in progress is not blamed on an unrelated command"
+out=$(dgcmd "$REPO" 'echo "// a command of its own" > tests/x.test.ts')
+blocked "$out" && ok "a durable write beside the merge still blocks" || bad "a write outside the merge should block"
+echo "$out" | grep -q 'src/auth/merged.ts' && bad "the block should not list the merge's paths" || ok "the block lists only the command's paths"
+rm -f "$REPO/tests/x.test.ts"
+git -C "$REPO" merge --abort
+git -C "$REPO" reset -q --hard HEAD~1
+git -C "$REPO" branch -q -D dg-side
+
+# The reverted fix trusted the merge marker. A fake marker and a staged
+# write must still block.
+echo "# x" > "$REPO/docs/x.md"
+(cd "$REPO" && git add docs/x.md && git commit -qm "docs x")
+touch "$REPO/.git/MERGE_HEAD"
+out=$(dgcmd "$REPO" 'sed -i "s/x/y/" docs/x.md && git add docs/x.md')
+blocked "$out" && ok "a fake merge marker does not hide a staged write" || bad "the merge marker must not be trusted"
+rm -f "$REPO/.git/MERGE_HEAD"
+git -C "$REPO" reset -q HEAD -- docs/x.md
+git -C "$REPO" checkout HEAD -- docs/x.md
+(cd "$REPO" && git rm -q docs/x.md && git commit -qm "drop docs x")
+out=$(dg "$REPO")
+blocked "$out" && bad "the primary tree should be clean after the merge fixtures" || ok "the merge fixtures leave the tree clean"
 
 # A non-durable root file is the project's business.
-echo '{}' > "$REPO/package.json"
-out=$(dg "$REPO")
+out=$(dgcmd "$REPO" "echo '{}' > package.json")
 blocked "$out" && bad "non-durable package.json should pass" || ok "non-durable root file passes"
+rm -f "$REPO/package.json"
 
 # .hone-durable-paths extends the set, so the same file now blocks. This is the
 # package-manager case in full: 'bun add' rewrites package.json from inside its
@@ -504,12 +629,16 @@ blocked "$out" && bad "non-durable package.json should pass" || ok "non-durable 
 # construct. Only the effect gives it away.
 printf 'package.json\n' > "$REPO/.hone-durable-paths"
 (cd "$REPO" && git add .hone-durable-paths && git commit -qm "policy")
-out=$(dg "$REPO")
+out=$(dgcmd "$REPO" "echo '{}' > package.json")
 blocked "$out" && ok "a path from .hone-durable-paths blocks" || bad "should block a listed durable path"
 
 # The same dirty durable path inside a worktree is the work in flight → silent.
+echo '{}' > "$WT/package.json"
 out=$(dg "$WT")
 blocked "$out" && bad "a worktree is where durable work belongs" || ok "dirty durable path in a worktree passes"
+dg_event "$WT" PreToolUse toolu_wt >/dev/null
+[ -e "$SNAPS/sess-1.toolu_wt" ] && bad "a worktree needs no snapshot" || ok "no snapshot is taken in a worktree"
+rm -f "$WT/package.json"
 
 # .hone-off disables it like the rest of hone.
 touch "$REPO/.hone-off"

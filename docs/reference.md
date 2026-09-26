@@ -164,11 +164,6 @@ file:
 - `.hone-off` turns off every hook, for a quick manual edit outside the
   loop. Delete it when done. The `bash-guard` refuses to let the agent create
   it.
-
-  Delete the marker only after the commit that cleans the tree. The
-  dirty-guard blocks every command while a durable path is dirty. Remove the
-  marker before the commit, and the next command blocks. The order is:
-  create the marker, edit, run the checks, commit, then delete the marker.
 - `.hone-grant/<change>` is the authorization for one irreversible change.
   Its text lands in the merge commit body. Delete the file to revoke. Write it
   with `worktree.sh grant` (say who, when, and why), yourself or through the
@@ -269,11 +264,13 @@ irreversible. When you want that record, route the edit through the loop.
   whole command, and nothing moves or writes the primary tree, the command
   passes. Otherwise the ask stands. The header of `hooks/bash-guard.sh`
   lists what it cannot model.
-- *dirty-guard* (PostToolUse on Bash) reads the effect instead of the command.
-  In the primary tree it asks git what the command left dirty, and blocks when
-  that list holds a protected path. It catches a writer the bash-guard's name
-  list misses. It reports after the
-  write, so it stops the run before the commit.
+- *dirty-guard* (PreToolUse and PostToolUse on Bash) reads the effect instead
+  of the command. In the primary tree it records the dirty protected paths
+  before the command, with a hash of each, and blocks on those that the
+  command dirtied, edited again, or staged. A path dirty before and left alone
+  passes. With no record, it blocks on every dirty protected path. It catches
+  a writer the bash-guard's name list misses. It reports after the write, so
+  it stops the run before the commit. The record lives in `.git/hone-dirty/`.
 - *gate* (Stop) runs `scripts/run-tests.sh`, plus `scripts/typecheck.sh`
   and `scripts/lint.sh` when they exist, and blocks the turn on any failure.
   - With an uncommitted change to any durable path it runs the fast unit
