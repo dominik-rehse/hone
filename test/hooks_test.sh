@@ -508,6 +508,21 @@ passes "$(bgj "cd $WT && git merge main; for f in a; do echo \$f; done")" "a loo
 asks "$(bgj "cd $REPO && git merge main; for f in a; do echo \$f; done" "$WT")" "a loop after a move in the primary tree asks"
 passes "$(bgj 'for f in README.md; do git checkout -- "$f"; done')" "a restore in a loop in the primary tree passes"
 asks "$(bgj 'for f in README.md; do git checkout "$f"; done')" "a checkout without -- in a loop in the primary tree asks"
+# (f) The false asks of the reach in a replay of real commands, each next to
+# a twin that asks. Each pass asked before the fix.
+for c in "git push origin main && for r in $SCR/wt @P; do (cd \$r/src && git merge y); done" \
+         "for r in $SCR/wt @P; do cd \"\${r}/src\"; git merge y; done"; do
+    asks "$(bgj "${c//@P/$REPO}" "$WT")" "a cd on a loop variable into the primary tree asks: ${c//$SCR/<scr>}"
+    passes "$(bgj "${c//@P/$SCR/clone}" "$WT")" "a cd on a loop variable into a scratch clone passes: ${c//$SCR/<scr>}"
+done
+passes "$(bgj "cd $SCR/wt/src && cd .. && git merge y")" "a cd .. into a scratch worktree passes"
+asks "$(bgj "cd $REPO/src && cd .. && git merge y" "$WT")" "a cd .. into the primary tree asks"
+asks "$(bgj "cd $SCR/link/src && cd .. && git merge y" "$WT")" "a cd .. through a link into the primary tree asks"
+lease="mkdir $SCR/lease && cd $SCR/lease && git init -q --bare o.git && git clone -q @S a && cd a"
+passes "$(bgj "${lease//@S/o.git} && git push -q origin HEAD:main; git push origin HEAD:x")" "a push from a clone of a scratch repository the command makes passes"
+asks "$(bgj "${lease//@S/$REPO} && git push -q origin HEAD:main")" "a push from a clone of the primary tree the command makes asks"
+asks "$(bgj "${lease//@S/o.git} && git remote set-url origin $REPO && git push origin HEAD:main")" "a push after the command points the clone elsewhere asks"
+asks "$(bgj "mkdir $REPO/new && cd $REPO/new && git push . HEAD:main" "$WT")" "a push from a new directory in the primary tree into it asks"
 
 echo "== bash-guard: a copy asks where it writes a protected path, not where it reads one =="
 # The rule read any path after the verb, so copying an adapter out to a

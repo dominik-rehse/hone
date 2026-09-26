@@ -290,7 +290,8 @@ hone_copy_written() (
 #   - a `cd`, `export`, or assignment inside a pipeline or after `||`
 #   - a cd target it cannot resolve to an existing directory, a fresh
 #     `$(mktemp -d)`, the one directory an `ls -d <glob>` finds, or a
-#     worktree the same `&&` chain adds; a path with `..`
+#     worktree, `mkdir`, or `git clone` the same `&&` chain adds; a path
+#     with `..` whose lexical and physical readings differ
 #   - `git --git-dir`, `--work-tree`, `-c`, and a push option that names
 #     another repository or program
 #   - a git, package-manager, or formatter command named inside another
@@ -477,6 +478,10 @@ SIGNOFF_LINES=()
 VN=(); VV=()       # the command's own variables; \001 marks an unknown value
 ADDED_P=(); ADDED_OK=()
 MKTEMP_DIRS=(); MK_N=0
+CLONE_P=(); CLONE_U=(); CLONE_B=()   # a clone the command makes: its path, source, and the directory it ran in
+MKDIRS=""          # every directory a mkdir makes, kept past the end of its list
+# A command that can point a new repository's push elsewhere than its clone source.
+RE_REMOTE_EDIT='remote[[:space:]]+(add|set-url|rename)|remote\.|url\.|insteadof|pushdefault|pushremote|include'
 LN_SEEN=0
 AN_WROTE=0         # a command before this point may have written a file
 declare -A AN_KIND=()
@@ -619,6 +624,33 @@ hone_an_expand() {
     done
     [ -z "$q" ] || return 1
     AN_E=$out
+}
+
+# Every value of shell word $1, one per line in AN_ES: hone_an_expand over each
+# value of the set variables the word names, such as `~/repos/$r` in a loop
+# over r. Fails where hone_an_expand fails, and past 64 values.
+hone_an_expand_all() {
+    local w=$1 rest name i n c out=""
+    rest=$w
+    while [[ $rest =~ \$\{?([A-Za-z_][A-Za-z0-9_]*)(.*)$ ]]; do
+        name=${BASH_REMATCH[1]}; rest=${BASH_REMATCH[2]}
+        for ((i = ${#VN[@]} - 1; i >= 0; i--)); do
+            [ "${VN[$i]}" = "$name" ] || continue
+            [[ ${VV[$i]} == $'\002'* ]] || break
+            n=${#VN[@]}
+            while IFS= read -r c; do
+                VN[n]=$name; VV[n]=$c
+                if ! hone_an_expand_all "$w"; then unset "VN[$n]" "VV[$n]"; return 1; fi
+                out+=${out:+$'\n'}$AN_ES
+            done <<<"${VV[$i]#$'\002'}"
+            unset "VN[$n]" "VV[$n]"
+            c=${out//[!$'\n']/}
+            [ "${#c}" -lt 64 ] || return 1
+            AN_ES=$out; return 0
+        done
+    done
+    hone_an_expand "$w" || return 1
+    AN_ES=$AN_E
 }
 
 hone_an_in() { local x k=$1; shift; for x in "$@"; do [ "$x" = "$k" ] && return 0; done; return 1; }
@@ -767,7 +799,7 @@ hone_an_setref() {
 }
 
 hone_an_cd() {
-    local prev=$1 nx=$2 a=$3 j tgt="" cnt=0 p
+    local prev=$1 nx=$2 a=$3 j tgt="" cnt=0 p q
     hone_an_state_ok "$prev" "$nx" || return
     [ "$a" -eq 0 ] || { an_fail "an environment prefix on cd"; return; }
     for ((j = a + 1; j < ${#W[@]}; j++)); do
@@ -791,12 +823,19 @@ hone_an_cd() {
         an_fail "a cd target the hook cannot resolve"; return
     fi
     case $AN_E in
-        /*) hone_an_norm "$AN_E" || { an_fail "a cd target with .."; return; } ;;
+        /*) p=$AN_E ;;
         *)
             if [ -n "${CDPATH:-}" ] && [[ $AN_E != ./* ]]; then an_fail "a relative cd under CDPATH"; return; fi
             [[ $CURSET != *$'\n'* ]] || { an_fail "a relative cd from an uncertain directory"; return; }
-            hone_an_norm "$CURSET/$AN_E" || { an_fail "a cd target with .."; return; } ;;
+            p=$CURSET/$AN_E ;;
     esac
+    # cd reads `..` lexically and git -C physically. Where both name the same
+    # existing directory, the difference does not matter.
+    if ! hone_an_norm "$p"; then
+        hone_an_lex "$p" && [ "$LN_SEEN" -eq 0 ] && hone_an_phys "$AN_P" \
+            && q=$(cd -P -- "$p" 2>/dev/null && pwd -P) && [ "$AN_P" = "$q" ] \
+            || { an_fail "a cd target with .."; return; }
+    fi
     p=$AN_P
     if [ -d "$p" ] && [ -x "$p" ]; then
         hone_an_phys "$p" || { an_fail "a cd target that does not resolve"; return; }
@@ -880,6 +919,43 @@ hone_an_worktree_add() {
     done <<<"$GTD"
 }
 
+# `mkdir DIR...` and `git clone SRC [DIR]` after `&&`: record the directories
+# they make, so a cd into one does not end the walk. A clone keeps its source,
+# which a push from it to origin reaches.
+hone_an_made() {
+    local nx=$1 a=$2 j w src="" dir="" d
+    [ "$nx" = '&&' ] && [ "$LIST_OR" -eq 0 ] || return 0
+    if [ "${W[$a]##*/}" = mkdir ]; then
+        [[ $CURSET != *$'\n'* ]] || return 0
+        for ((j = a + 1; j < ${#W[@]}; j++)); do
+            case ${W[$j]} in -p|--parents|-v|--verbose) continue ;; -*) return 0 ;; esac
+            hone_an_expand "${W[$j]}" && [ -n "$AN_E" ] && hone_an_resolve "$AN_E" "$CURSET" || continue
+            MADE+=$'\n'"$AN_P"; MKDIRS+=$'\n'"$AN_P"
+        done
+        return 0
+    fi
+    [ -z "$GFAIL" ] || return 0
+    for ((j = GSUBI + 1; j < ${#W[@]}; j++)); do
+        w=${W[$j]}
+        case $w in
+            -q|--quiet|-n|--no-checkout|--single-branch|--no-tags|--depth=*|--branch=*) ;;
+            --depth|-b|--branch) j=$((j + 1)) ;;
+            -*) return 0 ;;
+            *) hone_an_expand "$w" && [ -n "$AN_E" ] || return 0
+               if [ -z "$src" ]; then src=$AN_E; elif [ -z "$dir" ]; then dir=$AN_E; else return 0; fi ;;
+        esac
+    done
+    [ -n "$src" ] || return 0
+    if [ -z "$dir" ]; then
+        dir=${src%/}; dir=${dir%/.git}; dir=${dir%.git}; dir=${dir##*/}; dir=${dir##*:}
+        [ -n "$dir" ] || return 0
+    fi
+    while IFS= read -r d; do
+        hone_an_resolve "$dir" "$d" || continue
+        MADE+=$'\n'"$AN_P"; CLONE_P+=("$AN_P"); CLONE_U+=("$src"); CLONE_B+=("$d")
+    done <<<"$GTD"
+}
+
 # `git reset [-q] <path>...` unstages when every operand is a path that
 # exists in the tree or the index and names no revision, judged in directory $1.
 hone_an_reset_paths() {
@@ -947,10 +1023,11 @@ hone_an_env_ok() {
 # branch from any tree, a scratch clone of the primary tree included. So it
 # counts as a move in the primary tree. The destination is the repository
 # argument, or the remote git picks for the branch, and a remote name stands
-# for its push URLs. A URL on another host passes. A push the hook cannot
-# resolve asks, as a clone this same command makes could have any origin.
+# for its push URLs. A URL on another host passes. A push from a clone this
+# same command makes goes to its source, unless the command edits a remote.
+# A push the hook cannot resolve asks.
 hone_an_push() {
-    local j w dest="" d r b urls u
+    local i j w dest="" d r b urls u
     [ -z "$GFAIL" ] || { an_fail "$GFAIL"; WRAP=1; return; }
     hone_an_env_ok "$1" || return
     for ((j = GSUBI + 1; j < ${#W[@]}; j++)); do
@@ -963,6 +1040,20 @@ hone_an_push() {
         esac
     done
     while IFS= read -r d; do
+        # A directory this command makes: a clone pushes to its source, and
+        # a mkdir lies in the repository of its nearest ancestor. Where the
+        # command did not get to make it, the push fails.
+        if [ ! -d "$d" ] && [ "$LN_SEEN" -eq 0 ] && ! [[ ${CMD,,} =~ $RE_REMOTE_EDIT ]]; then
+            for ((i = ${#CLONE_P[@]} - 1; i >= 0; i--)); do [ "${CLONE_P[$i]}" = "$d" ] && break; done
+            if [ "$i" -ge 0 ]; then
+                if [ -z "$dest" ] || [ "$dest" = origin ]; then
+                    u=$(cd / && git ls-remote --get-url -- "${CLONE_U[$i]}" 2>/dev/null) || u=${CLONE_U[$i]}
+                    hone_an_push_url "$u" "${CLONE_B[$i]}"; continue
+                fi
+            elif [[ $MKDIRS$'\n' == *$'\n'"$d"$'\n'* ]]; then
+                while [ ! -e "$d" ]; do d=${d%/*}; [ -n "$d" ] || d=/; done
+            fi
+        fi
         [ -d "$d" ] || { an_fail "a push from a tree that does not exist yet"; WRAP=1; return; }
         r=$dest
         if [ -z "$r" ]; then
@@ -1195,9 +1286,11 @@ hone_an_simple() {
                 an_fail "printf -v"; ALLV_ALL=1
             done ;;
         ln) LN_SEEN=1 ;;
+        mkdir) hone_an_made "$nx" "$a" ;;
         cp) for ((j = a + 1; j < n; j++)); do [[ ${W[$j]} =~ ^(-[A-Za-z]*s|--symbolic-link)$ ]] && LN_SEEN=1; done ;;
     esac
     [ "$base" = git ] && [ "$GSUB" = worktree ] && [ "${W[$GSUBI+1]:-}" = add ] && hone_an_worktree_add "$nx"
+    [ "$base" = git ] && [ "$GSUB" = clone ] && hone_an_made "$nx" "$a"
     [ "$base" = git ] && [ "$GSUB" = worktree ] && case ${W[$GSUBI+1]:-} in add|list|prune|remove) ;; *) an_fail "a git worktree subcommand" ;; esac
 
     # Check-config writes by a verb.
@@ -1496,8 +1589,8 @@ hone_an_reach_cd() {
         vals=$HOME
     elif hone_an_setref "$tgt"; then
         vals=$AN_SET
-    elif hone_an_expand "$tgt"; then
-        vals=$AN_E
+    elif hone_an_expand_all "$tgt"; then
+        vals=$AN_ES
     else
         hone_an_reach_fail "a cd target the hook cannot resolve"; return
     fi

@@ -257,11 +257,12 @@ neither. When you want that record, route the edit through the loop.
 
   Every primary-tree rule reads each tree the command names, and the
   shell's directory. Before a rule asks, an analysis replays the command.
-  It follows `cd`, `git -C`, and a variable set to a literal path,
-  `$TMPDIR`, `$(mktemp -d)`, or the one directory an `ls -d <glob>` finds.
+  It follows `cd`, `git -C`, a variable set to a literal path,
+  `$TMPDIR`, `$(mktemp -d)`, or the one directory an `ls -d <glob>` finds,
+  and a directory the command makes.
   If it models the whole command and nothing moves or writes the primary
-  tree, it passes. Otherwise it asks. A command that names such a
-  move or a push, but that no rule caught, gets the same test. Where the
+  tree, it passes. Otherwise it asks. A move or a push that no rule
+  caught gets the same test. Where the
   analysis cannot model a part, such as a loop body, it judges each
   command there in every directory it may reach, and asks on what it
   cannot place. The header of `hooks/bash-guard.sh`

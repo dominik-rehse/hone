@@ -250,11 +250,13 @@ Fixed after 0.64.0, not yet released:
   one still asks, because a write through the link lands in the file.
 
 Each shape has a test in `test/hooks_test.sh` that fails on 0.64.0.
-Next step: replay the real commands of
-[the 2026-09-26 note](spikes/2026-09-26-bash-guard-holes-replay.md) on the
-new hook and read every new ask. That replay needs the Claude Code
-transcripts on the maintainer's machine, and this session could not read
-them. Then release.
+A replay of 705 real commands first found 20 new asks, 19 of them false.
+Most were a loop that cds into each of several repositories on a loop
+variable. The reach now reads such a variable with each of its values,
+and the walk follows a `cd ..` and a directory the command makes. After
+that, the replay adds 2 asks and removes 4, and every change is right
+([the reach note](spikes/2026-09-26-bash-guard-reach.md)).
+Next step: release it.
 
 Still open:
 
