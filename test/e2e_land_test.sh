@@ -1558,6 +1558,35 @@ case "$(drain p1 "$REPO")" in *"review ✓ (skipped, docs-only) > land\"}") ;; *
 bash "$WSH" remove "$WT_P" >/dev/null 2>&1; git branch -q -D hone/prog-docs 2>/dev/null
 step "a docs-only review shows as skipped"
 
+mkdir -p docs && printf '%s\n' "See src/mathx/add.js." "A stale line." > docs/garden.md
+git add docs/garden.md && git commit -qm "docs: garden fixture"
+WT_P=$(bash "$WSH" add garden/g-cut) || die "worktree add garden/g-cut"
+(cd "$WT_P" && sed -i '2d' docs/garden.md && bash "$WSH" verify >/dev/null 2>&1) || die "verify in garden/g-cut"
+(cd "$WT_P" && git commit -qam "docs: cut a stale line" -m "Cut: a stale line")
+bash "$WSH" governed garden/g-cut >/dev/null 2>&1
+bash "$WSH" review-scope garden/g-cut >/dev/null 2>&1
+bash "$WSH" land garden/g-cut >/dev/null 2>&1 || die "land garden/g-cut"
+M=$(git rev-parse --short HEAD)
+want='◆ [garden/g-cut] worktree ✓ > cut/repair ... > verify > land\n◆ [garden/g-cut] worktree ✓ > cut ✓ > verify ... > land\n◆ [garden/g-cut] worktree ✓ > cut ✓ > verify ✓ > land ...\n◆ [garden/g-cut] worktree ✓ > cut ✓ > verify ✓ > land ✓ (merged '"$M"')'
+out=$(drain p1 "$REPO")
+[ "$out" = "{\"systemMessage\":\"$want\"}" ] || die "a garden cut should show the garden chain, and no consolidate or review: $out"
+step "a garden cut shows worktree > cut > verify > land"
+
+WT_P=$(bash "$WSH" add garden/g-repair) || die "worktree add garden/g-repair"
+(cd "$WT_P" && sed -i 's|src/mathx/add.js|src/mathx/sum.js|' docs/garden.md && bash "$WSH" verify >/dev/null 2>&1) || die "verify in garden/g-repair"
+(cd "$WT_P" && git commit -qam "docs: repoint the add link" -m "Repair: src/mathx/add.js → src/mathx/sum.js")
+bash "$WSH" land garden/g-repair >/dev/null 2>&1 || die "land garden/g-repair"
+case "$(drain p1 "$REPO")" in
+    *"[garden/g-repair] worktree ✓ > repair ✓ > verify ... > land\\n"*"repair ✓ > verify ✓ > land ✓ (merged $(git rev-parse --short HEAD))\"}") ;;
+    *) die "a garden repair should name repair in place of cut" ;; esac
+step "a garden repair names repair in place of cut"
+
+WT_P=$(bash "$WSH" add garden/g-red) || die "worktree add garden/g-red"
+(cd "$WT_P" && git rm -q src/mathx/add.js && bash "$WSH" verify >/dev/null 2>&1) && die "a cut of add.js should be red"
+case "$(drain p1 "$REPO")" in *"[garden/g-red] worktree ✓ > cut ✓ > verify ✗ (suite exit "*) ;; *) die "a red garden verify should show verify ✗" ;; esac
+bash "$WSH" remove "$WT_P" >/dev/null 2>&1; git branch -q -D hone/garden/g-red 2>/dev/null
+step "a red garden cut shows verify ✗"
+
 unset CLAUDE_CODE_SESSION_ID
 WT_P=$(bash "$WSH" add prog-quiet) || die "add without a session"
 [ -e "$QDIR/p1" ] && die "no session id should queue nothing"

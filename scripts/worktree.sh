@@ -1906,13 +1906,17 @@ cmd_remove() {
 # before it is done, because the loop runs them in order. So no step state is
 # kept. The queue is <git-common-dir>/hone-progress/<session>, one file per
 # Claude Code session: worktrees share the common dir, and each session drains
-# only its own file. Without CLAUDE_CODE_SESSION_ID nothing is queued. A garden
-# change has its own chain, so it gets no line. Every error here is ignored,
-# because a lost line must never fail a step.
+# only its own file. Without CLAUDE_CODE_SESSION_ID nothing is queued. Every
+# error here is ignored, because a lost line must never fail a step.
+#
+# A garden change (garden/<slug>) has its own chain, the one the garden skill
+# names: worktree > cut > verify > land, with repair in place of cut. It calls
+# add, verify, and land only. $1 = the chain, as words.
 progress_line() {
-    local change="$1" at="$2" mark="$3" note="${4:-}" line s past=1
+    local chain="$1" change="$2" at="$3" mark="$4" note="${5:-}" line s past=1 last
+    last=${chain##* }
     line="◆ [$change]"
-    for s in worktree build verify consolidate review land; do
+    for s in $chain; do
         if [ "$s" = "$at" ]; then
             line+=" $s $mark${note:+ ($note)}"; past=0
         elif [ "$past" -eq 1 ]; then
@@ -1920,15 +1924,39 @@ progress_line() {
         else
             line+=" $s"
         fi
-        [ "$s" = land ] || line+=" >"
+        [ "$s" = "$last" ] || line+=" >"
     done
     printf '%s\n' "$line"
 }
 
+# The chain of a change. $2 = the kind of a garden change, when known.
+progress_chain() {
+    case "$1" in
+        garden/*) printf 'worktree %s verify land' "${2:-$(progress_garden_kind "$1")}" ;;
+        *) printf 'worktree build verify consolidate review land' ;;
+    esac
+}
+
+# Whether a garden change is a cut or a repair, read from its diff against the
+# primary branch, committed or not. A cut only deletes lines, and a repair
+# replaces a target, so it adds one. With no diff yet it prints cut/repair.
+progress_garden_kind() {
+    local main wt base
+    main=$(main_root_of)
+    wt="$main/.worktrees/$1"
+    base=$(git -C "$wt" merge-base HEAD "$(git -C "$main" rev-parse HEAD 2>/dev/null)" 2>/dev/null)
+    git -C "$wt" diff --numstat "${base:-HEAD}" 2>/dev/null | awk '
+        $1 ~ /^[0-9]+$/ { a += $1; d += $2 }
+        END { print (a > 0 ? "repair" : d > 0 ? "cut" : "cut/repair") }'
+}
+
+# $1 = the chain. A step outside it queues nothing: garden has no consolidate
+# or review step.
 progress_emit() {
-    local sid="${CLAUDE_CODE_SESSION_ID:-}" change="$1" dir line
+    local sid="${CLAUDE_CODE_SESSION_ID:-}" change="$2" at="$3" dir line
     case "$sid" in ""|*/*|.*) return 0 ;; esac
-    case "$change" in ""|garden/*) return 0 ;; esac
+    [ -n "$change" ] || return 0
+    case " $1 " in *" $at "*) ;; *) return 0 ;; esac
     dir=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P) || return 0
     dir="$dir/hone-progress"
     line=$(progress_line "$@")
@@ -1959,39 +1987,46 @@ progress_land_gate() {
 # Run a step subcommand between its progress lines. $1 = the subcommand.
 progress_step() {
     local sub="$1"; shift
-    local change="${1:-}" rc=0 out
+    local change="${1:-}" rc=0 out chain second
     case "$sub" in
         add)
             cmd_add "$@" || rc=$?
+            chain=$(progress_chain "$change" cut/repair)
             if [ "$rc" -eq 0 ]; then
-                progress_emit "$change" build ...
+                read -r _ second _ <<<"$chain"
+                progress_emit "$chain" "$change" "$second" ...
             else
-                progress_emit "$change" worktree ✗ "exit $rc"
+                progress_emit "$chain" "$change" worktree ✗ "exit $rc"
             fi ;;
         verify)
             change=$(git symbolic-ref --short -q HEAD 2>/dev/null)
             case "$change" in hone/*) change=${change#hone/} ;; *) change="" ;; esac
-            progress_emit "$change" verify ...
+            chain=$(progress_chain "$change")
+            progress_emit "$chain" "$change" verify ...
             cmd_verify "$@" || rc=$?
-            [ "$rc" -eq 0 ] || progress_emit "$change" verify ✗ "suite exit $rc" ;;
+            [ "$rc" -eq 0 ] || progress_emit "$chain" "$change" verify ✗ "suite exit $rc" ;;
         governed)
-            progress_emit "$change" consolidate ...
+            progress_emit "$(progress_chain "$change")" "$change" consolidate ...
             cmd_governed "$@" || rc=$? ;;
         review-scope)
             out=$(cmd_review_scope "$@") || rc=$?
             [ -n "$out" ] && printf '%s\n' "$out"
+            chain=$(progress_chain "$change")
             if [ "$rc" -eq 0 ] && [ "$out" = docs-only ]; then
-                progress_emit "$change" review ✓ "skipped, docs-only"
+                progress_emit "$chain" "$change" review ✓ "skipped, docs-only"
             elif [ "$rc" -eq 0 ]; then
-                progress_emit "$change" review ...
+                progress_emit "$chain" "$change" review ...
             fi ;;
         land)
-            progress_emit "$change" land ...
+            # Before cmd_land, because a green land removes the worktree the
+            # garden kind is read from.
+            chain=$(progress_chain "$change")
+            progress_emit "$chain" "$change" land ...
             cmd_land "$@" || rc=$?
             if [ "$rc" -eq 0 ]; then
-                progress_emit "$change" land ✓ "merged $(git rev-parse --short HEAD 2>/dev/null)"
+                progress_emit "$chain" "$change" land ✓ "merged $(git rev-parse --short HEAD 2>/dev/null)"
             else
-                progress_emit "$change" land ✗ "exit $rc, $(progress_land_gate "$rc")"
+                progress_emit "$chain" "$change" land ✗ "exit $rc, $(progress_land_gate "$rc")"
             fi ;;
     esac
     return "$rc"

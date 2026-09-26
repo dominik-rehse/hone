@@ -326,9 +326,10 @@ neither. When you want that record, route the edit through the loop.
   It prints the full list once per session and tree, and again when it
   changes. Otherwise it prints the count.
 - *progress* (after each Bash call, and Stop) shows the loop's progress
-  line: `◆ [csv-export] worktree ✓ > build ... > verify > …`. The step
-  subcommands of `worktree.sh` queue
-  it per session in `<git-common-dir>/hone-progress/`, and it never blocks.
+  line: `◆ [csv-export] worktree ✓ > build ... > verify > …`. A garden
+  change gets `worktree > cut > verify > land`, with `repair` for a diff
+  that adds a line. The step subcommands of `worktree.sh` queue it per
+  session in `<git-common-dir>/hone-progress/`, and it never blocks.
 - *session-start* injects the workflow rule from the plugin. It warns when
   the test adapter or the `src/` layout is missing. It also warns, naming
   the missing rules, when the settings lack any rule from the canonical deny

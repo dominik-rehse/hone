@@ -184,16 +184,18 @@ see whether it passes. 9 conflict → another change owns these files, defer.
 refusal's command as `run` does. Independent changes may run in parallel
 worktrees. Land them one at a time.
 
-Report each change with a progress line on the chain `worktree > cut > verify >
-land`, and name the step `repair` in place of `cut` on a repair. Open the line
-with the marker `◆` and the name `[garden/<slug>]`, each
-wrapped in backticks. Print it when a step starts and when it ends. Mark a
-finished step `✓` with its artifact in parentheses ("verify ✓ (suite
-212/212)"), the active step `...`, and a red cut `✗`. Also wrap one step in
-backticks: the active step, the failed step on a stop, or the land step after
-the change lands. Print the line as plain markdown, never inside a code fence,
-so the terminal highlights the backticked spans. A line with no artifact is a
-status update, never a completion claim.
+hone prints each change's progress line itself. `add`, `verify`, and `land`
+queue it, and a hook shows it to the person:
+
+```
+◆ [garden/<slug>] worktree ✓ > cut ✓ > verify ... > land
+```
+
+It names the step `repair` in place of `cut` when the diff adds a line. Never
+print this line yourself. Run `verify` and `land` through `worktree.sh` as
+above, because those calls are what tell the person where the change stands.
+A status update of your own never claims a step is done unless it names the
+artifact that shows it.
 
 ## 4. Judgment: the consolidate-critic, repo-wide
 

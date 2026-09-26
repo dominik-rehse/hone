@@ -1,5 +1,5 @@
 #!/bin/bash
-# Shows the run loop's progress lines to the person (PostToolUse and
+# Shows the progress lines of run and garden to the person (PostToolUse and
 # PostToolUseFailure on Bash, and Stop). The step subcommands of
 # scripts/worktree.sh queue each line in <git-common-dir>/hone-progress/<session>
 # (see progress_emit there). This hook takes its own session's queue and returns
