@@ -204,7 +204,7 @@ directory, a formatter on a variable set to a Plan, a heredoc commit
 message, a read of `.hone-grant/` inside `$(...)`, and a scratch check
 config outside the repository. The check-config ask now names the file.
 
-Fixed after 0.63.0 (not yet released): moves in the primary tree that the
+Fixed in 0.64.0: moves in the primary tree that the
 old whole-line rules missed. They read the tree from one leading `cd` and
 from literal `-C` paths, and the analysis only ran where they already
 asked. So these passed: `(cd <scratch> && git merge x); git merge y`, a
@@ -221,7 +221,7 @@ The same change lets `T=$(ls -d <glob> | tail -1); cd "$T"` pass when the
 glob finds one scratch tree. Each shape has a test.
 Next step: release it, then count the asks in the field again.
 
-Fixed, not yet released: the `dirty-guard` now records the dirty protected
+Fixed in 0.64.0: the `dirty-guard` now records the dirty protected
 paths before each shell command, with a hash of each, and blocks only on
 those the command changed. One old uncommitted file blocked 30 read-only
 commands in the first note, and another session's half-finished merge was
