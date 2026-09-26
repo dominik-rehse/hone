@@ -19,6 +19,8 @@ REPO=$(mktemp -d); trap 'rm -rf "$REPO"' EXIT
 cd "$REPO" || exit 1
 git init -q && git symbolic-ref HEAD refs/heads/main
 git config user.email t@t.t; git config user.name t
+# Section 9 sets its own session. The others queue no progress line.
+unset CLAUDE_CODE_SESSION_ID
 
 # A minimal real project: a bash "adapter" running a tiny test file, and the
 # hone ephemeral ignores so worktrees don't pollute the tree. A Plan is tracked,
@@ -1424,6 +1426,56 @@ after=$(wc -l < "$RUNS")
 git rm -q scripts/setup-tree.sh && git commit -qm "chore: drop the counting setup-tree adapter"
 bash "$WSH" remove "$WT_SS" >/dev/null 2>&1; git branch -q -D hone/st-sticky 2>/dev/null; rm -f "$RUNS"
 step "a restore after a retry installs the branch's dependencies again"
+
+echo "== 9. progress lines: the step subcommands queue them, the hook shows them =="
+PROGRESS="$PLUGIN_ROOT/hooks/progress.sh"
+QDIR="$(git rev-parse --absolute-git-dir)/hone-progress"
+drain() { printf '{"session_id":"%s","cwd":"%s"}' "$1" "$2" | bash "$PROGRESS"; }
+export CLAUDE_CODE_SESSION_ID=p1
+WT_P=$(bash "$WSH" add prog) || die "worktree add prog"
+(cd "$WT_P" && bash "$WSH" verify >/dev/null 2>&1) || die "verify in prog"
+(cd "$WT_P" && echo "// prog" > src/mathx/prog.js && git add -A && git commit -qm "feat(mathx): prog" -m "Cut: nothing, a test change")
+bash "$WSH" governed prog >/dev/null 2>&1
+bash "$WSH" governed prog >/dev/null 2>&1
+[ "$(bash "$WSH" review-scope prog 2>/dev/null)" = full ] || die "review-scope should still print its word"
+[ "$(drain p2 "$REPO")" = "" ] || die "another session must not see this session's lines"
+out=$(drain p1 "$WT_P")
+want='◆ [prog] worktree ✓ > build ... > verify > consolidate > review > land\n◆ [prog] worktree ✓ > build ✓ > verify ... > consolidate > review > land\n◆ [prog] worktree ✓ > build ✓ > verify ✓ > consolidate ... > review > land\n◆ [prog] worktree ✓ > build ✓ > verify ✓ > consolidate ✓ > review ... > land'
+[ "$out" = "{\"systemMessage\":\"$want\"}" ] || die "the hook should show each step once, in order: $out"
+[ "$(drain p1 "$REPO")" = "" ] || die "a drained queue shows nothing again"
+step "each step's start shows once, in order, to its own session only"
+bash "$WSH" land prog >/dev/null 2>&1 || die "land prog"
+M=$(git rev-parse --short HEAD)
+out=$(drain p1 "$REPO")
+case "$out" in *"review ✓ > land ...\\n◆ [prog] worktree ✓ > build ✓ > verify ✓ > consolidate ✓ > review ✓ > land ✓ (merged $M)\"}") ;;
+    *) die "land should queue its start and its merge commit: $out" ;; esac
+step "land shows its start and the merge commit"
+
+WT_P=$(bash "$WSH" add prog-red) || die "worktree add prog-red"
+(cd "$WT_P" && echo 'exports.add = (a, b) => a - b;' > src/mathx/add.js && git add -A && git commit -qm "fix(mathx): break add" -m "Cut: nothing, a test change")
+bash "$WSH" land prog-red >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 6 ] || die "land of a red change should exit 6 (got $rc)"
+case "$(drain p1 "$REPO")" in *"land ✗ (exit 6, red on the merge)\"}") ;; *) die "a red land should queue land ✗ with its gate" ;; esac
+step "a refused land shows land ✗ with its gate"
+bash "$WSH" remove "$WT_P" >/dev/null 2>&1; git branch -q -D hone/prog-red 2>/dev/null
+
+WT_P=$(bash "$WSH" add prog-docs) || die "worktree add prog-docs"
+(cd "$WT_P" && mkdir -p docs && echo "# d" > docs/d.md && git add -A && git commit -qm "docs: d" -m "Cut: nothing, a test change")
+[ "$(bash "$WSH" review-scope prog-docs 2>/dev/null)" = docs-only ] || die "review-scope should print docs-only"
+case "$(drain p1 "$REPO")" in *"review ✓ (skipped, docs-only) > land\"}") ;; *) die "a docs-only review should show as skipped" ;; esac
+bash "$WSH" remove "$WT_P" >/dev/null 2>&1; git branch -q -D hone/prog-docs 2>/dev/null
+step "a docs-only review shows as skipped"
+
+unset CLAUDE_CODE_SESSION_ID
+WT_P=$(bash "$WSH" add prog-quiet) || die "add without a session"
+[ -e "$QDIR/p1" ] && die "no session id should queue nothing"
+bash "$WSH" remove "$WT_P" >/dev/null 2>&1; git branch -q -D hone/prog-quiet 2>/dev/null
+mv "$QDIR" "$QDIR.bak" && touch "$QDIR"
+WT_P=$(CLAUDE_CODE_SESSION_ID=p1 bash "$WSH" add prog-broken) || die "a broken queue must not fail add"
+rm -f "$QDIR"; mv "$QDIR.bak" "$QDIR"
+[ "$(drain p1 "$REPO")" = "" ] || die "a broken queue shows nothing"
+bash "$WSH" remove "$WT_P" >/dev/null 2>&1; git branch -q -D hone/prog-broken 2>/dev/null
+step "no session id queues nothing, and a broken queue fails nothing"
 
 echo
 echo "e2e land path: PASS"

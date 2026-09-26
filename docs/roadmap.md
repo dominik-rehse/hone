@@ -261,30 +261,38 @@ How we know that the fixes hold in the field: we do not yet. The tests
 replay each shape from the transcripts. Next step: after the release, read
 the next field window and count fires per hook again.
 
-#### Progress lines are still missing in most steps
+#### Progress lines now come from a hook, and the lab has not measured it yet
 
-- What happens: the run skill asks for a progress line when each step of
-  the loop starts and when it ends. The model often starts a step in a
-  message that holds only tool calls and no text, so the start line never
-  appears. A person watching sees silence, in the field for up to 50
-  minutes.
-- How we know: 10 of 23 finished field runs printed fewer than 5 of the 6
-  start lines ([note](spikes/2026-09-25-field-data-since-0-58.md)). The lab
-  measure `progress_starts` (steps announced as started over steps
-  reached, in `evals/lab/checks.sh`) read 1/6 to 3/6 on claude-opus-5-5
-  on 2026-09-25, also after the 0.61.0 prose that asks for the line at the
-  start and end of each step. The runs are the lab pass in
-  `/var/tmp/hone-lab/20260925-153159/` and the three reruns in
-  `/var/tmp/hone-lab/prog-*/`. A measure that also reads a wrapped line
-  gives the same numbers on those transcripts.
-- What we tried: a candidate of one paragraph, "open each step with its
-  progress line in the message of its first tool call". It was green on
-  the unit suites, but its gain in the lab sat inside the spread between
-  identical runs, so the procedure in `development.md` cannot accept it.
-- Next step: a mechanical route, so the line does not depend on the
-  model. Either the `worktree.sh` subcommands that start a step print it,
-  or a hook prints it. Else more lab runs, until a gain can show above the
-  spread.
+- What happened: the run skill asked the agent to print a progress line
+  when each step of the loop starts and ends. The model often starts a step
+  in a message that holds only tool calls, so the line never appeared. In
+  the field a person saw silence for up to 50 minutes. 10 of 23 finished
+  field runs printed fewer than 5 of the 6 start lines
+  ([note](spikes/2026-09-25-field-data-since-0-58.md)). The lab measure
+  `progress_starts` (steps announced as started over steps reached, in
+  `evals/lab/checks.sh`) read 1/6 to 3/6 on claude-opus-5-5 on 2026-09-25,
+  also after better prose.
+- What changed on 2026-09-26: hone prints the line itself. The step
+  subcommands of `scripts/worktree.sh` (`add`, `verify`, `governed`,
+  `review-scope`, `land`) queue it in `<git-common-dir>/hone-progress/`,
+  one queue per session. `hooks/progress.sh` shows the queue as a
+  `systemMessage` after each Bash call and at Stop. The run skill no longer
+  asks the agent for the line. The final report stays the agent's.
+- How we will know: the lab measure `progress_starts` now also reads the
+  hook's lines, which the transcript logs as `informational` entries, and
+  `hook_lines` counts them. The goal is 5/6 or better in every scenario
+  that reaches land. The build step has no subcommand of its own, so its
+  end shows only when verify starts.
+- Open points. A garden change (`garden/<slug>`) gets no line, because its
+  chain differs. The garden skill still asks the agent for it. The lab
+  transcripts log a nonzero exit as a tool error (`is_error: true`), and
+  Claude Code 2.1.283 has a `PostToolUseFailure` event for a failed tool.
+  So the hook is registered on both events. If a failed command skips
+  `PostToolUse`, then the `dirty-guard` never runs after one. Nobody has
+  checked that yet.
+- Next step: run the lab after the merge and read `progress_starts` and
+  `hook_lines` in each `result.json`. Check in one session whether a
+  failed command runs `PostToolUse`. Then decide on the garden chain.
 
 #### The lab scenario `proof-gate` had a real fork at review
 

@@ -28,51 +28,25 @@ Resolve `$ARGUMENTS`:
 Setup check: if `scripts/run-tests.sh` is missing, stop and tell the user to run
 `/hone:setup` first. Without the adapter the gate can't verify anything.
 
-## Reporting: the four kinds of output
+## Reporting: what hone prints, and what you print
 
-Everything `run` prints is one of four kinds, and each kind has a fixed shape.
-The shape is what lets a reader tell a status update from a receipt, and see
-where the run stands.
+hone prints the **progress line** itself. Each step's `worktree.sh`
+subcommand (`add`, `verify`, `governed`, `review-scope`, `land`) queues it,
+and a hook shows it to the person:
 
-**The progress line.** The steps form a fixed chain:
-`worktree > build > verify > consolidate > review > land`. Print the chain as
-one line when a step starts and again when it ends. Open the line with the
-marker `◆` and the change name, each wrapped in backticks. Mark a finished
-step `✓`, the active step `...`, and a failed step `✗`. Leave a step not yet
-reached bare.
+```
+◆ [csv-export] worktree ✓ > build ✓ > verify ... > consolidate > review > land
+```
 
-Backticks also wrap exactly one step: the step where the run stands. That is
-the active step while the run works, and the failed step on a stop. After the
-run lands, it is the land step with its receipt. The terminal renders a backticked
-span in the inline-code color, so the highlight shows where the run stands at
-a glance. Print the line as plain markdown, never inside a code fence. A fence
-stops that rendering. A mid-run line looks like this:
+Never print this line yourself, and never restate it. Run each step's
+subcommand where the step says, because that call is what tells the person
+where the run stands. Everything you print is one of three kinds, and each
+kind has a fixed shape.
 
-`◆` `[csv-export]` worktree ✓ > build ✓ > `verify ...` > consolidate > review > land
-
-When a step ends, its `✓` carries that step's artifact in short form, in
-parentheses. Earlier steps keep a bare `✓`:
-
-`◆` `[csv-export]` worktree ✓ > build ✓ > verify ✓ (suite 212/212, typecheck ✓,
-lint ✓, mutation: skipped, no critical path named) > `consolidate ...` > review > land
-
-On a stop, the highlight sits on the failed step:
-
-`◆` `[csv-export]` worktree ✓ > `build ✗` > verify > consolidate > review > land
-
-After the run lands, the highlight rests on land:
-
-`◆` `[csv-export]` worktree ✓ > build ✓ > verify ✓ > consolidate ✓ > review ✓ >
-`land ✓ (merged 3f2a1c9)`
-
-That annotated `✓` **is** the step's receipt. It states outcomes read from the
-artifact. It names every skipped check with its reason, because an unstated
-skip looks like a forgotten check. A line with no artifact is a status update,
-never a completion claim.
-
-**Status updates.** Between progress lines, narrate in plain one-sentence
-present tense ("Running the full suite in the background."). No checkmarks and
-no headers: those belong to progress lines and the final report.
+**Status updates.** Narrate in plain one-sentence present tense ("Running the
+full suite in the background."). No checkmarks and no headers: those belong to
+the progress line and the final report. A status update never claims a step
+is done unless it names the artifact that shows it.
 
 **Quoted subagent output.** Findings from the `consolidate-critic` or from
 `/code-review` are someone else's claims until you triage them. Frame them.
@@ -100,9 +74,6 @@ block. Then recommend one of them here, with a clause saying why that one.
 Never close with a list and no pick. The reader was not watching, so the run
 owes them a recommendation and the reason behind it. The pick stays theirs.
 
-On a stop, the last progress line (with its `✗`) sits directly above this
-block. The reader then sees where the run stopped and why in one place.
-
 ## The loop, per Plan
 
 Three hooks enforce the laws as you work. The first is the `guard` (PreToolUse:
@@ -119,9 +90,6 @@ The Plan check already happened: the `plan-critic` approved the Plan at
 here. Spawn the worktree and build.
 
 ### 1. Worktree
-
-Print the progress line: `worktree ...` now, and `worktree ✓` once `add`
-exits 0.
 
 Spawn an isolated worktree and work in it for every step below:
 
@@ -153,9 +121,6 @@ action. Put both into the report as they are. Under `--all` it is **skipped**
 (below). Only exit 0 means you own this change and may proceed.
 
 ### 2. Build: red → green, serial
-
-Print the progress line: `build ...` now, and `build ✓` when the last cycle
-is green.
 
 If the Plan has a *References* section, **read every file it names before writing
 anything**. A reference is there because prose would have lost the detail: a
@@ -208,8 +173,6 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
 
 ### 3. Verify
 
-Print the progress line: `verify ...` now.
-
 - **gate**: the full suite, plus type-check and lint, all green:
   - Run the full suite through the serialized wrapper:
     `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" verify`. Never run the
@@ -244,19 +207,16 @@ Print the progress line: `verify ...` now.
   the gap with another red-green cycle. Skip it for non-critical or UI
   changes. Never gate a trivial change on it.
 
-Close verify with its progress line. Each check's outcome (tests, type-check,
-lint, mutation) goes in the verify `✓`'s artifact. Include any skip **with
-its reason** ("mutation: skipped, no critical path named in the Plan"). An
-unstated skip is indistinguishable from a forgotten check, and this receipt is
-what a later audit of the transcript reads.
+Close verify with one line, its receipt, that names each check's outcome
+(tests, type-check, lint, mutation) as its output shows it. Include any skip
+**with its reason** ("mutation: skipped, no critical path named in the Plan").
+An unstated skip is indistinguishable from a forgotten check, and this receipt
+is what a later audit of the transcript reads.
 
 If verify cannot go green and you have exhausted the fix, **stop and escalate**
 (stop-point 1), leaving the worktree as evidence.
 
 ### 4. Consolidate: sort the leftovers, prune, delete the Plan
-
-Print the progress line: `consolidate ...` now, and `consolidate ✓` once
-the critic's findings are applied or declined.
 
 This is the only step that writes `docs/` and the only step that prunes tests.
 Sort everything the change leaves behind that is worth keeping into the place
@@ -315,8 +275,6 @@ findings (more pruning), or record why not.
 
 ### 5. Review: native `/code-review`
 
-Print the progress line: `review ...` now, and `review ✓` after triage.
-
 First ask the diff how deep its review must go:
 
 ```bash
@@ -327,10 +285,9 @@ It prints one word.
 
 - **`full`**: the answer for every change that touches code. Run the review below.
 - **`docs-only`**: the diff changes nothing outside `docs/` and `.plans/`, so a
-  code reviewer has no code to read. Skip the review and go to *land*. State
-  the skip in the review `✓`'s artifact
-  ("review ✓ (skipped, review-scope: docs-only)"). The `consolidate-critic`
-  judged this change at step 4, and prose is what it judges.
+  code reviewer has no code to read. Skip the review and go to *land*. hone's
+  progress line shows the skip. The `consolidate-critic` judged this change at
+  step 4, and prose is what it judges.
 
 Read that word. Never form your own view of it. "This change looks too small to
 review" is not yours to decide, and a five-line change to a critical path still
@@ -408,9 +365,6 @@ wrong to land, **stop and escalate** (stop-point 2). Merely large or out of
 scope is not that.
 
 ### 6. Land
-
-Print the progress line: `land ...` now, and `land ✓` or `land ✗` on its
-exit.
 
 Commit in the worktree, then hand the merge to `worktree.sh land`:
 
@@ -490,9 +444,9 @@ your clone may be behind it. Before reading `.plans/`, run
 partition is the set the team has. A claim held on the remote surfaces as
 the same exit 4.
 
-Under `--all`, every progress line keeps its `[<change>]` prefix, so interleaved
-steps stay readable. Also keep a status board: one line per Plan, reprinted
-whenever any Plan changes state, and again as the run's final report:
+Under `--all`, hone's progress lines carry the `[<change>]` prefix, so
+interleaved steps stay readable. Keep a status board: one line per Plan,
+reprinted whenever any Plan changes state, and again as the run's final report:
 
 ```
 csv-export   landed a1b2c3d
@@ -522,8 +476,8 @@ picks the model for those sessions. `parallel.md` makes the check, and
 3. **done**: landed and green.
 
 On 1 or 2, leave the worktree in place as evidence and escalate with the specific
-blocker. Print a last progress line with the failing step marked `✗`, then end
-with the final report block from *Reporting*. Never disable, weaken, or route
+blocker. End with the final report block from *Reporting*. Its heading names
+the step where the run stopped. Never disable, weaken, or route
 around a check to proceed. Stopping and reporting is a correct outcome, and a
 forced pass is not.
 

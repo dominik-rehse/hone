@@ -206,21 +206,25 @@ reached() {
     measure reached "$hit"
 }
 
-# progress_lines: how the run reported where it stood. The run skill prints a
-# progress line (it holds `◆`) when each step of the loop starts and when it
-# ends. A step starts in a line that marks it active (`build ...`), and a step
-# is reached in a line that marks it at all (active, `✓`, or `✗`). Two
-# measures: `progress_lines` counts the lines, and `progress_starts` is
-# STARTED/REACHED over the six steps. A run that printed the land line alone
-# measures 0/6. In the field, 10 of 23 runs showed fewer than 5 of 6 starts,
-# with silences of up to 50 minutes. It only measures.
+# progress_lines: how the run reported where it stood. A progress line holds
+# `◆`. Two sources print it. hooks/progress.sh shows the line that each step's
+# worktree.sh subcommand queued, and the transcript logs it as an
+# `informational` entry, one "<hook> says: " prefix per line. The agent may
+# still print one in its own text. A step starts in a line that marks it
+# active (`build ...`). The hook shows `worktree` only when `add` has ended, so
+# a `✗` there, or a `✓` right before `build ...`, also counts as its start.
+# A step is reached in a line that marks it
+# at all. Three measures: `progress_lines` counts the lines from both sources,
+# `hook_lines` the hook's share, and `progress_starts` is STARTED/REACHED over
+# the six steps. Before the hook, 10 of 23 field runs showed fewer than 5 of 6
+# starts, with silences of up to 50 minutes. It only measures.
 #
-# A progress line can wrap, as the skill's own examples do. So a line that
+# The agent's line can wrap, as the skill's old examples did. So a line that
 # holds `◆` takes the non-blank lines after it in the same text block, until
 # its chain reaches land or a new `◆` line starts.
 progress_lines() {
-    local lines s started=0 reached=0
-    lines=$(jq -r 'select(.type == "assistant") | .message.content[]?
+    local agent hook lines s started=0 reached=0
+    agent=$(jq -r 'select(.type == "assistant") | .message.content[]?
                    | select(.type == "text") | .text | split("\n")
                    | reduce .[] as $l ({out: [], cur: null};
                        if ($l | contains("◆")) then
@@ -232,11 +236,20 @@ progress_lines() {
                            (if .cur then .out += [.cur] else . end) | .cur = null
                        end)
                    | .out + (if .cur then [.cur] else [] end) | .[]' "$LAB_TRANSCRIPT" 2>/dev/null)
+    hook=$(jq -r 'select(.type == "system" and .subtype == "informational")
+                  | .content // empty | strings | split("\n")[]
+                  | select(contains("◆")) | sub("^.*? says: "; "")' "$LAB_TRANSCRIPT" 2>/dev/null)
+    lines=$(printf '%s\n%s\n' "$agent" "$hook")
     for s in worktree build verify consolidate review land; do
-        grep -qE "(^|[^a-z])$s (\.\.\.|…)" <<<"$lines" && started=$((started+1))
+        if [ "$s" = worktree ]; then
+            grep -qE "(^|[^a-z])worktree (✗|\.\.\.|…|✓ > \`?build (\.\.\.|…))" <<<"$lines" && started=$((started+1))
+        else
+            grep -qE "(^|[^a-z])$s (\.\.\.|…)" <<<"$lines" && started=$((started+1))
+        fi
         grep -qE "(^|[^a-z])$s (✓|✗|\.\.\.|…)" <<<"$lines" && reached=$((reached+1))
     done
     measure progress_lines "$(grep -c . <<<"$lines")"
+    measure hook_lines "$(grep -c . <<<"$hook")"
     measure progress_starts "$started/$reached"
 }
 

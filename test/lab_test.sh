@@ -386,18 +386,26 @@ progress_of() { LAB_TRANSCRIPT="$W/t.jsonl" bash -c "source '$PLUGIN_ROOT/evals/
   say 'Status. `◆` `[a]` worktree ✓ > `build ...` > verify > consolidate > review > land'
   say '`◆` `[a]` worktree ✓ > build ✓ > verify ✓ > consolidate ✓ > review ✓ > `land ✓ (merged 3f2a1c9)`'
   tool_use '/x/◆ verify ...'; } > "$W/t.jsonl"
-[ "$(progress_of)" = "measureprogress_lines=3 measureprogress_starts=2/6 " ] \
+[ "$(progress_of)" = "measureprogress_lines=3 measurehook_lines=0 measureprogress_starts=2/6 " ] \
     && ok "two announced starts of six reached steps, over three lines" || bad "progress should measure 3 lines and 2/6 (got $(progress_of))"
 say 'I did the work.' > "$W/t.jsonl"
-[ "$(progress_of)" = "measureprogress_lines=0 measureprogress_starts=0/0 " ] \
+[ "$(progress_of)" = "measureprogress_lines=0 measurehook_lines=0 measureprogress_starts=0/0 " ] \
     && ok "a silent run measures no line" || bad "a silent run should measure 0 and 0/0 (got $(progress_of))"
 say '`◆` `[a]` worktree ✓ > `build ✗` > verify > consolidate > review > land' > "$W/t.jsonl"
-[ "$(progress_of)" = "measureprogress_lines=1 measureprogress_starts=0/2 " ] \
+[ "$(progress_of)" = "measureprogress_lines=1 measurehook_lines=0 measureprogress_starts=0/2 " ] \
     && ok "a failed step counts as reached" || bad "a stop at build should measure 0/2 (got $(progress_of))"
 { say "$(printf '%s\n%s\n\n%s' '`◆` `[a]` worktree ✓ > build ✓ > verify ✓ (suite 3/3,' 'lint ✓) > `consolidate ...` > review > land' 'Running the critic.')"
   say "$(printf '%s\n%s' '`◆` `[a]` worktree ✓ > build ✓ > verify ✓ > consolidate ✓ > review ✓ >' '`land ✓ (merged 3f2a1c9)`')"; } > "$W/t.jsonl"
-[ "$(progress_of)" = "measureprogress_lines=2 measureprogress_starts=1/6 " ] \
+[ "$(progress_of)" = "measureprogress_lines=2 measurehook_lines=0 measureprogress_starts=1/6 " ] \
     && ok "a wrapped line keeps the steps on its second line" || bad "wrapped lines should measure 2 lines and 1/6 (got $(progress_of))"
+
+hook_says() { jq -cn --arg t "$1" '{type: "system", subtype: "informational", content: $t, level: "notice"}'; }
+{ hook_says "$(printf '%s\n%s' 'PostToolUse:Bash says: ◆ [a] worktree ✓ > build ... > verify > consolidate > review > land' 'PostToolUse:Bash says: ◆ [a] worktree ✓ > build ✓ > verify ... > consolidate > review > land')"
+  hook_says 'Stop says: hone gate: green (tests (--unit))'
+  hook_says 'PostToolUse:Bash says: ◆ [a] worktree ✓ > build ✓ > verify ✓ > consolidate ... > review > land'
+  hook_says 'PostToolUseFailure:Bash says: ◆ [a] worktree ✓ > build ✓ > verify ✓ > consolidate ✓ > review ✓ > land ✗ (exit 7, proof gate)'; } > "$W/t.jsonl"
+[ "$(progress_of)" = "measureprogress_lines=4 measurehook_lines=4 measureprogress_starts=4/6 " ] \
+    && ok "the hook's lines count, and add's line starts the worktree step" || bad "hook lines should measure 4 lines and 4/6 (got $(progress_of))"
 
 echo "== a scenario with a by-name file stays out of a pass that names none =="
 mkdir -p "$W/scenarios/toy-byname"

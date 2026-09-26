@@ -81,6 +81,12 @@
       "means": "The hook never runs. The skills still name it.",
       "hook": "dirty-guard"
     },
+    "progress": {
+      "kind": "hook",
+      "what": "After each Bash call, and at Stop: it shows the progress lines that worktree.sh queued.",
+      "means": "The person sees no progress line. The run skill does not ask the agent for one, so the measure progress_starts falls to what the agent prints unasked.",
+      "hook": "progress"
+    },
     "gate": {
       "kind": "hook",
       "what": "Stop: tests, type-check and lint through the one adapter.",
@@ -255,10 +261,10 @@
         {
           "file": "skills/run/SKILL.md",
           "from": [
-            "  (\"review ✓ (skipped, review-scope: docs-only)\"). The `consolidate-critic`",
-            "  judged this change at step 4, and prose is what it judges."
+            "  progress line shows the skip. The `consolidate-critic` judged this change at",
+            "  step 4, and prose is what it judges."
           ],
-          "to": ["  (\"review ✓ (skipped, review-scope: docs-only)\"). Step 4 judged the prose."],
+          "to": ["  progress line shows the skip. Step 4 judged the prose."],
           "count": 1
         },
         {
@@ -424,23 +430,7 @@
           "to": ["hone loop: worktree, build (test-first), consolidate,"],
           "count": 1
         },
-        {
-          "file": "skills/run/SKILL.md",
-          "from": [
-            " > verify ✓ (suite 212/212, typecheck ✓,",
-            "lint ✓, mutation: skipped, no critical path named)"
-          ],
-          "to": [""],
-          "count": 1
-        },
-        {
-          "file": "skills/run/SKILL.md",
-          "from": [" > `verify ...`"],
-          "to": [""],
-          "count": 1
-        },
-        {"file": "skills/run/SKILL.md", "from": [" > verify ✓"], "to": [""], "count": 1},
-        {"file": "skills/run/SKILL.md", "from": [" > verify"], "to": [""], "count": 2},
+        {"file": "skills/run/SKILL.md", "from": [" > verify ..."], "to": [""], "count": 1},
         {
           "file": "skills/run/SKILL.md",
           "from": [
@@ -516,10 +506,10 @@
         {
           "file": "skills/run/SKILL.md",
           "from": [
-            "  (\"review ✓ (skipped, review-scope: docs-only)\"). The `consolidate-critic`",
-            "  judged this change at step 4, and prose is what it judges."
+            "  progress line shows the skip. The `consolidate-critic` judged this change at",
+            "  step 4, and prose is what it judges."
           ],
-          "to": ["  (\"review ✓ (skipped, review-scope: docs-only)\")."],
+          "to": ["  progress line shows the skip."],
           "count": 1
         },
         {
@@ -569,8 +559,7 @@
           "to": [""],
           "count": 1
         },
-        {"file": "skills/run/SKILL.md", "from": [" > review ✓"], "to": [""], "count": 1},
-        {"file": "skills/run/SKILL.md", "from": [" > review"], "to": [""], "count": 4},
+        {"file": "skills/run/SKILL.md", "from": [" > review"], "to": [""], "count": 1},
         {
           "file": "skills/run/SKILL.md",
           "from": [

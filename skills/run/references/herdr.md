@@ -141,7 +141,7 @@ and new approved Plans can join the set.
    ```
 
    `landed` comes from the predicate alone. `running` comes from the agent
-   state, and `needs human` from the tail read. When you relay a SUB's own
+   state, and `needs human` from the tail read. When you relay a SUB's
    progress line, mark it as the SUB's claim ("SUB reports verify ..."), never
    as MAIN's knowledge.
 

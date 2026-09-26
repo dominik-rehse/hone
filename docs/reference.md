@@ -198,11 +198,9 @@ lets the turn end (default 3).
 under `src/<area>/`.
 
 The hooks run inside the agent's session, and nowhere else. An edit you make
-in your own editor or terminal never meets them. That is the intended
-division: the perimeter binds the agent, not you. The cost is on the record.
-hone writes a grant and a sign-off only for a change that lands through the
-loop. A hand edit leaves neither, even on a path the policy files mark
-irreversible. When you want that record, route the edit through the loop.
+in your own editor or terminal never meets them. hone writes a grant and a
+sign-off only for a change that lands through the loop, so a hand edit leaves
+neither. When you want that record, route the edit through the loop.
 
 - *guard* (PreToolUse on Write/Edit) enforces three rules and asks in one
   case:
@@ -317,12 +315,15 @@ irreversible. When you want that record, route the edit through the loop.
 
   It prints the full list once per session and tree, and again when it
   changes. Otherwise it prints the count.
+- *progress* (after each Bash call, and Stop) shows the loop's progress
+  line: `◆ [csv-export] worktree ✓ > build ... > verify > …`. The step
+  subcommands of `worktree.sh` queue
+  it per session in `<git-common-dir>/hone-progress/`, and it never blocks.
 - *session-start* injects the workflow rule from the plugin. It warns when
   the test adapter or the `src/` layout is missing. It also warns, naming
   the missing rules, when the settings lack any rule from the canonical deny
-  list (`templates/settings/deny-rules.txt`). The comparison is semantic:
-  `Edit(./x)` and `Edit(x)` both count, either settings file counts, and
-  the warning ignores extra project-specific denies.
+  list (`templates/settings/deny-rules.txt`). `Edit(./x)` and `Edit(x)`
+  match, either settings file counts, and extra denies are fine.
 
 ## Land gates
 

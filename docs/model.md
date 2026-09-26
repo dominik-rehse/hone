@@ -174,7 +174,9 @@ primary tree. Tests, type-check, and lint must be green before a turn
 ends, and the hooks report hygiene findings visibly. After three identical
 failures the gate asks for a final report and then lets the turn end. So a
 run that cannot reach green still hands you the reason, and nothing red
-lands either way.
+lands either way. The progress hook shows where a run stands. The step
+scripts write that line, not the model, because the model often starts a
+step without a word of text.
 
 ## The loop
 

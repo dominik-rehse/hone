@@ -221,6 +221,10 @@
 #       the remote. Exit: 0 removed · 2 usage/not-a-repo/failed/self ·
 #       3 left in place (not hone's to remove).
 #
+# add, verify, governed, review-scope, and land each queue the loop's progress
+# line for hooks/progress.sh to show (see progress_emit below). A lost line
+# never changes their exit.
+#
 # Runs relative to the project root (git toplevel, else CLAUDE_PROJECT_DIR, else
 # cwd, matching the hooks).
 
@@ -1814,6 +1818,105 @@ cmd_remove() {
     done
 }
 
+# The progress line. The five step subcommands queue it, and hooks/progress.sh
+# shows it to the person. The model often starts a step in a message with no
+# text, so a line it had to print itself went missing (docs/roadmap.md).
+#
+# The chain is positional. The subcommand says which step runs, and every step
+# before it is done, because the loop runs them in order. So no step state is
+# kept. The queue is <git-common-dir>/hone-progress/<session>, one file per
+# Claude Code session: worktrees share the common dir, and each session drains
+# only its own file. Without CLAUDE_CODE_SESSION_ID nothing is queued. A garden
+# change has its own chain, so it gets no line. Every error here is ignored,
+# because a lost line must never fail a step.
+progress_line() {
+    local change="$1" at="$2" mark="$3" note="${4:-}" line s past=1
+    line="◆ [$change]"
+    for s in worktree build verify consolidate review land; do
+        if [ "$s" = "$at" ]; then
+            line+=" $s $mark${note:+ ($note)}"; past=0
+        elif [ "$past" -eq 1 ]; then
+            line+=" $s ✓"
+        else
+            line+=" $s"
+        fi
+        [ "$s" = land ] || line+=" >"
+    done
+    printf '%s\n' "$line"
+}
+
+progress_emit() {
+    local sid="${CLAUDE_CODE_SESSION_ID:-}" change="$1" dir line
+    case "$sid" in ""|*/*|.*) return 0 ;; esac
+    case "$change" in ""|garden/*) return 0 ;; esac
+    dir=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P) || return 0
+    dir="$dir/hone-progress"
+    line=$(progress_line "$@")
+    {
+        mkdir -p "$dir"
+        # A step can run its subcommand twice (consolidate may ask governed
+        # again). The same line twice says nothing new.
+        [ "$(cat "$dir/$sid.last" 2>/dev/null)" = "$line" ] && return 0
+        printf '%s\n' "$line" >>"$dir/$sid"
+        printf '%s\n' "$line" >"$dir/$sid.last"
+    } 2>/dev/null
+    return 0
+}
+
+# The failed gate, in a few words, for land's ✗.
+progress_land_gate() {
+    case "$1" in
+        2) printf 'usage or repo state' ;;
+        5) printf 'lock timeout or contention' ;;
+        6) printf 'red on the merge' ;;
+        7) printf 'proof gate' ;;
+        8) printf 'authority gate' ;;
+        9) printf 'merge conflict' ;;
+        *) printf 'failed' ;;
+    esac
+}
+
+# Run a step subcommand between its progress lines. $1 = the subcommand.
+progress_step() {
+    local sub="$1"; shift
+    local change="${1:-}" rc=0 out
+    case "$sub" in
+        add)
+            cmd_add "$@" || rc=$?
+            if [ "$rc" -eq 0 ]; then
+                progress_emit "$change" build ...
+            else
+                progress_emit "$change" worktree ✗ "exit $rc"
+            fi ;;
+        verify)
+            change=$(git symbolic-ref --short -q HEAD 2>/dev/null)
+            case "$change" in hone/*) change=${change#hone/} ;; *) change="" ;; esac
+            progress_emit "$change" verify ...
+            cmd_verify "$@" || rc=$?
+            [ "$rc" -eq 0 ] || progress_emit "$change" verify ✗ "suite exit $rc" ;;
+        governed)
+            progress_emit "$change" consolidate ...
+            cmd_governed "$@" || rc=$? ;;
+        review-scope)
+            out=$(cmd_review_scope "$@") || rc=$?
+            [ -n "$out" ] && printf '%s\n' "$out"
+            if [ "$rc" -eq 0 ] && [ "$out" = docs-only ]; then
+                progress_emit "$change" review ✓ "skipped, docs-only"
+            elif [ "$rc" -eq 0 ]; then
+                progress_emit "$change" review ...
+            fi ;;
+        land)
+            progress_emit "$change" land ...
+            cmd_land "$@" || rc=$?
+            if [ "$rc" -eq 0 ]; then
+                progress_emit "$change" land ✓ "merged $(git rev-parse --short HEAD 2>/dev/null)"
+            else
+                progress_emit "$change" land ✗ "exit $rc, $(progress_land_gate "$rc")"
+            fi ;;
+    esac
+    return "$rc"
+}
+
 main() {
     # The directory the caller ran this from, before the cd below. land reads
     # it to refuse a caller that stands in the worktree it would remove.
@@ -1824,12 +1927,12 @@ main() {
     cd "$root" || return 1
     local sub="${1:-}"; shift || true
     case "$sub" in
-        add)      cmd_add "$@" ;;
+        add)      progress_step add "$@" ;;
         landable) cmd_landable "$@" ;;
-        verify)   cmd_verify "$@" ;;
-        review-scope) cmd_review_scope "$@" ;;
-        governed) cmd_governed "$@" ;;
-        land)     cmd_land "$@" ;;
+        verify)   progress_step verify "$@" ;;
+        review-scope) progress_step review-scope "$@" ;;
+        governed) progress_step governed "$@" ;;
+        land)     progress_step land "$@" ;;
         remove)   cmd_remove "$@" ;;
         landed)   cmd_landed "$@" ;;
         sync)     cmd_sync "$@" ;;
