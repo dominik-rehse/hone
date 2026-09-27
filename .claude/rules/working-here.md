@@ -13,6 +13,21 @@ in `releasing.md` beside this file. A measurement or an audit goes under
 fact fits none of those, ask where it belongs instead of storing it outside
 the repo.
 
+## Where work comes from
+
+Real use is the main source of work. After a release reaches the
+maintainer's repos and they have run sessions on it, read the transcripts
+since the last field note. Write each failure as a line in
+`docs/field-log.md`, and the counts in a dated note under `docs/spikes/`.
+A fix for a field shape ships with a test or a lab scenario that replays
+the shape.
+
+The evals and the lab are a regression gate, not the source of work. Do
+not start a new benchmark, probe, ablation campaign, prompt search, or
+noise-floor measurement without the maintainer's word. On 2026-09-27 an
+audit found that real use found more defects, and worse ones, for less
+money ([the note](../../docs/spikes/2026-09-27-eval-lab-value-audit.md)).
+
 ## Keeping the docs short
 
 The maintainer wants docs that read easily: short, and not dense. Four

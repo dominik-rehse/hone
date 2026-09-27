@@ -311,8 +311,8 @@ the overfitting signal. Fix the prose, never the holdout case.
 A case dir named `*-watch` is in no suite run, with or without `--holdout`.
 It runs only when `--cases` names it. A watch case is a brief on which a
 paragraph still moves a tally and flips no plurality, so it cannot gate
-anything today. It exists for the expiry check of a new model. Run it at
-five votes against the full prompt and against the prompt minus the
+anything today. It exists for an expiry check on the maintainer's word.
+Run it at five votes against the full prompt and against the prompt minus the
 paragraph. Then compare the tallies.
 
 ```bash
@@ -369,8 +369,7 @@ full-suite passes at `--votes 3` on one commit.
 
 So a flipped plurality after a prompt edit is signal, and a tally that
 moves by one vote is noise. A pass cost about 3.70 dollars on 2026-09-25.
-Measure the floor again before an ablation campaign and on every new
-model. The run header prints the full model ID, so compare it with the
+Measure the floor again before an ablation campaign. The run header prints the full model ID, so compare it with the
 last row.
 
 ## Extending

@@ -58,11 +58,15 @@ Before the release commit, the changed layer must pass its suite:
   decide. The noise floor is 46 passes of 48 over three identical passes,
   and both fails were real. So a fail is signal. A fail in a part that the
   release does not touch does not block the release, once you have read it
-  in its sandbox. It goes on the roadmap. Three times a fail has been a
+  in its sandbox. It goes on the roadmap. Four times a fail has been a
   bug in a check. See `evals/lab/README.md`. After a green pass, read the
   measures in each `result.json`. Where one is off its goal, read that
   run's transcript before you release. On 2026-09-18 a green pass hid a fix
   that had made a defect worse, and only two transcripts showed it.
+- a change to a guard (`hooks/bash-guard.sh`, `hooks/guard.sh`,
+  `hooks/dirty-guard.sh`): a code review of the diff at `high` that hunts
+  for commands the change lets past. 0.62.0 passed the lab 21 of 21 and
+  every suite, and a review then found about twenty such routes.
 
 ## The model slots
 
@@ -77,21 +81,16 @@ when Claude Code re-points the alias, whether or not the suites ran on it.
 A new model can read the same prose differently, in both directions. For a
 new Opus, do this as soon as `opus` resolves to it, because consumers
 already run on it. `bash evals/run.sh` prints the model ID it resolved.
-Date each result where it lives.
 
-1. Does the prose still hold? Run all four eval targets on the new ID at
-   `--votes 3`, then with `--holdout`, and run the lab once.
-2. Measure the floors again, and write them to `evals/floors`. The floor of
-   a slot is the cheapest model on which its suite is green.
-3. Measure the noise floor of the unit suite again: three identical passes.
-   Date it in `evals/README.md`.
-4. Which prose is now unnecessary? Run each watch case at five votes on the
-   full prompt and on the prompt minus its paragraph (`evals/README.md`,
-   *Watch cases*). A paragraph that no longer moves its case is a candidate
-   for `bash evals/candidate.sh`.
+Run all four eval targets on the new ID at `--votes 3`, then with
+`--holdout`, and run the lab once. Date the result in a note under
+`docs/spikes/`. A tally below 3/3 on any case means the prose does not hold
+on the new model. Fix the prose in a release of its own.
 
-A tally below 3/3 on any case means the prose does not hold on the new
-model. Fix the prose in a release of its own.
+Do not measure the floors, the noise floor, or the watch cases again
+without the maintainer's word. On opus those measures found nothing that
+real use did not find sooner
+([the audit](../../docs/spikes/2026-09-27-eval-lab-value-audit.md)).
 
 ## The docs sweep
 

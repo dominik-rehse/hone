@@ -205,7 +205,7 @@ Three identical passes on 2026-09-18 gave 46 passes of 48, and both fails
 were faults of the run
 ([`lab-noise-floor`](../../docs/spikes/2026-09-18-lab-noise-floor.md)).
 
-So read a fail in the sandbox before you believe it. Three times a fail
+So read a fail in the sandbox before you believe it. Four times a fail
 came from a check.
 
 ## Switching a component off
