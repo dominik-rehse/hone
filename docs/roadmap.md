@@ -101,36 +101,6 @@ in git.
   cover it. The likely candidate is one sentence in the refactor step of
   the run skill. It owes the `loop` unit suite and the whole lab.
 
-#### The review bench has no headroom on opus, and its false-alarm count is not stable
-
-- What it is: `evals/probes/review-bench/` tests the nested code review
-  alone. Since 2026-09-20 it has eleven harder fixtures. Each is a small
-  project with a change that carries one or three planted defects, and a
-  clean twin of the same change that counts false alarms
-  ([`review-bench-harder-fixtures`](spikes/2026-09-20-review-bench-harder-fixtures.md)).
-- What it can do now: it tells opus from sonnet. sonnet missed one defect
-  in 3 reviews of 3, an omission in a file that the change does not touch.
-- What it cannot do: opus caught 51 of 51, so the bench cannot show that a
-  change makes the opus review catch more.
-- What is not stable: an agent judges the false alarms on the clean twins,
-  and two passes had two judges. The opus review itself also changed
-  between 2026-09-19 and 2026-09-20. It took four times as long and cost
-  2.7 times as much, on the same twins with the same command. We do not
-  know why.
-- A related gap: inside the loop, no lab run has ever tested the review.
-  Either the run's brief already named the defect, or the builder fixed
-  the defect before the review ran.
-- Next step, cheap: run two untouched twins on opus once a day for a week,
-  and record time, cost, and tokens. That shows whether the review moves
-  with the day. The cost of the nested review in a run rests on the same
-  number.
-- Next step for the false alarms: write the judge's rule as a prompt with
-  worked examples, keep it under `evals/probes/review-bench/`, and run it at
-  five votes per twin.
-- Next step for headroom: a base that a reviewer cannot read whole, of
-  5,000 lines or more. The note says why 500 lines are too few. Six known
-  weaknesses in the clean twins are listed in the note's judged files.
-
 #### Two sentences of the `plan-critic` move no case
 
 - What happens: the critic says that a Decision which settles a fork is the
@@ -145,9 +115,8 @@ in git.
 - Why it waits: a trim of this paragraph is risky. A change of three words
   once moved the lab scenario `plan-fork` from 3 correct runs of 3 to none.
   The gain is two sentences.
-- Next step: at the next model release, the watch-case step of
-  `releasing.md` tests the paragraph anyway. Before that, a trim needs a
-  harder case first: a fork that the stub rejects and that only a Decision
+- Next step: none without the maintainer's word. A trim needs a harder
+  case first: a fork that the stub rejects and that only a Decision
   settles.
 
 #### `setup-misfit` failed once in nine runs
@@ -286,6 +255,14 @@ Still open:
 
 - The `bash-guard` still denies a sabotage token anywhere outside a commit
   message or a sign-off text, a read of the hooks-path key included.
+- A replay of the 76 field asks of 2026-09-21 to 2026-09-26 through the
+  0.65 `bash-guard` still asks on 41
+  ([the audit](spikes/2026-09-27-eval-lab-value-audit.md)). Shapes seen:
+  a merge in a worktree whose path is `S=$(mktemp -d)`, `dprint fmt` on a
+  file under `.plans/`, and a command that writes to Claude Code's own
+  memory directory. The replay substituted a working directory for
+  worktrees that no longer exist, so the count is rough. Next step: sort
+  the 41 into right and false asks, and add a test per false shape.
 - The `bash-guard` still asks when a command uses a variable set in an
   earlier Bash call. This ask is right, and nothing is left to fix. Each
   call starts a fresh shell, so the variable is empty there. `cd ""` then
@@ -387,10 +364,48 @@ the next field window and count fires per hook again.
   `SELECT *` copy counts as lossless. A copy that names its columns fires
   the gate, and the refusal says why. Such a copy was lossless by the text
   alone before, so a migration written that way now stops for a grant.
+- What the field shows: every fire of the gate in the field came from an
+  Atlas migration, and Atlas writes the copy with a column list. So the
+  `SELECT *` rule exempts none of them, and each still stops for a grant.
+  `scripts/sql-rewrite.awk` on the two migrations of 2026-09-22 and
+  2026-09-23 answers "the copy names its columns"
+  ([the audit](spikes/2026-09-27-eval-lab-value-audit.md)). The maintainer
+  must decide whether that is the intended price of the rule. One way out
+  is a column list that equals the old columns in the live schema, which
+  only a check against the live database can show.
 - Next step: after the next release, count the exit-8 stops in the
   maintainer's repos, and read every rewrite that land let through. A
   rewrite that should have fired is a defect in the reader, and it goes in
   `test/sql_rewrite_test.sh` first.
+
+#### The test-first rule asks for a test of a fixture file
+
+- What happens: rule 2 of `hooks/guard.sh` denies a new non-test file
+  under `src/` that has no test. A fixture, such as
+  `src/retrieval/__fixtures__/latch-worker.ts` or
+  `background-strip.fixtures.ts`, is data for a test and not production
+  code. The agent obeys and writes a test for the fixture.
+- How we know: 5 of the 6 test-first denies in the field on 2026-09-21 to
+  2026-09-26 were on fixtures, and about 11 tests of fixtures now sit in
+  that repository
+  ([the audit](spikes/2026-09-27-eval-lab-value-audit.md)).
+- Next step: exempt a path under a `__fixtures__/` or `fixtures/`
+  directory and a basename with `.fixture.` or `.fixtures.`, with a test
+  per shape in `test/hooks_test.sh`.
+
+#### A land that succeeds can return exit code 1
+
+- What happens: land removes the worktree after the merge. When the
+  Bash call stood in that worktree, the command ends with exit code 1
+  after land printed "hone worktree: landed". The agent then reads a success
+  under a failure code. The field log calls the getcwd case fixed in
+  0.60.0, and this is what remains of it.
+- How we know: 8 sessions of 2026-09-21 to 2026-09-26 show "Exit code 1"
+  before "hone worktree: landed", some on 0.63.0.
+- Next step: find which command after land's exit fails in a removed
+  directory, and make land's own exit code the call's last word. A test in
+  `test/e2e_land_test.sh` runs land from inside the worktree and checks
+  the exit code.
 
 #### The `consolidate-critic` once proposed cutting code that a Plan requires
 
@@ -437,6 +452,11 @@ the next field window and count fires per hook again.
   irreversible changes. We build nothing until the maintainer decides.
 
 ### Measurement
+
+Since 2026-09-27 the evals and the lab are a regression gate, and real use
+is the main source of work. No item in this section starts without the
+maintainer's word
+([the audit](spikes/2026-09-27-eval-lab-value-audit.md)).
 
 #### A real base gives the lab no room, for now
 
@@ -502,22 +522,6 @@ and [the second](spikes/2026-09-25-field-data-since-0-58.md).
   about 250 dollars and a day of setup with Docker
   ([`slopcodebench-first-look`](spikes/2026-09-18-slopcodebench-first-look.md)).
 
-#### Automated search over candidates
-
-- What it is: a tool that tries many variants of a prompt and reports the
-  trade-offs between hone's goals.
-- Why it was parked: the lab costs 10 to 50 dollars per variant, and the
-  unit suites test little.
-- Next step: the maintainer reopened it on 2026-09-20.
-  [`HANDOFF.md`](../HANDOFF.md)
-  is the program. It builds a cheap and meaningful judge first, and the
-  search after it. It also asks which hooks, critics, and steps of the
-  loop earn their cost.
-- State on 2026-09-20: the judges exist at three prices, and a first
-  search ran on the `plan-critic`. The structure campaign is half done.
-  The *Status* section of the handoff has the results and the next steps
-  in order.
-
 #### Three goals that no part of hone works on
 
 - Nothing keeps a sentence in the docs in step with a value in the code
@@ -539,7 +543,13 @@ probe shows a gap.
   have no unit case that aims at them, so the suites cannot tell whether
   they matter
   ([`section-ablation-on-opus`](spikes/2026-09-18-section-ablation-on-opus.md)).
-  Reopen at the next model release. `releasing.md` has the step.
+  Reopen on the maintainer's word.
+- *The review bench.* `evals/probes/review-bench/` tests the nested code
+  review alone. opus caught 51 of 51, so the bench cannot show a gain, and
+  its false-alarm count moved with the judge and with the day
+  ([`review-bench-harder-fixtures`](spikes/2026-09-20-review-bench-harder-fixtures.md)).
+  Reopen on the maintainer's word, with a base of 5,000 lines or more that
+  a reviewer cannot read whole.
 - *A reviewer from another model family.* The author and the reviewer are
   both Claude, so they may miss the same things. The review bench now tells
   sonnet from opus, but opus misses nothing on it, so a second reviewer
@@ -573,6 +583,13 @@ probe shows a gap.
 - *A lab fail in a part that a release does not touch does not block the
   release* (2026-09-19). Someone must first read the failed run in its
   sandbox. The fail then goes on this page.
+- *Real use leads, and the evals gate* (2026-09-27). Of 200 changes to
+  the plugin, about 8% came from an eval or the lab, and about 45% from
+  real use. The suites stay as a regression gate. No new benchmark,
+  probe, ablation campaign, prompt search, or noise-floor measurement
+  starts without the maintainer's word. This drops the program of
+  `HANDOFF.md`, and git keeps the file. A guard change gets a code review before release
+  ([the audit](spikes/2026-09-27-eval-lab-value-audit.md)).
 - *Only a person records a grant* (2026-09-26). In the field the agent
   granted itself each of the 3 times the authority gate fired
   ([note](spikes/2026-09-25-field-data-since-0-58.md)), so exit 8 stopped

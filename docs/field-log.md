@@ -15,6 +15,15 @@ The counts and the method are in
 and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md).
 "Not recorded" in the version field means the source did not record it.
 
+- 2026-09-21 to 2026-09-26 · 0.58.1 to 0.63.0 · `guard` · 5 of 6
+  test-first denies were on fixture files under `src/`. The agent wrote a
+  test for each fixture.
+- 2026-09-21 to 2026-09-26 · 0.58.1 to 0.63.0 · run loop · a land that
+  succeeded returned exit code 1 in 8 sessions, because the Bash call stood
+  in the worktree that land removed.
+- 2026-09-21 to 2026-09-26 · 0.58.1 to 0.63.0 · `bash-guard` · of 76 field
+  asks, 41 still ask when replayed on 0.65. Shapes include a merge in a
+  `mktemp` worktree and `dprint fmt` on a Plan.
 - 2026-09-25 · 0.59.1 · `garden` · `skills/garden/SKILL.md` reads every land
   exit 6 as "the cut was unsafe," but since 0.59.1 a refused merge hook also
   exits 6. Fixed in 0.61.0.
