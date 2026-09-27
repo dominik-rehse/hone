@@ -6,7 +6,7 @@ this directory, and no release gate does either.
 
 These cases are in no suite because the shipped prompt answers them wrong. A
 suite that held them would be red on every release, and a red gate says
-nothing. The search of step 6 in `HANDOFF.md` trains on them instead. A failure
+nothing. The prose search (`evals/optimize/README.md`) trains on them instead. A failure
 is what a reflective optimizer learns from, so a case the prompt already passes
 carries no signal for it.
 

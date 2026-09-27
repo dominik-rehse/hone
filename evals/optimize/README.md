@@ -2,7 +2,9 @@
 
 This directory searches for better wordings of hone's judgment prose. GEPA
 runs a candidate wording on cases, lets a model read the failures, and lets
-it rewrite one section. `HANDOFF.md` steps 6 and 8 own the program.
+it rewrite one section. The maintainer dropped the search program on
+2026-09-27 (`docs/spikes/2026-09-27-eval-lab-value-audit.md`). The tools
+stay, and a new search starts only on the maintainer's word.
 
 Four parts live here.
 

@@ -4,10 +4,10 @@
 # `claude plugin eval` and `context.history_file`.
 #
 # A case costs cents, where a lab run costs dollars
-# (`docs/spikes/2026-09-20-decision-point-cases.md`). Step 8 of HANDOFF.md
-# uses this script as its evaluator, so it takes the plugin under test as an
-# argument: a candidate is a copy of the plugin with another
-# `skills/run/SKILL.md`.
+# (`docs/spikes/2026-09-20-decision-point-cases.md`). The prose search
+# (`evals/optimize/`) uses this script as its evaluator, so it takes the
+# plugin under test as an argument: a candidate is a copy of the plugin with
+# another `skills/run/SKILL.md`.
 #
 # Usage:
 #   bash evals/decision-points/run.sh [options]
