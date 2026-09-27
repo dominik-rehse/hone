@@ -437,8 +437,9 @@ copy, drop the old one, rename. The drop loses nothing when the copy keeps
 every row and every column. `land` lets such a rewrite through only when
 the migration proves that, with the old columns replayed from the earlier
 migrations. Any doubt fires the gate, because a wrong pass lands data loss
-unattended. A column in the live database that no migration created is
-beyond what the text can show.
+unattended. The copy must be `SELECT *`. A column in the live database that
+no migration created is beyond what the text can show, and a copy that
+names its columns would drop it silently, where `*` fails loudly.
 
 Only a person records that grant. The loop reads the diff, hands the
 person what it read and the grant command, and stops. A Plan cannot

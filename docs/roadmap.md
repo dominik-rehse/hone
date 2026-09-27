@@ -370,19 +370,23 @@ the next field window and count fires per hook again.
 - What changed: land now reads a rewrite in a new migration file with
   `scripts/sql-rewrite.awk`. It lets the drop through only when the text
   shows five things. The file drops exactly the table it copied from. The
-  copy has no filter. The new table is renamed to the old name. Every old
-  column is copied under its own name with the same type affinity (SQLite's
-  per-column type class, which decides whether a value is converted). And
-  the old columns are known from the earlier migrations or a `schema.sql`.
+  copy is `INSERT INTO new SELECT * FROM old`, with no filter. The new table
+  is renamed to the old name. The new table has the old columns in the same
+  order with the same type affinity (SQLite's per-column type class, which
+  decides whether a value is converted). And the old columns are known from
+  the earlier migrations or a `schema.sql`.
   It also refuses on the loss paths it found: a cascading foreign key, an
   `INSERT OR IGNORE` or `ON CONFLICT` clause, a down section, and an
   earlier migration edited on the branch. The receipt or the refusal names
   each rewrite and the verdict. `test/sql_rewrite_test.sh` lists the cases.
 - What the text cannot show: a column in the live database that no
-  migration created, say one added by hand. An explicit copy list then
-  drops it with no error. A copy written as `SELECT *` fails loudly
-  instead. We accepted this because the repo is the schema's source of
-  truth everywhere else in hone.
+  migration created, say one added by hand. A copy that lists its columns
+  then drops it with no error. A copy written as `SELECT *` fails loudly
+  instead, because the live table and the new one no longer have the same
+  number of columns. So on 2026-09-27 the maintainer decided that only a
+  `SELECT *` copy counts as lossless. A copy that names its columns fires
+  the gate, and the refusal says why. Such a copy was lossless by the text
+  alone before, so a migration written that way now stops for a grant.
 - Next step: after the next release, count the exit-8 stops in the
   maintainer's repos, and read every rewrite that land let through. A
   rewrite that should have fired is a defect in the reader, and it goes in
