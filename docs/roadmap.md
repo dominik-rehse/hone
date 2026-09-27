@@ -369,10 +369,8 @@ the next field window and count fires per hook again.
   `SELECT *` rule exempts none of them, and each still stops for a grant.
   `scripts/sql-rewrite.awk` on the two migrations of 2026-09-22 and
   2026-09-23 answers "the copy names its columns"
-  ([the audit](spikes/2026-09-27-eval-lab-value-audit.md)). The maintainer
-  must decide whether that is the intended price of the rule. One way out
-  is a column list that equals the old columns in the live schema, which
-  only a check against the live database can show.
+  ([the audit](spikes/2026-09-27-eval-lab-value-audit.md)). On 2026-09-27
+  the maintainer accepted that price: a grant per Atlas rewrite.
 - Next step: after the next release, count the exit-8 stops in the
   maintainer's repos, and read every rewrite that land let through. A
   rewrite that should have fired is a defect in the reader, and it goes in
