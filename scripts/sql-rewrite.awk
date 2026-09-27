@@ -1,10 +1,15 @@
 # hone: judge the table rewrites in one migration file. land_rewrites in
 # scripts/worktree.sh feeds this and reads its verdicts.
 #
-# A table rewrite is: CREATE TABLE new, INSERT INTO new SELECT ... FROM old,
+# A table rewrite is: CREATE TABLE new, INSERT INTO new SELECT * FROM old,
 # DROP TABLE old, ALTER TABLE new RENAME TO old. SQLite needs it to drop or
 # change most columns. The DROP reads as destructive SQL, yet the rewrite
 # loses no data when the copy keeps every row and every column.
+#
+# The copy must be SELECT * with no column list on either side. The old
+# columns come from the migrations, and the live table can hold one that no
+# migration shows. A copy that names its columns drops it without an error.
+# With *, a live table whose columns differ makes the copy fail loudly.
 #
 # The verdict is "lossless" only when the text proves it. Anything this does
 # not understand is a "no" with its reason, and the authority gate fires as
@@ -399,8 +404,8 @@ function is_rewrite(t, first, last,    k, i) {
     return 0
 }
 
-function check(t, first, last,    k, kd, kr, kc, kcr, nd, nr, nc, ncr, nw, i, j, a, d, nt, nsel, star, tgt, sel, why, lst, cols, fk) {
-    delete copied; delete ncol_new; delete naff_new
+function check(t, first, last,    k, kd, kr, kc, kcr, nd, nr, nc, ncr, nw, i, j, a, nt, star, named, lst, cols, fk) {
+    delete ncol_new; delete naff_new
     delete known; delete ncol; delete col; delete aff; delete why_unknown
     if (opaque != "") return "the earlier migrations cannot be replayed: " opaque
     if (downmark[tf]) return "the file has a down or rollback section"
@@ -435,37 +440,35 @@ function check(t, first, last,    k, kd, kr, kc, kcr, nd, nr, nc, ncr, nw, i, j,
     nt = CN
     for (j = 1; j <= CN; j++) { ncol_new[j] = CCOL[j]; naff_new[CCOL[j]] = CAFF[j] }
 
-    # The copy: INSERT INTO new [(cols)] SELECT [ALL] items FROM old, and
-    # nothing after old.
+    # The copy: INSERT INTO new SELECT [ALL] * FROM old, and nothing after
+    # old. A column list on either side is read far enough to name the
+    # reason, then refused.
     k = kc
     if (!kw(k, 2, "INTO")) return "the copy is not a plain INSERT INTO (" T[k, 2] ")"
     i = getname(k, 3)
-    ntgt = 0
+    named = 0
     if (T[k, i] == "(" && TT[k, i] == "P") {
+        named = 1
         for (i++; i <= sn[k] && T[k, i] != ")"; i++) {
             if (T[k, i] == "," && TT[k, i] == "P") continue
             if (!isname(k, i)) return "land cannot read the column list of the copy"
-            tgt[++ntgt] = T[k, i]
         }
         i++
-    } else {
-        for (j = 1; j <= nt; j++) tgt[j] = ncol_new[j]
-        ntgt = nt
     }
     if (!kw(k, i, "SELECT")) return "the copy is not INSERT ... SELECT"
     i++
     if (kw(k, i, "DISTINCT")) return "the copy selects DISTINCT rows"
     if (kw(k, i, "ALL")) i++
-    nsel = 0; star = 0
+    star = 0
     for (;;) {
-        if (T[k, i] == "*" && TT[k, i] == "P") { star = 1; i++ }
+        if (T[k, i] == "*" && TT[k, i] == "P") { star++; i++ }
         else {
             if (isname(k, i) && T[k, i + 1] == "." && isname(k, i + 2)) {
                 if (T[k, i] != t) return "the copy reads a column of another table"
                 i += 2
             }
             if (!isname(k, i)) return "the copy computes a value instead of reading a column"
-            sel[++nsel] = T[k, i]; i++
+            named = 1; i++
         }
         if (T[k, i] == "," && TT[k, i] == "P") { i++; continue }
         break
@@ -475,31 +478,20 @@ function check(t, first, last,    k, kd, kr, kc, kcr, nd, nr, nc, ncr, nw, i, j,
     if (!i) return "land cannot read the source of the copy"
     if (NAME != t) return "the copy reads from " tolower(NAME) ", not " tolower(t)
     if (i <= sn[k]) return "the copy filters or joins rows (" T[k, i] " after FROM " tolower(t) ")"
-    if (star && nsel) return "the copy mixes * with columns"
+    if (named) return "the copy names its columns, so a column that no migration shows would be lost"
+    if (star != 1) return "the copy selects * more than once"
 
-    # The old columns, replayed up to the copy.
+    # The old columns, replayed up to the copy. * copies by position, so
+    # each position must hold the same column with the same affinity.
     for (a = 0; a < kc; a++) replay(a)
     if (!(t in known)) return "no earlier migration or schema file defines " tolower(t)
     if (!known[t]) return "the columns of " tolower(t) " are unknown: " why_unknown[t]
-
-    if (star) {
-        if (nt != ncol[t]) return "the copy uses * and " tolower(newt) " has " nt " columns, " tolower(t) " has " ncol[t]
-        for (j = 1; j <= nt; j++) {
-            if (ncol_new[j] != col[t, j]) return "the copy uses * and column " j " is " tolower(col[t, j]) " in " tolower(t) ", " tolower(ncol_new[j]) " in " tolower(newt)
-            sel[j] = col[t, j]
-        }
-        nsel = nt
+    if (nt != ncol[t]) return "the copy uses * and " tolower(newt) " has " nt " columns, " tolower(t) " has " ncol[t]
+    for (j = 1; j <= nt; j++) {
+        if (ncol_new[j] != col[t, j]) return "the copy uses * and column " j " is " tolower(col[t, j]) " in " tolower(t) ", " tolower(ncol_new[j]) " in " tolower(newt)
+        if (naff_new[col[t, j]] != aff[t, j])
+            return tolower(col[t, j]) " changes type affinity from " aff[t, j] " to " naff_new[col[t, j]] ", which can convert values"
     }
-    if (nsel != ntgt) return "the copy selects " nsel " values into " ntgt " columns"
-    for (j = 1; j <= nsel; j++) {
-        if (tgt[j] != sel[j]) return "the copy moves " tolower(sel[j]) " into " tolower(tgt[j])
-        if (!colidx(t, sel[j])) return tolower(sel[j]) " is not a column of " tolower(t)
-        if (!(sel[j] in naff_new)) return tolower(sel[j]) " is not a column of " tolower(newt)
-        if (naff_new[sel[j]] != aff[t, colidx(t, sel[j])])
-            return tolower(sel[j]) " changes type affinity from " aff[t, colidx(t, sel[j])] " to " naff_new[sel[j]] ", which can convert values"
-        copied[sel[j]] = 1
-    }
-    for (j = 1; j <= ncol[t]; j++) if (!(col[t, j] in copied)) return "the copy leaves out column " tolower(col[t, j])
 
     # With foreign keys on, DROP TABLE deletes every row first, and a
     # cascading or nulling foreign key carries that into the child table.

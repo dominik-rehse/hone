@@ -45,9 +45,10 @@
 #       Authority gate: an IRREVERSIBLE change (destructive SQL, a db/ deletion,
 #       or a .hone-irreversible-paths match) may not merge without a scoped
 #       grant at .hone-grant/<change>. The DROP of a table rewrite (create,
-#       copy, drop, rename) is not destructive when the migration text proves
-#       that every row and column is copied (scripts/sql-rewrite.awk). The
-#       receipt or the refusal names each such rewrite. Without it land refuses BEFORE the merge
+#       copy, drop, rename) is not destructive when its copy is SELECT * and the
+#       migration text proves that every row and column is copied
+#       (scripts/sql-rewrite.awk). The receipt or the refusal names each such
+#       rewrite. Without a grant land refuses BEFORE the merge
 #       and keeps the worktree as evidence. The grant's text goes into the
 #       merge commit body, so the authorization lives in durable history rather
 #       than a chat. A green land then deletes the spent grant file: a grant

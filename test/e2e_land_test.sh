@@ -612,9 +612,9 @@ bash "$WSH" land infra-change >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "infra change should land once the path list is gone (got $rc)"
 step ".hone-irreversible-paths (and its legacy name) gate a listed path (exit 8)"
 # (e) A table rewrite (create, copy, drop, rename) lands without a grant only
-# when the migration text shows that no row and no column is lost. The old
-# columns come from the earlier migrations. Each missing fact still exits 8,
-# and the refusal names it.
+# when the migration text shows that no row and no column is lost: the copy
+# is SELECT *, and the old columns come from the earlier migrations. Each
+# missing fact still exits 8, and the refusal names it.
 mkdir -p "$REPO/db/migrations"
 cat > "$REPO/db/migrations/0100_users.sql" <<'SQL'
 CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
@@ -643,39 +643,46 @@ DROP TABLE users;
 ALTER TABLE users_new RENAME TO users;"
 refused rw-filter "the copy filters or joins rows (WHERE after FROM users)"
 rewrite rw-column "CREATE TABLE users_new (id INTEGER PRIMARY KEY, name TEXT NOT NULL);
-INSERT INTO users_new SELECT id, name FROM users;
+INSERT INTO users_new SELECT * FROM users;
 DROP TABLE users;
 ALTER TABLE users_new RENAME TO users;"
-refused rw-column "the copy leaves out column email"
+refused rw-column "users_new has 2 columns, users has 3"
+# A copy that names every known column still drops one that only the live
+# table has, so it fires the gate too.
+rewrite rw-named "$NEW
+INSERT INTO users_new (id, name, email) SELECT id, name, email FROM users;
+DROP TABLE users;
+ALTER TABLE users_new RENAME TO users;"
+refused rw-named "the copy names its columns, so a column that no migration shows would be lost"
 rewrite rw-other "$NEW
-INSERT INTO users_new SELECT id, name, email FROM users;
+INSERT INTO users_new SELECT * FROM users;
 DROP TABLE accounts;
 ALTER TABLE users_new RENAME TO accounts;"
 refused rw-other "the copy reads from users, not accounts"
 rewrite rw-norename "$NEW
-INSERT INTO users_new SELECT id, name, email FROM users;
+INSERT INTO users_new SELECT * FROM users;
 DROP TABLE users;"
 refused rw-norename "no single ALTER TABLE ... RENAME TO users"
 rewrite rw-unknown "CREATE TABLE sessions_new (id INTEGER PRIMARY KEY);
-INSERT INTO sessions_new SELECT id FROM sessions;
+INSERT INTO sessions_new SELECT * FROM sessions;
 DROP TABLE sessions;
 ALTER TABLE sessions_new RENAME TO sessions;"
 refused rw-unknown "no earlier migration or schema file defines sessions"
 rewrite rw-cascade "CREATE TABLE posts (id INTEGER, user_id INTEGER REFERENCES users(id) ON DELETE CASCADE);
 $NEW
-INSERT INTO users_new SELECT id, name, email FROM users;
+INSERT INTO users_new SELECT * FROM users;
 DROP TABLE users;
 ALTER TABLE users_new RENAME TO users;"
 refused rw-cascade "references users with ON DELETE CASCADE"
 rewrite rw-affinity "CREATE TABLE users_new (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email INTEGER);
-INSERT INTO users_new SELECT id, name, email FROM users;
+INSERT INTO users_new SELECT * FROM users;
 DROP TABLE users;
 ALTER TABLE users_new RENAME TO users;"
 refused rw-affinity "email changes type affinity from TEXT to INTEGER"
 # A lossless rewrite beside a second destructive statement: the second still
 # fires, and the refusal names the rewrite it read as lossless.
 rewrite rw-extra "$NEW
-INSERT INTO users_new SELECT id, name, email FROM users;
+INSERT INTO users_new SELECT * FROM users;
 DROP TABLE users;
 ALTER TABLE users_new RENAME TO users;
 DROP TABLE audit_log;"
@@ -687,7 +694,7 @@ refused rw-extra "DROP TABLE audit_log;"
 WT_E=$(bash "$WSH" add rw-edited) || die "worktree add rw-edited"
 echo "ALTER TABLE users ADD COLUMN phone TEXT;" >> "$WT_E/db/migrations/0100_users.sql"
 printf '%s\n' "CREATE TABLE users_new (id INTEGER PRIMARY KEY, name TEXT NOT NULL, email TEXT, phone TEXT);" \
-    "INSERT INTO users_new SELECT id, name, email, phone FROM users;" "DROP TABLE users;" \
+    "INSERT INTO users_new SELECT * FROM users;" "DROP TABLE users;" \
     "ALTER TABLE users_new RENAME TO users;" > "$WT_E/db/migrations/0110_rw-edited.sql"
 (cd "$WT_E" && git add -A && git commit -qm "feat(db): rw-edited" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" land rw-edited 2>&1); rc=$?
@@ -695,7 +702,7 @@ refused rw-edited "db/migrations/0100_users.sql changed on the branch"
 # The lossless rewrite lands with no grant, and the receipt names it.
 rewrite rw-ok "PRAGMA foreign_keys = OFF;
 $NEW
-INSERT INTO users_new (id, name, email) SELECT id, name, email FROM users;
+INSERT INTO users_new SELECT * FROM users;
 DROP TABLE users;
 ALTER TABLE users_new RENAME TO users;
 CREATE INDEX users_name ON users (name);"
