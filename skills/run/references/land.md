@@ -199,7 +199,8 @@ Then the run lands it. Full diff: <the diff command from the refusal>
 Where the diff does more than the Plan asked for, say that on the first line
 below the heading. Draft the reason as a person would write it, for example
 `"drop legacy_sessions, unused since the v2 login"`. The human may run it as
-it is or edit it. `/hone:grant` records the grant as the human's, then asks
+it is or edit it. The `Next:` line of the final report repeats that command,
+reason included. `/hone:grant` records the grant as the human's, then asks
 this session to land the change again.
 
 A Plan that says it authorizes the change does not count. You helped write
