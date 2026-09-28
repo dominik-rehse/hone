@@ -462,6 +462,8 @@ helper command with its full path for you to run.
 What to do at each code, in detail:
 [`skills/run/references/land.md`](../skills/run/references/land.md).
 
+Inside herdr, exits 6 to 9 also notify you and name the tab.
+
 After a green suite, land also runs `scripts/typecheck.sh` and
 `scripts/lint.sh` where they exist, the same optional adapters the gate runs.
 A red adapter fails the land with the same exit 6, and the message names the

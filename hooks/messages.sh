@@ -1029,6 +1029,14 @@ msg_wt_land_retry_moved() {
     printf 'hone worktree: %s moved during the suite, so land merges again on the new tip (attempt %s).\n' "$primary" "$attempt"
 }
 
+# The herdr notification for a land that stopped at a gate. Line 1 is the
+# title, line 2 the body. $1 = change, $2 = gate, $3 = exit, $4 = tab label.
+msg_wt_land_notify() {
+    local change="$1" gate="$2" rc="$3" tab="$4"
+    printf 'hone: %s needs you\n' "$change"
+    printf 'Land stopped at %s (exit %s) in tab %s. The run in that tab says what it needs from you.\n' "$gate" "$rc" "$tab"
+}
+
 msg_wt_land_primary_moved() {
     local primary="$1" attempts="$2"
     cat <<EOF
@@ -1613,6 +1621,7 @@ worktree|human|msg_wt_land_worktree_dirty|<main-root>/.worktrees/<change>
 worktree|human|msg_wt_land_worktree_untracked|<main-root>/.worktrees/<change>|- <path>
 worktree|human|msg_wt_land_from_worktree|<main-root>|bash <plugin-root>/scripts/worktree.sh land <change>
 worktree|plain|msg_wt_land_retry_moved|main|2
+worktree|plain|msg_wt_land_notify|<change>|the proof gate|7|SUB:<short>:<change>
 worktree|human|msg_wt_land_primary_moved|main|3
 worktree|human|msg_wt_land_ff_refused|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_setup_tree_primary_failed|- <lockfile>|<git-common-dir>/hone-land.log

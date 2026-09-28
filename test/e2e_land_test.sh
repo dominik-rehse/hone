@@ -15,12 +15,15 @@ denied() { echo "$1" | grep -q '"permissionDecision":"deny"'; }
 step() { printf '  %s\n' "$1"; }
 die()  { printf '  FAIL: %s\n' "$1"; exit 1; }
 
-REPO=$(mktemp -d); trap 'rm -rf "$REPO"' EXIT
+REPO=$(mktemp -d); trap 'rm -rf "$REPO" "$REPO.bin" "$REPO.herdr.log"' EXIT
 cd "$REPO" || exit 1
 git init -q && git symbolic-ref HEAD refs/heads/main
 git config user.email t@t.t; git config user.name t
 # Section 9 sets its own session. The others queue no progress line.
 unset CLAUDE_CODE_SESSION_ID
+# A land that stops shows a herdr notification when herdr runs. Section 5f
+# stubs herdr. Everywhere else no notification may reach a real screen.
+unset HERDR_ENV
 
 # A minimal real project: a bash "adapter" running a tiny test file, and the
 # hone ephemeral ignores so worktrees don't pollute the tree. A Plan is tracked,
@@ -809,6 +812,27 @@ out=$(bash "$WSH" land ui-flow 2>&1); rc=$?
 # A bare trailer (an older Plan) declares no check, so the message stays generic.
 echo "$out" | grep -q "The Plan declares this check" && die "a bare trailer should not print a declared check"
 step "real-environment change without proof refused (exit 7), trunk untouched"
+# (b1) Under herdr, the stop tells the person, because the watching session
+# may be asleep. The stub logs each call. A land outside herdr shows nothing.
+mkdir -p "$REPO.bin"
+cat > "$REPO.bin/herdr" <<'STUB'
+#!/bin/bash
+printf '%s\n' "$*" >> "$HERDR_LOG"
+case "$1 $2" in
+    "tab get") echo '{"result":{"tab":{"label":"SUB:m:ui-flow","tab_id":"w:t1"}}}' ;;
+esac
+STUB
+chmod +x "$REPO.bin/herdr"
+export HERDR_LOG="$REPO.herdr.log"
+: > "$HERDR_LOG"
+PATH="$REPO.bin:$PATH" HERDR_ENV=1 HERDR_TAB_ID=w:t1 bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 7 ] || die "the notification must not change land's exit (got $rc)"
+grep -q '^notification show hone: ui-flow needs you --body .*proof gate (exit 7).*SUB:m:ui-flow' "$HERDR_LOG" \
+    || die "a gate stop under herdr should notify with the change, the gate, and the tab: $(cat "$HERDR_LOG")"
+: > "$HERDR_LOG"
+PATH="$REPO.bin:$PATH" bash "$WSH" land ui-flow >/dev/null 2>&1
+[ -s "$HERDR_LOG" ] && die "a land outside herdr must not call herdr"
+step "a gate stop under herdr shows a notification that names the tab"
 # (b2) A proof.sh planted in the WORKTREE does not count: land executes only
 # the primary tree's reviewed copy, so a change cannot ship its own green stub.
 printf '#!/bin/bash\nexit 0\n' > "$WT_P/scripts/proof.sh"

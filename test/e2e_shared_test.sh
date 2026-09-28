@@ -6,6 +6,8 @@
 # landed reads the remote, and sync rebases a local Plan commit onto the
 # team's primary branch. Run: bash test/e2e_shared_test.sh
 set -uo pipefail
+# A land that stops under herdr shows a notification. No test may reach a real screen.
+unset HERDR_ENV
 
 PLUGIN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 WSH="$PLUGIN_ROOT/scripts/worktree.sh"

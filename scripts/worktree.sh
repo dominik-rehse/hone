@@ -107,6 +107,10 @@
 #       exit 2, no retry: land tells the two apart by fetching again after a
 #       rejection. When the undo of the fast-forward fails, land exits 2,
 #       prints the recovery, and marks the merge so no sync pushes it.
+#       Inside herdr (HERDR_ENV=1), a land that exits 6 to 9 also shows a
+#       herdr notification that names the change, the stop, and the tab. A
+#       person must act on each of these exits, and a watching session may
+#       not notice the stop. The notification never changes the exit.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached/push refused/caller in
 #       the worktree/dirty or untracked worktree/files in the way/primary
 #       tree left its branch/bad HONE_LAND_RETRIES/rebuild failed/undo
@@ -2060,6 +2064,30 @@ progress_land_gate() {
     esac
 }
 
+# A land that exits 6 to 9 waits for a person. Under herdr, show that person
+# a notification that names the tab, so no watching session has to stay
+# awake for it. It never changes land's exit. $1 = change, $2 = land's exit.
+land_notify() {
+    local change="$1" rc="$2" tab label msg gate
+    case "$rc" in
+        6) gate="a red check on the merge" ;;
+        7) gate="the proof gate" ;;
+        8) gate="the authority gate" ;;
+        9) gate="a merge conflict" ;;
+        *) return 0 ;;
+    esac
+    [ "${HERDR_ENV:-}" = 1 ] && command -v herdr >/dev/null 2>&1 || return 0
+    # A herdr server that does not answer must not hold the land's exit.
+    local t=()
+    command -v timeout >/dev/null 2>&1 && t=(timeout 10)
+    tab="${HERDR_TAB_ID:-}"
+    [ -n "$tab" ] && label=$(${t[@]+"${t[@]}"} herdr tab get "$tab" 2>/dev/null \
+        | sed -n 's/.*"label":"\([^"]*\)".*/\1/p')
+    msg=$(msg_wt_land_notify "$change" "$gate" "$rc" "${label:-${tab:-unknown}}")
+    ${t[@]+"${t[@]}"} herdr notification show "${msg%%$'\n'*}" --body "${msg#*$'\n'}" \
+        --sound request >/dev/null 2>&1 || true
+}
+
 # Run a step subcommand between its progress lines. $1 = the subcommand.
 progress_step() {
     local sub="$1"; shift
@@ -2103,6 +2131,7 @@ progress_step() {
                 progress_emit "$chain" "$change" land ✓ "merged $(git rev-parse --short HEAD 2>/dev/null)"
             else
                 progress_emit "$chain" "$change" land ✗ "exit $rc, $(progress_land_gate "$rc")"
+                land_notify "$change" "$rc"
             fi ;;
     esac
     return "$rc"

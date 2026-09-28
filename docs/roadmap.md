@@ -43,7 +43,8 @@ in git.
   Each MAIN writes its own watcher, and each watcher has new bugs.
 - Next steps, in this order:
   1. `worktree.sh land` sends the herdr notification itself when it stops
-     at a gate. That needs no MAIN. In progress.
+     at a gate. That needs no MAIN. Done in 0.67.0, with a test in
+     `test/e2e_land_test.sh`. Next: read whether the person answers sooner.
   2. The `bash-guard` held 3 of 3 notifications, because their body text
      named a formatter command. It must not read a quoted notification
      body as a command.

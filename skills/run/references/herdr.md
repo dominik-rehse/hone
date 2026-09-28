@@ -154,9 +154,10 @@ and new approved Plans can join the set.
      herdr agent read <agent-name> --source recent-unwrapped --lines 120
      ```
 
-     - **A land gate fired (exit 7 or 8) and the SUB stopped there.** That
-       is the expected stop: the grant and the sign-off are the human's.
-       Notify the human, name the tab, then wait.
+     - **`land` exited 6 to 9 and the SUB stopped there.** That is the
+       expected stop, and only the human can act on it. `land` has already
+       shown them a notification that names the tab. Do not show a second
+       one. Wait.
      - **A question or an approval prompt.** Notify the human, name the tab,
        wait. Never answer for them.
      - **Blocked-unresolvable or genuinely ambiguous** (`run`'s stop points 1
@@ -165,7 +166,7 @@ and new approved Plans can join the set.
    - A SUB whose `worktree.sh add` exited 4 found the change claimed by another
      session: it skips, and MAIN reports the skip.
 
-   The notification, whatever the reason:
+   The notification for any other stop that needs the human:
 
    ```bash
    herdr notification show "hone: <change> needs you" \

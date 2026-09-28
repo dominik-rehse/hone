@@ -3,6 +3,8 @@
 # drives each hook script the way Claude Code would (JSON on stdin, or Stop with
 # no input), and asserts the decision. Run: bash test/hooks_test.sh
 set -uo pipefail
+# A land that stops under herdr shows a notification. No test may reach a real screen.
+unset HERDR_ENV
 
 PLUGIN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 GUARD="$PLUGIN_ROOT/hooks/guard.sh"
