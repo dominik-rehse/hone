@@ -27,6 +27,47 @@ in git.
 
 ### Defects with evidence
 
+#### MAIN loses track of its SUB sessions under herdr
+
+- What happens: under herdr, a MAIN session starts one SUB session per
+  Plan. MAIN must watch each SUB until it lands or stops
+  ([`herdr.md`](../skills/run/references/herdr.md)). MAIN often ends its
+  turn with no watch on a running SUB. Then a SUB that stops at a gate
+  waits for the person, and nobody tells the person.
+- How we know: [the 2026-09-28 note](spikes/2026-09-28-main-tracking-of-subs.md)
+  read 7 MAIN sessions. 13 stops or lands reached MAIN only when the
+  person asked. 12 times a SUB needed the person and got no notification.
+  One sign-off waited 7.5 hours.
+- Where it comes from: MAINs do not use `herdr agent wait`, because a
+  harness memory in a consumer repository says that it returns early.
+  Each MAIN writes its own watcher, and each watcher has new bugs.
+- Next steps, in this order:
+  1. `worktree.sh land` sends the herdr notification itself when it stops
+     at a gate. That needs no MAIN. In progress.
+  2. The `bash-guard` held 3 of 3 notifications, because their body text
+     named a formatter command. It must not read a quoted notification
+     body as a command.
+  3. Find out whether `herdr agent wait` really returns early. Then ship
+     one watcher in hone, which MAIN arms again after each event.
+  4. `herdr.md` says in plain words that MAIN never tells a SUB to run
+     `land` again after exit 6 or 9. MAIN did so twice.
+
+#### Two MAINs in one repository coordinate with no rule
+
+- What happens: `parallel.md` checks overlap only within one MAIN's set of
+  Plans. A claim covers only the same change. On 2026-09-27, two MAINs ran
+  in one repository. They agreed on holds and file lists over Claude Code's
+  cross-session messages, which hone does not mention. Once, a MAIN
+  forwarded the other MAIN's acceptance to a SUB that had stopped at a
+  Plan precondition meant for the person.
+- How we know: [the 2026-09-28 note](spikes/2026-09-28-main-tracking-of-subs.md).
+- Next step: the partition in `parallel.md` could treat every claimed
+  change as running work, whoever holds it. Its Plan names its files, so
+  no message is needed for that part. Then `herdr.md` says what a message
+  between MAINs may do: ask for a hold, send a file list, or wake the
+  other MAIN. It never answers a stop that belongs to a person, and it
+  never counts as proof of a land.
+
 #### The `untied-sentence` check grades a true negation as stale
 
 - What happens: the lab scenario `untied-sentence` (see

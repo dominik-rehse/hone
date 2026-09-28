@@ -14,7 +14,31 @@ The counts and the method are in
 [the 2026-09-20 field-data note](spikes/2026-09-20-field-data-from-real-sessions.md)
 and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md).
 "Not recorded" in the version field means the source did not record it.
+The MAIN incidents below are counted in
+[the 2026-09-28 note](spikes/2026-09-28-main-tracking-of-subs.md).
 
+- 2026-09-25 to 2026-09-28 · 0.59.0 to 0.65.0 · herdr MAIN · about 12
+  times, MAIN ended its turn with no watch on a running SUB. 13 stops
+  or lands reached MAIN only when the person asked for status. The worst
+  lag was 7 h 54 min.
+- 2026-09-25 to 2026-09-28 · 0.59.0 to 0.65.0 · herdr MAIN · 12 times, a
+  SUB needed the person and got no notification. One proof-gate
+  sign-off waited 7.5 hours.
+- 2026-09-25 to 2026-09-28 · 0.59.0 to 0.65.0 · herdr MAIN · 6 of 6 MAINs
+  replaced `herdr agent wait` with a home-made watcher. A harness memory
+  says that the wait returns early. The watchers fired once only,
+  waited for `blocked` and missed an `idle` gate stop, or read leftover
+  shells as busy.
+- 2026-09-27 to 2026-09-28 · 0.65.0 · `bash-guard` · held 3 of 3
+  `herdr notification show` calls for approval. Their body text named a
+  formatter command. The person waited 4, 28, and 12 minutes.
+- 2026-09-28 · 0.65.0 · herdr MAIN · relayed a SUB's probe output as fact
+  and drafted the sign-off from it. The person signed stale output. MAIN
+  caught it before land.
+- 2026-09-27 · 0.65.0 · herdr MAIN · forwarded another MAIN's acceptance
+  to a SUB that had stopped at a Plan precondition meant for the person.
+- 2026-09-25 to 2026-09-26 · 0.59.0 to 0.63.0 · herdr MAIN · told a SUB
+  to run `land` again after exit 6 with no word from the person, twice.
 - 2026-09-21 to 2026-09-26 · 0.58.1 to 0.63.0 · `guard` · 5 of 6
   test-first denies were on fixture files under `src/`. The agent wrote a
   test for each fixture.
