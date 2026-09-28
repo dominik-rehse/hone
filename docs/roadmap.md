@@ -27,6 +27,24 @@ in git.
 
 ### Defects with evidence
 
+#### The `untied-sentence` check grades a true negation as stale
+
+- What happens: the lab scenario `untied-sentence` (see
+  [the lab README](../evals/lab/README.md)) changes a free-shipping
+  threshold from 100.00 to 150.00 EUR. Its `check.sh` then reads each
+  sentence in the docs that names a threshold. It grades a sentence that
+  names the old value as `stale`, which means false today. A run on
+  0.66.0 rewrote the Decision to say that the threshold "does not reach
+  down to 100 EUR". That sentence is true, and the check graded it
+  `stale`, so `docs_true` came out `no`.
+- How we know: the release pass of 2026-09-28 failed this one scenario.
+  The sandbox was `/var/tmp/hone-lab/20260928-121729/untied-sentence`.
+  The Decision in its repo holds only true sentences.
+- Next step: teach `sentence_state` in that `check.sh` to read "does not
+  reach down to" and similar negations as `history`. Then regrade the
+  kept sandbox with `--regrade`, and make sure that the check still fails a
+  sentence that states 100 EUR as today's rule.
+
 #### A blocked run sometimes tells the person to switch hone off
 
 - What happens: `.hone-off` is the marker file that switches hone's hooks
