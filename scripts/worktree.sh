@@ -53,7 +53,11 @@
 #       merge commit body, so the authorization lives in durable history rather
 #       than a chat. A green land then deletes the spent grant file: a grant
 #       is not pinned to a commit, so a leftover one would open the gate for
-#       a LATER change that reuses the slug.
+#       a LATER change that reuses the slug. A committed .hone-grant-auto
+#       marker grants every irreversible change with no person: land records
+#       the marker's commit and the signals in the merge body and the
+#       receipt. The marker never grants a change that adds, edits, or
+#       deletes the marker itself.
 #       Proof gate: a change whose Plan declared real-environment proof (a
 #       `Proof: real-environment` trailer on a branch commit) may not land on
 #       the test suite alone. Satisfy it either with a green scripts/proof.sh
@@ -190,11 +194,13 @@
 #       the settings.json deny rules are present. Read-only, and always exit 0
 #       in a git repo.
 #
-#   worktree.sh grant <change> "who/why"
+#   worktree.sh grant <change> "your reason"
 #       Record the authority grant for one irreversible change at
 #       .hone-grant/<change>, stamped with the git user and the current time.
 #       The human's act alone: the bash-guard denies the agent this helper,
-#       and the agent stops and hands over the diff and this command instead.
+#       and the agent stops and hands over a briefing and this command instead.
+#       In Claude Code the person runs it as /hone:grant (skills/grant), which
+#       the model cannot invoke.
 #       A Plan authorizes nothing here, because the agent helped write it.
 #       It is the only route to the file: both guards deny a raw write,
 #       because the stamp lives here.
@@ -566,14 +572,20 @@ land_irreversible() {
                 }
             }
             END { if (n > 10) print "    ... and " n - 10 " more" }')
+    # Each signal says why it counts, in one sentence. The person who grants
+    # judges the reason as well as the statement, and a weak reason shows
+    # where the policy is too strict.
     if [ -n "$sql" ]; then
-        reasons+="- destructive SQL (DROP/TRUNCATE/DELETE/ALTER...DROP) in a migration or db/ file:"$'\n'"$sql"$'\n'
+        reasons+="- destructive SQL in a migration or db/ file. A revert brings back the file, but not the rows or columns that the statement removed:"$'\n'"$sql"$'\n'
     fi
     if [ -n "$no" ]; then
-        reasons+="- a table rewrite that land could not show to be lossless:"$'\n'"$no"$'\n'
+        reasons+="- a table rewrite that land could not show to be lossless. A revert does not bring back a row or a column that the copy lost:"$'\n'"$no"$'\n'
     fi
     if [ -n "$(git -C "$root" diff --diff-filter=D --name-only "$base" "$branch" -- db 2>/dev/null)" ]; then
-        reasons+="- a file under db/ is deleted"$'\n'
+        reasons+="- a file under db/ is deleted. land treats every deletion under db/ as a possible loss of schema or data."$'\n'
+    fi
+    if [ -n "$(land_changes_auto_marker "$root" "$base" "$branch")" ]; then
+        reasons+="- the change adds, edits, or deletes .hone-grant-auto. That marker decides whether land grants irreversible changes with no person, so only a person grants this change."$'\n'
     fi
     local pf pat
     for pf in .hone-irreversible-paths .hone-consequential-paths; do
@@ -582,11 +594,46 @@ land_irreversible() {
             [ -n "$pat" ] || continue
             case "$pat" in \#*) continue ;; esac
             if [ -n "$(git -C "$root" diff --name-only "$base" "$branch" -- ":(glob)$pat" 2>/dev/null)" ]; then
-                reasons+="- touches a path listed in $pf: $pat"$'\n'
+                reasons+="- touches a path listed in $pf: $pat. The project marked this path as irreversible."$'\n'
             fi
         done < "$root/$pf"
     done
     printf '%s' "$reasons"
+}
+
+# Print non-empty when the branch adds, edits, or deletes .hone-grant-auto.
+# land reads the marker from the primary tree, so a branch cannot use a marker
+# that it brings along. But once it lands, the marker grants every later change.
+# So the change that turns auto-grant on or off always needs a person's grant.
+land_changes_auto_marker() {
+    local root="$1" base="$2" branch="$3"
+    [ -n "$base" ] || return 0
+    git -C "$root" diff --name-only "$base" "$branch" -- .hone-grant-auto 2>/dev/null
+}
+
+# Print non-empty when the primary tree holds a COMMITTED .hone-grant-auto.
+# The marker loosens a gate, where .hone-proof-always tightens one, so a file
+# that only exists does not count. The dirty-guard reports a new file only
+# after it exists, and a commit leaves nothing dirty for it to see. So the
+# bash-guard asks on any command that names the marker (its rule 1d).
+land_auto_grant_on() {
+    local root="$1"
+    [ -f "$root/.hone-grant-auto" ] || return 0
+    git -C "$root" cat-file -e HEAD:.hone-grant-auto 2>/dev/null && echo yes
+}
+
+# The grant text land records when the committed .hone-grant-auto marker
+# grants a change. It has the shape of a grant a person records ("stamp |
+# why"), then the marker's own text and the signals it granted, so the merge
+# commit body carries the same audit trail. $1 = main root, $2 = the signals.
+land_auto_grant_note() {
+    local root="$1" reasons="$2" at text
+    at=$(git -C "$root" log -1 --format=%h -- .hone-grant-auto 2>/dev/null)
+    text=$(git -C "$root" show HEAD:.hone-grant-auto 2>/dev/null | grep -v '^[[:space:]]*$' | head -n 5)
+    printf 'land, by .hone-grant-auto (committed in %s) | %s | granted with no person\n' \
+        "$at" "$(date -Iseconds)"
+    [ -z "$text" ] || printf '%s\n' "$text" | sed 's/^/  marker: /'
+    printf 'Signals:\n%s\n' "$reasons"
 }
 
 # Judge each table rewrite (create, copy, drop, rename) in a migration file the
@@ -881,7 +928,7 @@ cmd_land() {
     # touches the trunk. The grant is scoped (one change), revocable (delete
     # the file), auditable (its text lands in the merge body below), and
     # recoverable (the worktree stays until granted).
-    local grant_note="" signoff_note="" reasons grant grant_cmd lossless
+    local grant_note="" signoff_note="" reasons grant grant_cmd lossless auto_granted=""
     grant_cmd="bash $HONE_WSH grant $change \"$(hone_msg_grant_why)\""
     reasons=$(land_irreversible "$main_root" "$base" "$branch")
     # A rewrite read as lossless is named in the refusal and the receipt,
@@ -889,19 +936,28 @@ cmd_land() {
     lossless=$(land_lossless "$main_root" "$base" "$branch")
     if [ -n "$reasons" ]; then
         grant="$main_root/.hone-grant/$change"
-        if [ ! -f "$grant" ]; then
-            # The refusal carries what the human needs to judge the change.
-            # That is the signals that classified it, a diffstat, and the exact
-            # command that shows the whole diff. Reading the branch is
-            # otherwise a detour through git plumbing at the moment the run
-            # stops.
+        if [ ! -f "$grant" ] && [ -n "$(land_auto_grant_on "$main_root")" ] \
+           && [ -z "$(land_changes_auto_marker "$main_root" "$base" "$branch")" ]; then
+            # The project's owner committed .hone-grant-auto, so a person
+            # decided in advance to let every irreversible change land. land
+            # records that decision as the grant, with the signals it
+            # covered, and the receipt names them. A person's own grant
+            # file still wins, because its text says more.
+            grant_note=$(land_auto_grant_note "$main_root" "$reasons")
+            auto_granted="$reasons"
+        elif [ ! -f "$grant" ]; then
+            # The refusal carries what the human needs to judge the change:
+            # each signal with the reason it counts, a diffstat, and the
+            # command that shows the whole diff. It names the range by
+            # branch, because a merge-base SHA tells the reader nothing.
             msg_wt_land_authority_missing "$branch" "$reasons" \
                 "$(land_diffstat "$main_root" "$base" "$branch")" \
-                "git -C $main_root diff $base...$branch" \
-                "$grant_cmd" "$lossless" >&2
+                "git -C $main_root diff $(git -C "$main_root" symbolic-ref -q --short HEAD)...$branch" \
+                "$change" "$grant_cmd" "$lossless" >&2
             return 8
+        else
+            grant_note=$(cat "$grant" 2>/dev/null)
         fi
-        grant_note=$(cat "$grant" 2>/dev/null)
         # An empty grant authorizes nothing and would leave no audit trail in
         # the merge commit body, so it does not open the gate.
         if ! printf '%s' "$grant_note" | grep '[^[:space:]]' >/dev/null; then
@@ -1316,7 +1372,7 @@ cmd_land() {
     # and the cleanup. It goes to stdout, because it is the success path.
     local kept=""
     [ "$remove_rc" -eq 0 ] || kept="$wt"
-    msg_wt_land_receipt "$merge_sha" "$branch" "$consumed" "$kept" "$lossless"
+    msg_wt_land_receipt "$merge_sha" "$branch" "$consumed" "$kept" "$lossless" "$auto_granted"
     [ -n "$kept" ] && msg_wt_land_worktree_kept "$kept" "bash $HONE_WSH remove $change" "$leftovers"
     [ -n "$remote" ] && msg_wt_land_pushed "$remote" "$primary"
     if [ -n "$lockfiles" ]; then
@@ -1551,8 +1607,9 @@ attest_is_placeholder() {
     done < <(hone_msg_attest_placeholders)
 }
 
-# Print non-empty if $1 still reads as the "who/why" placeholder from the
-# usage lines (hone_msg_grant_why), quoted or bare, in any case. A half-edited
+# Print non-empty if $1 still reads as the placeholder from the usage lines
+# (hone_msg_grant_why), or as the older "who/why" one, quoted or bare, in any
+# case. A half-edited
 # form counts too: any whitespace-free text whose why half is still the bare
 # word "why". An audit found a grant reading "rehse/why" on a repo's largest
 # irreversible change. The who half was filled in, the why half was not, and
@@ -1563,7 +1620,9 @@ grant_is_placeholder() {
         | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//' \
               -e 's/^["'"'"']//' -e 's/["'"'"']$//' \
               -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')
-    [ "$why" = "$(hone_msg_grant_why)" ] && { echo yes; return 0; }
+    case "$why" in
+        "$(hone_msg_grant_why)"|"<$(hone_msg_grant_why)>"|who/why) echo yes; return 0 ;;
+    esac
     case "$why" in
         *[[:space:]]*) ;;
         why|*/why) echo yes; return 0 ;;
@@ -1718,6 +1777,16 @@ cmd_status() {
         fi
     fi
 
+    # The auto-grant marker is project policy too, and the most consequential
+    # one: it lets irreversible changes land with no person.
+    if [ -f ".hone-grant-auto" ]; then
+        if [ -n "$(land_auto_grant_on "$main_root")" ]; then
+            msg_status_grant_auto
+        else
+            msg_status_grant_auto_uncommitted
+        fi
+    fi
+
     # Shared mode is project policy like the markers above, so an uncommitted
     # marker gets the same warning.
     local remote=""
@@ -1799,6 +1868,12 @@ cmd_grant() {
     fi
     git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
     local main_root; main_root=$(main_root_of)
+    # A grant names a change whose branch exists. A mistyped name would leave
+    # a stray grant that opens the gate for a later change of that name. And
+    # git refuses ".." in a branch name, so the check also keeps the path
+    # below inside .hone-grant/.
+    git -C "$main_root" rev-parse -q --verify "refs/heads/hone/$change" >/dev/null 2>&1 || {
+        msg_wt_grant_no_branch "$change" >&2; return 2; }
     local grant="$main_root/.hone-grant/$change"
     mkdir -p "$(dirname "$grant")"
     printf '%s | %s\n' "$(signer_stamp)" "$why" > "$grant"

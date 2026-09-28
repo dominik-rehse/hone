@@ -539,6 +539,15 @@ echo "$out" | grep -qF "db/migrations/0002_drop.sql: DROP TABLE legacy_sessions;
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "ungranted irreversible change must not touch the trunk"
 [ -d "$WT_C" ] || die "worktree should survive an ungranted irreversible land as evidence"
 step "irreversible change without a grant refused (exit 8), trunk untouched"
+# (b0) The refusal says why each signal needs a grant, names the diff range by
+# branch and not by a merge-base SHA, and offers /hone:grant beside the
+# terminal command.
+echo "$out" | grep -qF "A revert brings back the file, but not the rows or columns" \
+    || die "the refusal should say why destructive SQL needs a grant: $out"
+echo "$out" | grep -qF "diff main...hone/db-drop" || die "the refusal should name the diff range by branch: $out"
+echo "$out" | grep -qE '[0-9a-f]{40}' && die "the refusal should carry no raw SHA: $out"
+echo "$out" | grep -qF '/hone:grant db-drop "your reason"' || die "the refusal should offer /hone:grant: $out"
+step "the refusal explains each signal and offers /hone:grant"
 # (b1) The same gate on a LARGE migration. The destructive-SQL grep used to
 # run with -q, quit on its first match, and the diff writer took SIGPIPE on a
 # diff larger than the pipe. Under pipefail the condition then read false with
@@ -576,12 +585,44 @@ step "grant helper wrote a stamped grant; change landed, authorization in histor
 # (c2) Both a person and the agent may record a grant, so the stamp says which.
 # The git identity is the same either way, and an unmarked stamp would read as
 # the person's authorization for a grant the loop recorded.
+git branch hone/stamp-person && git branch hone/stamp-agent && git branch hone/skill-grant
+out=$(bash "$WSH" grant no-such-change "a real reason" 2>&1); rc=$?
+[ "$rc" -eq 2 ] || die "a grant for a change with no branch should exit 2 (got $rc)"
+echo "$out" | grep -qF "branch hone/no-such-change does not exist" || die "the refusal should name the missing branch: $out"
+[ -e "$REPO/.hone-grant/no-such-change" ] && die "a grant for a missing branch must not write a file"
+bash "$WSH" grant ../.hone-grant-auto "a real reason" >/dev/null 2>&1 && die "a grant must not write outside .hone-grant/"
+[ -e "$REPO/.hone-grant-auto" ] && die "a traversing grant must not create the marker"
+step "grant refuses a change with no branch, so it writes only inside .hone-grant/"
 env -u CLAUDECODE bash "$WSH" grant stamp-person "a person's own reason" >/dev/null || die "grant helper failed for a person"
 grep -q "^agent" "$REPO/.hone-grant/stamp-person" && die "a grant a person records should carry no agent mark"
 CLAUDECODE=1 bash "$WSH" grant stamp-agent "the loop's own reason" >/dev/null || die "grant helper failed under CLAUDECODE"
 grep -q "^agent, on behalf of .*t@t.t" "$REPO/.hone-grant/stamp-agent" || die "a grant the agent records should be stamped as the agent"
 rm -f "$REPO/.hone-grant/stamp-person" "$REPO/.hone-grant/stamp-agent"
+git branch -D hone/stamp-person hone/stamp-agent >/dev/null 2>&1
 step "the grant stamp separates the agent from the person"
+# (c2b) /hone:grant runs the shell block of skills/grant/SKILL.md. Claude Code
+# pastes the arguments into that block as text and sets CLAUDECODE, so the
+# block must pass a quoted reason through unexpanded and stamp a person.
+skill_grant() {
+    awk '/^```!$/ { on = 1; next } /^```$/ { on = 0 } on' "$PLUGIN_ROOT/skills/grant/SKILL.md" \
+        | awk -v a="$1" -v r="$PLUGIN_ROOT" '{ gsub(/\$ARGUMENTS/, a); gsub(/\$\{CLAUDE_PLUGIN_ROOT\}/, r); print }' \
+        | CLAUDECODE=1 bash
+}
+out=$(skill_grant 'skill-grant "it'"'"'s unused, see $(echo INJ) `echo TICK`"')
+echo "$out" | grep -q "^exit 0$" || die "the skill block should record the grant: $out"
+grep -qF 'it'"'"'s unused, see $(echo INJ) `echo TICK`' "$REPO/.hone-grant/skill-grant" \
+    || die "the skill block should record the reason verbatim, unquoted and unexpanded: $(cat "$REPO/.hone-grant/skill-grant")"
+grep -q "^agent" "$REPO/.hone-grant/skill-grant" && die "a grant through the skill should carry no agent mark"
+rm -f "$REPO/.hone-grant/skill-grant"
+out=$(skill_grant '"skill-grant" the users'"'")
+echo "$out" | grep -q "^exit 0$" || die "the skill block should unquote the change name: $out"
+grep -qF "the users'" "$REPO/.hone-grant/skill-grant" || die "the skill block should keep an unpaired apostrophe: $(cat "$REPO/.hone-grant/skill-grant")"
+rm -f "$REPO/.hone-grant/skill-grant"
+out=$(skill_grant 'skill-grant "your reason"')
+echo "$out" | grep -q "^exit 2$" || die "the skill block should report a refused placeholder: $out"
+[ -f "$REPO/.hone-grant/skill-grant" ] && die "a refused skill grant must not write a file"
+git branch -D hone/skill-grant >/dev/null 2>&1
+step "/hone:grant records the reason verbatim, stamped as a person"
 # (c3) A nested slug's grant sits in a subdir. Consuming it removes the empty
 # parent dirs too, up to (not including) .hone-grant itself.
 WT_N=$(bash "$WSH" add db/nested-drop) || die "worktree add db/nested-drop"
@@ -710,6 +751,41 @@ CREATE INDEX users_name ON users (name);"
 echo "$out" | grep -qF "db/migrations/0110_rw-ok.sql: users_new copies all 3 columns of users (id, name, email) with no filter" \
     || die "the receipt should name the rewrite land read as lossless: $out"
 step "a lossless table rewrite lands without a grant; each missing fact still exits 8"
+# (f) A committed .hone-grant-auto grants every irreversible change with no
+# person. An uncommitted one grants nothing, and no marker grants a change that
+# adds, edits, or deletes the marker.
+drop_change() {
+    local wt
+    wt=$(bash "$WSH" add "$1") || die "worktree add $1"
+    printf 'DROP TABLE %s;\n' "${1//-/_}" > "$wt/db/migrations/0200_$1.sql"
+    [ -n "${2:-}" ] && printf '%s\n' "$2" > "$wt/.hone-grant-auto"
+    (cd "$wt" && git add -A && git commit -qm "feat(db): $1" -m "Cut: nothing, a test change")
+    out=$(bash "$WSH" land "$1" 2>&1); rc=$?
+}
+printf '# rehse: this sandbox has no production data\n' > "$REPO/.hone-grant-auto"
+git add .hone-grant-auto
+st=$(bash "$WSH" status 2>&1); echo "$st" | grep -qF ".hone-grant-auto present, NOT committed" || die "status should not report a staged marker as committed: $st"
+drop_change auto-uncommitted
+[ "$rc" -eq 8 ] || die "an uncommitted .hone-grant-auto should grant nothing (got $rc): $out"
+bash "$WSH" remove auto-uncommitted >/dev/null 2>&1; git branch -D hone/auto-uncommitted >/dev/null 2>&1
+git add .hone-grant-auto && git commit -qm "chore: grant irreversible changes automatically"
+MARKER_AT=$(git rev-parse --short HEAD)
+st=$(bash "$WSH" status 2>&1); echo "$st" | grep -qF ".hone-grant-auto present (committed)" || die "status should report the committed marker: $st"
+drop_change auto-drop
+[ "$rc" -eq 0 ] || die "a committed .hone-grant-auto should land an irreversible change (got $rc): $out"
+echo "$out" | grep -qF "land granted this irreversible change itself" || die "the receipt should say land granted it: $out"
+echo "$out" | grep -qF "DROP TABLE auto_drop;" || die "the receipt should name the signals it granted: $out"
+body=$(git log --format=%B -1)
+echo "$body" | grep -qF "land, by .hone-grant-auto (committed in $MARKER_AT)" \
+    || die "the merge body should record the marker's commit: $body"
+echo "$body" | grep -qF "marker: # rehse: this sandbox has no production data" || die "the merge body should quote the marker: $body"
+echo "$body" | grep -qF "DROP TABLE auto_drop;" || die "the merge body should record the granted signals: $body"
+drop_change auto-edit "# widened by the loop"
+[ "$rc" -eq 8 ] || die "a change that edits .hone-grant-auto should need a person's grant (got $rc): $out"
+echo "$out" | grep -qF "the change adds, edits, or deletes .hone-grant-auto" || die "the refusal should name the marker signal: $out"
+bash "$WSH" remove auto-edit >/dev/null 2>&1; git branch -D hone/auto-edit >/dev/null 2>&1
+git rm -q .hone-grant-auto && git commit -qm "chore: grant by hand again"
+step "a committed .hone-grant-auto lands an irreversible change and records itself; nothing else does"
 
 echo "== 5f. proof gate: real-environment changes need proof or a sign-off =="
 # (a) An assertion-class change (no Proof: trailer) is never gated.
@@ -899,11 +975,12 @@ step "attest refuses an empty or placeholder description (exit 2)"
 # The grant text is validated the same way. Whitespace authorizes nothing, the
 # unedited "who/why" is the usage placeholder, and the half-edited "rehse/why"
 # is the observed failure shape: the who half filled in, the why half not.
+git branch hone/grant-text
 out=$(bash "$WSH" grant grant-text "   " 2>&1); rc=$?
 [ "$rc" -eq 2 ] || die "grant with a whitespace text should exit 2 (got $rc)"
 echo "$out" | grep -q "empty" || die "the empty-grant refusal should name the reason"
 [ -f "$REPO/.hone-grant/grant-text" ] && die "a refused grant must not write a file"
-for placeholder in "who/why" "Who/Why" '"who/why"' "rehse/why" "why"; do
+for placeholder in "who/why" "Who/Why" '"who/why"' "rehse/why" "why" "your reason" '"Your reason"' "<your reason>"; do
     out=$(bash "$WSH" grant grant-text "$placeholder" 2>&1); rc=$?
     [ "$rc" -eq 2 ] || die "grant with the placeholder '$placeholder' should exit 2 (got $rc)"
     echo "$out" | grep -q "placeholder" || die "the placeholder refusal should name the reason"
@@ -912,7 +989,7 @@ done
 bash "$WSH" grant grant-text "dominik: reviewed the diff, the drop is safe" >/dev/null \
     || die "grant should accept a real authorization"
 grep -q "reviewed the diff" "$REPO/.hone-grant/grant-text" || die "grant helper should write the reason"
-rm -f "$REPO/.hone-grant/grant-text"
+rm -f "$REPO/.hone-grant/grant-text"; git branch -D hone/grant-text >/dev/null 2>&1
 step "grant refuses an empty or placeholder authorization (exit 2)"
 # (f) A green scripts/proof.sh also discharges it, and runs in the change's
 # worktree, told which change it is, so it can reach the code under test. The

@@ -441,12 +441,14 @@ unattended. The copy must be `SELECT *`. A column in the live database that
 no migration created is beyond what the text can show, and a copy that
 names its columns would drop it silently, where `*` fails loudly.
 
-Only a person records that grant. The loop reads the diff, hands the
-person what it read and the grant command, and stops. A Plan cannot
-authorize the change ahead of time, because the agent helped write it.
-When the loop could grant itself, it did so every time the gate fired in
-the field, and the gate stopped nothing. The bash-guard denies the loop
-the helper, and both guards deny every other route into `.hone-grant/`.
+Only a person records that grant. The loop reads the diff, briefs the
+person, and stops. A Plan cannot authorize the change, because the agent
+helped write it. When the loop could grant itself, it did so every time the
+gate fired in the field, and the gate stopped nothing. The bash-guard
+denies the loop the helper, and both guards deny every other route into
+`.hone-grant/`. A person may still decide once for a whole repository, where
+a lost table costs little, by committing `.hone-grant-auto`. The gate then
+records each change instead of stopping it.
 Mechanics are in [`reference.md`](reference.md).
 
 The guards assume an agent that makes a mistake, skips a step, or takes a

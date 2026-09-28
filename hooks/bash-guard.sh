@@ -106,7 +106,7 @@ SHELL_CWD=$(hone_extract_top_field "$INPUT" cwd)
 
 # The patterns the rules below and the analysis share. Each rule's comment
 # says why its pattern reads the way it does.
-PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common|messages)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths|\.hone-proof-always|\.hone-review-always|\.hone-shared'
+PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common|messages)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths|\.hone-proof-always|\.hone-review-always|\.hone-shared|\.hone-grant-auto'
 CFG="${HONE_CHECK_CONFIG_RE}([^A-Za-z0-9_.-]|$)"
 REDIR_PRE=">>?[[:space:]]*\"?'?[^[:space:]|;&]*"
 VERB_PRE='(tee|sed -i|cp |mv |install |ln -s|chmod|chattr|rm |truncate|dd of=)[^|;&]*'
@@ -1782,12 +1782,28 @@ fi
 # the human the command. An agent that may grant itself did so every time in
 # the field, and the gate stopped nothing. The sed above already stripped the
 # free text, so this matches the invocation alone, never a mention inside a
-# message.
-if echo "$CMD" | grep -Eq 'worktree\.sh"?[[:space:]]+attest([[:space:]]|$)'; then
+# message. The match reads the command with its quotes removed, because the
+# shell removes them too: `worktree.sh "grant"` and `gr""ant` run the helper.
+#
+# /hone:grant is the person's route to the same helper. The model cannot
+# invoke the skill, but a nested `claude -p '/hone:grant ...'` would run it as
+# if a person typed it. So a claude command that names it is denied as well.
+UNQUOTED=$(printf '%s' "$CMD" | tr -d "\"'\\\\")
+if echo "$UNQUOTED" | grep -Eq 'worktree\.sh[[:space:]]+attest([[:space:]]|$)'; then
     decision deny "$(msg_bashguard_attest)"
 fi
-if echo "$CMD" | grep -Eq 'worktree\.sh"?[[:space:]]+grant([[:space:]]|$)'; then
+if echo "$UNQUOTED" | grep -Eq -e 'worktree\.sh[[:space:]]+grant([[:space:]]|$)' \
+        -e '(^|[^A-Za-z0-9_.-])claude([[:space:]].*)?hone:grant'; then
     decision deny "$(msg_bashguard_grant)"
+fi
+
+# 1d. .hone-grant-auto lets every irreversible change land with no person, and
+# land honours it once it is committed on the primary branch. One command can
+# create, stage, and commit it, and no write construct of rule 2 needs to
+# appear: `touch`, `git add`, `git checkout <branch> -- <path>`. So any command
+# that names the marker outside a message asks the person.
+if echo "$UNQUOTED" | grep -Eq '\.hone-grant-auto'; then
+    decision ask "$(msg_bashguard_grant_auto)"
 fi
 
 # 2. A mutating operation aimed at a protected artifact → ask. The committed

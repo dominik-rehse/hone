@@ -392,7 +392,9 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    green fast-forwards the primary branch, removes the worktree, and deletes
    the branch. Read its exit:
 
-   - **0**: landed and green. Continue.
+   - **0**: landed and green. Continue. Where the receipt says land granted
+     the change itself, read *0* in `references/land.md` first: the report
+     owes the person a briefing.
    - **9**: merge conflict. Aborted, tree restored. The message names the
      paths. Fold in serially. Stop, and never run land again blindly.
    - **6**: the merge failed a check, or a git hook refused the merge
@@ -405,9 +407,9 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
      act, and the `bash-guard` denies the run that helper. Where you cannot
      run any real check, stop with what you tried.
    - **8**: the authority gate wants the human's grant for an irreversible
-     change. Read the statements it quotes and the diff it names, then stop:
-     hand the human the diff command, the quoted statements, and the
-     `worktree.sh grant` command. The grant is the human's act, and the
+     change. Read the signals it lists and the diff it names, then stop:
+     give the human the briefing that `references/land.md` shows, ending in
+     the `/hone:grant` command. The grant is the human's act, and the
      `bash-guard` denies the run that helper.
    - **5**: a land or a full-suite run held the land lock past the timeout
      (often this session's own background run), or the primary branch moved
@@ -490,12 +492,13 @@ Both land gates end in a stop, because each wants something only the human
 can give. Hand it over like this:
 
 - **Exit 8, the authority gate.** The change is irreversible. Read the
-  statements the refusal quotes and the diff it names. Then **stop**, and hand
-  the human three things from the refusal: the `git diff` command, the quoted
-  statements, and the `worktree.sh grant` command. The grant is the human's
+  signals the refusal lists and the diff it names. Then **stop**, and give
+  the human the briefing in `references/land.md`: what the change does, what
+  is lost, why each signal needs a grant, what you checked, and the
+  `/hone:grant` command with a reason you drafted. The grant is the human's
   act. You never run `grant`, and the `bash-guard` denies it to you. A Plan
   that says it authorizes the change does not count, because you helped write
-  it. Where the diff does more than the Plan asked for, say so.
+  it. Where the diff does more than the Plan asked for, say so first.
 - **Exit 7, the proof gate.** Run the check the refusal names. Where the change
   rewrites the proof harness, that is `bash scripts/proof.sh <change>` from the
   worktree. Elsewhere it is whatever the trailer declared, if you can reach it.

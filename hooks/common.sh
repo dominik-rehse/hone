@@ -87,7 +87,8 @@ hone_extract_top_field() {
 # reason again: deleting it is the cheapest way to make a docs-only change skip
 # its review. .hone-shared is durable too: deleting it is the cheapest way
 # past a push the host refused, and where the team lands is not a workspace
-# edit.
+# edit. .hone-grant-auto is durable because creating it lets every
+# irreversible change land with no person.
 #
 # Reads .hone-durable-paths from the caller's cwd, so the caller cds to the
 # project root first. guard.sh (the file-tool route) and dirty-guard.sh (the
@@ -110,7 +111,7 @@ hone_is_durable() {
         docs/open-questions.md) ;;
         src/*|tests/*|docs/*|db/*|scripts/*) return 0 ;;
         .hone-durable-paths|.hone-irreversible-paths|.hone-consequential-paths) return 0 ;;
-        .hone-proof-always|.hone-review-always|.hone-shared) return 0 ;;
+        .hone-proof-always|.hone-review-always|.hone-shared|.hone-grant-auto) return 0 ;;
     esac
     [ -f ".hone-durable-paths" ] || return 1
     local entry

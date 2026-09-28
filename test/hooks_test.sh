@@ -195,6 +195,21 @@ echo "$out" | grep -q "the human's act" && ok "the grant deny names the human" |
 echo "$out" | grep -q "grant command" && ok "the grant deny says to hand over the command" || bad "the grant deny should say to hand over the grant command"
 echo "$(bg 'bash \"$CLAUDE_PLUGIN_ROOT/scripts/worktree.sh\" grant db-drop reason')" | grep -q '"deny"' && ok "grant denied through a quoted plugin path" || bad "grant through a quoted path should be denied"
 echo "$(bg 'git commit -m \"docs: run worktree.sh grant db-drop yourself\"')" | grep -q 'permissionDecision' && bad "grant inside a commit message is prose" || ok "a grant command named in a commit message passes"
+# The shell removes quotes, so a quoted subcommand still runs the helper.
+for c in 'env -u CLAUDECODE bash scripts/worktree.sh \"grant\" db-drop reason' \
+         "bash scripts/worktree.sh 'grant' db-drop reason" 'bash scripts/worktree.sh gr\"\"ant db-drop reason' \
+         'bash scripts/worktree.sh \"attest\" db-drop ran-it'; do
+    echo "$(bg "$c")" | grep -q '"deny"' && ok "a quoted helper subcommand denied: $c" || bad "a quoted helper subcommand should be denied: $c"
+done
+# The model cannot invoke /hone:grant, but a nested session would run it as a person.
+echo "$(bg "claude -p '/hone:grant db-drop unused' --allowedTools Bash")" | grep -q '"deny"' && ok "a nested /hone:grant denied" || bad "a nested claude -p /hone:grant should be denied"
+echo "$(bg 'git commit -m \"docs: the person types /hone:grant\"')" | grep -q 'permissionDecision' && bad "/hone:grant inside a commit message is prose" || ok "/hone:grant named in a commit message passes"
+# Any command that names the auto-grant marker asks: one command can create,
+# stage, and commit it with no write construct of rule 2.
+for c in 'touch .hone-grant-auto && git add .hone-grant-auto && git commit -qm x' \
+         'git checkout hone/x -- .hone-grant-auto' 'git rm .hone-grant-auto'; do
+    echo "$(bg "$c")" | grep -q '"ask"' && ok "naming .hone-grant-auto asks: $c" || bad "naming .hone-grant-auto should ask: $c"
+done
 out=$(bg 'bash scripts/worktree.sh attest db-drop ran-it')
 echo "$out" | grep -q '"deny"' && ok "attest helper denied to the agent" || bad "the attest helper should be denied"
 echo "$out" | grep -q "the human's act" && ok "the attest deny names the human" || bad "the attest deny should say whose act it is"
@@ -221,6 +236,10 @@ echo "$(bg 'echo db/ >> .hone-irreversible-paths')" | grep -q '"ask"' && ok "app
 # way past the land proof gate, so removing or rewriting it escalates.
 echo "$(bg 'rm .hone-proof-always')" | grep -q '"ask"' && ok "removing .hone-proof-always escalated" || bad "removing the proof-always marker should ask"
 echo "$(bg 'echo x > .hone-proof-always')" | grep -q '"ask"' && ok "rewriting .hone-proof-always escalated" || bad "rewriting the proof-always marker should ask"
+# The auto-grant marker lets irreversible changes land with no person, so a
+# shell write that creates it is the cheapest way past the authority gate.
+echo "$(bg 'echo x > .hone-grant-auto')" | grep -q '"ask"' && ok "creating .hone-grant-auto escalated" || bad "creating the auto-grant marker should ask"
+echo "$(bg 'cp /tmp/x .hone-grant-auto')" | grep -q '"ask"' && ok "copying onto .hone-grant-auto escalated" || bad "copying onto the auto-grant marker should ask"
 # .hone-review-always is the same class: deleting it is the cheapest way to make
 # a docs-only change skip its review.
 # .hone-shared decides where the team lands, and deleting it is the cheapest
@@ -1378,6 +1397,8 @@ out=$(guard_write ".hone-review-always" "$REPO")
 denied "$out" && ok "review-always list denied in primary tree" || bad ".hone-review-always should be guard-protected"
 out=$(guard_write ".hone-shared" "$REPO")
 denied "$out" && ok "shared marker denied in primary tree" || bad ".hone-shared should be guard-protected"
+out=$(guard_write ".hone-grant-auto" "$REPO")
+denied "$out" && ok "auto-grant marker denied in primary tree" || bad ".hone-grant-auto should be guard-protected"
 
 echo
 echo "== nag: zero-deletion change (advisory, pre-land) =="

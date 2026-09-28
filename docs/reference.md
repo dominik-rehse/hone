@@ -30,6 +30,9 @@ Slash commands, in the order a change flows:
   closes a SUB tab only then. Probes, proofs, and everything else plan-specific
   happen in the SUB tab, never in MAIN. For a workspace of their own, create the
   workspace and invoke the command in it.
+- `/hone:grant <change> "<reason>"` records your grant for a change that
+  the authority gate stopped, and the run then lands it. Only you invoke
+  it. The model cannot.
 - `/hone:garden` scans the repo for stale docs, dead code, and redundant tests
   between changes, and lands the safe deletions. It also repoints a `docs/`
   reference whose target moved, and escalates the rest as one proposed Plan per
@@ -101,15 +104,12 @@ work. The loop calls it, and you can too:
   created, and its branch if fully merged.
 - `worktree.sh landable` lists worktrees whose branch is ahead of the
   primary branch.
-- `worktree.sh grant <change> "who/why"` records the authorization for one
-  irreversible change (writes `.hone-grant/<change>`, stamped with the git
-  user and the time). You run it, and only you: the `bash-guard` denies it
-  to the loop, which stops and hands you the diff and this command. It is
-  the only route to the file: both guards deny a raw write.
-  It refuses a text that is empty or only whitespace, and the `who/why`
-  placeholder from this page, exact or half-edited (`rehse/why`). Case and
-  surrounding quotes make no difference. The refusals exit 2 and write
-  nothing, because a placeholder authorizes nothing a reader can check.
+- `worktree.sh grant <change> "your reason"` records the authorization for
+  one irreversible change in `.hone-grant/<change>`, stamped with the git
+  user and the time. Only you run it, here or as `/hone:grant`. The
+  `bash-guard` denies it to the loop, and both guards deny a raw write. It
+  refuses an empty text and a placeholder (`your reason`, or the older
+  `who/why`), exits 2, and writes nothing.
 - `worktree.sh attest <change> "what you ran"` records the sign-off that
   the real-environment check ran (writes `.hone-proof/<change>`, stamped with
   the branch tip, the git user, and the time). You run it, and only you: the
@@ -132,7 +132,7 @@ file:
   paths, never remove built-ins.
 - `.hone-irreversible-paths` lists path globs that make a change count as
   irreversible, beyond the built-in signals (destructive SQL in a migration
-  or `db/` file, a deletion under `db/`). A table rewrite passes when its
+  or `db/` file, a deletion under `db/`, a change to `.hone-grant-auto`). A table rewrite passes when its
   copy is `SELECT *` and provably keeps every row and column. land names it. One glob per line, `#` comments.
   The pre-0.19 name `.hone-consequential-paths` still works.
 - `.hone-review-always` lists path globs that force `review-scope` to answer
@@ -148,6 +148,12 @@ file:
   adapter. The guard and the bash-guard protect the marker like the other
   policy files, so removing it stays your call. `worktree.sh status` reports
   the marker and warns until you commit it.
+
+- `.hone-grant-auto` lets land grant every irreversible change itself, with
+  no person. land honours it only when committed. It records the marker's
+  commit and the signals in the merge commit body, and the receipt names
+  them. It never grants a change that adds, edits, or deletes the marker.
+  The guards protect it like the other policy files.
 
 - `.hone-shared` turns on *shared mode*: the primary branch belongs to a
   team, on a remote. Its first non-comment line names the remote, and a
@@ -168,8 +174,7 @@ file:
   it.
 - `.hone-grant/<change>` is the authorization for one irreversible change.
   Its text lands in the merge commit body. Delete the file to revoke. You
-  write it, with `worktree.sh grant` (say who, when, and why) or your own
-  editor, and the loop never does. A green land deletes the spent file. A
+  write it with `worktree.sh grant`, and the loop never does. A green land deletes the spent file. A
   grant is not pinned to a commit, so a leftover one would authorize a later
   change that reuses the slug.
 - `.hone-proof/<change>` is the sign-off that the real-environment check for
@@ -346,13 +351,11 @@ in the worktree. This check comes first because an amended commit moves the tip,
 and a proof sign-off names the tip.
 
 - *Authority gate (exit 8)* fires when the diff is irreversible (see
-  `.hone-irreversible-paths` above for the signals). Landing it needs your
-  grant: review the diff, then `worktree.sh grant <change> "who/why"`, then
-  re-run land. A Plan that claims to authorize the change does not count,
-  because the loop helped write it. land records the grant text in the merge
-  commit body. The refusal prints the signals that fired and a diffstat
-  against the merge base. It also prints the `git diff` command for the whole
-  change, and the grant command.
+  `.hone-irreversible-paths` above for the signals). The refusal lists each
+  signal with the reason it counts, a diffstat, the diff command, and the
+  grant commands. Landing needs your grant, or a committed `.hone-grant-auto`.
+  A Plan that claims to authorize the change does not count, because the
+  loop helped write it. land records the grant text in the merge commit body.
 - *Proof gate (exit 7)* fires when a commit on the branch carries a
   `Proof: real-environment — <the check>` trailer (copied verbatim from the
   Plan). The trailer means no in-repo test can prove the change: a browser
@@ -392,14 +395,11 @@ the shape [`templates/proof/README.md`](../templates/proof/README.md)
 recommends. An edit to a probe that already exists still arms the gate: that
 probe guards a change that landed earlier.
 
-Only you record a grant or a sign-off, with `worktree.sh grant` or
-`attest`. The `bash-guard` denies the loop both helpers. At exit 8 the loop
-reads the diff and hands you what it read. At exit 7 it runs the check where
-it can and hands you the output. Either way it stops. Every other route stays denied:
-the guard blocks the file-tool routes into `.hone-grant/` and `.hone-proof/`,
-and the bash-guard the shell routes (a deterrent, not a sandbox). The helper
-is what stamps the signer, binds a sign-off to the commit it proves, and
-refuses an empty or placeholder text.
+Only you record a grant or a sign-off. The `bash-guard` denies the loop both
+helpers. At exit 8 the loop hands you a short briefing, and at exit 7 the
+output of the check it ran. Either way it stops. The guards deny every other
+route into `.hone-grant/` and `.hone-proof/` (a deterrent, not a sandbox),
+because the helper stamps the signer and binds a sign-off to its commit.
 
 ### Shared mode
 
@@ -551,6 +551,7 @@ repo/                            # the primary tree: a merge target, never a wor
 ├── .hone-durable-paths          # committed policy (optional)
 ├── .hone-irreversible-paths     # committed policy (optional)
 ├── .hone-proof-always           # committed policy (optional): prove every change
+├── .hone-grant-auto             # committed policy (optional): grant every change
 ├── .hone-shared                 # committed policy (optional): the team's remote
 └── .claude/settings.json        # enables the plugin; deny rules for the adapters
 ```
@@ -560,7 +561,7 @@ The plugin itself:
 ```
 hone/
 ├── rules/workflow.md            # injected at session start
-├── skills/{setup,plan,run,garden}/ # the four commands; run/references/ loads on demand
+├── skills/{setup,plan,run,grant,garden}/ # the five commands; run/references/ loads on demand
 ├── hooks/                       # guard, bash-guard, dirty-guard, gate, nag, progress, session-start
 │   └── messages.sh              # every message hone prints, one template each
 ├── scripts/{worktree,setup}.sh

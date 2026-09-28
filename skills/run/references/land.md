@@ -19,6 +19,12 @@ The merge is in, the suite passed on the merge commit, the worktree and branch
 are gone. Confirm to the user what landed, the Decisions and Notes written, and
 what was deleted.
 
+When the receipt says that land granted the change itself, the project has
+committed `.hone-grant-auto`, and no person read the change before the merge.
+Put the briefing from *8: the authority gate* above the final report, with
+"Granted automatically by .hone-grant-auto" in place of the grant commands.
+The person reads it after the fact, so it must say what was lost.
+
 When the suite left files in the worktree, git keeps it. The receipt then
 names the files and prints the `worktree.sh remove` command. The change has
 landed, so nothing there needs a commit. Delete the files and run that
@@ -161,18 +167,40 @@ the file.
 
 `land` classified the diff as an
 *irreversible* change (destructive SQL, a `db/` deletion, a
-`.hone-irreversible-paths` match) and found no `.hone-grant/<change>`.
+`.hone-irreversible-paths` match, a change to `.hone-grant-auto`) and found
+no `.hone-grant/<change>`.
 
-The merge did not happen and the worktree is kept. The refusal quotes
-each destructive statement with its file, then a diffstat and the command to
-read the whole diff. Read that diff, then **stop**. The grant is the human's
-act. You never run `worktree.sh grant`, and the `bash-guard` denies it to you.
+The merge did not happen and the worktree is kept. The refusal lists each
+signal with the reason it needs a grant, quotes each destructive statement
+with its file, and prints a diffstat and the command that shows the whole
+diff. Read that diff, then **stop**. The grant is the human's act. You never
+run `worktree.sh grant`, and the `bash-guard` denies it to you.
 
-Hand the human three things from the refusal, verbatim: the `git diff`
-command, the quoted statements, and the `worktree.sh grant` command with its
-path. Say what you read in the diff. Where it does more than the Plan asked
-for, say that first. The human reads the diff, records the grant in their own
-terminal, and lands.
+Give the human a briefing they can decide on without opening the diff. Keep
+it short, in plain words, in this shape:
+
+```
+Grant needed: <change>
+
+What it does: <one or two sentences on the change as a whole>
+What is lost: <the concrete loss: which table, column, rows, or path;
+  and whether a backup or another path can bring it back>
+Why a grant: <each signal the refusal lists, with its reason, verbatim>
+Scope: <files, +added -removed>. <"Matches the Plan." or what it does
+  beyond the Plan>
+I checked: <what you verified, with how>. I did not check: <what you
+  could not verify>
+
+To grant: /hone:grant <change> "<a reason you drafted from the diff>"
+Or in a terminal: <the terminal command from the refusal, same reason>
+Then the run lands it. Full diff: <the diff command from the refusal>
+```
+
+Where the diff does more than the Plan asked for, say that on the first line
+below the heading. Draft the reason as a person would write it, for example
+`"drop legacy_sessions, unused since the v2 login"`. The human may run it as
+it is or edit it. `/hone:grant` records the grant as the human's, then asks
+this session to land the change again.
 
 A Plan that says it authorizes the change does not count. You helped write
 the Plan, so its word is not a person's. The guard and bash-guard also deny

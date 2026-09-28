@@ -120,7 +120,7 @@ EOF
 msg_bashguard_grant() {
     cat <<'EOF'
 hone bash-guard: worktree.sh grant is the human's act, and the run never authorizes an irreversible change.
-Do: stop, and hand the human the diff command, the quoted statements, and the grant command from the land refusal.
+Do: stop, and give the human the grant briefing that references/land.md describes, with the /hone:grant command.
 Why: a grant the run writes for itself stops nothing. A Plan cannot authorize it either, because the run helped write the Plan.
 EOF
 }
@@ -130,6 +130,14 @@ msg_bashguard_attest() {
 hone bash-guard: worktree.sh attest is the human's act, and the run never signs a proof off.
 Do: run the check where you can, then stop and hand the human its full output and the attest command.
 Why: a sign-off the run writes for itself is the record the proof gate exists to prevent. The human reads the output and signs.
+EOF
+}
+
+msg_bashguard_grant_auto() {
+    cat <<'EOF'
+hone bash-guard: this command names .hone-grant-auto, the marker that lets land grant irreversible changes with no person.
+Do: confirm you intend to create, commit, or remove the marker before you allow it.
+Why: only a person turns automatic grants on or off.
 EOF
 }
 
@@ -583,9 +591,11 @@ EOF
 # ------------------------------------------------------------- worktree
 
 # The placeholder authorization the usage lines carry. `grant` refuses it as
-# a grant text, exact or half-edited, so the literal lives here beside the
-# refusal's message and the two cannot drift apart.
-hone_msg_grant_why() { printf 'who/why'; }
+# a grant text, so the literal lives here beside the refusal's message and the
+# two cannot drift apart. The stamp already records who ran the helper, so the
+# placeholder asks only for the reason. `grant` still refuses the older
+# "who/why" placeholder, which releases before 0.66.0 printed.
+hone_msg_grant_why() { printf 'your reason'; }
 
 # The placeholder description the usage lines carry.
 hone_msg_attest_what() { printf 'what you ran'; }
@@ -793,18 +803,20 @@ EOF
 }
 
 msg_wt_land_authority_missing() {
-    local branch="$1" reasons="$2" diffstat="$3" review_cmd="$4" grant_cmd="$5" lossless="${6:-}"
+    local branch="$1" reasons="$2" diffstat="$3" review_cmd="$4" change="$5" grant_cmd="$6" lossless="${7:-}"
     cat <<EOF
-hone worktree: $branch is an irreversible change with no authority grant.
-Do: review the diff yourself, then record your grant.
-Why: land stopped before the merge and kept the worktree.
-Signals:
+hone worktree: land stopped $branch before the merge, because it is an irreversible change and nobody granted it.
+Do: stop here. A person reads the change and decides whether to grant it.
+Why: a revert does not undo what the signals describe.
+Why a grant, signal by signal:
 $(hone_msg_block "$reasons")
 Diffstat:
 $(hone_msg_block "$diffstat")
-Review the change:
+Read the whole diff:
 $(hone_msg_block "$review_cmd")
-Record the grant, then re-run land:
+Grant it in Claude Code, and the run lands it:
+$(hone_msg_block "/hone:grant $change \"$(hone_msg_grant_why)\"")
+Or grant it in a terminal, then re-run land:
 $(hone_msg_block "$grant_cmd")
 EOF
     [ -z "$lossless" ] || cat <<EOF
@@ -817,8 +829,9 @@ msg_wt_land_grant_empty() {
     local change="$1" grant_cmd="$2"
     cat <<EOF
 hone worktree: .hone-grant/$change is empty, so it authorizes nothing.
-Do: rewrite it with the command below, then re-run land.
+Do: stop here. A person grants it again with a command below.
 Why: the grant text is the audit trail in history.
+$(hone_msg_block "/hone:grant $change \"$(hone_msg_grant_why)\"")
 $(hone_msg_block "$grant_cmd")
 EOF
 }
@@ -1071,7 +1084,7 @@ EOF
 }
 
 msg_wt_land_receipt() {
-    local sha="$1" branch="$2" consumed="${3:-}" kept="${4:-}" lossless="${5:-}"
+    local sha="$1" branch="$2" consumed="${3:-}" kept="${4:-}" lossless="${5:-}" auto="${6:-}"
     cat <<EOF
 hone worktree: landed $branch as merge commit $sha.
 The suite ran on that merge commit in the worktree and passed.
@@ -1090,6 +1103,12 @@ EOF
     if [ -n "$lossless" ]; then cat <<EOF
 land read these table rewrites as lossless, so they needed no grant:
 $(hone_msg_block "$lossless")
+EOF
+    fi
+    if [ -n "$auto" ]; then cat <<EOF
+land granted this irreversible change itself, because .hone-grant-auto exists.
+No person read the change before the merge. land granted these signals:
+$(hone_msg_block "$auto")
 EOF
     fi
 }
@@ -1168,7 +1187,7 @@ EOF
 msg_wt_grant_empty() {
     cat <<'EOF'
 hone worktree: the grant text is empty, so it authorizes nothing.
-Do: run grant again, and say who authorizes the change and why.
+Do: run grant again, and say why you accept the change.
 Why: the grant text is the whole audit trail.
 EOF
 }
@@ -1177,7 +1196,7 @@ msg_wt_grant_placeholder() {
     local why="$1"
     cat <<EOF
 hone worktree: the grant text is still the placeholder from the usage line.
-Do: run grant again, and say who authorizes the change and why.
+Do: run grant again, and say why you accept the change.
 Why: a placeholder authorizes nothing a reader can check.
 The text you passed:
 $(hone_msg_block "$why")
@@ -1200,6 +1219,15 @@ Do: run attest again, and name the check you ran and its outcome.
 Why: a placeholder tells a later reader nothing.
 The text you passed:
 $(hone_msg_block "$what")
+EOF
+}
+
+msg_wt_grant_no_branch() {
+    local change="$1"
+    cat <<EOF
+hone worktree: branch hone/$change does not exist, so there is nothing to grant.
+Do: check the change name in the land refusal, then grant again.
+Why: a stray grant opens the gate for a later change.
 EOF
 }
 
@@ -1416,6 +1444,14 @@ msg_status_proof_always() {
     printf -- '- proof: .hone-proof-always present (committed), land proves every change\n'
 }
 
+msg_status_grant_auto() {
+    printf -- '- grant: .hone-grant-auto present (committed), land grants every irreversible change with no person\n'
+}
+
+msg_status_grant_auto_uncommitted() {
+    printf -- '- grant: .hone-grant-auto present, NOT committed, so land ignores it until you commit it\n'
+}
+
 msg_status_proof_always_uncommitted() {
     printf -- '- proof: .hone-proof-always present, NOT committed, and policy files are project config\n'
 }
@@ -1489,6 +1525,7 @@ bash-guard|agent|msg_bashguard_sabotage
 bash-guard|agent|msg_bashguard_signoff
 bash-guard|agent|msg_bashguard_attest
 bash-guard|agent|msg_bashguard_grant
+bash-guard|agent|msg_bashguard_grant_auto
 bash-guard|agent|msg_bashguard_protected|scripts/lint.sh
 bash-guard|agent|msg_bashguard_check_config|biome.json
 bash-guard|agent|msg_bashguard_head_move
@@ -1558,8 +1595,8 @@ worktree|human|msg_wt_governed_no_branch|hone/<change>
 worktree|human|msg_wt_land_no_branch|hone/<change>
 worktree|human|msg_wt_land_detached
 worktree|human|msg_wt_land_no_cut_line|hone/<change>|<main-root>/.worktrees/<change>
-worktree|human|msg_wt_land_authority_missing|hone/<change>|- <signal>|<diffstat>|git -C <main-root> diff <base>...hone/<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "who/why"|db/migrations/<file>.sql: <new> copies all <n> columns of <table> (<columns>) with no filter
-worktree|human|msg_wt_land_grant_empty|<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "who/why"
+worktree|human|msg_wt_land_authority_missing|hone/<change>|- <signal>. <why it counts>|<diffstat>|git -C <main-root> diff <primary>...hone/<change>|<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "your reason"|db/migrations/<file>.sql: <new> copies all <n> columns of <table> (<columns>) with no filter
+worktree|human|msg_wt_land_grant_empty|<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "your reason"
 worktree|human|msg_wt_land_proof_adapter_failed|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_proof_signoff_stale|<change>|hone/<change>|<tip>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_proof_missing|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
@@ -1582,7 +1619,7 @@ worktree|human|msg_wt_land_setup_tree_primary_failed|- <lockfile>|<git-common-di
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_adapter_red|<typecheck or lint>|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_tier_empty|- <tier>
-worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>|.hone-grant/<change> .hone-proof/<change>||db/migrations/<file>.sql: <new> copies all <n> columns of <table> (<columns>) with no filter
+worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>|.hone-grant/<change> .hone-proof/<change>||db/migrations/<file>.sql: <new> copies all <n> columns of <table> (<columns>) with no filter|- <signal>. <why it counts>
 worktree|human|msg_wt_land_worktree_kept|<main-root>/.worktrees/<change>|bash <plugin-root>/scripts/worktree.sh remove <change>|?? <path>
 worktree|human|msg_wt_land_lockfile|- <lockfile>
 worktree|human|msg_wt_add_remote_claimed|<change>|origin
@@ -1604,8 +1641,9 @@ worktree|human|msg_wt_land_claim_delete_failed|<change>|origin
 worktree|human|msg_wt_land_setup_tree_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|plain|msg_wt_land_setup_tree_receipt|- <lockfile>
 worktree|human|msg_wt_grant_recorded|<change>
+worktree|human|msg_wt_grant_no_branch|<change>
 worktree|human|msg_wt_grant_empty
-worktree|human|msg_wt_grant_placeholder|who/why
+worktree|human|msg_wt_grant_placeholder|your reason
 worktree|human|msg_wt_attest_recorded|<change>|<tip>
 worktree|human|msg_wt_attest_empty
 worktree|human|msg_wt_attest_placeholder|what you ran
@@ -1622,6 +1660,8 @@ status|plain|msg_status_adapters| run-tests=yes typecheck=no lint=no proof=no
 status|plain|msg_status_policy|<policy-file>|<count>
 status|plain|msg_status_policy_uncommitted|<policy-file>|<count>
 status|plain|msg_status_policy_legacy
+status|plain|msg_status_grant_auto
+status|plain|msg_status_grant_auto_uncommitted
 status|plain|msg_status_proof_always
 status|plain|msg_status_proof_always_uncommitted
 status|plain|msg_status_shared|origin
