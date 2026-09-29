@@ -803,9 +803,14 @@ STUB
 chmod +x "$REPO.bin/herdr"
 export HERDR_LOG="$REPO.herdr.log"
 : > "$HERDR_LOG"
+# Where a session watches, the stop also goes into the coordinate event file.
+COORD_EVENTS="$(git rev-parse --git-common-dir)/hone-coordinate/events"
+mkdir -p "${COORD_EVENTS%/events}"
 PATH="$REPO.bin:$PATH" HERDR_ENV=1 HERDR_TAB_ID=w:t1 bash "$WSH" land ui-flow >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 7 ] || die "the notification must not change land's exit (got $rc)"
-grep -q '^notification show hone: ui-flow needs you --body .*proof gate (exit 7).*SUB:m:ui-flow' "$HERDR_LOG" \
+grep -qP '^1\t[0-9]+\tui-flow\tstopped\texit 7, proof gate$' "$COORD_EVENTS" \
+    || die "a watched land that stops should write a stopped event: $(cat "$COORD_EVENTS" 2>/dev/null)"
+grep -q '^notification show hone: [^ ]*/ui-flow needs you --body .*proof gate (exit 7).*SUB:m:ui-flow' "$HERDR_LOG" \
     || die "a gate stop under herdr should notify with the change, the gate, and the tab: $(cat "$HERDR_LOG")"
 : > "$HERDR_LOG"
 PATH="$REPO.bin:$PATH" bash "$WSH" land ui-flow >/dev/null 2>&1
@@ -1040,6 +1045,9 @@ step "real-environment change with a red scripts/proof.sh refused (exit 7)"
 git rev-parse --short hone/ui-flow3 > "$REPO/.hone-proof/ui-flow3"
 bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a tip-naming sign-off should land the change despite a red adapter (got $rc)"
+grep -qP "\tui-flow3\tlanded\t$(git rev-parse --short HEAD)\$" "$COORD_EVENTS" \
+    || die "a watched land that merges should write a landed event: $(cat "$COORD_EVENTS")"
+rm -rf "${COORD_EVENTS%/events}"
 step "sign-off naming the tip lands the change (checked before the adapter)"
 rm -f "$REPO/.hone-proof/ui-flow3"
 # (i) The bootstrap change runs NO adapter, even where the primary tree holds a

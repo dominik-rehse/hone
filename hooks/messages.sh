@@ -1027,10 +1027,12 @@ msg_wt_land_retry_moved() {
 }
 
 # The herdr notification for a land that stopped at a gate. Line 1 is the
-# title, line 2 the body. $1 = change, $2 = gate, $3 = exit, $4 = tab label.
+# title, line 2 the body. $1 = repository, $2 = change, $3 = gate, $4 = exit,
+# $5 = tab label. The repository tells two tabs of one label apart, because
+# each repository has a workspace of its own.
 msg_wt_land_notify() {
-    local change="$1" gate="$2" rc="$3" tab="$4"
-    printf 'hone: %s needs you\n' "$change"
+    local repo="$1" change="$2" gate="$3" rc="$4" tab="$5"
+    printf 'hone: %s/%s needs you\n' "$repo" "$change"
     printf 'Land stopped at %s (exit %s) in tab %s. The run in that tab says what it needs from you.\n' "$gate" "$rc" "$tab"
 }
 
@@ -1511,6 +1513,63 @@ msg_status_deny_missing() {
     printf '%s\n' "$missing" | sed 's/^/    /'
 }
 
+# ---------------------------------------------------------------- coordinate
+
+# The herdr notification the coordinate ticker shows. Line 1 is the title,
+# line 2 the body. $1 = repository, $2 = change, $3 = what the session waits
+# for, $4 = tab label.
+msg_coord_notify() {
+    local repo="$1" change="$2" reason="$3" tab="$4"
+    printf 'hone: %s/%s needs you\n' "$repo" "$change"
+    printf 'Tab %s: %s. Go to that tab. The session there says what it needs.\n' "$tab" "$reason"
+}
+
+msg_coord_usage() {
+    cat <<'EOF'
+usage: coordinate.sh watch <change> <agent> [<tab-id>] | unwatch <change> | wait [--since <n>] | list | events | ensure | ticker
+EOF
+}
+
+msg_coord_no_herdr() {
+    cat <<'EOF'
+hone coordinate: herdr is not installed, so nothing can watch a session.
+Do: run the Plans in this session, without herdr tabs.
+Why: the ticker reads each session's state from herdr.
+EOF
+}
+
+msg_coord_herdr_old() {
+    local ver="$1"
+    cat <<EOF
+hone coordinate: herdr $ver is too old to watch a session.
+Do: update herdr to 0.9.0 or later, then restart its server.
+Why: older agent records carry no state sequence.
+EOF
+}
+
+# ---------------------------------------------------------------- watch hook
+
+# The Stop hook blocks a watching session that would end its turn with no
+# wait. $1 = the changes still watched, one per line. $2 = the wait command.
+msg_watch_no_wait() {
+    local changes="$1" cmd="$2"
+    cat <<EOF
+hone watch: this session watches runs that are still going, and no wait runs for it.
+Do: run \`$cmd\` with the Bash tool in the background, then end your turn.
+Why: the wait wakes this session on the next land, stop, or question. Without it, a stop waits unseen until the person asks. Never write a watcher of your own.
+$(hone_msg_block "$changes")
+EOF
+}
+
+# The person's line when the watch hook lets a turn end with no wait.
+msg_watch_let_go() {
+    cat <<'EOF'
+hone watch: the coordinator ended its turn twice with no wait, so the hook let it end.
+Do: ask it for status when you come back.
+Why: the ticker still notifies you of each stop.
+EOF
+}
+
 # ---------------------------------------------------------------- catalog
 
 # One line per template: section|kind|function|argument...
@@ -1618,7 +1677,13 @@ worktree|human|msg_wt_land_worktree_dirty|<main-root>/.worktrees/<change>
 worktree|human|msg_wt_land_worktree_untracked|<main-root>/.worktrees/<change>|- <path>
 worktree|human|msg_wt_land_from_worktree|<main-root>|bash <plugin-root>/scripts/worktree.sh land <change>
 worktree|plain|msg_wt_land_retry_moved|main|2
-worktree|plain|msg_wt_land_notify|<change>|the proof gate|7|SUB:<short>:<change>
+worktree|plain|msg_wt_land_notify|<repo>|<change>|the proof gate|7|SUB:<short>:<change>
+coordinate|plain|msg_coord_notify|<repo>|<change>|a question or an approval prompt|SUB:<short>:<change>
+coordinate|plain|msg_coord_usage
+coordinate|human|msg_coord_no_herdr
+coordinate|human|msg_coord_herdr_old|0.8.2
+watch|agent|msg_watch_no_wait|  csv-export  (sub-csv-export)|bash <plugin-root>/scripts/coordinate.sh wait
+watch|human|msg_watch_let_go
 worktree|human|msg_wt_land_primary_moved|main|3
 worktree|human|msg_wt_land_ff_refused|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
 worktree|human|msg_wt_land_setup_tree_primary_failed|- <lockfile>|<git-common-dir>/hone-land.log

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Shared helpers for hone's hooks. The hooks (guard.sh, bash-guard.sh, gate.sh,
-# nag.sh, session-start.sh, progress.sh) and the scripts that share their checks (setup.sh,
-# worktree.sh) SOURCE this file, and nothing executes it directly. It defines
+# nag.sh, session-start.sh, progress.sh, watch.sh) and the scripts that share their checks (setup.sh,
+# worktree.sh, coordinate.sh) SOURCE this file, and nothing executes it directly. It defines
 # functions only, and it has no side effects at source time. Keeping the JSON
 # emit/escape, the stdin-field parse, and the deny-rule comparison in one place
 # stops the consumers from drifting (they had already diverged).
@@ -187,4 +187,22 @@ hone_governs_paths() {
             case "$tok" in */*) printf '%s\n' "$tok" ;; esac
         done
     )
+}
+
+# Append one event to the coordinate event file (scripts/coordinate.sh). $1 =
+# the state directory (<git-common-dir>/hone-coordinate), $2 = the change,
+# $3 = the kind, $4 = the detail. Without the directory nobody watches, so
+# nothing is written. The lock keeps the event numbers unique when land and
+# the ticker write at once. A tab or a newline in the detail would break the
+# line, so they become spaces.
+hone_coord_event() {
+    local dir="$1" detail="${4//[$'\t\n']/ }"
+    [ -d "$dir" ] || return 0
+    (
+        command -v flock >/dev/null 2>&1 && flock -w 5 9
+        n=0
+        [ -f "$dir/events" ] && n=$(awk -F'\t' 'END { print $1 + 0 }' "$dir/events")
+        printf '%s\t%s\t%s\t%s\t%s\n' "$((n + 1))" "$(date +%s)" "$2" "$3" "$detail" >> "$dir/events"
+    ) 9>"$dir/events.lock" 2>/dev/null
+    return 0
 }

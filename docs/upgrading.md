@@ -111,9 +111,11 @@ mechanical steps.
      one. The run stops and hands you the diff and the grant command. Plan
      for a person to review each irreversible change: run the printed
      `worktree.sh grant` command in your own terminal, then land.
-   - *Restart sessions for 0.64*: Claude Code reads the hook set at session
-     start. Restart every session in the repo to get the progress hook and
-     the dirty-guard's new events.
+   - *Restart sessions for 0.64 and 0.69*: Claude Code reads the hook set
+     at session start. Restart every session in the repo to get the new
+     hooks (progress in 0.64, watch in 0.69).
+   - *herdr 0.9.0 since 0.69*: `--all` under herdr needs it. Run `herdr
+     update`, and restart the herdr server as it says.
    - *`/hone:grant` is gone in 0.68*: in auto mode Claude Code let the
      model run it, and the guard refused. At exit 8 the run gives you a
      short briefing and the grant command with a drafted reason. Type it

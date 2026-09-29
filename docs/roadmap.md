@@ -38,20 +38,19 @@ in git.
   read 7 MAIN sessions. 13 stops or lands reached MAIN only when the
   person asked. 12 times a SUB needed the person and got no notification.
   One sign-off waited 7.5 hours.
-- Where it comes from: MAINs do not use `herdr agent wait`, because a
-  harness memory in a consumer repository says that it returns early.
-  Each MAIN writes its own watcher, and each watcher has new bugs.
-- Next steps, in this order:
-  1. `worktree.sh land` sends the herdr notification itself when it stops
-     at a gate. That needs no MAIN. Done in 0.67.0, with a test in
-     `test/e2e_land_test.sh`. Next: read whether the person answers sooner.
-  2. The `bash-guard` held 3 of 3 notifications, because their body text
-     named a formatter command. It must not read a quoted notification
-     body as a command.
-  3. Find out whether `herdr agent wait` really returns early. Then ship
-     one watcher in hone, which MAIN arms again after each event.
-  4. `herdr.md` says in plain words that MAIN never tells a SUB to run
-     `land` again after exit 6 or 9. MAIN did so twice.
+- Where it comes from: MAINs did not use `herdr agent wait`, because a
+  harness memory said that it returns early. It returns at once on a SUB
+  that is already idle ([the 2026-09-29 note](spikes/2026-09-29-herdr-wait-semantics.md)).
+  Each MAIN wrote its own watcher, and each watcher had new bugs.
+- Done: `land` notifies the person at a gate (0.67.0). In 0.69.0,
+  `scripts/coordinate.sh` holds one ticker and one wait for every MAIN, and
+  the `watch` hook blocks a MAIN that ends its turn with no wait. The
+  ticker sends the notifications from a script, so the `bash-guard` no
+  longer sees them. `herdr.md` forbids a new `land` after a stop unless the
+  person asks. `test/coordinate_test.sh` replays the three field shapes.
+- Next step: after 0.69.0 has run in the maintainer's repositories, read
+  the MAIN transcripts. Count the stops that reached the person only when
+  they asked, and compare with the 13 of the 2026-09-28 note.
 
 #### Two MAINs in one repository coordinate with no rule
 

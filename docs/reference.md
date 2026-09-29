@@ -21,15 +21,15 @@ Slash commands, in the order a change flows:
   invoke it too, as it may invoke `/hone:run`.
 - `/hone:run <change>` executes the Plan unattended (worktree, build, verify,
   consolidate, review, land). `/hone:run --all` runs every ready Plan.
-- Inside [herdr](https://github.com/dominik-rehse/herdr), which `run` detects on
-  its own, `--all` spreads those Plans over herdr tabs. This tab
-  becomes `MAIN:<short>` and orchestrates. Each Plan gets a fresh Claude Code
-  session in its own `SUB` tab. Those sessions run on `opus`, and `--model`
-  picks another model where you want one. MAIN starts a
-  dependent Plan only when `worktree.sh landed` shows the predecessor landed, and
-  closes a SUB tab only then. Probes, proofs, and everything else plan-specific
-  happen in the SUB tab, never in MAIN. For a workspace of their own, create the
-  workspace and invoke the command in it.
+- Inside [herdr](https://github.com/herdrdev/herdr) 0.9.0 or later, which
+  `run` detects on its own, `--all` spreads those Plans over herdr tabs. This
+  tab becomes `MAIN:<short>` and orchestrates. Each Plan gets a fresh Claude
+  Code session in its own `SUB` tab, on `opus` unless `--model` says otherwise.
+  MAIN starts a dependent Plan only when `worktree.sh landed` shows the
+  predecessor landed, and closes a SUB tab only then. Probes, proofs, and
+  everything else plan-specific happen in the SUB tab. MAIN watches each SUB
+  through `scripts/coordinate.sh`, whose ticker notifies you when a SUB needs
+  you.
 - `/hone:garden` scans the repo for stale docs, dead code, and redundant tests
   between changes, and lands the safe deletions. It also repoints a `docs/`
   reference whose target moved, and escalates the rest as one proposed Plan per
@@ -112,12 +112,9 @@ work. The loop calls it, and you can too:
   the real-environment check ran (writes `.hone-proof/<change>`, stamped with
   the branch tip, the git user, and the time). You run it, and only you: the
   `bash-guard` denies it to the loop, which runs the check where it can and
-  hands you the output. Same sole-route rule as grant.
-  It refuses a description that is empty or only whitespace. It also refuses
-  the unedited placeholder from this page: `what you ran`, or `what you ran
-  and the outcome`. Case and surrounding quotes make no difference. Both
-  refusals exit 2 and write nothing, because a sign-off holding the
-  placeholder reads as evidence and carries none.
+  hands you the output. Same sole-route rule as grant. Like grant, it
+  refuses an empty text and the placeholder `what you ran`, exits 2, and
+  writes nothing, because such a sign-off reads as evidence and carries none.
 
 ## Configuration files
 
@@ -193,7 +190,8 @@ the remote rejected its push (default 3).
 Two more variables tune a hook. `HONE_AREA_MAX_LINES` sets the size above
 which the nag names a `src/<area>/` (default 3000). `HONE_GATE_BLOCK_CAP`
 sets how many identical failures the gate blocks a turn end for before it
-lets the turn end (default 3).
+lets the turn end (default 3). `HONE_COORD_TICK` (15) and `HONE_COORD_QUIET`
+(600) set the seconds of the coordinate ticker. Its header says more.
 
 ## Hooks
 
@@ -327,6 +325,9 @@ neither. When you want that record, route the edit through the loop.
   line: `◆ [csv-export] worktree ✓ > build ... > verify > …`. A garden
   change gets `worktree > cut > verify > land`. The step subcommands of
   `worktree.sh` queue it, and it never blocks.
+- *watch* (Stop) blocks a session that watches SUBs from ending its turn
+  with no `coordinate.sh wait` armed, twice at most. It also restarts a dead
+  ticker.
 - *session-start* injects the workflow rule from the plugin. It warns when
   the test adapter or the `src/` layout is missing. It also warns, naming
   the missing rules, when the settings lack any rule from the canonical deny
@@ -460,7 +461,8 @@ helper command with its full path for you to run.
 What to do at each code, in detail:
 [`skills/run/references/land.md`](../skills/run/references/land.md).
 
-Inside herdr, exits 6 to 9 also notify you and name the tab.
+Inside herdr, exits 6 to 9 also notify you and name the repository and the
+tab.
 
 After a green suite, land also runs `scripts/typecheck.sh` and
 `scripts/lint.sh` where they exist, the same optional adapters the gate runs.
@@ -562,9 +564,9 @@ The plugin itself:
 hone/
 ├── rules/workflow.md            # injected at session start
 ├── skills/{setup,plan,run,garden}/ # the four commands; run/references/ loads on demand
-├── hooks/                       # guard, bash-guard, dirty-guard, gate, nag, progress, session-start
+├── hooks/                       # guard, bash-guard, dirty-guard, gate, nag, progress, watch, session-start
 │   └── messages.sh              # every message hone prints, one template each
-├── scripts/{worktree,setup}.sh
+├── scripts/{worktree,setup,coordinate}.sh
 ├── agents/                      # plan-critic, consolidate-critic
 ├── templates/{run-tests,proof}/ # adapter contracts and templates
 ├── templates/quality/           # which existing analyzer fits which goal

@@ -1,7 +1,7 @@
 # `--all` across herdr tabs
 
 Background for `/hone:run --all` when the session runs inside
-[herdr](https://github.com/dominik-rehse/herdr). `parallel.md` sends you here
+[herdr](https://github.com/herdrdev/herdr). `parallel.md` sends you here
 after `test "${HERDR_ENV:-}" = 1` passed.
 
 The tabs change **where** each run executes, nothing else. This session becomes
@@ -13,6 +13,9 @@ executes the ordinary `/hone:run <change>` loop, gates and all. Every law of
 The claim and the locks already make concurrent sessions safe. `worktree.sh add`
 is the atomic claim (exit 4 = someone else owns it). Lands serialize under one
 cross-session lock. The tabs build on that, they do not replace it.
+
+MAIN needs herdr 0.9.0 or later. `coordinate.sh watch` refuses an older one,
+and then you run the Plans in this session, without tabs.
 
 The installed `herdr` binary is the authority for syntax. When a command here
 fails to parse, run the group without a subcommand (`herdr tab`, `herdr agent`,
@@ -107,6 +110,7 @@ and new approved Plans can join the set.
    herdr agent start <agent-name> --kind claude --pane <pane-id> \
      -- --permission-mode auto --model <model>
    herdr agent prompt <agent-name> "/hone:run <change>"
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/coordinate.sh" watch <change> <agent-name> <tab-id>
    ```
 
    `agent start` returns when the Claude session is ready for input (30 s
@@ -116,22 +120,27 @@ and new approved Plans can join the set.
    `opus`. Never start a SUB on `fable` unless the user asked for that model by
    name.
 
-4. **Watch.** Wait on each SUB, always in the Bash tool's background mode. Then
-   poll the output file. A run outlasts the ~2 minute foreground timeout, and so
-   does this wait.
+4. **Watch.** Run the wait with the Bash tool in background mode, then end
+   the turn:
 
    ```bash
-   herdr agent wait <agent-name> --timeout 3600000
+   bash "${CLAUDE_PLUGIN_ROOT}/scripts/coordinate.sh" wait
    ```
 
-   It returns when the agent settles (`idle`, `done`, or `blocked`). A settled
-   state says the SUB stopped typing, nothing more. Run the `landed` predicate
-   each time one settles. If the SUB is still `working` when the wait times out,
-   wait again.
+   A ticker behind it reads each watched SUB from herdr. The wait exits when
+   an event arrives that this session has not seen, and it prints each such
+   event. The harness then wakes you. Handle the events, then start the wait
+   again. A Stop hook refuses to end your turn while a watched SUB runs and
+   no wait runs. Never write a watcher of your own, and never poll with
+   `herdr agent wait`: it returns at once on a SUB that is already idle.
 
-   Keep a status board: one line per Plan, reprinted each time a SUB settles, a
-   Plan starts, or a tab closes. Every state on it comes from what MAIN can
-   verify itself:
+   The ticker also shows the person a notification for each SUB that needs
+   them, and `land` shows one for each gate. So MAIN never sends a
+   notification itself.
+
+   Keep a status board: one line per Plan, reprinted each time an event
+   arrives, a Plan starts, or a tab closes. Every state on it comes from what
+   MAIN can verify itself:
 
    ```
    csv-export   landed a1b2c3d
@@ -140,43 +149,36 @@ and new approved Plans can join the set.
    pdf-export   needs human: proof gate, tab kept
    ```
 
-   `landed` comes from the predicate alone. `running` comes from the agent
-   state, and `needs human` from the tail read. When you relay a SUB's
-   progress line, mark it as the SUB's claim ("SUB reports verify ..."), never
-   as MAIN's knowledge.
+   `landed` comes from the predicate alone. When you relay a SUB's progress
+   line, mark it as the SUB's claim ("SUB reports verify ..."), never as
+   MAIN's knowledge. The events:
 
-   - `landed`: close that SUB tab, report the land, and start whatever Plan was
-     waiting on it.
-   - `pending`: the SUB stopped mid-loop. Read its tail to classify, never to
-     adopt its work:
+   - `landed`: `land` merged the change. Confirm it with the `landed`
+     predicate above, close that SUB tab, report the land, and start
+     whatever Plan waited on it.
+   - `stopped`: `land` exited 6 to 9 and told the person. Only the person
+     can act. Never tell the SUB to run `land` again, unless the person says
+     so in this conversation. Wait.
+   - `needs-you` or `quiet`: the SUB waits on a question, an approval, or its
+     own stop. Read its tail to classify, never to adopt its work:
 
      ```bash
      herdr agent read <agent-name> --source recent-unwrapped --lines 120
      ```
 
-     - **`land` exited 6 to 9 and the SUB stopped there.** That is the
-       expected stop, and only the human can act on it. `land` has already
-       shown them a notification that names the tab. Do not show a second
-       one. Wait.
-     - **A question or an approval prompt.** Notify the human, name the tab,
-       wait. Never answer for them.
-     - **Blocked-unresolvable or genuinely ambiguous** (`run`'s stop points 1
-       and 2): report it and leave the tab open. The worktree and the tab are
-       the evidence.
-   - A SUB whose `worktree.sh add` exited 4 found the change claimed by another
-     session: it skips, and MAIN reports the skip.
+     Report what it waits for on the board, and leave the tab open. Never
+     answer for the person, and never pass on another session's answer. A
+     SUB that is blocked-unresolvable or genuinely ambiguous (`run`'s stop
+     points 1 and 2) keeps its worktree and its tab as evidence.
+   - `gone`: the SUB's session ended. Report it. Its worktree, if any, is
+     evidence.
 
-   The notification for any other stop that needs the human:
-
-   ```bash
-   herdr notification show "hone: <change> needs you" \
-     --body "Tab SUB:<short>:<change>: <what the SUB is waiting for>" \
-     --sound request
-   ```
-
-   Name the tab in the body, so the human goes to the SUB, not to MAIN. Probes
-   and proofs run from the SUB tab. Only the human runs the grant and attest
-   helpers: after a `!` in the SUB tab, or in their own terminal.
+   When the person closes a stopped SUB's tab or gives up on it, run
+   `coordinate.sh unwatch <change>`. A SUB whose `worktree.sh add` exited 4
+   found the change claimed by another session: it skips, and MAIN reports
+   the skip. Probes and proofs run from the SUB tab. Only the person runs the
+   grant and attest helpers: after a `!` in the SUB tab, or in their own
+   terminal.
 
 5. **Chains.** Start a dependent Plan only when its predecessor's `landed`
    predicate prints `landed`. Never on the SUB's word, never on an idle state
@@ -186,7 +188,7 @@ and new approved Plans can join the set.
    `SUB:<short>:consolidate`. Prompt it to run the global consolidate pass from
    `parallel.md`: a `consolidate-critic` over the combined result. It lands
    any accepted cuts through a worktree change of its own. Close its tab when
-   that lands, or when it reports nothing to cut.
+   that lands, or when it reports nothing to cut. Watch it like any other SUB.
 
 7. **Report.** Print the final status board. Per Plan: landed (with the merge
    commit) or stopped (with the blocker and the tab left open). Name the tabs

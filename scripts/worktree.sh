@@ -108,9 +108,11 @@
 #       rejection. When the undo of the fast-forward fails, land exits 2,
 #       prints the recovery, and marks the merge so no sync pushes it.
 #       Inside herdr (HERDR_ENV=1), a land that exits 6 to 9 also shows a
-#       herdr notification that names the change, the stop, and the tab. A
-#       person must act on each of these exits, and a watching session may
-#       not notice the stop. The notification never changes the exit.
+#       herdr notification that names the repository, the change, the stop,
+#       and the tab. A person must act on each of these exits, and a watching
+#       session may not notice the stop. The notification never changes the
+#       exit. Where a session watches (scripts/coordinate.sh), land also
+#       writes `landed` or `stopped` to the coordinate event file.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached/push refused/caller in
 #       the worktree/dirty or untracked worktree/files in the way/primary
 #       tree left its branch/bad HONE_LAND_RETRIES/rebuild failed/undo
@@ -2083,9 +2085,18 @@ land_notify() {
     tab="${HERDR_TAB_ID:-}"
     [ -n "$tab" ] && label=$(${t[@]+"${t[@]}"} herdr tab get "$tab" 2>/dev/null \
         | sed -n 's/.*"label":"\([^"]*\)".*/\1/p')
-    msg=$(msg_wt_land_notify "$change" "$gate" "$rc" "${label:-${tab:-unknown}}")
+    msg=$(msg_wt_land_notify "$(basename "$(main_root_of)")" "$change" "$gate" "$rc" "${label:-${tab:-unknown}}")
     ${t[@]+"${t[@]}"} herdr notification show "${msg%%$'\n'*}" --body "${msg#*$'\n'}" \
         --sound request >/dev/null 2>&1 || true
+}
+
+# Tell a coordinator how a land ended (scripts/coordinate.sh). The event file
+# exists only where a session watches, so a land nobody watches writes
+# nothing. $1 = change, $2 = landed|stopped, $3 = the detail.
+land_event() {
+    local common
+    common=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P) || return 0
+    hone_coord_event "$common/hone-coordinate" "$1" "$2" "$3"
 }
 
 # Run a step subcommand between its progress lines. $1 = the subcommand.
@@ -2129,8 +2140,10 @@ progress_step() {
             cmd_land "$@" || rc=$?
             if [ "$rc" -eq 0 ]; then
                 progress_emit "$chain" "$change" land ✓ "merged $(git rev-parse --short HEAD 2>/dev/null)"
+                land_event "$change" landed "$(git rev-parse --short HEAD 2>/dev/null)"
             else
                 progress_emit "$chain" "$change" land ✗ "exit $rc, $(progress_land_gate "$rc")"
+                case "$rc" in 6|7|8|9) land_event "$change" stopped "exit $rc, $(progress_land_gate "$rc")" ;; esac
                 land_notify "$change" "$rc"
             fi ;;
     esac
