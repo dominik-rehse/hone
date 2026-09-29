@@ -21,15 +21,16 @@ Slash commands, in the order a change flows:
   invoke it too, as it may invoke `/hone:run`.
 - `/hone:run <change>` executes the Plan unattended (worktree, build, verify,
   consolidate, review, land). `/hone:run --all` runs every ready Plan.
-- Inside [herdr](https://github.com/herdrdev/herdr) 0.9.0 or later, which
-  `run` detects on its own, `--all` spreads those Plans over herdr tabs. This
-  tab becomes `MAIN:<short>` and orchestrates. Each Plan gets a fresh Claude
-  Code session in its own `SUB` tab, on `opus` unless `--model` says otherwise.
-  MAIN starts a dependent Plan only when `worktree.sh landed` shows the
-  predecessor landed, and closes a SUB tab only then. Probes, proofs, and
-  everything else plan-specific happen in the SUB tab. MAIN watches each SUB
-  through `scripts/coordinate.sh`, whose ticker notifies you when a SUB needs
-  you.
+- `/hone:coordinate [request]` makes this tab in
+  [herdr](https://github.com/herdrdev/herdr) 0.9.0 or later the repository's
+  coordinator, labelled `hone`. It starts each plan, run, or garden session
+  in a tab of its own (`run:<change>`, on `opus` unless `--model` says
+  otherwise), watches them, and prints a board. `/hone:run --all` inside
+  herdr hands over to it. `scripts/coordinate.sh` does the mechanics: its
+  ticker notifies you when a session needs you, and its `admit` checks a
+  change against every change in flight, other developers' claims included,
+  and keeps garden apart. A dependent Plan starts, and a tab closes, only
+  after `worktree.sh landed`.
 - `/hone:garden` scans the repo for stale docs, dead code, and redundant tests
   between changes, and lands the safe deletions. It also repoints a `docs/`
   reference whose target moved, and escalates the rest as one proposed Plan per
@@ -91,9 +92,8 @@ work. The loop calls it, and you can too:
   the answer holds from any clone.
 - `worktree.sh sync` levels the primary tree with the remote primary branch
   in both directions: fetch, fast-forward or rebase local-only commits on
-  top, then push them. Shared mode only. The plan skill runs it after
-  committing a Plan, `run --all` and `garden` run it before reading the
-  queue, and you run it to catch up.
+  top, then push them. Shared mode only. The plan skill, `run --all`, and
+  `garden` run it, and you run it to catch up.
 - `worktree.sh release <change>` deletes a claim from the remote by hand,
   for a change whose worktree is already gone. `remove` does it with the
   worktree.
@@ -155,12 +155,12 @@ file:
   blank file means `origin`. With the marker committed, `add` claims a
   change on the remote, and `land` merges on top of the remote's latest and
   pushes the tested result. `landed` and `sync` read the remote. Without
-  it, hone never pushes, so a solo repository with a backup remote keeps
-  working as before. The remote must accept pushes to `refs/hone/*`, which
+  it, hone never pushes. The remote must accept pushes to `refs/hone/*`, which
   GitHub, GitLab, and Gitea do. `worktree.sh status` reports the marker,
   warns until you commit it, and lists the claims other developers hold.
   The guard and the bash-guard protect the marker like the other policy
-  files, so turning shared mode off stays your call.
+  files, so turning shared mode off stays your call. In shared mode a Plan
+  names its `Owner:`, and only the owner's coordinator starts it.
 
 *Per-developer*, gitignored and never checked in:
 
@@ -563,7 +563,7 @@ The plugin itself:
 ```
 hone/
 ├── rules/workflow.md            # injected at session start
-├── skills/{setup,plan,run,garden}/ # the four commands; run/references/ loads on demand
+├── skills/{setup,plan,run,garden,coordinate}/ # the five commands; run/references/ loads on demand
 ├── hooks/                       # guard, bash-guard, dirty-guard, gate, nag, progress, watch, session-start
 │   └── messages.sh              # every message hone prints, one template each
 ├── scripts/{worktree,setup,coordinate}.sh

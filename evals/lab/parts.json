@@ -293,11 +293,19 @@
           "count": 1
         },
         {
-          "file": "skills/run/references/herdr.md",
+          "file": "skills/coordinate/SKILL.md",
           "from": [
-            "   `parallel.md`: a `consolidate-critic` over the combined result. It lands"
+            "It runs a `consolidate-critic` over the combined result, and it lands any"
           ],
-          "to": ["   `parallel.md`, over the combined result. It lands"],
+          "to": ["It runs a pass over the combined result, and it lands any"],
+          "count": 1
+        },
+        {
+          "file": "scripts/coordinate.sh",
+          "from": [
+            "a consolidate-critic over the combined result of the changes that just landed."
+          ],
+          "to": ["a pass over the combined result of the changes that just landed."],
           "count": 1
         }
       ]

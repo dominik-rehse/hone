@@ -64,11 +64,6 @@ mechanical steps.
      changes without the marker. Turn it on with no worktree in flight and
      the primary branch pushed. Then no branch was cut from a commit that a
      later rebase moves. The remote must accept pushes to `refs/hone/*`.
-   - *Model IDs are pinned since 0.53*: the critics and the nested
-     `/code-review` name a full model ID where they named the `sonnet`
-     and `opus` aliases. Nothing to do on the Anthropic API. On a provider
-     that names its models differently, read the pin paragraph under
-     *Commands* in `reference.md`.
    - *The critics run on opus since 0.54*: `plan-critic` and
      `consolidate-critic` pin claude-opus-5 where they pinned
      claude-sonnet-5. A Plan review costs more, and the `plan-critic`
@@ -116,6 +111,11 @@ mechanical steps.
      hooks (progress in 0.64, watch in 0.69).
    - *herdr 0.9.0 since 0.69*: `--all` under herdr needs it. Run `herdr
      update`, and restart the herdr server as it says.
+   - *`/hone:coordinate` since 0.70*: it replaces MAIN, and `--all` under
+     herdr hands over to it. Tabs are now `hone` and `run:<change>`. You may
+     drop `Bash(herdr agent prompt:*)` from your settings. A shared-mode
+     Plan now names its `Owner:`. An older Plan without the line stays open
+     to every developer.
    - *`/hone:grant` is gone in 0.68*: in auto mode Claude Code let the
      model run it, and the guard refused. At exit 8 the run gives you a
      short briefing and the grant command with a drafted reason. Type it

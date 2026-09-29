@@ -258,7 +258,16 @@ uncommitted entry is invisible to the run. Commit nothing but the Plan, its
 references, and that entry. The loop owns every other artifact.
 
 When the primary tree holds a committed `.hone-shared` marker, the primary
-branch belongs to a team on a remote. Then push the Plan commit right away:
+branch belongs to a team on a remote. Before the commit, put an owner line
+under the Plan's title, with the git `user.name` of the person you plan with:
+
+```markdown
+Owner: <git config user.name>
+```
+
+A coordinator then starts the Plan only for that person, so a colleague's
+`run --all` never takes it. Leave the line out when the person says that any
+developer may run the change. Then push the Plan commit right away:
 
 ```bash
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" sync

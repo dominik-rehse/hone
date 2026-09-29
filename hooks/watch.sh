@@ -1,6 +1,6 @@
 #!/bin/bash
-# Stop hook: a session that watches runs keeps a wait armed. A session under
-# herdr (MAIN of `--all`) registers each run it starts with
+# Stop hook: a session that watches runs keeps a wait armed. The coordinator
+# (skills/coordinate/SKILL.md) registers each session it starts with
 # `scripts/coordinate.sh watch`. While one of those runs is still watched,
 # this hook refuses to end the turn unless the session's `coordinate.sh wait`
 # runs in the background. The wait wakes the session on the next land, stop,

@@ -1526,7 +1526,11 @@ msg_coord_notify() {
 
 msg_coord_usage() {
     cat <<'EOF'
-usage: coordinate.sh watch <change> <agent> [<tab-id>] | unwatch <change> | wait [--since <n>] | list | events | ensure | ticker
+usage:
+  coordinate.sh open | board [<path>] | admit <change>
+  coordinate.sh start run <change> | start garden | start consolidate | start plan "<idea>" [--model <model>]
+  coordinate.sh watch <change> <agent> [<tab-id>] | unwatch <change>
+  coordinate.sh wait [--since <n>] | list | events | ensure | ticker
 EOF
 }
 
@@ -1545,6 +1549,70 @@ hone coordinate: herdr $ver is too old to watch a session.
 Do: update herdr to 0.9.0 or later, then restart its server.
 Why: older agent records carry no state sequence.
 EOF
+}
+
+msg_coord_not_in_herdr() {
+    cat <<'EOF'
+hone coordinate: this session does not run inside herdr, so it cannot open a tab.
+Do: run the Plans in this session, as parallel.md describes.
+Why: start opens each session in a herdr tab.
+EOF
+}
+
+msg_coord_herdr_step() {
+    local step="$1" out="$2"
+    cat <<EOF
+hone coordinate: herdr refused the step "$step", so the session did not start.
+Do: read herdr's answer below, fix the cause, and start the change again. Close the tab if it stays empty.
+Why: a session that never got its prompt runs nothing.
+$(hone_msg_block "$out")
+EOF
+}
+
+msg_coord_started() {
+    local verb="$1" change="$2" label="$3" agent="$4" model="$5"
+    printf 'hone coordinate: started %s %s in tab %s (agent %s, model %s).\n' "$verb" "$change" "$label" "$agent" "$model"
+}
+
+msg_coord_admit_inflight() {
+    local change="$1" owner="$2"
+    cat <<EOF
+hone coordinate: $change is in flight already ($owner), so it does not start again.
+Do: wait for its land, or ask its owner.
+Why: one change has one claim.
+EOF
+}
+
+msg_coord_admit_garden_waits() {
+    local others="$1"
+    cat <<EOF
+hone coordinate: garden waits, because other changes are in flight.
+Do: start garden after these land.
+Why: garden finds its work as it goes.
+$(hone_msg_block "$others")
+EOF
+}
+
+msg_coord_admit_owned() {
+    local change="$1" owner="$2"
+    cat <<EOF
+hone coordinate: the Plan of $change names $owner as its owner, so this coordinator does not start it.
+Do: leave it to $owner, or ask them to hand it over.
+Why: the owner runs their own Plan.
+EOF
+}
+
+msg_coord_admit_waits_for_garden() {
+    cat <<'EOF'
+hone coordinate: a garden pass is in flight, so no run starts now.
+Do: start this change after garden lands.
+Why: garden may touch any file.
+EOF
+}
+
+msg_coord_admit_compare() {
+    local change="$1" n="$2"
+    printf 'hone coordinate: %s may start if its Plan is disjoint from the %s change(s) in flight. Compare the Plans below by the checklist in parallel.md.\n' "$change" "$n"
 }
 
 # ---------------------------------------------------------------- watch hook
@@ -1677,9 +1745,17 @@ worktree|human|msg_wt_land_worktree_dirty|<main-root>/.worktrees/<change>
 worktree|human|msg_wt_land_worktree_untracked|<main-root>/.worktrees/<change>|- <path>
 worktree|human|msg_wt_land_from_worktree|<main-root>|bash <plugin-root>/scripts/worktree.sh land <change>
 worktree|plain|msg_wt_land_retry_moved|main|2
-worktree|plain|msg_wt_land_notify|<repo>|<change>|the proof gate|7|SUB:<short>:<change>
-coordinate|plain|msg_coord_notify|<repo>|<change>|a question or an approval prompt|SUB:<short>:<change>
+worktree|plain|msg_wt_land_notify|<repo>|<change>|the proof gate|7|run:<change>
+coordinate|plain|msg_coord_notify|<repo>|<change>|a question or an approval prompt|run:<change>
 coordinate|plain|msg_coord_usage
+coordinate|human|msg_coord_not_in_herdr
+coordinate|human|msg_coord_herdr_step|agent start|{"error":{"code":"timeout"}}
+coordinate|plain|msg_coord_started|run|<change>|run:<change>|run-<change>|opus
+coordinate|human|msg_coord_admit_inflight|<change>|anna on laptop
+coordinate|human|msg_coord_admit_garden_waits|csv-export (this clone)
+coordinate|human|msg_coord_admit_waits_for_garden
+coordinate|human|msg_coord_admit_owned|<change>|anna
+coordinate|plain|msg_coord_admit_compare|<change>|2
 coordinate|human|msg_coord_no_herdr
 coordinate|human|msg_coord_herdr_old|0.8.2
 watch|agent|msg_watch_no_wait|  csv-export  (sub-csv-export)|bash <plugin-root>/scripts/coordinate.sh wait

@@ -2,8 +2,8 @@
 # hone coordinate helper. The mechanical half of watching run sessions under
 # herdr: a ticker that reads each watched session's state from herdr, an event
 # file that holds what happened, and a wait that hands the next events to the
-# session that watches. The watching session (MAIN of `--all` under herdr) keeps
-# no watcher of its own. Its context can end, and no event is lost, because the
+# session that watches. The watching session (the coordinator of
+# skills/coordinate/SKILL.md) keeps no watcher of its own. Its context can end, and no event is lost, because the
 # events live in a file.
 #
 # State lives in <git-common-dir>/hone-coordinate/, beside the land lock, so
@@ -21,6 +21,52 @@
 #       later, whose agent records carry state_change_seq.
 #       Exit: 0 watching · 2 usage/not-a-repo/no herdr/herdr too old.
 #
+#   coordinate.sh open
+#       Make this herdr tab the repository's coordinator: label it hone, or
+#       hone-2, hone-3 when another tab of this workspace holds the label.
+#       Then print the board. Exit: 0 · 2 not-a-repo/not in herdr/herdr
+#       too old.
+#
+#   coordinate.sh board [<path>]
+#       One line per change, the ones that need the person first: needs
+#       you (with the last event), running, in flight elsewhere (with its
+#       owner), Plan ready, and landed in the last 24 hours. A <path> keeps
+#       the changes whose name or Plan names it. It reads the repository,
+#       the event file, and the watched sessions, never a session's report.
+#       In shared mode it fetches the claims. Exit: 0.
+#
+#   coordinate.sh admit <change | garden>
+#       Say whether <change> may start now, against every change in flight:
+#       a worktree here, a session this repository watches, and in shared
+#       mode each claim on the remote, whoever holds it. Mechanical refusals
+#       exit 4 with the reason: the change is in flight already, garden next
+#       to any other change, or a run next to garden. Garden finds its work
+#       as it goes, so no Plan can say what it touches. Otherwise it exits 0
+#       and prints the candidate's Plan and the Plan of each change in
+#       flight, with its owner. The caller then compares them by the
+#       checklist in skills/run/references/parallel.md. It needs no herdr.
+#       A Plan with an `Owner: <name>` line (the plan skill writes it in
+#       shared mode) is admitted only for the developer whose git user.name
+#       is <name>, so a coordinator never takes a colleague's Plan.
+#       Exit: 0 compare · 4 wait · 2 usage/not-a-repo.
+#
+#   coordinate.sh start run <change> [--model <model>]
+#   coordinate.sh start garden [--model <model>]
+#   coordinate.sh start plan "<idea>" [--model <model>]
+#   coordinate.sh start consolidate [--model <model>]
+#       Open a herdr tab in this workspace, start Claude Code in it, and
+#       prompt it once: /hone:run <change>, /hone:garden, /hone:plan
+#       <idea>, or the global consolidate pass of parallel.md. The session runs in auto permission mode, on opus unless
+#       --model says otherwise. Every session but a plan first passes the
+#       mechanical half of admit, opens in the background, and is watched.
+#       A plan session opens in front, because the person plans in it, and
+#       nobody watches it. The tab label names the verb and the change:
+#       run:<change>, garden, consolidate, or plan. The workspace names the
+#       repository. The agent name is the label in the form herdr accepts
+#       (run-<change>, plan-<n>), with -2, -3 on a collision.
+#       Exit: 0 started · 4 admit refused · 2 usage/not-a-repo/not in
+#       herdr/herdr too old/herdr refused a step (the tab stays).
+#
 #   coordinate.sh unwatch <change>
 #       Stop watching <change>, for a stopped session whose tab the person
 #       closed or gave up. A land removes its session by itself.
@@ -36,7 +82,8 @@
 #       Exit: 0 printed · 2 usage/not-a-repo.
 #
 #   coordinate.sh list
-#       Print each watched session: change, agent, state, and for how long.
+#       Print each watched session: change, agent, tab ID, state, and for
+#       how long.
 #       Exit: 0.
 #
 #   coordinate.sh events
@@ -71,10 +118,10 @@
 
 set -uo pipefail
 
-# shellcheck source=hooks/common.sh
-. "$(dirname -- "${BASH_SOURCE[0]}")/../hooks/common.sh"
-# shellcheck source=hooks/messages.sh
-. "$(dirname -- "${BASH_SOURCE[0]}")/../hooks/messages.sh"
+# worktree.sh has no side effects when sourced. It brings common.sh,
+# messages.sh, and the claim and worktree helpers that admit reads.
+# shellcheck source=scripts/worktree.sh
+. "$(dirname -- "${BASH_SOURCE[0]}")/worktree.sh"
 
 HONE_COORD="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/coordinate.sh"
 # A blocked agent waits this long before the ticker calls it a need. herdr
@@ -216,13 +263,19 @@ version_ge() {
     [ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -1)" = "$2" ]
 }
 
-cmd_watch() {
-    local change="${1:-}" agent="${2:-}" tab="${3:-}" dir ver f
-    [ -n "$change" ] && [ -n "$agent" ] || { msg_coord_usage >&2; return 2; }
-    printf '%s' "$agent" | grep -qE '^[a-z][a-z0-9_-]{0,31}$' || { msg_coord_usage >&2; return 2; }
+# herdr is installed and new enough, or say why not.
+herdr_ready() {
+    local ver
     command -v herdr >/dev/null 2>&1 || { msg_coord_no_herdr >&2; return 2; }
     ver=$(herdr --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
     version_ge "${ver:-0.0.0}" 0.9.0 || { msg_coord_herdr_old "${ver:-unknown}" >&2; return 2; }
+}
+
+cmd_watch() {
+    local change="${1:-}" agent="${2:-}" tab="${3:-}" dir f
+    [ -n "$change" ] && [ -n "$agent" ] || { msg_coord_usage >&2; return 2; }
+    printf '%s' "$agent" | grep -qE '^[a-z][a-z0-9_-]{0,31}$' || { msg_coord_usage >&2; return 2; }
+    herdr_ready || return 2
     dir=$(coord_state_dir) || { msg_coord_usage >&2; return 2; }
     mkdir -p "$dir/sessions"
     [ -n "$tab" ] || tab=$(json_str "$(herdr_call agent get "$agent" 2>/dev/null)" tab_id)
@@ -233,6 +286,240 @@ cmd_watch() {
     kv_save "$f"
     coord_ensure_ticker "$dir"
     printf 'hone coordinate: watching %s (agent %s, tab %s).\n' "$change" "$agent" "${tab:-unknown}"
+}
+
+# Every change in flight, one per line: change, TAB, owner. A worktree
+# here, then a watched session with no worktree yet, then each claim on the
+# shared remote that has no worktree here. A remote that does not answer
+# adds nothing.
+coord_inflight() {
+    local main_root="$1" dir="$2" path branch f remote cref subj c seen=""
+    while IFS=$'\t' read -r path branch; do
+        case "$branch" in hone/*) ;; *) continue ;; esac
+        c=${branch#hone/}
+        seen+=" $c "
+        printf '%s\tthis clone\n' "$c"
+    done < <(parse_worktrees "$(git -C "$main_root" worktree list --porcelain 2>/dev/null)" "$main_root")
+    for f in "$dir"/sessions/*; do
+        [ -f "$f" ] || continue
+        c=$(sed -n 's/^change=//p' "$f")
+        case "$seen" in *" $c "*) continue ;; esac
+        seen+=" $c "
+        printf '%s\tthis clone, starting\n' "$c"
+    done
+    remote=$(shared_remote "$main_root")
+    [ -n "$remote" ] || return 0
+    git -C "$main_root" fetch -q --prune "$remote" '+refs/hone/claim/*:refs/hone/remote-claim/*' >/dev/null 2>&1
+    while IFS= read -r cref; do
+        [ -n "$cref" ] || continue
+        c=${cref#refs/hone/remote-claim/}
+        case "$seen" in *" $c "*) continue ;; esac
+        subj=$(git -C "$main_root" log -1 --format=%s "$cref" 2>/dev/null)
+        # "hone claim: <change> by <name> <<email>> on <host> at <time>"
+        subj=$(printf '%s' "$subj" | sed -n 's/^hone claim: .* by \(.*\) <[^>]*> on \([^ ]*\) at .*/\1 on \2/p')
+        printf '%s\t%s\n' "$c" "${subj:-another clone}"
+    done < <(git -C "$main_root" for-each-ref --format='%(refname)' 'refs/hone/remote-claim/' 2>/dev/null)
+}
+
+# The owner a Plan names on its `Owner:` line, or nothing.
+coord_plan_owner() {
+    coord_plan_text "$1" "$2" | sed -n 's/^Owner:[[:space:]]*//p' | head -1 | sed 's/[[:space:]]*$//'
+}
+
+# The Plan of change $2, from the primary tree, else from the shared
+# remote's primary branch, which holds a Plan another developer committed.
+coord_plan_text() {
+    local main_root="$1" c="$2" remote primary
+    if [ -f "$main_root/.plans/$c.md" ]; then
+        cat "$main_root/.plans/$c.md"; return 0
+    fi
+    remote=$(shared_remote "$main_root")
+    primary=$(git -C "$main_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
+    if [ -n "$remote" ] && git -C "$main_root" show "$remote/$primary:.plans/$c.md" 2>/dev/null; then
+        return 0
+    fi
+    printf '(no Plan for %s here or on the shared remote)\n' "$c"
+}
+
+cmd_admit() {
+    local change="${1:-}" main_root dir inflight c owner garden_now=0 others=""
+    [ -n "$change" ] || { msg_coord_usage >&2; return 2; }
+    main_root=$(main_root_of)
+    dir=$(coord_state_dir) || { msg_coord_usage >&2; return 2; }
+    inflight=$(coord_inflight "$main_root" "$dir")
+    while IFS=$'\t' read -r c owner; do
+        [ -n "$c" ] || continue
+        if [ "$c" = "$change" ]; then
+            msg_coord_admit_inflight "$change" "$owner"; return 4
+        fi
+        case "$c" in garden|garden/*) garden_now=1 ;; esac
+        others+="$c ($owner)"$'\n'
+    done <<<"$inflight"
+    case "$change" in
+        garden|garden/*)
+            [ -z "$others" ] || { msg_coord_admit_garden_waits "${others%$'\n'}"; return 4; } ;;
+        *)
+            owner=$(coord_plan_owner "$main_root" "$change")
+            if [ -n "$owner" ] && [ "$owner" != "$(git config user.name 2>/dev/null)" ]; then
+                msg_coord_admit_owned "$change" "$owner"; return 4
+            fi
+            [ "$garden_now" -eq 0 ] || { msg_coord_admit_waits_for_garden; return 4; } ;;
+    esac
+    msg_coord_admit_compare "$change" "$(printf '%s' "$inflight" | grep -c .)"
+    case "$change" in garden|garden/*) return 0 ;; esac
+    printf '\n=== %s (the candidate)\n' "$change"
+    coord_plan_text "$main_root" "$change"
+    while IFS=$'\t' read -r c owner; do
+        [ -n "$c" ] || continue
+        printf '\n=== %s (%s)\n' "$c" "$owner"
+        coord_plan_text "$main_root" "$c"
+    done <<<"$inflight"
+    return 0
+}
+
+# A herdr agent name for $1-$2: lowercase, [a-z0-9_-] only, 32 characters at
+# most, with -2, -3 on a collision with a live agent.
+coord_agent_name() {
+    local base n i=2
+    base=$(printf '%s-%s' "$1" "$2" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]/-/g' | cut -c1-32)
+    n=$base
+    while herdr_call agent get "$n" >/dev/null 2>&1; do
+        n="$(printf '%s' "$base" | cut -c1-29)-$i"
+        i=$((i + 1))
+    done
+    printf '%s' "$n"
+}
+
+cmd_start() {
+    local verb="${1:-}" arg="" model=opus main_root label agent prompt focus=--no-focus
+    local out tab pane change watch=1 dir admitted rc
+    shift || true
+    case "$verb" in
+        run|plan) arg="${1:-}"; shift || true; [ -n "$arg" ] || { msg_coord_usage >&2; return 2; } ;;
+        garden|consolidate) ;;
+        *) msg_coord_usage >&2; return 2 ;;
+    esac
+    if [ "${1:-}" = --model ]; then
+        model="${2:-}"; [ -n "$model" ] || { msg_coord_usage >&2; return 2; }
+    fi
+    [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_WORKSPACE_ID:-}" ] || { msg_coord_not_in_herdr >&2; return 2; }
+    herdr_ready || return 2
+    main_root=$(main_root_of)
+    dir=$(coord_state_dir) || { msg_coord_usage >&2; return 2; }
+    case "$verb" in
+        run)    change=$arg; label="run:$change"; prompt="/hone:run $change"; agent=$(coord_agent_name run "$change") ;;
+        garden) change=garden; label=garden; prompt="/hone:garden"; agent=$(coord_agent_name hone garden) ;;
+        consolidate)
+            change=consolidate; label=consolidate; agent=$(coord_agent_name hone consolidate)
+            prompt="Run the global consolidate pass that the hone run skill's references/parallel.md describes: a consolidate-critic over the combined result of the changes that just landed. Land each accepted cut through a worktree change of its own, with the ordinary hone loop. Report when it landed, or that there is nothing to cut." ;;
+        plan)   change=plan; label=plan; prompt="/hone:plan $arg"; agent=$(coord_agent_name plan "$(date +%H%M%S)")
+                focus=--focus; watch=0 ;;
+    esac
+    if [ "$watch" -eq 1 ]; then
+        admitted=$(cmd_admit "$change"); rc=$?
+        if [ "$rc" -eq 4 ]; then printf '%s\n' "$admitted"; return 4; fi
+        [ "$rc" -eq 0 ] || return "$rc"
+    fi
+    out=$(herdr_call tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$main_root" --label "$label" "$focus" 2>&1)
+    tab=$(json_str "$out" tab_id); pane=$(json_str "$out" pane_id)
+    [ -n "$tab" ] && [ -n "$pane" ] || { msg_coord_herdr_step "tab create" "$out" >&2; return 2; }
+    out=$(herdr agent start "$agent" --kind claude --pane "$pane" -- --permission-mode auto --model "$model" 2>&1) \
+        || { msg_coord_herdr_step "agent start" "$out" >&2; return 2; }
+    out=$(herdr_call agent prompt "$agent" "$prompt" 2>&1) \
+        || { msg_coord_herdr_step "agent prompt" "$out" >&2; return 2; }
+    [ "$watch" -eq 1 ] && cmd_watch "$change" "$agent" "$tab" >/dev/null
+    msg_coord_started "$verb" "$change" "$label" "$agent" "$model"
+}
+
+cmd_open() {
+    local main_root labels n=1 label=hone
+    [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_TAB_ID:-}" ] || { msg_coord_not_in_herdr >&2; return 2; }
+    herdr_ready || return 2
+    main_root=$(main_root_of)
+    # One tab object per line. The label of every other tab in the workspace.
+    labels=$(herdr_call tab list --workspace "${HERDR_WORKSPACE_ID:-}" 2>/dev/null | sed 's/},{/}\n{/g' \
+        | while IFS= read -r t; do
+              [ "$(json_str "$t" tab_id)" = "$HERDR_TAB_ID" ] || json_str "$t" label
+              printf '\n'
+          done)
+    while printf '%s\n' "$labels" | grep -qxF "$label"; do
+        n=$((n + 1)); label="hone-$n"
+    done
+    herdr_call tab rename "$HERDR_TAB_ID" "$label" >/dev/null 2>&1
+    printf 'hone coordinate: this tab is %s, the coordinator of %s.\n\n' "$label" "$(basename "$main_root")"
+    cmd_board
+}
+
+# The Plans in .plans/, one change per line. A Markdown file under the
+# directory of another Plan is that Plan's reference, not a Plan.
+coord_ready_plans() {
+    local main_root="$1" f c d skip
+    while IFS= read -r f; do
+        c=${f#"$main_root/.plans/"}; c=${c%.md}
+        skip=0; d=$c
+        while [ "$d" != "${d%/*}" ]; do
+            d=${d%/*}
+            [ -f "$main_root/.plans/$d.md" ] && skip=1
+        done
+        [ "$skip" -eq 0 ] && printf '%s\n' "$c"
+    done < <(find "$main_root/.plans" -name '*.md' -type f 2>/dev/null | sort)
+}
+
+cmd_board() {
+    local filter="${1:-}" main_root dir now inflight f c owner ev kind detail
+    local rows="" seen=" " need=0 run=0 ready=0 label
+    main_root=$(main_root_of)
+    dir=$(coord_state_dir) || return 0
+    now=$(date +%s)
+    # One row: rank TAB change TAB state TAB owner. Rank 1 needs the person.
+    row() { rows+="$1"$'\t'"$2"$'\t'"$3"$'\t'"$4"$'\n'; seen+="$2 "; }
+    for f in "$dir"/sessions/*; do
+        [ -f "$f" ] || continue
+        kv_load "$f"
+        ev=$(awk -F'\t' -v c="$kv_change" '$3 == c { k = $4; d = $5 } END { if (k != "") print k "\t" d }' "$dir/events" 2>/dev/null)
+        kind=${ev%%$'\t'*}; detail=${ev#*$'\t'}
+        label=$(json_str "$(herdr_call tab get "$kv_tab" 2>/dev/null)" label)
+        label=${label:-$kv_tab}
+        if [ "$kv_notified" = 1 ] && [ -n "$ev" ]; then
+            case "$kind" in
+                stopped)   row 1 "$kv_change" "NEEDS YOU: land stopped, $detail, tab $label" "this clone" ;;
+                needs-you) row 1 "$kv_change" "NEEDS YOU: $detail, tab $label" "this clone" ;;
+                *)         row 1 "$kv_change" "NEEDS YOU: the session went quiet, tab $label" "this clone" ;;
+            esac
+            need=$((need + 1))
+        else
+            row 2 "$kv_change" "running ($kv_status), tab $label" "this clone"
+            run=$((run + 1))
+        fi
+    done
+    inflight=$(coord_inflight "$main_root" "$dir")
+    while IFS=$'\t' read -r c owner; do
+        [ -n "$c" ] || continue
+        case "$seen" in *" $c "*) continue ;; esac
+        row 3 "$c" "in flight" "$owner"
+    done <<<"$inflight"
+    while IFS= read -r c; do
+        [ -n "$c" ] || continue
+        case "$seen" in *" $c "*) continue ;; esac
+        row 4 "$c" "Plan ready" "$(coord_plan_owner "$main_root" "$c")"
+        ready=$((ready + 1))
+    done < <(coord_ready_plans "$main_root")
+    if [ -f "$dir/events" ]; then
+        while IFS=$'\t' read -r _ c detail; do
+            case "$seen" in *" $c "*) continue ;; esac
+            row 5 "$c" "landed $detail" ""
+        done < <(awk -F'\t' -v t=$((now - 86400)) '$4 == "landed" && $2 >= t { print $2 "\t" $3 "\t" $5 }' "$dir/events")
+    fi
+    printf '%s · %s running · %s need you · %s ready\n' "$(basename "$main_root")" "$run" "$need" "$ready"
+    [ -n "$rows" ] || { printf 'nothing in flight, and no Plan is ready.\n'; return 0; }
+    printf '%s' "$rows" | sort -t$'\t' -k1,1n -k2,2 | while IFS=$'\t' read -r _ c detail owner; do
+        if [ -n "$filter" ]; then
+            case "$c" in *"$filter"*) ;; *)
+                grep -qF -- "$filter" "$main_root/.plans/$c.md" 2>/dev/null || continue ;;
+            esac
+        fi
+        printf '%-24s %-58s %s\n' "$c" "$detail" "$owner"
+    done
 }
 
 cmd_unwatch() {
@@ -306,7 +593,7 @@ cmd_list() {
     for f in "$dir"/sessions/*; do
         [ -f "$f" ] || continue
         kv_load "$f"
-        printf '%-24s %-24s %-8s %s min\n' "$kv_change" "$kv_agent" "$kv_status" $(( (now - kv_since) / 60 ))
+        printf '%-24s %-24s %-10s %-8s %s min\n' "$kv_change" "$kv_agent" "$kv_tab" "$kv_status" $(( (now - kv_since) / 60 ))
     done
 }
 
@@ -326,6 +613,10 @@ main() {
     cd "$root" || return 2
     shift || true
     case "$sub" in
+        open)    cmd_open "$@" ;;
+        board)   cmd_board "$@" ;;
+        admit)   cmd_admit "$@" ;;
+        start)   cmd_start "$@" ;;
         watch)   cmd_watch "$@" ;;
         unwatch) cmd_unwatch "$@" ;;
         wait)    cmd_wait "$@" ;;

@@ -18,7 +18,7 @@ bad() { fail=$((fail+1)); printf '  FAIL %s\n' "$1"; }
 
 REPO=$(mktemp -d)/mailduct
 FAKE="$REPO.fake"
-mkdir -p "$REPO" "$FAKE/bin" "$FAKE/agents" "$FAKE/tabs"
+mkdir -p "$REPO" "$FAKE/bin" "$FAKE/agents" "$FAKE/tabs" "$FAKE/panes"
 cleanup() {
     # A ticker leaves when no session is left.
     rm -rf "$STATE/sessions" 2>/dev/null
@@ -44,7 +44,26 @@ case "$1 ${2:-}" in
         fi
         read -r st sq tab < "$f"
         printf '{"result":{"agent":{"agent_status":"%s","state_change_seq":%s,"tab_id":"%s"}}}\n' "$st" "$sq" "$tab" ;;
-    "tab get") printf '{"result":{"tab":{"label":"%s","tab_id":"%s"}}}\n' "$(cat "$FAKE/tabs/$3" 2>/dev/null)" "$3" ;;
+    "tab get") printf '{"result":{"tab":{"agent_status":"idle","label":"%s","number":1,"tab_id":"%s"}}}\n' "$(cat "$FAKE/tabs/$3" 2>/dev/null)" "$3" ;;
+    "tab list")
+        # herdr 0.9.2's order: label before tab_id, other fields between.
+        printf '{"id":"cli:tab:list","result":{"tabs":['
+        sep=""
+        for t in "$FAKE"/tabs/*; do
+            printf '%s{"agent_status":"idle","focused":false,"label":"%s","number":1,"pane_count":1,"tab_id":"%s","workspace_id":"w"}' "$sep" "$(cat "$t")" "$(basename "$t")"
+            sep=","
+        done
+        printf '],"type":"tab_list"}}\n' ;;
+    "tab rename") printf '%s\n' "$4" > "$FAKE/tabs/$3" ;;
+    "tab create")
+        n=$(( $(cat "$FAKE/n" 2>/dev/null || echo 0) + 1 )); echo "$n" > "$FAKE/n"
+        label=$(printf '%s\n' "$@" | grep -A1 -x -- --label | tail -1)
+        printf '%s\n' "$label" > "$FAKE/tabs/w:t$n"; printf 'w:t%s\n' "$n" > "$FAKE/panes/w:p$n"
+        printf '{"result":{"tab":{"tab_id":"w:t%s","label":"%s"},"root_pane":{"pane_id":"w:p%s"}}}\n' "$n" "$label" "$n" ;;
+    "agent start")
+        pane=$(printf '%s\n' "$@" | grep -A1 -x -- --pane | tail -1)
+        printf 'idle 1 %s\n' "$(cat "$FAKE/panes/$pane")" > "$FAKE/agents/$3" ;;
+    "agent prompt") read -r _ _ tab < "$FAKE/agents/$3"; printf 'working 2 %s\n' "$tab" > "$FAKE/agents/$3" ;;
     "notification show") echo '{"result":{"shown":true}}' ;;
 esac
 STUB
@@ -167,6 +186,130 @@ for _ in $(seq 10); do [ -f "$STATE/sessions/sub-auth" ] || break; sleep 1; done
 events | grep -qP '\tauth-retry\tgone\t' && ok "the background ticker writes events on its own" || bad "ticker: $(events)"
 for _ in $(seq 5); do flock -n "$STATE/ticker.lock" true && break; sleep 1; done
 flock -n "$STATE/ticker.lock" true && ok "the ticker exits when no session is left" || bad "the ticker should exit"
+
+echo "== coordinate: admit =="
+exec 7>"$STATE/ticker.lock"; flock -n 7
+mkdir -p .plans
+printf '# csv-export\n\nFiles: src/export/csv.ts\n' > .plans/csv-export.md
+printf '# pdf-export\n\nFiles: src/export/pdf.ts\n' > .plans/pdf-export.md
+git add -A && git commit -qm "plans"
+out=$(bash "$COORD" admit pdf-export); rc=$?
+[ "$rc" -eq 0 ] && echo "$out" | grep -q 'disjoint from the 0 change' && echo "$out" | grep -q 'src/export/pdf.ts' \
+    && ok "with nothing in flight, admit prints the candidate's Plan and exits 0" || bad "admit, nothing in flight (rc $rc): $out"
+git worktree add -q -b hone/csv-export .worktrees/csv-export
+out=$(bash "$COORD" admit csv-export); rc=$?
+[ "$rc" -eq 4 ] && echo "$out" | grep -q 'csv-export is in flight already (this clone)' \
+    && ok "a change in flight already is refused with exit 4" || bad "in flight (rc $rc): $out"
+out=$(bash "$COORD" admit pdf-export); rc=$?
+[ "$rc" -eq 0 ] && echo "$out" | grep -q '^=== csv-export (this clone)$' && echo "$out" | grep -q 'src/export/csv.ts' \
+    && ok "admit prints each change in flight with its owner and its Plan" || bad "admit compare (rc $rc): $out"
+out=$(bash "$COORD" admit garden); rc=$?
+[ "$rc" -eq 4 ] && echo "$out" | grep -q 'garden waits' && echo "$out" | grep -q 'csv-export (this clone)' \
+    && ok "garden waits while any other change is in flight" || bad "garden (rc $rc): $out"
+printf 'change=garden\nagent=sub-garden\nowner=main-1\n' > "$STATE/sessions/sub-garden"
+out=$(bash "$COORD" admit pdf-export); rc=$?
+[ "$rc" -eq 4 ] && echo "$out" | grep -q 'a garden pass is in flight' \
+    && ok "a run waits while garden is in flight" || bad "run next to garden (rc $rc): $out"
+rm -f "$STATE/sessions/sub-garden"
+
+echo "== coordinate: admit in shared mode =="
+# Another developer claimed rate-limit and committed its Plan on the remote.
+git init -q --bare "$REPO.remote"
+git remote add origin "$REPO.remote"
+printf 'origin\n' > .hone-shared && git add .hone-shared && git commit -qm shared && git push -q origin main
+git clone -q "$REPO.remote" "$REPO.anna"
+( cd "$REPO.anna" && git config user.email a@a && git config user.name anna
+  mkdir -p .plans && printf '# rate-limit\n\nFiles: src/auth/session.ts\n' > .plans/rate-limit.md
+  git add -A && git commit -qm "plan rate-limit" && git push -q origin main
+  sha=$(git commit-tree "$(git hash-object -t tree /dev/null)" -m "hone claim: rate-limit by anna <a@a> on laptop at 2026-09-29T10:00:00+02:00")
+  git push -q origin "$sha:refs/hone/claim/rate-limit" )
+git fetch -q origin
+out=$(bash "$COORD" admit pdf-export); rc=$?
+[ "$rc" -eq 0 ] && echo "$out" | grep -q '^=== rate-limit (anna on laptop)$' && echo "$out" | grep -q 'src/auth/session.ts' \
+    && ok "admit reads another developer's claim and the Plan from the remote" || bad "shared admit (rc $rc): $out"
+( cd "$REPO.anna" && printf '# Plan: tax-export\nOwner: anna\n\nFiles: src/tax/export.ts\n' > .plans/tax-export.md
+  git add -A && git commit -qm "plan tax-export" && git push -q origin main )
+git fetch -q origin
+out=$(bash "$COORD" admit tax-export); rc=$?
+[ "$rc" -eq 4 ] && echo "$out" | grep -q 'names anna as its owner' \
+    && ok "a Plan whose Owner line names a colleague is not admitted" || bad "owned Plan (rc $rc): $out"
+out=$(GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=user.name GIT_CONFIG_VALUE_0=anna bash "$COORD" admit tax-export); rc=$?
+[ "$rc" -eq 0 ] && ok "the owner's own coordinator admits the Plan" || bad "owner admits (rc $rc): $out"
+out=$(bash "$COORD" admit rate-limit); rc=$?
+[ "$rc" -eq 4 ] && echo "$out" | grep -q 'anna on laptop' \
+    && ok "a change another developer claimed is refused with its owner" || bad "claimed by anna (rc $rc): $out"
+git remote remove origin; git rm -q .hone-shared && git commit -qm "not shared"
+git update-ref -d refs/hone/remote-claim/rate-limit
+
+echo "== coordinate: start =="
+: > "$FAKE/log"
+out=$(bash "$COORD" start run pdf-export 2>&1); rc=$?
+[ "$rc" -eq 2 ] && echo "$out" | grep -q 'does not run inside herdr' \
+    && ok "start outside herdr exits 2" || bad "start outside herdr (rc $rc): $out"
+printf 'claude\n' > "$FAKE/tabs/w:t0"
+export HERDR_ENV=1 HERDR_WORKSPACE_ID=w HERDR_TAB_ID=w:t0
+out=$(CLAUDE_CODE_SESSION_ID=main-1 bash "$COORD" start run pdf-export 2>&1); rc=$?
+[ "$rc" -eq 0 ] && echo "$out" | grep -q 'started run pdf-export in tab run:pdf-export (agent run-pdf-export, model opus)' \
+    && ok "start run opens the tab, starts the agent, and says so" || bad "start run (rc $rc): $out"
+grep -q -- "^tab create --workspace w --cwd $REPO --label run:pdf-export --no-focus$" "$FAKE/log" \
+    && grep -q -- '^agent start run-pdf-export --kind claude --pane w:p[0-9]* -- --permission-mode auto --model opus$' "$FAKE/log" \
+    && grep -q -- '^agent prompt run-pdf-export /hone:run pdf-export$' "$FAKE/log" \
+    && [ "$(grep -c '^agent prompt' "$FAKE/log")" -eq 1 ] \
+    && ok "the session opens in the background, in auto mode, on opus, with one prompt" || bad "start calls: $(cat "$FAKE/log")"
+grep -qx 'owner=main-1' "$STATE/sessions/run-pdf-export" && grep -qx 'change=pdf-export' "$STATE/sessions/run-pdf-export" \
+    && ok "start registers the watch for the calling session" || bad "start should watch"
+: > "$FAKE/log"
+out=$(bash "$COORD" start run pdf-export 2>&1); rc=$?
+[ "$rc" -eq 4 ] && ! grep -q '^tab create' "$FAKE/log" \
+    && ok "start refuses a change in flight before it opens a tab" || bad "start in flight (rc $rc): $out"
+agent run-auth-retry idle 9
+out=$(bash "$COORD" start run auth/retry --model sonnet 2>&1); rc=$?
+echo "$out" | grep -q 'agent run-auth-retry-2, model sonnet' \
+    && grep -q -- '--label run:auth/retry' "$FAKE/log" \
+    && ok "an agent name follows herdr's form, and a collision gets -2" || bad "agent name (rc $rc): $out"
+: > "$FAKE/log"
+out=$(bash "$COORD" start plan "an invoice export" 2>&1); rc=$?
+[ "$rc" -eq 0 ] && grep -q -- '--label plan --focus$' "$FAKE/log" \
+    && grep -q -- '^agent prompt plan-[0-9]* /hone:plan an invoice export$' "$FAKE/log" \
+    && ! ls "$STATE"/sessions/ | grep -q '^plan-' \
+    && ok "start plan opens in front, prompts /hone:plan, and is not watched" || bad "start plan (rc $rc): $out / $(cat "$FAKE/log")"
+: > "$FAKE/log"
+out=$(bash "$COORD" start garden 2>&1); rc=$?
+[ "$rc" -eq 4 ] && ! grep -q '^tab create' "$FAKE/log" \
+    && ok "start garden waits while runs are in flight" || bad "start garden (rc $rc): $out"
+: > "$FAKE/log"
+out=$(bash "$COORD" start consolidate 2>&1); rc=$?
+[ "$rc" -eq 0 ] && grep -q -- '^agent prompt hone-consolidate Run the global consolidate pass' "$FAKE/log" \
+    && [ -f "$STATE/sessions/hone-consolidate" ] \
+    && ok "start consolidate prompts the global consolidate pass and watches it" || bad "start consolidate (rc $rc): $out"
+
+echo "== coordinate: open and board =="
+out=$(bash "$COORD" open 2>&1); rc=$?
+[ "$rc" -eq 0 ] && [ "$(cat "$FAKE/tabs/w:t0")" = hone ] && echo "$out" | grep -q 'this tab is hone, the coordinator of mailduct' \
+    && ok "open labels this tab hone and prints the board" || bad "open (rc $rc): $out"
+printf 'hone\n' > "$FAKE/tabs/w:t99"; printf 'claude\n' > "$FAKE/tabs/w:t0"
+out=$(bash "$COORD" open 2>&1)
+[ "$(cat "$FAKE/tabs/w:t0")" = hone-2 ] && ok "a second coordinator in the workspace becomes hone-2" || bad "hone-2: $(cat "$FAKE/tabs/w:t0")"
+rm -f "$FAKE/tabs/w:t99"
+printf '# tax-report\n\nFiles: src/tax/report.ts\n' > .plans/tax-report.md
+mkdir -p .plans/tax-report && printf 'a reference\n' > .plans/tax-report/sample.md
+agent run-pdf-export blocked 12
+( . "$COORD"; cd "$REPO" || exit 1; COORD_BLOCKED=0; coord_tick_session "$STATE/sessions/run-pdf-export" "$STATE" )
+( . "$PLUGIN_ROOT/hooks/common.sh"; hone_coord_event "$STATE" old-change landed 1a2b3c4 )
+out=$(bash "$COORD" board)
+first=$(echo "$out" | sed -n 2p)
+echo "$out" | head -1 | grep -q '^mailduct · 2 running · 1 need you · 1 ready$' \
+    && echo "$first" | grep -q '^pdf-export .*NEEDS YOU: a question or an approval prompt, tab run:pdf-export' \
+    && echo "$out" | grep -q '^csv-export .*in flight .*this clone' \
+    && echo "$out" | grep -q '^tax-report .*Plan ready' && ! echo "$out" | grep -q 'tax-report/sample' \
+    && echo "$out" | grep -q '^old-change .*landed 1a2b3c4' \
+    && ok "board puts what needs you first, then running, in flight, ready, and landed" || bad "board: $out"
+out=$(bash "$COORD" board src/tax)
+[ "$(echo "$out" | sed -n '2,$p' | wc -l)" -eq 1 ] && echo "$out" | grep -q '^tax-report' \
+    && ok "board <path> keeps the changes whose Plan names the path" || bad "board filter: $out"
+unset HERDR_ENV HERDR_WORKSPACE_ID HERDR_TAB_ID
+rm -f "$STATE"/sessions/*
+exec 7>&-
 
 echo
 echo "coordinate_test: $pass passed, $fail failed"

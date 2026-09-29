@@ -490,8 +490,8 @@ landed one at a time. Three rules:
   the last. The unit of parallelism is the change.
 - *The run checks independence before fan-out, never assumes it.* Each
   `plan-critic` ran before the later plans existed, so `run --all` first
-  compares the whole set and partitions it. The comparison covers
-  expected files and areas, shared types and persistent contracts, and
+  compares the whole set, and every change in flight, whoever holds it.
+  The comparison covers expected files and areas, shared types and persistent contracts, and
   Decisions and Notes more than one plan touches. Disjoint plans run in
   parallel. Overlapping plans run sequentially, and each lands before the
   next starts.
@@ -504,8 +504,8 @@ landed one at a time. Three rules:
 
 By default the primary tree is one developer's, and land merges into it
 and stops. A team commits a `.hone-shared` marker, and the primary branch
-then belongs to the team on a remote. Nothing else changes, and that is
-the point. There is no tracker, no daemon, and no pull request, because
+then belongs to the team on a remote. Nothing else changes. There is no
+tracker, no daemon, and no pull request, because
 git already carries the two facts a team needs. The first is who owns a
 change. A claim is a ref on the remote, and git creates a ref exactly
 once. So of two runs racing on one change exactly one wins. The second is
@@ -520,8 +520,8 @@ fast-forwards the primary branch onto that commit. A red merge needs no
 rollback there, and no other session's commit or draft is ever reset.
 Merges from several machines serialize on the suite, and no commit reaches
 the remote unless the suite passed on exactly that tree.
-The partition rule above stays per machine: across machines the merge
-alone verifies independence, and a collision is the same exit 9.
+The partition also reads the other developers' claims and their Plans on
+the remote. The merge still verifies it, and a collision is the same exit 9.
 
 ## Continuous maintenance
 

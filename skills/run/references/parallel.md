@@ -18,15 +18,24 @@ test "${HERDR_ENV:-}" = 1
 
 - It **fails**: run the Plans in this session, as the rest of this file
   describes. That is the ordinary case.
-- It **passes**: this session runs inside herdr, so spread the Plans over herdr
-  tabs. This session becomes MAIN and orchestrates. Each Plan gets a fresh
-  Claude Code session in its own SUB tab. Read `references/herdr.md` and follow
-  it. Everything below still holds. The tabs only change where each run
+- It **passes**: this session runs inside herdr, so it becomes the
+  coordinator. Read `${CLAUDE_PLUGIN_ROOT}/skills/coordinate/SKILL.md` and
+  follow it. Each Plan gets a fresh Claude Code session in a tab of its own.
+  Everything below still holds. The tabs only change where each run
   executes.
 
 ## Partition
 
-Read every ready Plan and compare them pairwise:
+Every change already in flight counts, whoever runs it: another session
+here, or another developer in shared mode. For each ready Plan, run:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/coordinate.sh" admit <change>
+```
+
+Exit 4 means the Plan waits, and the output says why. Exit 0 prints the
+Plan of each change in flight, with its owner. Compare against those Plans
+too. Then read every ready Plan and compare them pairwise:
 
 - the files and areas each expects to change (its *Notes for the loop*, its
   *What*, a quick look at `src/`).

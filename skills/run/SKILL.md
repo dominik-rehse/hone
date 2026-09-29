@@ -1,6 +1,6 @@
 ---
 name: run
-description: "Execute one or more Plans unattended through the hone loop: worktree, build (test-first), verify, consolidate, /code-review, land. Confirms each step by its artifacts, never a subagent's report; proceeds without checking in and stops only when blocked-unresolvable, genuinely ambiguous, or done, leaving the worktree as evidence. Inside herdr, --all spreads the Plans over tabs by itself: this session orchestrates, and each Plan runs in a fresh session in its own tab. Invoke with /hone:run [change | --all] [--model <model>]."
+description: "Execute one or more Plans unattended through the hone loop: worktree, build (test-first), verify, consolidate, /code-review, land. Confirms each step by its artifacts, never a subagent's report; proceeds without checking in and stops only when blocked-unresolvable, genuinely ambiguous, or done, leaving the worktree as evidence. Inside herdr, --all hands over to /hone:coordinate: this session coordinates, and each Plan runs in a fresh session in its own tab. Invoke with /hone:run [change | --all] [--model <model>]."
 argument-hint: "[change-name | --all] [--model <model>]"
 ---
 
@@ -436,8 +436,9 @@ Parallelism is `run` over several Plans, not a special mode, and it is never
 assumed. **Check independence before spawning any worktree**. Each `plan-critic`
 ran before the later Plans existed. So this is the first moment the whole set is
 visible, and the cross-check is yours. Partition the set into disjoint Plans (run
-in parallel) and overlapping ones (run sequentially, foundation first). State the
-partition and its reason, then land one at a time. A change whose `add` exits 4 is
+in parallel) and overlapping ones (run sequentially, foundation first). Changes
+already in flight count too, another developer's included: `coordinate.sh
+admit` lists them. State the partition and its reason, then land one at a time. A change whose `add` exits 4 is
 claimed by another run: skip it and say so.
 
 In shared mode (a committed `.hone-shared`), the queue is the team's, and
@@ -460,12 +461,12 @@ pdf-export   stopped at review: genuinely ambiguous, worktree kept
 `references/parallel.md` carries the full comparison checklist, the claim rule,
 and the landing order. Read it whenever the invocation is `--all`.
 
-Where this session runs inside herdr (`HERDR_ENV=1`), `--all` spreads the Plans
-over herdr tabs rather than running them here. This session becomes MAIN and
-orchestrates. Each Plan gets a fresh Claude Code session in its own SUB tab,
-which runs the same `/hone:run <change>` loop with the same gates. `--model`
-picks the model for those sessions. `parallel.md` makes the check, and
-`references/herdr.md` carries the topology and the exact commands.
+Where this session runs inside herdr (`HERDR_ENV=1`), `--all` hands over to the
+coordinator. Read `${CLAUDE_PLUGIN_ROOT}/skills/coordinate/SKILL.md` and follow
+it, with "run all ready Plans" as the request. This session becomes the
+coordinator, and each Plan runs in a fresh Claude Code session in a tab of its
+own, with the same loop and the same gates. `--model` picks the model for
+those sessions.
 
 ## The three ways to stop
 

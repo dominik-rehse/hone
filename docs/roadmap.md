@@ -30,8 +30,8 @@ in git.
 #### MAIN loses track of its SUB sessions under herdr
 
 - What happens: under herdr, a MAIN session starts one SUB session per
-  Plan. MAIN must watch each SUB until it lands or stops
-  ([`herdr.md`](../skills/run/references/herdr.md)). MAIN often ends its
+  Plan. Since 0.70 MAIN is the coordinator of `/hone:coordinate`. MAIN must watch each SUB until it lands or stops
+  ([the coordinate skill](../skills/coordinate/SKILL.md)). MAIN often ends its
   turn with no watch on a running SUB. Then a SUB that stops at a gate
   waits for the person, and nobody tells the person.
 - How we know: [the 2026-09-28 note](spikes/2026-09-28-main-tracking-of-subs.md)
@@ -46,7 +46,7 @@ in git.
   `scripts/coordinate.sh` holds one ticker and one wait for every MAIN, and
   the `watch` hook blocks a MAIN that ends its turn with no wait. The
   ticker sends the notifications from a script, so the `bash-guard` no
-  longer sees them. `herdr.md` forbids a new `land` after a stop unless the
+  longer sees them. The skill forbids a new `land` after a stop unless the
   person asks. `test/coordinate_test.sh` replays the three field shapes.
 - Next step: after 0.69.0 has run in the maintainer's repositories, read
   the MAIN transcripts. Count the stops that reached the person only when
@@ -61,12 +61,14 @@ in git.
   forwarded the other MAIN's acceptance to a SUB that had stopped at a
   Plan precondition meant for the person.
 - How we know: [the 2026-09-28 note](spikes/2026-09-28-main-tracking-of-subs.md).
-- Next step: the partition in `parallel.md` could treat every claimed
-  change as running work, whoever holds it. Its Plan names its files, so
-  no message is needed for that part. Then `herdr.md` says what a message
-  between MAINs may do: ask for a hold, send a file list, or wake the
-  other MAIN. It never answers a stop that belongs to a person, and it
-  never counts as proof of a land.
+- Done in 0.70.0: `coordinate.sh admit` checks a change against every
+  change in flight, whoever holds it: a worktree here, a session this
+  repository watches, and each claim on the shared remote with its Plan.
+  The coordinate skill says what a message between two coordinators may do. It may ask for a
+  hold, send a file list, or wake the other MAIN. It never answers a stop
+  that belongs to the person, and it never counts as proof of a land.
+- Next step: read the next session in which two MAINs share a repository.
+  Look for a message that stands in for the person.
 
 #### The `untied-sentence` check grades a true negation as stale
 
