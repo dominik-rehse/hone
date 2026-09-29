@@ -61,8 +61,8 @@
 #       watched. Every session but a plan first passes the mechanical half of
 #       admit. The tab label names the verb and the change: run:<change>,
 #       garden, consolidate, or plan:<idea>, where <idea> is the idea's first
-#       words in lowercase with hyphens, and -2, -3 on a collision. A
-#       plan's watch is under that label.
+#       40 characters in lowercase, with hyphens and slashes, and -2, -3 when
+#       a watched plan holds the label. A plan's watch is under that label.
 #       The workspace names the repository. The agent name is the label in
 #       the form herdr accepts (run-<change>, plan-<idea>), with -2, -3 on a
 #       collision.
@@ -72,8 +72,8 @@
 #   coordinate.sh planned <slug>
 #       The plan skill runs this last, in a plan tab that start opened, once
 #       it committed .plans/<slug>.md. It writes a planned event for the
-#       watch of this tab (HERDR_TAB_ID). In a tab that no watch names, it
-#       does nothing. Exit: 0 · 2 usage/not-a-repo/.plans/<slug>.md not in
+#       watch of this tab (HERDR_TAB_ID), and relabels the tab plan:<slug>.
+#       In a tab that no watch names, it does nothing. Exit: 0 · 2 usage/not-a-repo/.plans/<slug>.md not in
 #       HEAD.
 #
 #   coordinate.sh unwatch <change>
@@ -436,6 +436,16 @@ coord_agent_name() {
     printf '%s' "$n"
 }
 
+# The watch name of a new plan of slug $2: plan:$2, with -2, -3 when a
+# watch in $1 holds it already.
+coord_plan_change() {
+    local c="plan:$2" i=2
+    while grep -qxF "change=$c" "$1"/sessions/* 2>/dev/null; do
+        c="plan:$2-$i"; i=$((i + 1))
+    done
+    printf '%s' "$c"
+}
+
 cmd_start() {
     local verb="${1:-}" arg="" model=opus main_root label agent prompt slug
     local out tab pane change dir admitted rc
@@ -458,12 +468,13 @@ cmd_start() {
         consolidate)
             change=consolidate; label=consolidate; agent=$(coord_agent_name hone consolidate)
             prompt="Run the global consolidate pass that the hone run skill's references/parallel.md describes: a consolidate-critic over the combined result of the changes that just landed. Land each accepted cut through a worktree change of its own, with the ordinary hone loop. Report when it landed, or that there is nothing to cut." ;;
-        plan)   # The idea's first words name the tab: at most 24 of [a-z0-9-].
-                slug=$(printf '%s' "$arg" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//' \
-                    | cut -c1-24 | sed -E 's/-+$//')
-                agent=$(coord_agent_name plan "${slug:-$(date +%H%M%S)}")
-                # The agent's -2, -3 keeps two plans of one idea apart.
-                change="plan:${agent#plan-}"; label=$change; prompt="/hone:plan $arg" ;;
+        plan)   # The idea's first words name the tab: at most 40 of [a-z0-9/-],
+                # so a slug like auth/retry stays as run:auth/retry has it.
+                slug=$(printf '%s' "$arg" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9/]+#-#g; s#^[-/]+##' \
+                    | cut -c1-40 | sed -E 's#[-/]+$##')
+                slug=${slug:-$(date +%H%M%S)}
+                change=$(coord_plan_change "$dir" "$slug"); label=$change; prompt="/hone:plan $arg"
+                agent=$(coord_agent_name plan "$slug") ;;
     esac
     if [ "$verb" != plan ]; then
         admitted=$(cmd_admit "$change"); rc=$?
@@ -590,6 +601,7 @@ cmd_planned() {
         git -C "$(main_root_of)" cat-file -e "HEAD:.plans/$slug.md" 2>/dev/null \
             || { msg_coord_plan_uncommitted "$slug" >&2; return 2; }
         hone_coord_event "$dir" "$kv_change" planned "$slug"
+        herdr_call tab rename "$kv_tab" "plan:$slug" >/dev/null 2>&1
         printf 'hone coordinate: %s is planned. This tab closes when the turn ends.\n' "$slug"
         return 0
     done

@@ -268,9 +268,9 @@ echo "$out" | grep -q 'agent run-auth-retry-2, model sonnet' \
     && grep -q -- '--label run:auth/retry' "$FAKE/log" \
     && ok "an agent name follows herdr's form, and a collision gets -2" || bad "agent name (rc $rc): $out"
 : > "$FAKE/log"
-out=$(bash "$COORD" start plan "An invoice export, for Q3 accounting" 2>&1); rc=$?
+out=$(bash "$COORD" start plan "An invoice export, for Q3" 2>&1); rc=$?
 [ "$rc" -eq 0 ] && grep -q -- '--label plan:an-invoice-export-for-q3 --no-focus$' "$FAKE/log" \
-    && grep -q -- '^agent prompt plan-an-invoice-export-for-q3 /hone:plan An invoice export, for Q3 accounting$' "$FAKE/log" \
+    && grep -q -- '^agent prompt plan-an-invoice-export-for-q3 /hone:plan An invoice export, for Q3$' "$FAKE/log" \
     && grep -qx 'change=plan:an-invoice-export-for-q3' "$STATE/sessions/plan-an-invoice-export-for-q3" \
     && ok "start plan names the tab by the idea, opens it behind, prompts /hone:plan, and watches it" || bad "start plan (rc $rc): $out / $(cat "$FAKE/log")"
 ptab=$(sed -n 's/^tab=//p' "$STATE/sessions/plan-an-invoice-export-for-q3")
@@ -288,7 +288,8 @@ out=$(HERDR_TAB_ID=w:t99 bash "$COORD" planned invoice-export 2>&1); rc=$?
 [ "$rc" -eq 0 ] && ! events | grep -qP '\tplanned\t' && ok "planned in a tab no watch names does nothing" || bad "planned elsewhere (rc $rc): $out"
 out=$(HERDR_TAB_ID=$ptab bash "$COORD" planned invoice-export 2>&1); rc=$?
 [ "$rc" -eq 0 ] && events | grep -qP '\tplan:an-invoice-export-for-q3\tplanned\tinvoice-export$' \
-    && ok "planned writes a planned event for the tab's watch" || bad "planned (rc $rc): $out / $(events)"
+    && grep -qx "tab rename $ptab plan:invoice-export" "$FAKE/log" \
+    && ok "planned writes a planned event for the tab's watch and relabels the tab by the slug" || bad "planned (rc $rc): $out / $(events)"
 agent plan-an-invoice-export-for-q3 working 3 "$ptab"; tick plan-an-invoice-export-for-q3
 [ -f "$STATE/sessions/plan-an-invoice-export-for-q3" ] && ! grep -q "^tab close $ptab" "$FAKE/log" \
     && ok "a planned session keeps its tab while its turn runs" || bad "planned closed a working tab"
@@ -297,6 +298,10 @@ agent plan-an-invoice-export-for-q3 idle 4 "$ptab"; tick plan-an-invoice-export-
     && [ -f "$STATE/sessions/plan-an-invoice-export-for-q3-2" ] \
     && ok "a planned session that goes idle closes its tab and leaves the watch" || bad "planned idle: $(cat "$FAKE/log")"
 rm -f "$STATE/sessions/plan-an-invoice-export-for-q3-2"
+out=$(bash "$COORD" start plan auth/retry 2>&1)
+grep -q -- '--label plan:auth/retry --no-focus$' "$FAKE/log" && grep -qx 'change=plan:auth/retry' "$STATE/sessions/plan-auth-retry" \
+    && ok "a nested slug keeps its slash in the plan label" || bad "nested plan label: $out"
+rm -f "$STATE/sessions/plan-auth-retry"
 git rm -q .plans/invoice-export.md && git commit -qm 'drop plan' && mkdir -p .plans
 : > "$FAKE/log"
 out=$(bash "$COORD" start garden 2>&1); rc=$?
