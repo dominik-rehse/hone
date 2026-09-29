@@ -24,9 +24,10 @@ Slash commands, in the order a change flows:
 - `/hone:coordinate [request]` makes this tab in
   [herdr](https://github.com/herdrdev/herdr) 0.9.0 or later the repository's
   coordinator, labelled `hone`. It starts each plan, run, or garden session
-  in a tab of its own (`run:<change>`, on `opus` unless `--model` says
-  otherwise), watches them, and prints a board. `/hone:run --all` inside
-  herdr hands over to it. `scripts/coordinate.sh` does the mechanics: its
+  in a background tab (`run:<change>`, `plan:<idea>`; `opus` unless
+  `--model` says otherwise), watches it, and prints a board. A plan tab
+  closes once its Plan is committed. `/hone:run --all` inside herdr hands over
+  to it. `scripts/coordinate.sh` does the mechanics: its
   ticker notifies you when a session needs you, and its `admit` checks a
   change against every change in flight, other developers' claims included,
   and keeps garden apart. A dependent Plan starts, and a run's tab closes,

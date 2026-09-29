@@ -1529,8 +1529,17 @@ msg_coord_usage() {
 usage:
   coordinate.sh open | board [<path>] | admit <change>
   coordinate.sh start run <change> | start garden | start consolidate | start plan "<idea>" [--model <model>]
-  coordinate.sh watch <change> <agent> [<tab-id>] | unwatch <change>
+  coordinate.sh watch <change> <agent> [<tab-id>] | unwatch <change> | planned <slug>
   coordinate.sh wait [--since <n>] | list | events | ensure | ticker
+EOF
+}
+
+msg_coord_plan_uncommitted() {
+    local slug="$1"
+    cat <<EOF
+hone coordinate: .plans/$slug.md is not committed on HEAD, so this plan is not done.
+Do: commit the approved Plan (plan skill step 7), then run planned again.
+Why: a plan tab closes only on a committed Plan.
 EOF
 }
 
@@ -1757,6 +1766,7 @@ coordinate|human|msg_coord_admit_waits_for_garden
 coordinate|human|msg_coord_admit_owned|<change>|anna
 coordinate|plain|msg_coord_admit_compare|<change>|2
 coordinate|human|msg_coord_no_herdr
+coordinate|human|msg_coord_plan_uncommitted|<slug>
 coordinate|human|msg_coord_herdr_old|0.8.2
 watch|agent|msg_watch_no_wait|  csv-export  (sub-csv-export)|bash <plugin-root>/scripts/coordinate.sh wait
 watch|human|msg_watch_let_go

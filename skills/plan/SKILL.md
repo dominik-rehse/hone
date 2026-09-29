@@ -291,3 +291,13 @@ the user typed, so state it plainly:
 > `/hone:run` to pick it up with any other ready Plans.
 
 Do not start building. `/hone:run` owns everything after the Plan.
+
+Inside herdr (`HERDR_ENV=1`), run this as the last step of the turn:
+
+```bash
+bash "${CLAUDE_PLUGIN_ROOT}/scripts/coordinate.sh" planned <slug>
+```
+
+In a plan tab that `/hone:coordinate` opened, it tells the coordinator that
+the Plan is committed, and the tab closes when your turn ends. Anywhere else it
+does nothing.

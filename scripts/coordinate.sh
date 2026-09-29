@@ -57,15 +57,24 @@
 #       Open a herdr tab in this workspace, start Claude Code in it, and
 #       prompt it once: /hone:run <change>, /hone:garden, /hone:plan
 #       <idea>, or the global consolidate pass of parallel.md. The session runs in auto permission mode, on opus unless
-#       --model says otherwise. Every session but a plan first passes the
-#       mechanical half of admit, opens in the background, and is watched.
-#       A plan session opens in front, because the person plans in it, and
-#       nobody watches it. The tab label names the verb and the change:
-#       run:<change>, garden, consolidate, or plan. The workspace names the
-#       repository. The agent name is the label in the form herdr accepts
-#       (run-<change>, plan-<n>), with -2, -3 on a collision.
+#       --model says otherwise. Every session opens in the background and is
+#       watched. Every session but a plan first passes the mechanical half of
+#       admit. The tab label names the verb and the change: run:<change>,
+#       garden, consolidate, or plan:<idea>, where <idea> is the idea's first
+#       words in lowercase with hyphens, and -2, -3 on a collision. A
+#       plan's watch is under that label.
+#       The workspace names the repository. The agent name is the label in
+#       the form herdr accepts (run-<change>, plan-<idea>), with -2, -3 on a
+#       collision.
 #       Exit: 0 started · 4 admit refused · 2 usage/not-a-repo/not in
 #       herdr/herdr too old/herdr refused a step (the tab stays).
+#
+#   coordinate.sh planned <slug>
+#       The plan skill runs this last, in a plan tab that start opened, once
+#       it committed .plans/<slug>.md. It writes a planned event for the
+#       watch of this tab (HERDR_TAB_ID). In a tab that no watch names, it
+#       does nothing. Exit: 0 · 2 usage/not-a-repo/.plans/<slug>.md not in
+#       HEAD.
 #
 #   coordinate.sh unwatch <change>
 #       Stop watching <change>, for a stopped session whose tab the person
@@ -107,10 +116,13 @@
 #                     garden no hone/garden/* worktree is left. Both land
 #                     under names of their own, so no landed event ends
 #                     their watch.
+#         planned     a plan session committed its Plan (planned writes
+#                     this one). When the session is next idle, the ticker
+#                     closes its tab.
 #       A needs-you or a quiet event also shows a herdr notification that
 #       names the repository and the tab, so the person hears of it while the
-#       watching session sleeps. A landed, gone, or finished session leaves
-#       the watch.
+#       watching session sleeps. A landed, gone, finished, or planned session
+#       leaves the watch.
 #       The ticker exits when no session is left. Exit: 0.
 #
 #   coordinate.sh ensure
@@ -222,6 +234,14 @@ coord_tick_session() {
         kv_seq=$sq kv_status=$st kv_since=$now kv_notified=0
         [ "$st" = working ] && kv_worked=$now
     fi
+    # A plan whose Plan is committed is done: close its tab once its turn ends.
+    case "$kv_change:$kv_status" in
+        plan:*:idle|plan:*:done)
+            if has_event "$dir/events" "$kv_change" planned "$kv_registered"; then
+                herdr_call tab close "$kv_tab" >/dev/null 2>&1
+                rm -f "$sf"; return 1
+            fi ;;
+    esac
     if [ "$kv_notified" = 0 ]; then
         case "$kv_status" in
             blocked)
@@ -327,6 +347,8 @@ coord_inflight() {
     for f in "$dir"/sessions/*; do
         [ -f "$f" ] || continue
         c=$(sed -n 's/^change=//p' "$f")
+        # A plan session changes no file outside .plans/.
+        case "$c" in plan:*) continue ;; esac
         case "$seen" in *" $c "*) continue ;; esac
         seen+=" $c "
         printf '%s\tthis clone, starting\n' "$c"
@@ -415,8 +437,8 @@ coord_agent_name() {
 }
 
 cmd_start() {
-    local verb="${1:-}" arg="" model=opus main_root label agent prompt focus=--no-focus
-    local out tab pane change watch=1 dir admitted rc
+    local verb="${1:-}" arg="" model=opus main_root label agent prompt slug
+    local out tab pane change dir admitted rc
     shift || true
     case "$verb" in
         run|plan) arg="${1:-}"; shift || true; [ -n "$arg" ] || { msg_coord_usage >&2; return 2; } ;;
@@ -436,22 +458,26 @@ cmd_start() {
         consolidate)
             change=consolidate; label=consolidate; agent=$(coord_agent_name hone consolidate)
             prompt="Run the global consolidate pass that the hone run skill's references/parallel.md describes: a consolidate-critic over the combined result of the changes that just landed. Land each accepted cut through a worktree change of its own, with the ordinary hone loop. Report when it landed, or that there is nothing to cut." ;;
-        plan)   change=plan; label=plan; prompt="/hone:plan $arg"; agent=$(coord_agent_name plan "$(date +%H%M%S)")
-                focus=--focus; watch=0 ;;
+        plan)   # The idea's first words name the tab: at most 24 of [a-z0-9-].
+                slug=$(printf '%s' "$arg" | tr '[:upper:]' '[:lower:]' | sed -E 's/[^a-z0-9]+/-/g; s/^-+//' \
+                    | cut -c1-24 | sed -E 's/-+$//')
+                agent=$(coord_agent_name plan "${slug:-$(date +%H%M%S)}")
+                # The agent's -2, -3 keeps two plans of one idea apart.
+                change="plan:${agent#plan-}"; label=$change; prompt="/hone:plan $arg" ;;
     esac
-    if [ "$watch" -eq 1 ]; then
+    if [ "$verb" != plan ]; then
         admitted=$(cmd_admit "$change"); rc=$?
         if [ "$rc" -eq 4 ]; then printf '%s\n' "$admitted"; return 4; fi
         [ "$rc" -eq 0 ] || return "$rc"
     fi
-    out=$(herdr_call tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$main_root" --label "$label" "$focus" 2>&1)
+    out=$(herdr_call tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$main_root" --label "$label" --no-focus 2>&1)
     tab=$(json_str "$out" tab_id); pane=$(json_str "$out" pane_id)
     [ -n "$tab" ] && [ -n "$pane" ] || { msg_coord_herdr_step "tab create" "$out" >&2; return 2; }
     out=$(herdr agent start "$agent" --kind claude --pane "$pane" -- --permission-mode auto --model "$model" 2>&1) \
         || { msg_coord_herdr_step "agent start" "$out" >&2; return 2; }
     out=$(herdr_call agent prompt "$agent" "$prompt" 2>&1) \
         || { msg_coord_herdr_step "agent prompt" "$out" >&2; return 2; }
-    [ "$watch" -eq 1 ] && cmd_watch "$change" "$agent" "$tab" >/dev/null
+    cmd_watch "$change" "$agent" "$tab" >/dev/null
     msg_coord_started "$verb" "$change" "$label" "$agent" "$model"
 }
 
@@ -551,6 +577,25 @@ cmd_board() {
     done
 }
 
+cmd_planned() {
+    local slug="${1:-}" dir f
+    [ -n "$slug" ] || { msg_coord_usage >&2; return 2; }
+    dir=$(coord_state_dir) || { msg_coord_usage >&2; return 2; }
+    [ -n "${HERDR_TAB_ID:-}" ] || return 0
+    for f in "$dir"/sessions/*; do
+        [ -f "$f" ] || continue
+        kv_load "$f"
+        case "$kv_change" in plan:*) ;; *) continue ;; esac
+        [ "$kv_tab" = "$HERDR_TAB_ID" ] || continue
+        git -C "$(main_root_of)" cat-file -e "HEAD:.plans/$slug.md" 2>/dev/null \
+            || { msg_coord_plan_uncommitted "$slug" >&2; return 2; }
+        hone_coord_event "$dir" "$kv_change" planned "$slug"
+        printf 'hone coordinate: %s is planned. This tab closes when the turn ends.\n' "$slug"
+        return 0
+    done
+    return 0
+}
+
 cmd_unwatch() {
     local change="${1:-}" dir f
     [ -n "$change" ] || { msg_coord_usage >&2; return 2; }
@@ -647,6 +692,7 @@ main() {
         admit)   cmd_admit "$@" ;;
         start)   cmd_start "$@" ;;
         watch)   cmd_watch "$@" ;;
+        planned) cmd_planned "$@" ;;
         unwatch) cmd_unwatch "$@" ;;
         wait)    cmd_wait "$@" ;;
         list)    cmd_list "$@" ;;

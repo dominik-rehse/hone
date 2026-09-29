@@ -39,9 +39,10 @@ The person asks in plain words. Map each request to one of these:
 
 - *Run a change* ("run csv-export", "run all ready Plans"): admit each Plan,
   then start the admitted ones. See *Admit* and *Start*.
-- *Plan a change* ("plan an export for invoices"): open a plan tab in front
-  of the person, who plans there. Nobody watches a plan tab. When the Plan is
-  committed, admit and start it like any other.
+- *Plan a change* ("plan an export for invoices"): open a plan tab, labelled
+  `plan:<the idea's first words>`, and tell the person its label. The tab
+  opens in the background, and the person plans there. The ticker watches it
+  like any other session.
 
   ```bash
   bash "${CLAUDE_PLUGIN_ROOT}/scripts/coordinate.sh" start plan "<the idea, in the person's words>"
@@ -125,6 +126,9 @@ notification itself. The events:
   is blocked-unresolvable or genuinely ambiguous (`run`'s stop points 1 and 2)
   keeps its worktree and its tab as evidence.
 - `gone`: the session ended. Report it. Its worktree, if any, is evidence.
+- `planned`: a plan session committed the Plan that the event names. The
+  ticker closes its tab when its turn ends. Admit and start the Plan like any
+  other.
 - `finished`: a garden or consolidate session went quiet with no worktree of
   its own left. They land under names of their own, so no `landed` event
   ends them. Read its report, put what it landed on the board, close its
@@ -190,8 +194,9 @@ herdr tab close <tab-id>
 ```
 
 `list` names each watched session's tab ID. Close a tab after `landed` printed
-`landed`, on a `finished` event, or when the person asks. Close only tabs this session started. A
-stopped session keeps its tab for the same reason a failed land keeps its
+`landed`, on a `finished` event, or when the person asks. The ticker closes a
+plan tab itself, after a `planned` event. Close only tabs this session started.
+A stopped session keeps its tab for the same reason a failed land keeps its
 worktree: it is evidence, and the person resumes there. When the person closes
 or gives up on a watched session, run `coordinate.sh unwatch <change>`.
 
