@@ -203,7 +203,7 @@ for c in 'env -u CLAUDECODE bash scripts/worktree.sh \"grant\" db-drop reason' \
          'bash scripts/worktree.sh \"attest\" db-drop ran-it'; do
     echo "$(bg "$c")" | grep -q '"deny"' && ok "a quoted helper subcommand denied: $c" || bad "a quoted helper subcommand should be denied: $c"
 done
-# The model cannot invoke /hone:grant, but a nested session would run it as a person.
+# Until 0.68 /hone:grant was a skill. A nested session would run it as a person.
 echo "$(bg "claude -p '/hone:grant db-drop unused' --allowedTools Bash")" | grep -q '"deny"' && ok "a nested /hone:grant denied" || bad "a nested claude -p /hone:grant should be denied"
 echo "$(bg 'git commit -m \"docs: the person types /hone:grant\"')" | grep -q 'permissionDecision' && bad "/hone:grant inside a commit message is prose" || ok "/hone:grant named in a commit message passes"
 # Any command that names the auto-grant marker asks: one command can create,

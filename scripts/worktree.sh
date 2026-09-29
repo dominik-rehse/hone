@@ -203,8 +203,8 @@
 #       .hone-grant/<change>, stamped with the git user and the current time.
 #       The human's act alone: the bash-guard denies the agent this helper,
 #       and the agent stops and hands over a briefing and this command instead.
-#       In Claude Code the person runs it as /hone:grant (skills/grant), which
-#       the model cannot invoke.
+#       In Claude Code the person types it after a `!`, which runs it as
+#       their own command.
 #       A Plan authorizes nothing here, because the agent helped write it.
 #       It is the only route to the file: both guards deny a raw write,
 #       because the stamp lives here.

@@ -543,14 +543,15 @@ echo "$out" | grep -qF "db/migrations/0002_drop.sql: DROP TABLE legacy_sessions;
 [ -d "$WT_C" ] || die "worktree should survive an ungranted irreversible land as evidence"
 step "irreversible change without a grant refused (exit 8), trunk untouched"
 # (b0) The refusal says why each signal needs a grant, names the diff range by
-# branch and not by a merge-base SHA, and offers /hone:grant beside the
-# terminal command.
+# branch and not by a merge-base SHA, and offers the grant command to type
+# after a `!`.
 echo "$out" | grep -qF "A revert brings back the file, but not the rows or columns" \
     || die "the refusal should say why destructive SQL needs a grant: $out"
 echo "$out" | grep -qF "diff main...hone/db-drop" || die "the refusal should name the diff range by branch: $out"
 echo "$out" | grep -qE '[0-9a-f]{40}' && die "the refusal should carry no raw SHA: $out"
-echo "$out" | grep -qF '/hone:grant db-drop "your reason"' || die "the refusal should offer /hone:grant: $out"
-step "the refusal explains each signal and offers /hone:grant"
+echo "$out" | grep -qE '^  ! bash .*worktree\.sh grant db-drop "your reason"$' || die "the refusal should offer the ! grant line: $out"
+echo "$out" | grep -qF '/hone:grant' && die "the refusal should not offer the removed /hone:grant: $out"
+step "the refusal explains each signal and offers the ! grant line"
 # (b1) The same gate on a LARGE migration. The destructive-SQL grep used to
 # run with -q, quit on its first match, and the diff writer took SIGPIPE on a
 # diff larger than the pipe. Under pipefail the condition then read false with
@@ -588,7 +589,7 @@ step "grant helper wrote a stamped grant; change landed, authorization in histor
 # (c2) Both a person and the agent may record a grant, so the stamp says which.
 # The git identity is the same either way, and an unmarked stamp would read as
 # the person's authorization for a grant the loop recorded.
-git branch hone/stamp-person && git branch hone/stamp-agent && git branch hone/skill-grant
+git branch hone/stamp-person && git branch hone/stamp-agent
 out=$(bash "$WSH" grant no-such-change "a real reason" 2>&1); rc=$?
 [ "$rc" -eq 2 ] || die "a grant for a change with no branch should exit 2 (got $rc)"
 echo "$out" | grep -qF "branch hone/no-such-change does not exist" || die "the refusal should name the missing branch: $out"
@@ -603,29 +604,6 @@ grep -q "^agent, on behalf of .*t@t.t" "$REPO/.hone-grant/stamp-agent" || die "a
 rm -f "$REPO/.hone-grant/stamp-person" "$REPO/.hone-grant/stamp-agent"
 git branch -D hone/stamp-person hone/stamp-agent >/dev/null 2>&1
 step "the grant stamp separates the agent from the person"
-# (c2b) /hone:grant runs the shell block of skills/grant/SKILL.md. Claude Code
-# pastes the arguments into that block as text and sets CLAUDECODE, so the
-# block must pass a quoted reason through unexpanded and stamp a person.
-skill_grant() {
-    awk '/^```!$/ { on = 1; next } /^```$/ { on = 0 } on' "$PLUGIN_ROOT/skills/grant/SKILL.md" \
-        | awk -v a="$1" -v r="$PLUGIN_ROOT" '{ gsub(/\$ARGUMENTS/, a); gsub(/\$\{CLAUDE_PLUGIN_ROOT\}/, r); print }' \
-        | CLAUDECODE=1 bash
-}
-out=$(skill_grant 'skill-grant "it'"'"'s unused, see $(echo INJ) `echo TICK`"')
-echo "$out" | grep -q "^exit 0$" || die "the skill block should record the grant: $out"
-grep -qF 'it'"'"'s unused, see $(echo INJ) `echo TICK`' "$REPO/.hone-grant/skill-grant" \
-    || die "the skill block should record the reason verbatim, unquoted and unexpanded: $(cat "$REPO/.hone-grant/skill-grant")"
-grep -q "^agent" "$REPO/.hone-grant/skill-grant" && die "a grant through the skill should carry no agent mark"
-rm -f "$REPO/.hone-grant/skill-grant"
-out=$(skill_grant '"skill-grant" the users'"'")
-echo "$out" | grep -q "^exit 0$" || die "the skill block should unquote the change name: $out"
-grep -qF "the users'" "$REPO/.hone-grant/skill-grant" || die "the skill block should keep an unpaired apostrophe: $(cat "$REPO/.hone-grant/skill-grant")"
-rm -f "$REPO/.hone-grant/skill-grant"
-out=$(skill_grant 'skill-grant "your reason"')
-echo "$out" | grep -q "^exit 2$" || die "the skill block should report a refused placeholder: $out"
-[ -f "$REPO/.hone-grant/skill-grant" ] && die "a refused skill grant must not write a file"
-git branch -D hone/skill-grant >/dev/null 2>&1
-step "/hone:grant records the reason verbatim, stamped as a person"
 # (c3) A nested slug's grant sits in a subdir. Consuming it removes the empty
 # parent dirs too, up to (not including) .hone-grant itself.
 WT_N=$(bash "$WSH" add db/nested-drop) || die "worktree add db/nested-drop"

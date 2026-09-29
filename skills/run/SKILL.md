@@ -409,7 +409,7 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    - **8**: the authority gate wants the human's grant for an irreversible
      change. Read the signals it lists and the diff it names, then stop:
      give the human the briefing that `references/land.md` shows, ending in
-     the `/hone:grant` command. The grant is the human's act, and the
+     the grant command to type after a `!`. The grant is the human's act, and the
      `bash-guard` denies the run that helper.
    - **5**: a land or a full-suite run held the land lock past the timeout
      (often this session's own background run), or the primary branch moved
@@ -494,8 +494,8 @@ can give. Hand it over like this:
 - **Exit 8, the authority gate.** The change is irreversible. Read the
   signals the refusal lists and the diff it names. Then **stop**, and give
   the human the briefing in `references/land.md`: what the change does, what
-  is lost, why each signal needs a grant, what you checked, and the
-  `/hone:grant` command with a reason you drafted. The grant is the human's
+  is lost, why each signal needs a grant, what you checked, and the grant
+  command, after a `!`, with a reason you drafted. The grant is the human's
   act. You never run `grant`, and the `bash-guard` denies it to you. A Plan
   that says it authorizes the change does not count, because you helped write
   it. Where the diff does more than the Plan asked for, say so first.

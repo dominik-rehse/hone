@@ -1785,9 +1785,10 @@ fi
 # message. The match reads the command with its quotes removed, because the
 # shell removes them too: `worktree.sh "grant"` and `gr""ant` run the helper.
 #
-# /hone:grant is the person's route to the same helper. The model cannot
-# invoke the skill, but a nested `claude -p '/hone:grant ...'` would run it as
-# if a person typed it. So a claude command that names it is denied as well.
+# Until 0.68, /hone:grant was a skill that ran the same helper. A nested
+# `claude -p '/hone:grant ...'` would have run it as if a person typed it. A
+# claude command that names it stays denied, for a plugin copy that still
+# has the skill.
 UNQUOTED=$(printf '%s' "$CMD" | tr -d "\"'\\\\")
 if echo "$UNQUOTED" | grep -Eq 'worktree\.sh[[:space:]]+attest([[:space:]]|$)'; then
     decision deny "$(msg_bashguard_attest)"

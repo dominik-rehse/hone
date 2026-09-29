@@ -202,7 +202,7 @@ of proceeding in exactly three cases:
 
 The land gates back the third case. An irreversible change stops at the
 authority gate, because `git revert` does not undo a dropped column. The
-run reads the diff, briefs you, and hands you a `/hone:grant` command. A
+run reads the diff, briefs you, and hands you the grant command. A
 committed `.hone-grant-auto` lets such changes land without you. A
 real-environment change stops at the proof gate until the check has
 actually run. The run executes the check
@@ -211,8 +211,8 @@ or signs off itself. `worktree.sh` stamps each record with its signer, and the
 text of a grant or a sign-off lands in the merge commit.
 
 The run never weakens a check to get through. On a stop, the worktree
-stays for inspection. `/hone:grant` and `worktree.sh attest` are yours to
-run, and they let the change land.
+stays for inspection. `worktree.sh grant` and `attest` are yours to run,
+and they let the change land.
 
 ## Teams
 

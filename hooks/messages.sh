@@ -120,7 +120,7 @@ EOF
 msg_bashguard_grant() {
     cat <<'EOF'
 hone bash-guard: worktree.sh grant is the human's act, and the run never authorizes an irreversible change.
-Do: stop, and give the human the grant briefing that references/land.md describes, with the /hone:grant command.
+Do: stop, and give the human the grant briefing that references/land.md describes, with the grant command to type after a !.
 Why: a grant the run writes for itself stops nothing. A Plan cannot authorize it either, because the run helped write the Plan.
 EOF
 }
@@ -814,10 +814,8 @@ Diffstat:
 $(hone_msg_block "$diffstat")
 Read the whole diff:
 $(hone_msg_block "$review_cmd")
-Grant it in Claude Code, and the run lands it:
-$(hone_msg_block "/hone:grant $change \"$(hone_msg_grant_why)\"")
-Or grant it in a terminal, then re-run land:
-$(hone_msg_block "$grant_cmd")
+Grant it: type this line in Claude Code, or run it without the "! " in a terminal. Then land again:
+$(hone_msg_block "! $grant_cmd")
 EOF
     [ -z "$lossless" ] || cat <<EOF
 land read these table rewrites as lossless, and they need no grant:
@@ -829,10 +827,9 @@ msg_wt_land_grant_empty() {
     local change="$1" grant_cmd="$2"
     cat <<EOF
 hone worktree: .hone-grant/$change is empty, so it authorizes nothing.
-Do: stop here. A person grants it again with a command below.
+Do: stop here. A person grants it again: type this line in Claude Code, or run it without the "! " in a terminal.
 Why: the grant text is the audit trail in history.
-$(hone_msg_block "/hone:grant $change \"$(hone_msg_grant_why)\"")
-$(hone_msg_block "$grant_cmd")
+$(hone_msg_block "! $grant_cmd")
 EOF
 }
 

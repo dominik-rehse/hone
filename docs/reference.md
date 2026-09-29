@@ -30,9 +30,6 @@ Slash commands, in the order a change flows:
   closes a SUB tab only then. Probes, proofs, and everything else plan-specific
   happen in the SUB tab, never in MAIN. For a workspace of their own, create the
   workspace and invoke the command in it.
-- `/hone:grant <change> "<reason>"` records your grant for a change that
-  the authority gate stopped, and the run then lands it. Only you invoke
-  it. The model cannot.
 - `/hone:garden` scans the repo for stale docs, dead code, and redundant tests
   between changes, and lands the safe deletions. It also repoints a `docs/`
   reference whose target moved, and escalates the rest as one proposed Plan per
@@ -106,7 +103,8 @@ work. The loop calls it, and you can too:
   primary branch.
 - `worktree.sh grant <change> "your reason"` records the authorization for
   one irreversible change in `.hone-grant/<change>`, stamped with the git
-  user and the time. Only you run it, here or as `/hone:grant`. The
+  user and the time. Only you run it: in a terminal, or after a `!` in
+  Claude Code, which runs it as your own command. The
   `bash-guard` denies it to the loop, and both guards deny a raw write. It
   refuses an empty text and a placeholder (`your reason`, or the older
   `who/why`), exits 2, and writes nothing.
@@ -563,7 +561,7 @@ The plugin itself:
 ```
 hone/
 ├── rules/workflow.md            # injected at session start
-├── skills/{setup,plan,run,grant,garden}/ # the five commands; run/references/ loads on demand
+├── skills/{setup,plan,run,garden}/ # the four commands; run/references/ loads on demand
 ├── hooks/                       # guard, bash-guard, dirty-guard, gate, nag, progress, session-start
 │   └── messages.sh              # every message hone prints, one template each
 ├── scripts/{worktree,setup}.sh

@@ -175,8 +175,8 @@ and new approved Plans can join the set.
    ```
 
    Name the tab in the body, so the human goes to the SUB, not to MAIN. Probes
-   and proofs run from the SUB tab. The grant and attest helpers stay in the
-   human's own terminal, as always.
+   and proofs run from the SUB tab. Only the human runs the grant and attest
+   helpers: after a `!` in the SUB tab, or in their own terminal.
 
 5. **Chains.** Start a dependent Plan only when its predecessor's `landed`
    predicate prints `landed`. Never on the SUB's word, never on an idle state

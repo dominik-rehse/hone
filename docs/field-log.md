@@ -17,6 +17,10 @@ and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md)
 The MAIN incidents below are counted in
 [the 2026-09-28 note](spikes/2026-09-28-main-tracking-of-subs.md).
 
+- 2026-09-28 · 0.67.0 · `/hone:grant` · in auto mode, Claude Code handed
+  the skill's shell block to the model. The `bash-guard` then denied the
+  grant as the model's own. The person granted with a `!` line instead.
+  Removed in 0.68.0.
 - 2026-09-25 to 2026-09-28 · 0.59.0 to 0.65.0 · herdr MAIN · about 12
   times, MAIN ended its turn with no watch on a running SUB. 13 stops
   or lands reached MAIN only when the person asked for status. The worst

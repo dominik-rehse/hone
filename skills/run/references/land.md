@@ -191,17 +191,18 @@ Scope: <files, +added -removed>. <"Matches the Plan." or what it does
 I checked: <what you verified, with how>. I did not check: <what you
   could not verify>
 
-To grant: /hone:grant <change> "<a reason you drafted from the diff>"
-Or in a terminal: <the terminal command from the refusal, same reason>
-Then the run lands it. Full diff: <the diff command from the refusal>
+To grant, type: ! <the grant command from the refusal, with a reason you
+  drafted from the diff>
+In a terminal, leave out the "! ". Then the run lands it.
+Full diff: <the diff command from the refusal>
 ```
 
 Where the diff does more than the Plan asked for, say that on the first line
 below the heading. Draft the reason as a person would write it, for example
 `"drop legacy_sessions, unused since the v2 login"`. The human may run it as
 it is or edit it. The `Next:` line of the final report repeats that command,
-reason included. `/hone:grant` records the grant as the human's, then asks
-this session to land the change again.
+reason included. The `!` runs it as the human's own command in this session.
+When its output shows the grant recorded, land the change again.
 
 A Plan that says it authorizes the change does not count. You helped write
 the Plan, so its word is not a person's. The guard and bash-guard also deny

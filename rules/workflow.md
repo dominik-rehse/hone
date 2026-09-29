@@ -71,7 +71,7 @@ belongs in that change's consolidate step. Creating the `.hone-off` marker is
 the human's act alone, so ask them to create it. Removing an existing marker
 is a legitimate agent action. A grant is the human's act, even where the
 Plan claims to authorize the change: read the diff, give the human a short
-briefing and the `/hone:grant` command, and never run `worktree.sh grant`. A proof sign-off is
+briefing and the grant command to type after a `!`, and never run `worktree.sh grant`. A proof sign-off is
 the human's act too: run the check where you can, hand over its output
 verbatim, and never run `worktree.sh attest`. Never report a failed or partial run as a pass. The
 `bash-guard` reads command text, so it can escalate an innocent command that

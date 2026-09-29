@@ -114,11 +114,12 @@ mechanical steps.
    - *Restart sessions for 0.64*: Claude Code reads the hook set at session
      start. Restart every session in the repo to get the progress hook and
      the dirty-guard's new events.
-   - *`/hone:grant` since 0.66*: at exit 8 the run now gives you a short
-     briefing and a `/hone:grant` command with a drafted reason. Type it,
-     and the run lands the change. The grant placeholder is now `your
-     reason`. A script of yours that pastes `who/why` must pass a real
-     reason. Restart sessions to load the new command.
+   - *`/hone:grant` is gone in 0.68*: in auto mode Claude Code let the
+     model run it, and the guard refused. At exit 8 the run gives you a
+     short briefing and the grant command with a drafted reason. Type it
+     after a `!` in Claude Code, and the run lands the change. Since 0.66
+     the grant placeholder is `your reason`. A script of yours that pastes
+     `who/why` must pass a real reason.
    - *Automatic grants since 0.66*: to let every irreversible change land
      without you, commit an empty `.hone-grant-auto` at the repo root. A
      `#` line in it can say who decided and why. Nothing changes without
