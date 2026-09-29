@@ -306,8 +306,42 @@ echo "$out" | head -1 | grep -q '^mailduct · 2 running · 1 need you · 1 ready
     && ok "board puts what needs you first, then running, in flight, ready, and landed" || bad "board: $out"
 out=$(bash "$COORD" board src/tax)
 [ "$(echo "$out" | sed -n '2,$p' | wc -l)" -eq 1 ] && echo "$out" | grep -q '^tax-report' \
-    && ok "board <path> keeps the changes whose Plan names the path" || bad "board filter: $out"
+    && echo "$out" | head -1 | grep -q '^mailduct · 0 running · 0 need you · 1 ready$' \
+    && ok "board <path> keeps the changes whose Plan names the path, and counts only those" || bad "board filter: $out"
 unset HERDR_ENV HERDR_WORKSPACE_ID HERDR_TAB_ID
+rm -f "$STATE"/sessions/*
+exec 7>&-
+
+echo "== coordinate: garden and consolidate end when they go quiet =="
+exec 7>"$STATE/ticker.lock"; flock -n 7
+agent hone-garden idle 3
+bash "$COORD" watch garden hone-garden w:t1 >/dev/null
+git worktree add -q -b hone/garden/cut-x .worktrees/garden/cut-x
+tick hone-garden
+[ -f "$STATE/sessions/hone-garden" ] && ! events | grep -qP '\tgarden\tfinished\t' \
+    && ok "a quiet garden session whose cut holds a worktree stays watched" || bad "garden with a worktree: $(events | tail -2)"
+git worktree remove .worktrees/garden/cut-x && git branch -q -D hone/garden/cut-x
+( . "$PLUGIN_ROOT/hooks/common.sh"; hone_coord_event "$STATE" garden/cut-x landed 9f8e7d6 )
+agent hone-garden working 4; tick hone-garden
+agent hone-garden idle 5; tick hone-garden
+[ ! -f "$STATE/sessions/hone-garden" ] && events | grep -qP '\tgarden\tfinished\t' \
+    && ok "a quiet garden session with no garden worktree left writes finished and leaves the watch" || bad "garden finished: $(events | tail -2)"
+out=$(bash "$COORD" admit tax-report); rc=$?
+[ "$rc" -eq 0 ] && ok "after garden finished, admit lets a run start again" || bad "admit after garden (rc $rc): $out"
+agent hone-consolidate idle 3
+bash "$COORD" watch consolidate hone-consolidate w:t1 >/dev/null
+tick hone-consolidate
+[ ! -f "$STATE/sessions/hone-consolidate" ] && events | grep -qP '\tconsolidate\tfinished\t' \
+    && ok "a quiet consolidate session writes finished and leaves the watch" || bad "consolidate finished: $(events | tail -2)"
+
+echo "== coordinate: a land that stopped needs the person at once =="
+agent run-billing working 1
+bash "$COORD" watch billing run-billing w:t1 >/dev/null
+( . "$COORD"; cd "$REPO" || exit 1; coord_tick_session "$STATE/sessions/run-billing" "$STATE" )
+( . "$PLUGIN_ROOT/hooks/common.sh"; hone_coord_event "$STATE" billing stopped "exit 8, authority gate" )
+out=$(bash "$COORD" board billing)
+echo "$out" | head -1 | grep -q '· 0 running · 1 need you ·' && echo "$out" | grep -q '^billing .*NEEDS YOU: land stopped, exit 8, authority gate' \
+    && ok "the board shows a stopped land as a need before the quiet threshold" || bad "stopped on board: $out"
 rm -f "$STATE"/sessions/*
 exec 7>&-
 

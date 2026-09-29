@@ -103,9 +103,14 @@
 #                     (default 600) after it last worked, with no land
 #                     since. That is a stop, a report, or a question in text.
 #         gone        herdr no longer knows the agent
+#         finished    a garden or consolidate session went quiet, and for
+#                     garden no hone/garden/* worktree is left. Both land
+#                     under names of their own, so no landed event ends
+#                     their watch.
 #       A needs-you or a quiet event also shows a herdr notification that
 #       names the repository and the tab, so the person hears of it while the
-#       watching session sleeps. A landed or a gone session leaves the watch.
+#       watching session sleeps. A landed, gone, or finished session leaves
+#       the watch.
 #       The ticker exits when no session is left. Exit: 0.
 #
 #   coordinate.sh ensure
@@ -233,11 +238,30 @@ coord_tick_session() {
                         coord_notify "$kv_change" "the session went quiet: a stop, a report, or a question" "$kv_tab"
                     fi
                     kv_notified=1
+                    # Garden and consolidate land under names of their own,
+                    # so no landed event ends their watch. Quiet ends it,
+                    # unless a garden cut still holds its worktree.
+                    if coord_pass_finished "$kv_change"; then
+                        hone_coord_event "$dir" "$kv_change" finished "the session went quiet with no worktree of its own"
+                        rm -f "$sf"; return 1
+                    fi
                 fi ;;
         esac
     fi
     kv_save "$sf"
     return 0
+}
+
+# True when the pass behind a garden or consolidate watch is over: the
+# session went quiet, and for garden no hone/garden/* worktree is left.
+coord_pass_finished() {
+    case "$1" in
+        consolidate) return 0 ;;
+        garden)
+            ! git -C "$(main_root_of)" worktree list --porcelain 2>/dev/null \
+                | grep -q '^branch refs/heads/hone/garden/' ;;
+        *) return 1 ;;
+    esac
 }
 
 cmd_ticker() {
@@ -466,30 +490,41 @@ coord_ready_plans() {
 }
 
 cmd_board() {
-    local filter="${1:-}" main_root dir now inflight f c owner ev kind detail
+    local filter="${1:-}" main_root dir now inflight f c owner ev kind detail when
     local rows="" seen=" " need=0 run=0 ready=0 label
     main_root=$(main_root_of)
     dir=$(coord_state_dir) || return 0
     now=$(date +%s)
-    # One row: rank TAB change TAB state TAB owner. Rank 1 needs the person.
-    row() { rows+="$1"$'\t'"$2"$'\t'"$3"$'\t'"$4"$'\n'; seen+="$2 "; }
+    # One row: rank TAB change TAB state TAB owner. Rank 1 needs the person,
+    # 2 runs here, 4 is a ready Plan. A <path> filter drops a row before it
+    # counts, so the header counts what the board shows.
+    row() {
+        seen+="$2 "
+        if [ -n "$filter" ]; then
+            case "$2" in *"$filter"*) ;; *)
+                grep -qF -- "$filter" "$main_root/.plans/$2.md" 2>/dev/null || return 0 ;;
+            esac
+        fi
+        rows+="$1"$'\t'"$2"$'\t'"$3"$'\t'"$4"$'\n'
+        case "$1" in 1) need=$((need + 1)) ;; 2) run=$((run + 1)) ;; 4) ready=$((ready + 1)) ;; esac
+    }
     for f in "$dir"/sessions/*; do
         [ -f "$f" ] || continue
         kv_load "$f"
-        ev=$(awk -F'\t' -v c="$kv_change" '$3 == c { k = $4; d = $5 } END { if (k != "") print k "\t" d }' "$dir/events" 2>/dev/null)
-        kind=${ev%%$'\t'*}; detail=${ev#*$'\t'}
+        ev=$(awk -F'\t' -v c="$kv_change" '$3 == c { k = $4; d = $5; t = $2 } END { if (k != "") print k "\t" t "\t" d }' "$dir/events" 2>/dev/null)
+        IFS=$'\t' read -r kind when detail <<<"$ev"
         label=$(json_str "$(herdr_call tab get "$kv_tab" 2>/dev/null)" label)
         label=${label:-$kv_tab}
-        if [ "$kv_notified" = 1 ] && [ -n "$ev" ]; then
-            case "$kind" in
-                stopped)   row 1 "$kv_change" "NEEDS YOU: land stopped, $detail, tab $label" "this clone" ;;
-                needs-you) row 1 "$kv_change" "NEEDS YOU: $detail, tab $label" "this clone" ;;
-                *)         row 1 "$kv_change" "NEEDS YOU: the session went quiet, tab $label" "this clone" ;;
-            esac
-            need=$((need + 1))
+        # A land that stopped needs the person at once. The ticker waits for
+        # the quiet threshold only before it calls an idle session a need.
+        if [ "$kind" = stopped ] && [ "${when:-0}" -ge "$kv_worked" ]; then
+            row 1 "$kv_change" "NEEDS YOU: land stopped, $detail, tab $label" "this clone"
+        elif [ "$kv_notified" = 1 ] && [ "$kind" = needs-you ]; then
+            row 1 "$kv_change" "NEEDS YOU: $detail, tab $label" "this clone"
+        elif [ "$kv_notified" = 1 ] && [ -n "$ev" ]; then
+            row 1 "$kv_change" "NEEDS YOU: the session went quiet, tab $label" "this clone"
         else
             row 2 "$kv_change" "running ($kv_status), tab $label" "this clone"
-            run=$((run + 1))
         fi
     done
     inflight=$(coord_inflight "$main_root" "$dir")
@@ -502,7 +537,6 @@ cmd_board() {
         [ -n "$c" ] || continue
         case "$seen" in *" $c "*) continue ;; esac
         row 4 "$c" "Plan ready" "$(coord_plan_owner "$main_root" "$c")"
-        ready=$((ready + 1))
     done < <(coord_ready_plans "$main_root")
     if [ -f "$dir/events" ]; then
         while IFS=$'\t' read -r _ c detail; do
@@ -513,11 +547,6 @@ cmd_board() {
     printf '%s · %s running · %s need you · %s ready\n' "$(basename "$main_root")" "$run" "$need" "$ready"
     [ -n "$rows" ] || { printf 'nothing in flight, and no Plan is ready.\n'; return 0; }
     printf '%s' "$rows" | sort -t$'\t' -k1,1n -k2,2 | while IFS=$'\t' read -r _ c detail owner; do
-        if [ -n "$filter" ]; then
-            case "$c" in *"$filter"*) ;; *)
-                grep -qF -- "$filter" "$main_root/.plans/$c.md" 2>/dev/null || continue ;;
-            esac
-        fi
         printf '%-24s %-58s %s\n' "$c" "$detail" "$owner"
     done
 }

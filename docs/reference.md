@@ -29,8 +29,8 @@ Slash commands, in the order a change flows:
   herdr hands over to it. `scripts/coordinate.sh` does the mechanics: its
   ticker notifies you when a session needs you, and its `admit` checks a
   change against every change in flight, other developers' claims included,
-  and keeps garden apart. A dependent Plan starts, and a tab closes, only
-  after `worktree.sh landed`.
+  and keeps garden apart. A dependent Plan starts, and a run's tab closes,
+  only after `worktree.sh landed`.
 - `/hone:garden` scans the repo for stale docs, dead code, and redundant tests
   between changes, and lands the safe deletions. It also repoints a `docs/`
   reference whose target moved, and escalates the rest as one proposed Plan per

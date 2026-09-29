@@ -125,6 +125,10 @@ notification itself. The events:
   is blocked-unresolvable or genuinely ambiguous (`run`'s stop points 1 and 2)
   keeps its worktree and its tab as evidence.
 - `gone`: the session ended. Report it. Its worktree, if any, is evidence.
+- `finished`: a garden or consolidate session went quiet with no worktree of
+  its own left. They land under names of their own, so no `landed` event
+  ends them. Read its report, put what it landed on the board, close its
+  tab, and admit whatever waited on garden.
 
 When you relay a session's progress line, mark it as the session's claim
 ("run:csv-export reports verify ..."), never as your own knowledge. A session
@@ -141,8 +145,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/coordinate.sh" start consolidate
 ```
 
 It runs a `consolidate-critic` over the combined result, and it lands any
-accepted cuts through a worktree change of its own. Close its tab when that
-lands, or when it reports nothing to cut. Then print the board as the report:
+accepted cuts through a worktree change of its own. Close its tab on its
+`finished` event. Then print the board as the report:
 per change, landed (with the merge commit) or stopped (with the blocker and the
 tab kept).
 
@@ -174,8 +178,9 @@ there. That is the design, not an obstacle:
   ```
 
   `landed` (exit 0) means merge commit present, and branch, worktree, and Plan
-  gone. Start a dependent Plan, and close a tab, only after it prints
+  gone. Start a dependent Plan, and close a run's tab, only after it prints
   `landed`. Never on the session's word, and never on an idle state alone.
+  A garden or consolidate tab closes on its `finished` event instead.
 
 ## Closing a tab
 
@@ -185,7 +190,7 @@ herdr tab close <tab-id>
 ```
 
 `list` names each watched session's tab ID. Close a tab after `landed` printed
-`landed`, or when the person asks. Close only tabs this session started. A
+`landed`, on a `finished` event, or when the person asks. Close only tabs this session started. A
 stopped session keeps its tab for the same reason a failed land keeps its
 worktree: it is evidence, and the person resumes there. When the person closes
 or gives up on a watched session, run `coordinate.sh unwatch <change>`.
