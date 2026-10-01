@@ -107,11 +107,10 @@ in git.
   passes `last_assistant_message` to a Stop hook. The watch hook falls
   back to the transcript when it does not. Next step: check both in the
   first coordinated session on 0.73.0 or later.
-- `start` still types a session's first prompt with `herdr agent
-  prompt`, and `send` does not cover that path. One first prompt arrived
-  garbled as "ude/hone:plan ..." (session aa340d60 of the 2026-10-01
-  note). Next step: route the first prompt through the same code as
-  `send`, and check that the text arrived whole.
+- One first prompt arrived garbled as "ude/hone:plan ..." (session
+  aa340d60 of the 2026-10-01 note). Done in 0.75.0: `start` and `send`
+  type through one helper, read the pane back, and exit 3 when the text
+  does not show whole.
 
 #### Parallel runs starve the suite lock, and the gate repeats work
 
@@ -198,17 +197,12 @@ in git.
   let a weakened probe land, and in the field repo 140 harness lines read
   probe text, so the comment exemption could never apply there. A
   sign-off for such an edit stays the cost.
-- Still open: land never compares the branch's `Proof:` trailer with the
-  Plan's `Proof:` line. A run that drops the trailer lands without
-  proof, unless the project commits `.hone-proof-always`. Next step: at
-  land, read the Plan's `Proof:` line from the branch's first commit and
-  refuse when the trailer is missing, with a test in
-  `test/e2e_land_test.sh`.
-- Still open: MAIN relayed sign-off requests in its own words and
-  recommended signing. `land.md` asks a run for the verbatim output, but
-  the coordinate skill has no such rule for MAIN. Next step: one rule in
-  the coordinate skill that MAIN relays a sign-off request verbatim, or
-  points the person at the run's tab, and never recommends signing.
+- Done in 0.75.0: a branch with no `Proof:` trailer falls back to the
+  Plan's `Proof:` line, so a run that drops the trailer still meets the
+  gate (`test/e2e_land_test.sh`, section 5f).
+- Done in 0.75.0: the coordinate skill says that MAIN quotes a sign-off
+  or grant request verbatim or names the tab, and never recommends
+  signing. A field batch must show whether this holds.
 
 #### A person's standing acceptance has no channel
 
@@ -572,9 +566,9 @@ redirect, `bun --cwd <primary> add` with the option before the verb, and
 
 Still open from this batch: the `$F` ask and the `stryker.conf.json`
 ask stay by design, so each still stops an unattended run until a
-person answers. And 0.72.0 adds one false ask: `npm -w <pkg> ...` asks,
-because the guard reads `<pkg>` as an npm verb. Next step: read `-w` and
-`--workspace` as options that take a value, with a test.
+person answers. 0.72.0 added a false ask on `npm -w <pkg> ...` and
+`npm install -w <pkg>`. Done in 0.75.0: the guard reads npm's `-w` and
+`--workspace` as options that take a value.
 
 How we know that the fixes hold in the field: we do not yet. The tests
 replay each shape from the transcripts. Next step: after the release, read
@@ -693,34 +687,29 @@ the next field window and count fires per hook again.
   rewrite that should have fired is a defect in the reader, and it goes in
   `test/sql_rewrite_test.sh` first.
 
-#### The test-first rule asks for a test of a fixture file
+#### The test-first rule asked for a test of a fixture file
 
-- What happens: rule 2 of `hooks/guard.sh` denies a new non-test file
-  under `src/` that has no test. A fixture, such as
-  `src/retrieval/__fixtures__/latch-worker.ts` or
-  `background-strip.fixtures.ts`, is data for a test and not production
-  code. The agent obeys and writes a test for the fixture.
-- How we know: 5 of the 6 test-first denies in the field on 2026-09-21 to
-  2026-09-26 were on fixtures, and about 11 tests of fixtures now sit in
-  that repository
-  ([the audit](spikes/2026-09-27-eval-lab-value-audit.md)).
-- Next step: exempt a path under a `__fixtures__/` or `fixtures/`
-  directory and a basename with `.fixture.` or `.fixtures.`, with a test
-  per shape in `test/hooks_test.sh`.
+- What happened: 5 of the 6 test-first denies in the field on 2026-09-21
+  to 2026-09-26 were on fixtures, and about 11 tests of fixtures sit in
+  that repository ([the audit](spikes/2026-09-27-eval-lab-value-audit.md)).
+- Done in 0.75.0: rule 2 of `hooks/guard.sh` exempts a path under
+  `__fixtures__/` and a basename with `.fixture.` or `.fixtures.`, with
+  tests in `test/hooks_test.sh`. A plain `fixtures/` directory still needs
+  a test, because it can be a domain module.
+- Next step: count test-first denies in the next field window. The tests
+  of fixtures in the field repository are that repository's to cut.
 
-#### A land that succeeds can return exit code 1
+#### A land that succeeded seemed to return exit code 1
 
-- What happens: land removes the worktree after the merge. When the
-  Bash call stood in that worktree, the command ends with exit code 1
-  after land printed "hone worktree: landed". The agent then reads a success
-  under a failure code. The field log calls the getcwd case fixed in
-  0.60.0, and this is what remains of it.
-- How we know: 8 sessions of 2026-09-21 to 2026-09-26 show "Exit code 1"
-  before "hone worktree: landed", some on 0.63.0.
-- Next step: find which command after land's exit fails in a removed
-  directory, and make land's own exit code the call's last word. A test in
-  `test/e2e_land_test.sh` runs land from inside the worktree and checks
-  the exit code.
+- What happened: 8 sessions showed "Exit code 1" after "hone worktree:
+  landed". The transcripts show the cause. The run started land in the
+  background from the primary tree, but the session's own shell stood in
+  the worktree. Land removed it, and the next Bash call failed in `pwd`.
+  Land itself exited 0.
+- Done in 0.75.0: the receipt says that a shell in the removed worktree
+  exits 1 next, and names the `cd` to the primary tree.
+- Next step: in the next field window, check whether a run still reads
+  such an exit 1 as a failed land.
 
 #### The `consolidate-critic` once proposed cutting code that a Plan requires
 
