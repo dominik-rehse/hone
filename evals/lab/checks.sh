@@ -25,9 +25,9 @@ ok()  { printf '  ok   %s\n' "$1"; lab_checks=$((lab_checks+1)); }
 bad() { printf '  FAIL %s\n' "$1"; lab_fail=1; lab_checks=$((lab_checks+1)); }
 # measure NAME VALUE: an observation that a tool can count across runs. It
 # decides nothing, and it is not a check. run.sh copies every measure into
-# result.json, and evals/candidate.sh compares them between two sets of runs.
+# result.json.
 # NAME and VALUE are one word each. A measure moves to a check once the
-# unchanged plugin holds it in three runs of three (docs/development.md).
+# unchanged plugin holds it in three runs of three (evals/lab/README.md).
 measure() { printf '  measure %s=%s\n' "$1" "$2"; }
 
 # goal NAME VALUE WANT: a measure that has moved to a check. The line of the

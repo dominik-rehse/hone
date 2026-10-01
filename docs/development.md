@@ -32,11 +32,10 @@ calls. It covers:
 - the hook unit tests
 - the end-to-end land path (worktree, gates, merge, fast-forward)
 - the plumbing of the eval harness and of the lab, against a fake CLI
-- the candidate procedure, against hand-written results
 - the prose and the shape of every message in `hooks/messages.sh`
 
-Run this suite after any change to `hooks/`, `scripts/`, `evals/run.sh`,
-`evals/candidate.sh`, or `evals/lab/`. The shell sources also stay
+Every release runs this suite. Run it after any change to `hooks/`,
+`scripts/`, `evals/run.sh`, or `evals/lab/` too. The shell sources also stay
 `shellcheck`-clean (`.shellcheckrc` sets the dialect). Nothing runs
 shellcheck for you, so run it over any script you touch.
 
@@ -44,25 +43,20 @@ shellcheck for you, so run it over any script you touch.
 critic prompts and the run skill's loop instructions to cases with
 known-good answers. [`evals/README.md`](../evals/README.md) is the manual:
 targets and cases, the balance between reject and near-miss pass cases,
-plurality voting, and the held-out set discipline. Two rules matter most.
-Match the model to what runs in production. The critic frontmatter names the
-`opus` alias, and the harness defaults to it. The loop target runs with
-`--model opus`. The garden target runs on opus and on its floor, sonnet.
-And never read or tune against a `*-holdout` case while editing prose.
+plurality voting, and the held-out cases. Two rules matter most. Match the
+model to what runs in production. The critic frontmatter names the `opus`
+alias, and the harness defaults to it. The loop and garden targets run with
+`--model opus`. And never read or tune against a `*-holdout` case while
+editing prose.
 
 *End to end*: `bash evals/lab/run.sh`. The scenario lab runs the whole
 plugin headless against fixture repos and grades the state each run leaves.
-It calls models for minutes per scenario, so it is for a release and never
-for a commit. [`evals/lab/README.md`](../evals/lab/README.md) is the manual.
+It calls models for minutes per scenario. So no release and no commit runs
+it. It runs on the maintainer's word, and once for each new Opus.
+[`evals/lab/README.md`](../evals/lab/README.md) is the manual.
 
 There is no CI. The suites run locally, and the releasing rule is what
 makes them a gate.
-
-A change that is meant to make hone better, smaller, or cheaper is a
-*candidate*. `bash evals/candidate.sh plan` names the suites that it owes
-and their cost, and `decide` reads the results of both arms and answers
-accept, reject, or undecided. *Judging a change to hone* below has the
-rules.
 
 ## Judging a change to hone
 
@@ -82,22 +76,14 @@ pursues each one and what measures it.
 | Dollars and minutes | nothing on purpose | cost and time in each `result.json` |
 
 [`evals/lab/README.md`](../evals/lab/README.md) explains each scenario and
-each measure. `evals/candidate.sh` is the procedure below as code. Its
-header lists every flag and every output line, and
-`test/candidate_test.sh` proves it with no model call.
+each measure.
 
 ### The rules
 
 1. *Coverage is the limit.* A change can degrade an outcome that nothing
    measures. So the measurements grow before a campaign of changes.
-2. *Test on the floor model.* The floor of a slot is the cheapest model on
-   which its suite is green. A critic's floor is the model that its
-   `opus` alias resolves to. `evals/floors` names the model of each suite, and the procedure
-   refuses a run on another one.
-3. *A change enters as a reviewed change.* No tool commits here. An accept
-   from the procedure is not the release gate. The procedure never reads
-   the held-out cases.
-4. *A change carries its upgrade path.* A consumer repo holds state that
+2. *A change enters as a reviewed change.* No tool commits here.
+3. *A change carries its upgrade path.* A consumer repo holds state that
    hone wrote. That state is the adapters, the policy files, the settings
    block, and the docs shapes. A change to it needs one of three paths:
    - *None needed*, because no consumer state changes.
@@ -106,13 +92,10 @@ header lists every flag and every output line, and
    - *Manual*: [`upgrading.md`](upgrading.md) names a step for a person,
      and the step counts as human attention.
 
-   With no path, the procedure rejects. The script sees consumer state
-   only under `templates/` and in `scripts/setup.sh`. Pass `--state-change`
-   for the rest.
-5. *A cheap, deterministic check needs no measured gain.* Cheap means
+   A release without a path is not complete.
+4. *A cheap, deterministic check needs no measured gain.* Cheap means
    three things. It makes no model call. It ships no new tool. It is
-   exact. Such a check enters on its own tests, a lab pass with no fail,
-   and its upgrade path. A heuristic that can misfire costs human
+   exact. Such a check enters on its own tests and its upgrade path. A heuristic that can misfire costs human
    attention, so it must show a gain.
 
 Each class of building block has its own evaluator:
@@ -122,79 +105,20 @@ Each class of building block has its own evaluator:
   improve. The unit suite judges a trim. The lab judges a removal.
 - *Safety against the model* (the guards, the deny rules, the land
   gates). Only a lab scenario in which the model reaches for the forbidden
-  path measures them. The models that reach are below the floor, so such
-  a candidate may run on a model that `evals/floors` lists for it.
+  path measures them. Haiku and sonnet reach for that path more often
+  than opus, so such a scenario may run on them.
 - *Coordination* (worktrees, locks, land's merge and re-verify). They
   guard against the environment, not the model. They are out of scope.
-
-### The procedure
-
-A candidate is one uncommitted diff to the shipped plugin, with a brief at
-`.plans/<slug>.md` that says which outcome it moves or which price it
-lowers. A defect fix is not a candidate. It comes with a test that was red,
-and [`releasing.md`](../.claude/rules/releasing.md) alone gates it.
-
-1. Keep a baseline per release. On a clean tree, run each unit target with
-   `--votes 3 --json` on its floor. Run each scenario that has a `goals`
-   file three times. Every candidate on that base uses these results.
-2. Apply the candidate to the working tree.
-3. Run `bash evals/candidate.sh plan`. It prints the suites that the
-   candidate owes, their cost, the upgrade path, and the size.
-4. Make the owed runs. The lab copies the plugin from the tree, so a run
-   measures the candidate.
-5. Run `bash evals/candidate.sh decide` with both arms.
-6. An accepted candidate goes through the release gates. A rejected one is
-   reverted, and its brief and numbers go into a note under `docs/spikes/`.
-
-### The verdict
-
-`decide` rejects a candidate for any of these:
-
-- The mechanical suite is red.
-- A unit case flips its plurality.
-- A lab scenario fails more often than at the baseline.
-- A goal measure drops by two runs of three or more.
-- A scenario ends in two more distinct ways than at the baseline.
-- Consumer state changes with no upgrade path.
-- The shipped prose grows and no measured outcome moved up.
-
-The last rule holds for prose alone, because a model executes prose and
-prose expires. Every other candidate needs only that every outcome holds.
-
-`decide` answers *undecided* when the evidence is thin, and each line names
-the run to make. It also refuses a change to a shipped path that no suite
-measures, such as a new skill. The plan skill owes `plan-clear` and
-`plan-fork`, and the setup skill owes `setup-misfit`.
-
-Two runs count as one plugin for a scenario when they agree on every
-shipped path that the scenario loads. So a baseline that differs only
-elsewhere still compares.
-
-A tally that moves by one vote of three is noise. `decide` then asks for
-that case at ten votes on both arms. At ten votes a fall of one is noise,
-and a fall of two rejects. A rise counts as a gain under the same numbers.
-
-Among accepted candidates the price decides: human attention first, then
-dollars and minutes, then the size of the shipped prose and code.
 
 ### What an evaluation costs
 
 The figures are API prices from 2026-09-18 on claude-opus-5. The account
 is on the Max plan, so the real limit is the plan's usage.
 
-- `plan` and the mechanical suite: no model call, two minutes.
-- One unit target at three votes, both arms: 1 to 3 dollars. The whole
-  unit suite costs about 4 dollars per arm.
-- One case at ten votes, both arms: about 1 dollar.
-- One goal scenario, three runs per arm: about 14 dollars and 45 minutes.
-  A kept baseline halves that.
+- The mechanical suite: no model call, a few minutes.
+- One unit target at three votes: 1 to 3 dollars. The whole unit suite
+  costs about 4 dollars.
 - One full lab pass: about 36 dollars and 65 minutes.
-- A section ablation: about 9 dollars for the `consolidate-critic` and 25
-  for the `plan-critic`.
-
-So a trim of a critic costs about 10 dollars with a kept baseline. A
-change to the run skill or to a hook costs about 50 dollars. It owes the
-whole lab and three runs of each goal scenario.
 
 ## Changing judgment prose
 

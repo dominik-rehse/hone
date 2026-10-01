@@ -237,8 +237,8 @@ fresh; MODE=idle lab toy >/dev/null
 [ "$(jq '.permissions.deny | length' "$W"/out/*/toy/repo/.claude/settings.json)" -gt 5 ] && ok "the full fixture carries the canonical deny rules" || bad "the fixture should carry the deny rules"
 
 echo "== the result hashes the plugin copy once per shipped path =="
-# The full run above is still in $W/out. evals/candidate.sh reads these hashes
-# to compare two runs path by path.
+# The full run above is still in $W/out. These hashes let a reader compare two
+# runs path by path.
 full_files=$(result toy .plugin_files)
 [ "$(jq -r '."hooks/guard.sh"' <<<"$full_files")" = "$(sha256sum "$W"/out/*/toy/plugin/hooks/guard.sh | cut -c1-12)" ] \
     && ok "the hash of a path is the hash of that file in the copy" || bad "the per-path hash should be the file's own hash"
@@ -513,6 +513,20 @@ echo "== the variant builder (evals/lab/variant.py) =="
 # reads evals/lab/parts.json and writes the copy that a run would load.
 VB="$PLUGIN_ROOT/evals/lab/variant.py"
 VW="$W/variant"; mkdir -p "$VW"
+# The section splitter must return every shipped prompt file byte for byte.
+python3 - "$PLUGIN_ROOT" <<'PY' && ok "the section splitter round-trips every prompt file" || bad "evals/lab/sections.py changed a prompt file"
+import glob, os, sys
+root = sys.argv[1]
+sys.path.insert(0, os.path.join(root, "evals", "lab"))
+sys.dont_write_bytecode = True
+import sections
+files = glob.glob(os.path.join(root, "skills", "*", "SKILL.md")) + glob.glob(os.path.join(root, "agents", "*.md"))
+for f in files + [os.path.join(root, "rules", "workflow.md")]:
+    text = open(f, encoding="utf-8").read()
+    for fine in (False, True):
+        if sections.join_sections(sections.split_text(text, fine=fine)) != text:
+            sys.exit(1)
+PY
 SHIPPED_DIRS=".claude-plugin agents hooks rules scripts skills templates"
 shipped_hash() { ( cd "$1" && find $SHIPPED_DIRS -type f -print0 | sort -z \
     | xargs -0 sha256sum | sha256sum | cut -c1-16 ); }

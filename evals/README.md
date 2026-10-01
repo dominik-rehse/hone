@@ -93,7 +93,7 @@ bash evals/run.sh plan-critic           # one target
 bash evals/run.sh loop --model opus     # the run skill's instructions
 bash evals/run.sh garden --model opus   # the garden skill's classification
 bash evals/run.sh --votes 3             # plurality-of-3 per case (use pre-release)
-bash evals/run.sh --votes 3 --holdout   # include the held-out cases (see below)
+bash evals/run.sh --holdout             # include the held-out cases (see below)
 bash evals/run.sh --jobs 12             # up to 12 concurrent calls (default 8)
 bash evals/run.sh --dry-run             # list cases + expected answers, no calls
 bash evals/run.sh garden --ablate       # the discrimination check, not a suite run
@@ -103,8 +103,7 @@ Match the model to what actually runs in production, or the result means nothing
 The critics name the `opus` alias in their frontmatter, and a run without
 `--model` reads it from there. A critic run on any other model prints a note,
 because it answers an assignment question and gates no release. The `loop` and
-`garden` targets use whatever model drives the session (`--model opus`). The
-release gate of `garden` also runs on its floor, `--model sonnet`.
+`garden` targets use whatever model drives the session (`--model opus`).
 
 `--model` takes an alias or a full model ID. An alias floats: the provider can
 re-point it, and two runs on `sonnet` a month apart may measure two models. So
@@ -114,7 +113,7 @@ cannot resolve its alias stops with exit 3.
 
 ## Driving the harness from a tool
 
-Four flags let a script or an optimizer drive `run.sh`. `test/evals_test.sh`
+Four flags let a script drive `run.sh`. `test/evals_test.sh`
 proves their plumbing against a fake CLI, with no model calls.
 
 ```bash
@@ -131,30 +130,6 @@ vote's answer, `verdict` and `pass` repeat the case's plurality result on every
 record, and `reply` is the full text the terminal discards. The vote number is
 part of the cache key, so three votes stay three samples.
 
-### Section ablation
-
-The first use of these flags is to test a section of a prompt, not a case.
-Copy the prompt, delete one section from the copy, and run the target on the
-copy at `--votes 3`, on the floor model of the target. It is the run of the
-second baseline, read in the other direction. There the run tests the case,
-and here it tests the section.
-
-Read the result under one rule. An unchanged suite is evidence only for a
-section that a case aims at. If no case aims at the section, the run reports
-nothing about it, and the section stays. Cut a section only when a case aims
-at it and `bash evals/candidate.sh decide` accepts the cut. It reads the
-`--json` files of both prompts, and
-[`docs/development.md`](../docs/development.md) has its rules. The cut then
-enters the repo as an ordinary prompt edit, through the release gate.
-
-Two campaigns have run, and neither found a section to cut. The first was on
-2026-09-17 over both critics, on claude-sonnet-5
-([note](../docs/spikes/2026-09-17-first-section-ablation.md)). The second was
-on 2026-09-18 on claude-opus-5
-([note](../docs/spikes/2026-09-18-section-ablation-on-opus.md)). One rule came
-out of the second. Delete the category word of a bullet from the *Output* list
-together with the bullet, because the word alone carries the bullet on opus.
-
 ## Targets and cases
 
 Each entry gives the expected answer, what the case pins, and the baseline
@@ -166,8 +141,7 @@ Re-measure a case before you lean on its entry.
 *`plan-critic`*, verdict `APPROVE` or `REJECT`, on claude-opus-5:
 
 - `named-references`: APPROVE. It pins *Calibration*: the critic invents no
-  objection. The opus stub approves too, so today it measures the sonnet
-  floor only.
+  objection. The opus stub approves too, so on opus it pins nothing.
 - `dep-refresh-no-red-test`: APPROVE. It pins *Calibration*, and no case
   pins the refresh bullet. The opus stub approves too.
 - `handler-proof-for-endpoint`: APPROVE, a near miss. The opus stub
@@ -299,12 +273,11 @@ Four rules from the drafts that died. The case history has the tallies.
 ## Held-out cases
 
 `run.sh` skips case dirs named `*-holdout` unless you pass `--holdout`, and they
-are the check against tuning to the suite. Trimming prose and re-running
-optimizes against the visible cases. Prose can then pass the very briefs you
-trimmed it against, while the behavior can still be gone in any paraphrase. So:
-never read a holdout brief or edit prose with one in view. Run `--holdout` once,
-as the last check before a release. A holdout failure after a green main suite is
-the overfitting signal. Fix the prose, never the holdout case.
+are the check against tuning to the suite. Prose that you trim against the
+visible cases can pass those briefs and still lose the behavior in a paraphrase.
+So never read a holdout brief or edit prose with one in view. No release runs
+`--holdout`. Run it on the maintainer's word. A holdout failure after a green
+main suite is the overfitting signal. Fix the prose, never the holdout case.
 
 ## Watch cases
 
@@ -354,23 +327,11 @@ Every `case × vote` call is independent and fans out concurrently, capped at
 sampling variance. Raising `--jobs` is faster but can hit API concurrency limits
 and error a call, which scores as no answer.
 
-## The noise floor
+## Reading a tally
 
-A claim that a prose cut changed nothing needs a number for how much the
-suite moves when nothing changed. The measurement is three identical
-full-suite passes at `--votes 3` on one commit.
-
-| Date | Models | Votes | Flipped pluralities | Dissenting votes |
-| --- | --- | --- | --- | --- |
-| 2026-09-01 | critics sonnet, loop and garden opus | 153 | 0 of 51 | 1 |
-| 2026-09-17 | critics claude-sonnet-5, the rest claude-opus-5 | 171 | 0 of 57 | 5 |
-| 2026-09-18 | every target claude-opus-5 | 216 | 0 of 72 | 1 |
-| 2026-09-25 | every target claude-opus-5-5 | 297 | 0 of 99 | 0 |
-
-So a flipped plurality after a prompt edit is signal, and a tally that
-moves by one vote is noise. A pass cost about 3.70 dollars on 2026-09-25.
-Measure the floor again before an ablation campaign. The run header prints the full model ID, so compare it with the
-last row.
+Three identical passes at `--votes 3` on one commit flipped no plurality, in
+four measurements up to 2026-09-25. So a flipped plurality after a prompt edit
+is signal, and a tally that moves by one vote is noise.
 
 ## Extending
 
@@ -383,5 +344,5 @@ per-vote check misses that. `schema-silent-on-data` had one such miss. A
 case that the stub answers correctly is not a regression net, however real
 the misjudgment that prompted it.
 
-A case the shipped prompt fails goes to `evals/optimize/cases/` instead of
-into a suite. Its README says why.
+A case that the shipped prompt fails stays out of the suite, because a gate
+that is always red says nothing. Fix the prompt first, then add the case.

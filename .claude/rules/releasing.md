@@ -40,33 +40,27 @@ that path is not complete.
 
 Before the release commit, the changed layer must pass its suite:
 
-- a change to a critic prompt (`agents/*.md`), to `skills/run/SKILL.md` or its
-  references, to `skills/garden/SKILL.md`, or to `rules/workflow.md`:
-  `bash evals/run.sh <target> --votes 3` green, then `--holdout` green as the
-  final check. See `evals/README.md` on held-out cases. The `loop` target
-  runs with `--model opus`. The `garden` target runs twice: with `--model
-  opus`, and with `--model sonnet`, which is its floor in `evals/floors`. A
-  person may run a garden pass on either model.
-- a new eval case, before you keep it: `bash evals/run.sh <target> --ablate`,
-  and the second baseline in `evals/README.md` when the stub agrees with the
-  expected answer. A case that discriminates against neither baseline pins
-  nothing, so it does not go in.
-- a change to hooks or scripts: `bash test/run.sh` green.
-- a behavior change to the hooks, to `scripts/worktree.sh`, or to the loop in
-  `skills/run/SKILL.md`: `bash evals/lab/run.sh` with no fail. Run an
-  indeterminate scenario again. Read a failed one in its sandbox before you
-  decide. The noise floor is 46 passes of 48 over three identical passes,
-  and both fails were real. So a fail is signal. A fail in a part that the
-  release does not touch does not block the release, once you have read it
-  in its sandbox. It goes on the roadmap. Four times a fail has been a
-  bug in a check. See `evals/lab/README.md`. After a green pass, read the
-  measures in each `result.json`. Where one is off its goal, read that
-  run's transcript before you release. On 2026-09-18 a green pass hid a fix
-  that had made a defect worse, and only two transcripts showed it.
+- every release: `bash test/run.sh` green. This suite is the regression
+  gate. A fix for a shape from real use adds a test there that replays the
+  shape, for example the command that a guard judged wrong.
+- a change to the wording of the judgment prose: `bash evals/run.sh
+  <target> --votes 3 --model opus` green, for the one target that the change
+  touches. The judgment prose is the critic prompts (`agents/*.md`),
+  `skills/run/SKILL.md` and its references, `skills/garden/SKILL.md`, and
+  `rules/workflow.md`. Run no held-out pass and no second model.
+- a new eval case, before you keep it: `bash evals/run.sh <target> --ablate`.
+  A case that the stub also passes pins nothing, so it does not go in.
 - a change to a guard (`hooks/bash-guard.sh`, `hooks/guard.sh`,
   `hooks/dirty-guard.sh`): a code review of the diff at `high` that hunts
   for commands the change lets past. 0.62.0 passed the lab 21 of 21 and
   every suite, and a review then found about twenty such routes.
+
+A release does not run the lab (`evals/lab/run.sh`). The lab costs about
+40 dollars and an hour a pass. From 2026-09-27 to 2026-09-29 it passed six
+releases and found one small defect, and it never ran the code that real
+use then broke. Run it only on the maintainer's word, for example before a
+large rework of the run loop. Read a failed scenario in its sandbox before
+you trust it, because some fails were bugs in a check.
 
 ## The model slots
 
@@ -82,14 +76,16 @@ A new model can read the same prose differently, in both directions. For a
 new Opus, do this as soon as `opus` resolves to it, because consumers
 already run on it. `bash evals/run.sh` prints the model ID it resolved.
 
-Run all four eval targets on the new ID at `--votes 3`, then with
-`--holdout`, and run the lab once. Date the result in a note under
-`docs/spikes/`. A tally below 3/3 on any case means the prose does not hold
-on the new model. Fix the prose in a release of its own.
+Run all four eval targets on the new ID at `--votes 3`. Run the lab once,
+and the cheating benchmark in `evals/probes/impossiblebench/` once. Date the
+result in a note under `docs/spikes/`. A tally below 3/3 on any case means
+the prose does not hold on the new model. Fix the prose in a release of its
+own. The lab's transparency scenarios and the cheating benchmark are hone's
+evidence for its main claim. So run them a few times a year as well, when
+the maintainer asks.
 
-Do not measure the floors, the noise floor, or the watch cases again
-without the maintainer's word. On opus those measures found nothing that
-real use did not find sooner
+Measure nothing more than this without the maintainer's word. On opus the
+extra measures found nothing that real use did not find sooner
 ([the audit](../../docs/spikes/2026-09-27-eval-lab-value-audit.md)).
 
 ## The docs sweep

@@ -21,7 +21,7 @@
 # loads. run.json and result.json carry the commit. --plugin-rev REV pins
 # another commit, which is how a later pass measures the same plugin as an
 # earlier one after main has moved. --plugin-from worktree takes the tree
-# instead, for a candidate that is not committed yet.
+# instead, for a change that is not committed yet.
 #
 # Usage:
 #   bash evals/probes/impossiblebench/run.sh [--arm bare|hone] [--tasks FILE]

@@ -325,7 +325,8 @@ The MAIN incidents up to 2026-09-28 are counted in
   Case: `plan-critic/tool-negative-from-config`.
 - 2026-08-28 · 0.40.1 · `plan-critic` · reject whose only finding was a
   number in motivating prose that no build step reads. One extra round.
-  Case: `optimize/cases/plan-critic/stale-count-in-motive`.
+  Case: `optimize/cases/plan-critic/stale-count-in-motive`, removed on
+  2026-10-01. Git keeps it.
 - 2026-08-24 to 2026-08-28 · mixed · `bash-guard` · 10 asks on a formatter
   run scoped to the plan directory, which the perimeter exempts.
 - 2026-08-21 to 2026-08-28 · mixed · `bash-guard` · 11 asks on a command that
@@ -346,7 +347,8 @@ The MAIN incidents up to 2026-09-28 are counted in
   because its forward pointer dangled. hone's own lifecycle guarantees that
   pointer will dangle.
   Case:
-  `optimize/cases/consolidate-critic/spike-pointer-to-deleted-plan`.
+  `optimize/cases/consolidate-critic/spike-pointer-to-deleted-plan`,
+  removed on 2026-10-01. Git keeps it.
 - 2026-08-26 · not recorded · `consolidate-critic` · proposed cutting a
   browser-level test as redundant with a server-level one. Two layers, one
   proposition.

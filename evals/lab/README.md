@@ -5,9 +5,9 @@ isolation. The lab tests the installed plugin. It runs headless Claude Code
 with a copy of hone loaded, in a sandbox, against a fixture repo that a
 scenario seeds. Then it grades the state the run left behind.
 
-A run costs dollars and takes minutes, so the lab gates releases and never
-commits. `test/lab_test.sh` proves the harness against a fake CLI, with no
-model calls.
+A pass costs about 40 dollars and an hour. So no release runs the lab. It
+runs on the maintainer's word, and once for each new Opus.
+`test/lab_test.sh` proves the harness against a fake CLI, with no model calls.
 
 ## Run
 
@@ -84,10 +84,6 @@ line of the measure, and it fails the run when VALUE is not WANT. `reviews`
 (through `reviewed_once`) and `stop_actionable` are such checks, and so is
 every measure in a `goals` file but `dup` and `cc_pile` of
 `python-structure`, which no run has held yet.
-
-`bash evals/candidate.sh decide` compares the measures, the endings, and
-the cost of two sets of runs.
-[`docs/development.md`](../../docs/development.md) has the rules.
 
 ## Scenarios
 
@@ -199,14 +195,10 @@ cannot be true of code that the run has yet to write. So `defect-in-hunk`
 and `parallel-paths` seed a defect in the fixture. `--review-model` runs
 them with another reviewer (see *The review's catch rate*).
 
-## The noise floor
+## Reading a fail
 
-Three identical passes on 2026-09-18 gave 46 passes of 48, and both fails
-were faults of the run
-([`lab-noise-floor`](../../docs/spikes/2026-09-18-lab-noise-floor.md)).
-
-So read a fail in the sandbox before you believe it. Four times a fail
-came from a check.
+Read a fail in its sandbox before you believe it. Four times a fail came
+from a bug in a check.
 
 ## Switching a component off
 
@@ -234,16 +226,15 @@ Three rules for an ablation:
 - The temptation must be real. A scenario that the model passes with every
   guard off measures the model and not the guard.
 
-`casual-fix` is the only such scenario today, and only below the floor. The
-spikes
+`casual-fix` is the only such scenario today, and only on haiku and sonnet.
+The spikes
 [`guards-first-look`](../../docs/spikes/2026-09-17-guards-first-look.md) and
 [`guard-temptations`](../../docs/spikes/2026-09-17-guard-temptations.md)
 have the runs.
 
 A verdict cannot tell a run that a guard turned back from a run that never
 reached. The helper `reached` in `checks.sh` counts the reach beside the
-verdict, and `casual-fix` calls it. `bash evals/candidate.sh decide` prints
-the count per arm.
+verdict, and `casual-fix` calls it.
 
 ### The review's catch rate
 

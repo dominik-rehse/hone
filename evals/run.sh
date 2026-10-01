@@ -40,8 +40,8 @@
 #   --jobs N    max concurrent model calls (default 8); raise for speed, but too
 #               high can hit API concurrency limits and error a call.
 #   --holdout   include the held-out cases (dirs named *-holdout), which are
-#               otherwise skipped; run them last before a release, and never
-#               read or tune against them while editing a prompt.
+#               otherwise skipped. Never read or tune against them while
+#               editing a prompt.
 #   --dry-run   list the cases and expected answers without calling the model.
 #   --ablate    swap the prose under test for a neutral reviewer stub, keeping
 #               the brief and the closing instruction identical. This is the
@@ -53,14 +53,14 @@
 #   --cases A,B   run only the named cases. A held-out case still needs --holdout.
 #               A watch case (*-watch) runs only when this flag names it.
 #   --prompt-file FILE  evaluate FILE in place of the target's checked-in prose.
-#               It needs one target. A section ablation is this flag plus a
-#               copy of the prompt with one section deleted.
+#               It needs one target. Use it to test a draft before you edit
+#               the real prompt.
 #   --json FILE   write one JSON record per case × vote to FILE, with the full
-#               reply. That reply is the trace a reflective optimizer learns from.
+#               reply.
 #   --cache       reuse a stored reply for the same (model ID, CLI version,
 #               system prompt, user turn, vote). It is opt-in, because a release
-#               gate and a noise-floor run must measure afresh. The store is
-#               evals/.cache, or $HONE_EVAL_CACHE.
+#               gate must measure afresh. The store is evals/.cache, or
+#               $HONE_EVAL_CACHE.
 #
 # Every call runs isolated from this repository: an empty working directory,
 # --safe-mode, and no tools. See call_one for what each one closes off, and why

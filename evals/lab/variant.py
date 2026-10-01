@@ -32,7 +32,7 @@ THE ANCHORS ARE CHECKED AGAINST THIS REPOSITORY, always, before a build. A
 `sub` that no longer matches its declared count fails the build loudly. So a
 reword of a skill or of worktree.sh cannot leave a silent no-op behind.
 
-Prose goes through evals/optimize/sections.py, which is the one place that
+Prose goes through evals/lab/sections.py, which is the one place that
 decides where a section starts and what it is called.
 
 Usage:
@@ -66,11 +66,11 @@ PARTS_FILE = os.environ.get("LAB_PARTS") or os.path.join(HERE, "parts.json")
 VARIANT_DIR = os.environ.get("LAB_VARIANTS") or os.path.join(HERE, "variants")
 
 sys.dont_write_bytecode = True   # no __pycache__ beside the splitter or here
-sys.path.insert(0, os.path.join(ROOT, "evals", "optimize"))
+sys.path.insert(0, HERE)
 try:
-    import sections  # evals/optimize/sections.py
+    import sections  # evals/lab/sections.py
 except ImportError as e:  # pragma: no cover - a missing splitter is a broken repo
-    sys.stderr.write("variant: evals/optimize/sections.py is missing (%s)\n" % e)
+    sys.stderr.write("variant: evals/lab/sections.py is missing (%s)\n" % e)
     raise SystemExit(2)
 
 LEVELS = ("low", "medium", "high", "max")

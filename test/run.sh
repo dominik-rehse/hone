@@ -1,9 +1,8 @@
 #!/bin/bash
 # Run hone's mechanical test suite: the hook unit tests, the end-to-end land
 # path (solo and shared mode), the coordinate helper and its watch hook, the table-rewrite reader, the shipped test
-# adapters, the plumbing of the eval harness, of the scenario lab, and of the candidate procedure, the
-# section splitter and the GEPA adapter the prose search uses, the prose
-# integrity checks, and the
+# adapters, the plumbing of the eval harness and of the scenario lab, the
+# prose integrity checks, and the
 # two checks on the message templates (prose and shape). These are
 # deterministic (no model calls). The critic/rule evals are separate and live
 # under evals/ (they call a model). Run: bash test/run.sh
@@ -33,18 +32,6 @@ bash "$DIR/evals_test.sh" || rc=1
 echo
 echo "### lab_test.sh"
 bash "$DIR/lab_test.sh" || rc=1
-echo
-echo "### candidate_test.sh"
-bash "$DIR/candidate_test.sh" || rc=1
-echo
-echo "### optimize_test.sh"
-bash "$DIR/optimize_test.sh" || rc=1
-echo
-echo "### gepa_adapter_test.sh"
-bash "$DIR/gepa_adapter_test.sh" || rc=1
-echo
-echo "### decision_points_test.sh"
-bash "$DIR/decision_points_test.sh" || rc=1
 echo
 echo "### prose_test.sh"
 bash "$DIR/prose_test.sh" || rc=1

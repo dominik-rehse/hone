@@ -22,9 +22,11 @@ since the last field note. Write each failure as a line in
 A fix for a field shape ships with a test or a lab scenario that replays
 the shape.
 
-The evals and the lab are a regression gate, not the source of work. Do
-not start a new benchmark, probe, ablation campaign, prompt search, or
-noise-floor measurement without the maintainer's word. On 2026-09-27 an
+`test/run.sh` is the regression gate. The model-based evals and the lab
+run only where `releasing.md` names them, and they are not the source of
+work. Do not start a new benchmark, probe, ablation campaign, prompt
+search, or noise-floor measurement without the maintainer's word. On
+2026-10-01 the maintainer cut the optimization tooling for this reason. On 2026-09-27 an
 audit found that real use found more defects, and worse ones, for less
 money ([the note](../../docs/spikes/2026-09-27-eval-lab-value-audit.md)).
 

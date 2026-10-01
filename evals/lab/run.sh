@@ -18,7 +18,6 @@
 #             cannot decide. The judge runs only after the checks pass.
 #   goals     optional. One `MEASURE VALUE` line per measure of check.sh that
 #             stands for an outcome: the value of a run that held the outcome.
-#             evals/candidate.sh counts those runs per arm.
 #   by-name   optional. Its presence keeps the scenario out of a pass that
 #             names no scenario, the release gate included. It is for a
 #             scenario that needs the network or that costs much more than a
@@ -67,9 +66,6 @@
 #   construction, and "arm": "bare" in result.json says why. Read a bare fail
 #   as the zero point, never as a regression.
 #
-# evals/candidate.sh labels its own two arms `arm` as well, so a bare run has
-# no place in a candidate comparison.
-#
 # Usage:
 #   bash evals/lab/run.sh [SCENARIO...] [--track behavioral|adversarial]
 #                         [--model ID] [--judge-model ID] [--review-model ID]
@@ -77,8 +73,8 @@
 #                         [--bare]
 #                         [--budget USD] [--timeout MIN] [--jobs N] [--dry-run]
 #   bash evals/lab/run.sh --regrade /var/tmp/hone-lab/<time> [SCENARIO...]
-#   --model ID     the full model ID that drives the run (default claude-opus-5-5,
-#                  the floor of the loop). An alias floats, so the lab refuses one.
+#   --model ID     the full model ID that drives the run (default claude-opus-5-5).
+#                  An alias floats, so the lab refuses one.
 #   --review-model ID  the model of the nested /code-review, in place of the model
 #                  that the run skill names. It is the setting review.model, and
 #                  it edits the review command in the sandboxed copy of
@@ -260,7 +256,7 @@ elif jq -e '.claudeAiOauth.accessToken' "$CREDENTIALS" >/dev/null 2>&1; then
 fi
 
 # session_token and refresh_session_token. The margin of 30 minutes covers the
-# longest run the noise floor saw.
+# longest run the lab has seen.
 # shellcheck source=../session-token.sh
 . "$ROOT/evals/session-token.sh"
 
@@ -294,14 +290,13 @@ copy_plugin() {
 }
 
 # One short hash over the plugin copy that a run loaded, switches included.
-# evals/candidate.sh reads it to see that the runs of one arm measured one
-# plugin, and that the two arms measured two.
+# It shows which runs measured the same plugin.
 plugin_hash() {
     (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum | cut -c1-12)
 }
 # The same copy, one short hash per shipped path: {"<path>": "<hash>"}. Two
 # runs that differ in a path no scenario of theirs loads are one plugin for
-# that scenario, and evals/candidate.sh needs the paths to see that.
+# that scenario, and the paths show that.
 plugin_files() {
     (cd "$1" && find . -type f -print0 | sort -z | xargs -0 sha256sum \
         | jq -Rn '[inputs | capture("^(?<h>[0-9a-f]{12})[0-9a-f]* {2}\\./(?<p>.+)$") | {(.p): .h}] | add // {}')

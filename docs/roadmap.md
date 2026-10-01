@@ -3,8 +3,8 @@
 This page lists what is open in the work on hone itself, and what the
 maintainer decided. Each item says what happens, how we know, and what the
 next step is. [*Goals*](model.md#goals) has the outcomes that hone works
-for. [`development.md`](development.md) has the procedure that judges a
-change, and [`releasing.md`](../.claude/rules/releasing.md) has the
+for. [`development.md`](development.md) says how a change is judged,
+and [`releasing.md`](../.claude/rules/releasing.md) has the
 release gates. The history is in the dated notes under `docs/spikes/` and
 in git.
 
@@ -19,9 +19,6 @@ in git.
 - A *probe* is a harder test from outside hone, such as a public
   benchmark. It shows where hone makes a difference on a strong model. A
   probe never decides whether a release may go out.
-- A *candidate* is a proposed change to hone that goes through the
-  procedure in `development.md`. The procedure accepts a change to prompt
-  text only when a measurement shows a gain.
 
 ## Open
 
@@ -120,8 +117,7 @@ in git.
   - a cap on concurrent runs in `coordinate`.
   - a land log per change.
   - no hone hooks in a nested review.
-  Each fix gets a test in `test/` that replays the shape. A change to
-  `scripts/worktree.sh` or the hooks also owes a lab pass.
+  Each fix gets a test in `test/` that replays the shape.
 
 #### The proof gate asks for sign-offs that prove nothing
 
@@ -245,7 +241,7 @@ Each comes from [the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-b
   suggestion may show up in a final report or in the
   [field log](field-log.md). Then reword those two places, so that they
   do not name the marker to the agent. That is a change to prompt text, so it
-  needs the `loop` unit suite and some lab runs.
+  needs the `loop` unit suite.
 
 #### On claude-opus-5-5 the loop sometimes starts a second review
 
@@ -274,11 +270,10 @@ Each comes from [the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-b
   person two routes and recommended neither. In `plan-fork`, one run of
   eight wrote that its rejected Plan was "written and on disk", while it
   recommended the other build.
-- Why it waits: on opus this is rare, and the procedure needs a measured
-  gain. The fix would move the one-action rule into `rules/workflow.md`,
+- Why it waits: on opus this is rare. The fix would move the one-action rule into `rules/workflow.md`,
   which every session reads, so it costs words in every session.
 - Next step: collect cases in the field log. With three or more on opus,
-  build a scenario and try the change as a candidate.
+  build a scenario or a test that replays them, and make the change.
 
 #### Complexity piles up in one function, and nobody raises it
 
@@ -295,29 +290,10 @@ Each comes from [the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-b
 - What limits the finding: it is one fixture, in Python. The first design
   of the fixture punished reasonable code, and the note says how the second
   design avoids that.
-- Next step: a candidate through the procedure in `development.md`. The
-  measure `cc_pile` exists, so a gain can show. An exact check would need a
-  complexity tool per language, which is a new tool, so rule 5 does not
-  cover it. The likely candidate is one sentence in the refactor step of
-  the run skill. It owes the `loop` unit suite and the whole lab.
-
-#### Two sentences of the `plan-critic` move no case
-
-- What happens: the critic says that a Decision which settles a fork is the
-  person's earlier answer, and that a Plan which follows it has picked
-  nothing. The unit case `fork-settled-by-decision` approves with those two
-  sentences and without them, 3 votes of 3 each.
-- How we know: the roadmap once read 2 rejections of 17 on that case as a
-  critic that ignores a Decision. Both rejections named a real second fork
-  in the case's brief, and the critic was right. The brief is fixed, and the
-  case now approves 10 of 10
-  ([`fork-case-second-fork`](spikes/2026-09-19-fork-case-second-fork.md)).
-- Why it waits: a trim of this paragraph is risky. A change of three words
-  once moved the lab scenario `plan-fork` from 3 correct runs of 3 to none.
-  The gain is two sentences.
-- Next step: none without the maintainer's word. A trim needs a harder
-  case first: a fork that the stub rejects and that only a Decision
-  settles.
+- Next step: the likely fix is one sentence in the refactor step of the
+  run skill. It owes the `loop` unit suite. The measure `cc_pile` can show
+  a gain. An exact check would need a complexity tool per language, which
+  is a new tool, so rule 4 in `development.md` does not cover it.
 
 #### `setup-misfit` failed once in nine runs
 
@@ -535,7 +511,7 @@ the next field window and count fires per hook again.
   57. It sits in the scrollback and scrolls away. Next step: show the
   runs' lines in the coordinator tab, and find a place for the line that
   stays in view.
-- Next step: run the lab after the merge and read `progress_starts` and
+- Next step: in the next lab pass, read `progress_starts` and
   `hook_lines` in each `result.json`. For garden, watch the next field
   pass for the line, or add a lab scenario that runs `/hone:garden`.
 
@@ -677,30 +653,10 @@ the next field window and count fires per hook again.
 
 ### Measurement
 
-Since 2026-09-27 the evals and the lab are a regression gate, and real use
-is the main source of work. No item in this section starts without the
+Since 2026-09-27 real use is the main source of work, and `test/run.sh`
+is the regression gate. No item in this section starts without the
 maintainer's word
 ([the audit](spikes/2026-09-27-eval-lab-value-audit.md)).
-
-#### A real base gives the lab no room, for now
-
-Step 4 of the handoff asked for a lab scenario that seeds a pinned
-open-source repository in place of a fixture of a hundred lines. The aim was
-room on *correct* and on the duplicate measure `dup`, where opus passes
-nearly every scenario of today. The base is pallets/click at the tag 8.5.0,
-12,674 lines of source, BSD-3-Clause.
-
-I tried three tasks, each one harder than the last, and each one hiding
-facts that only the wider code holds. Opus got every hidden fact right on
-every run, with hone and without it. Sonnet held the hardest task in three
-runs per arm, so the base gives no room below the floor either. The scenario
-`evals/lab/scenarios/real-base-click` holds the first task and runs by name
-only. The runs, the measures, and the two tasks that live in no file are in
-[the real-base note](spikes/2026-09-20-real-base-scenario.md).
-
-What is open: the note names two ways to reopen this. Cut the Plan back to
-what a user asks for, or take a base whose own suite catches less. Until
-then, a real base buys the lab a price comparison and no outcome room.
 
 #### Fails from real use
 
@@ -727,10 +683,9 @@ per hook are in
   ([`spec-authority-first-runs`](spikes/2026-09-19-spec-authority-first-runs.md)).
 - What it can show: only a large change, as long as a pass has ten single
   runs. No pass with more runs per task exists yet.
-- Next step: a baseline pass at `--runs 3` on the current release, before a
-  candidate leans on the probe. Three runs of ten tasks in both arms cost
-  about as much as a lab pass.
-  The benchmark's second half is built on SWE-bench. It needs Docker and
+- When it runs: once for each new Opus, and a few times a year when the
+  maintainer asks ([`releasing.md`](../.claude/rules/releasing.md)). A pass
+  at `--runs 3` costs about as much as a lab pass. The benchmark's second half is built on SWE-bench. It needs Docker and
   about 120 GB, and this machine has neither set up.
 
 #### An exact measure for well-structured code
@@ -764,23 +719,9 @@ probe shows a gap.
 
 ### Parked, each with the condition that reopens it
 
-- *Cutting sections from the critic prompts.* We removed each section of
-  both critics in turn, and no section could go safely. Thirteen sections
-  have no unit case that aims at them, so the suites cannot tell whether
-  they matter
-  ([`section-ablation-on-opus`](spikes/2026-09-18-section-ablation-on-opus.md)).
-  Reopen on the maintainer's word.
-- *The review bench.* `evals/probes/review-bench/` tests the nested code
-  review alone. opus caught 51 of 51, so the bench cannot show a gain, and
-  its false-alarm count moved with the judge and with the day
-  ([`review-bench-harder-fixtures`](spikes/2026-09-20-review-bench-harder-fixtures.md)).
-  Reopen on the maintainer's word, with a base of 5,000 lines or more that
-  a reviewer cannot read whole.
 - *A reviewer from another model family.* The author and the reviewer are
-  both Claude, so they may miss the same things. The review bench now tells
-  sonnet from opus, but opus misses nothing on it, so a second reviewer
-  could not show a benefit there. Reopen when the bench has a fixture that
-  opus misses.
+  both Claude, so they may miss the same things. Reopen when real use
+  shows a defect that the opus review missed.
 - *hone on hone.* This repository does not use hone for its own work
   ([`development.md`](development.md), *Change briefs*). Setting that up
   is a project of its own, and nothing above depends on it.
@@ -791,11 +732,8 @@ probe shows a gap.
   shows that the bullets proposed for removal change a verdict. A lab test
   of the removal would cost about 60 dollars, and the maintainer decided
   against it.
-- *A cheap, exact check needs no measured gain* (2026-09-18). It is rule 5
-  of the procedure. Cheap means no model call and no new tool.
-- *The ten-vote rule stands* (2026-09-18). When a unit case moves by one
-  vote of three, the procedure runs it again at ten votes. A fall of one
-  is noise, and a fall of two rejects the change.
+- *A cheap, exact check needs no measured gain* (2026-09-18). It is rule 4
+  in `development.md`. Cheap means no model call and no new tool.
 - *hone does not defend against a newly built route* (2026-09-18). The
   guards read the command and the path, and not what a command runs.
   [*Authority*](model.md#authority) says so. This closed the case of a
@@ -806,9 +744,6 @@ probe shows a gap.
 - *The code review stays on opus* (2026-09-19). On the review bench,
   sonnet caught the same defects at a third of the price. It also raised
   eight false alarms on a clean change, and opus raised none.
-- *A lab fail in a part that a release does not touch does not block the
-  release* (2026-09-19). Someone must first read the failed run in its
-  sandbox. The fail then goes on this page.
 - *Real use leads, and the evals gate* (2026-09-27). Of 200 changes to
   the plugin, about 8% came from an eval or the lab, and about 45% from
   real use. The suites stay as a regression gate. No new benchmark,
@@ -816,6 +751,10 @@ probe shows a gap.
   starts without the maintainer's word. This drops the program of
   `HANDOFF.md`, and git keeps the file. A guard change gets a code review before release
   ([the audit](spikes/2026-09-27-eval-lab-value-audit.md)).
+- *The optimization tooling is gone* (2026-10-01). The maintainer removed
+  the prose optimizer, the candidate procedure, the decision-point cases,
+  the review bench, and the model floors. A release no longer runs the lab
+  or the held-out cases. Git keeps the files.
 - *Only a person records a grant* (2026-09-26). In the field the agent
   granted itself each of the 3 times the authority gate fired
   ([note](spikes/2026-09-25-field-data-since-0-58.md)), so exit 8 stopped

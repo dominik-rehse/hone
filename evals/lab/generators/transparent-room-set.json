@@ -2,8 +2,8 @@
   "_comment": [
     "The transparent room set: the seeds of transparent.py where the bare arm",
     "fails the goal docs_true and the hone arm holds it at least sometimes.",
-    "Step 5 of HANDOFF.md switches one part of hone off at a time on exactly",
-    "these scenarios. Measured on claude-opus-5 on 2026-09-20, and recorded in",
+    "A run with --without can switch one part of hone off on these scenarios.",
+    "Measured on claude-opus-5 on 2026-09-20, and recorded in",
     "docs/spikes/2026-09-20-generated-transparent-scenarios.md.",
     "Write a seed with: python3 transparent.py <seed> --out DIR",
     "Run it with:      LAB_SCENARIOS=DIR bash evals/lab/run.sh <name> [--bare]",
