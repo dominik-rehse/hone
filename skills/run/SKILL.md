@@ -148,6 +148,9 @@ order, so work with it:
   test-after. Either you wrote the code first, or the test asserts nothing.
   Discard and rewrite it.
 - **Green.** Write the minimum code to pass it. Run the same file. It passes.
+  A test of yours that ever goes red with no change in between is a flake
+  that you made. Find its cause before the next cycle. Never retry it until
+  it passes.
 - **Refactor.** Clean up what you just wrote. Run `scripts/run-tests.sh` (unit
   tier). All green.
 - Repeat for the next behaviour. The loop is **serial**: each cycle learns from

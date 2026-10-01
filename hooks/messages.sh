@@ -681,7 +681,7 @@ msg_wt_grant_usage() {
 }
 
 msg_wt_attest_usage() {
-    printf '%s\n' "usage: worktree.sh attest <change> \"$(hone_msg_attest_what)\""
+    printf '%s\n' "usage: worktree.sh attest <change> \"$(hone_msg_attest_what)\"  |  worktree.sh attest <change> --file <path>"
 }
 
 msg_wt_not_a_repo() {
@@ -906,79 +906,125 @@ hone_msg_proof_check() {
     hone_msg_block "$1"
 }
 
+# The harness files a refusal names, as one phrase. $1 holds the files, one
+# per line. The refusal names what changed: the adapter, a probe, or both.
+hone_msg_proof_what() {
+    local f adapter="" probes="" n=0 p=""
+    while IFS= read -r f; do
+        case "$f" in
+            '') ;;
+            scripts/proof.sh) adapter=yes ;;
+            *) probes="$probes${probes:+, }$f"; n=$((n+1)) ;;
+        esac
+    done <<< "$1"
+    [ "$n" -eq 1 ] && p="the probe file $probes"
+    [ "$n" -gt 1 ] && p="the probe files $probes"
+    if [ -n "$adapter" ] && [ -n "$p" ]; then printf 'the proof adapter scripts/proof.sh and %s' "$p"
+    elif [ -n "$adapter" ]; then printf 'the proof adapter scripts/proof.sh'
+    elif [ -n "$p" ]; then printf '%s' "$p"
+    else printf 'the proof harness'
+    fi
+}
+
 # The bootstrap case, as a labelled paste block. land runs the PRIMARY tree's
 # proof.sh, so that copy cannot prove the change that writes or edits it. The
 # copy land would run is the one this change replaces. $1 holds the commands
 # to run, one per line, and is empty when the change leaves the harness alone.
+# $2 holds the files that changed, one per line.
 hone_msg_proof_bootstrap() {
     [ -n "$1" ] || return 0
-    cat <<'EOF'
-This change rewrites scripts/proof.sh or an existing probe, so land cannot use the copy it has.
-Run the change's own adapter, from its worktree, in your own terminal, once for each line:
-EOF
+    printf 'This change rewrites %s, so land cannot use the copy it has.\n' "$(hone_msg_proof_what "${2:-}")"
+    printf "Run the change's own adapter, from its worktree, in your own terminal, once for each line:\n"
     hone_msg_block "$1"
 }
 
+# The attest command as a paste block, and the short form for a long text.
+hone_msg_attest_block() {
+    hone_msg_block "$1"
+    printf 'For a long text, write it to a file and pass --file <path> in place of the quoted text.\n'
+}
+
+# The merge body line of a sign-off that carried from the commit the person
+# signed ($1) to the tip that lands ($2).
+hone_msg_proof_carried() {
+    printf 'signed at %s, carried to %s: the same change and the same proof files' "$1" "$2"
+}
+
+# The merge body line of a green adapter run. $1 = the name the adapter ran
+# with, $2 = the tip it ran on.
+hone_msg_proof_automatic() {
+    printf 'automatic: bash scripts/proof.sh %s exit 0 at %s' "$1" "$2"
+}
+
+# $4 says why the adapter ran: `declared` (a trailer), `added` (the branch
+# adds a probe), or `always` (the marker). $5 = the name the adapter ran
+# with. $6 = the added probe files, one per line.
 msg_wt_land_proof_adapter_failed() {
-    local branch="$1" check="$2" attest_cmd="$3" bootstrap="$4"
+    local branch="$1" check="$2" attest_cmd="$3" why="${4:-declared}" name="${5:-}" added="${6:-}"
+    local reason run="scripts/proof.sh"
+    [ -n "$name" ] && run="bash scripts/proof.sh $name"
+    case "$why" in
+        added)  reason="adds the probe ${added//$'\n'/, }" ;;
+        always) reason="falls under .hone-proof-always" ;;
+        *)      reason="declares real-environment proof" ;;
+    esac
     cat <<EOF
-hone worktree: $branch declares real-environment proof, and scripts/proof.sh failed.
+hone worktree: $branch $reason, and $run failed.
 Do: read the adapter output above, fix the change, then land again.
 Why: the real environment refused this change.
 EOF
     hone_msg_proof_check "$check"
-    if [ -n "$bootstrap" ]; then
-        hone_msg_proof_bootstrap "$bootstrap"
-        printf 'Record that run, then re-run land:\n'
-        hone_msg_block "$attest_cmd"
+    if [ "$why" = added ]; then
+        printf 'If the adapter cannot run the new probe, a person runs it by hand and records the run:\n'
+        hone_msg_attest_block "$attest_cmd"
     fi
     printf 'land kept the worktree as evidence.\n'
 }
 
 msg_wt_land_proof_signoff_stale() {
-    local change="$1" branch="$2" tip="$3" check="$4" attest_cmd="$5" bootstrap="$6"
+    local change="$1" branch="$2" tip="$3" check="$4" attest_cmd="$5" bootstrap="$6" harness="${7:-}"
     cat <<EOF
 hone worktree: .hone-proof/$change names no commit, or an older one, so it cannot cover $branch at $tip.
 Do: run the check against this tip, then record the sign-off again.
-Why: a sign-off covers one commit, never a later one.
+Why: the change or its proof files changed since the sign-off.
 EOF
     hone_msg_proof_check "$check"
-    hone_msg_proof_bootstrap "$bootstrap"
+    hone_msg_proof_bootstrap "$bootstrap" "$harness"
     printf 'Record the new sign-off, then re-run land:\n'
-    hone_msg_block "$attest_cmd"
+    hone_msg_attest_block "$attest_cmd"
     printf 'land kept the worktree as evidence.\n'
 }
 
 msg_wt_land_proof_missing() {
-    local branch="$1" check="$2" attest_cmd="$3" bootstrap="$4"
+    local branch="$1" check="$2" attest_cmd="$3" bootstrap="$4" harness="${5:-}"
     cat <<EOF
 hone worktree: $branch declares real-environment proof, which the test suite cannot give.
 Do: run the check yourself, then record your sign-off.
 Why: a green suite proves assertions, not deployed behaviour.
 EOF
     hone_msg_proof_check "$check"
-    hone_msg_proof_bootstrap "$bootstrap"
+    hone_msg_proof_bootstrap "$bootstrap" "$harness"
     printf 'Record your sign-off, then re-run land:\n'
-    hone_msg_block "$attest_cmd"
+    hone_msg_attest_block "$attest_cmd"
     [ -n "$bootstrap" ] || printf 'The other route is scripts/proof.sh in the primary tree, a real check such as a journey, a canary, or deployed health.\n'
     printf 'land kept the worktree as evidence.\n'
 }
 
-# The adapter-change gate: the branch edits scripts/proof.sh or a probe and
+# The harness gate: the branch rewrites scripts/proof.sh or a probe file and
 # declares no trailer, so the file change alone is what land refuses on. It
 # stays apart from msg_wt_land_proof_missing, which opens by naming the trailer
-# this change does not have.
+# this change does not have. The bootstrap block names the files.
 msg_wt_land_proof_adapter_change() {
-    local branch="$1" attest_cmd="$2" bootstrap="$3"
+    local branch="$1" attest_cmd="$2" bootstrap="$3" harness="${4:-}"
     cat <<EOF
-hone worktree: $branch changes the proof adapter, so land gates it whatever the Plan declared.
+hone worktree: $branch rewrites the proof harness, so land gates it whatever the Plan declared.
 Do: run the change's own adapter yourself, then record your sign-off.
 EOF
     # No Why line here. The bootstrap block below opens with the reason, and a
     # fourth line would push the paste block past the shape the reader expects.
-    hone_msg_proof_bootstrap "$bootstrap"
+    hone_msg_proof_bootstrap "$bootstrap" "$harness"
     printf 'Record your sign-off, then re-run land:\n'
-    hone_msg_block "$attest_cmd"
+    hone_msg_attest_block "$attest_cmd"
     printf 'land kept the worktree as evidence.\n'
 }
 
@@ -1250,7 +1296,7 @@ msg_wt_attest_recorded() {
     cat <<EOF
 hone worktree: sign-off recorded at .hone-proof/$change for commit $tip.
 Do: re-run land.
-Why: the sign-off stops counting after new commits.
+Why: a new commit of the change's own ends the sign-off.
 EOF
 }
 
@@ -1298,6 +1344,15 @@ msg_wt_grant_no_branch() {
 hone worktree: branch hone/$change does not exist, so there is nothing to grant.
 Do: check the change name in the land refusal, then grant again.
 Why: a stray grant opens the gate for a later change.
+EOF
+}
+
+msg_wt_attest_no_file() {
+    local path="$1"
+    cat <<EOF
+hone worktree: attest cannot read the file $path.
+Do: pass a file that holds the check you ran and its outcome.
+Why: the file's text becomes the sign-off.
 EOF
 }
 
@@ -1709,6 +1764,20 @@ Why: garden may touch any file.
 EOF
 }
 
+# The board line that a wait prints after its events. $1 = the items, joined
+# by " · ": a session's change and the step its last progress line names.
+msg_coord_progress() {
+    printf '◆ hone sessions, as each reports: %s\n' "$1"
+}
+
+msg_coord_consolidate_no_base() {
+    cat <<'EOF'
+hone coordinate: the global consolidate pass has no base commit, so it does not start.
+Do: start consolidate after a run of this batch lands.
+Why: the pass must know which merges to cover.
+EOF
+}
+
 msg_coord_admit_compare() {
     local change="$1" n="$2"
     printf 'hone coordinate: %s may start if its Plan is disjoint from the %s change(s) in flight. Compare the Plans below by the checklist in parallel.md.\n' "$change" "$n"
@@ -1834,10 +1903,11 @@ worktree|human|msg_wt_land_no_cut_line|hone/<change>|<main-root>/.worktrees/<cha
 worktree|human|msg_wt_land_authority_missing|hone/<change>|- <signal>. <why it counts>|<diffstat>|git -C <main-root> diff <primary>...hone/<change>|<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "your reason"|db/migrations/<file>.sql: <new> copies all <n> columns of <table> (<columns>) with no filter
 worktree|human|msg_wt_land_gates_both|hone/<change>
 worktree|human|msg_wt_land_grant_empty|<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "your reason"
-worktree|human|msg_wt_land_proof_adapter_failed|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
-worktree|human|msg_wt_land_proof_signoff_stale|<change>|hone/<change>|<tip>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
-worktree|human|msg_wt_land_proof_missing|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
-worktree|human|msg_wt_land_proof_adapter_change|hone/<change>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
+worktree|human|msg_wt_land_proof_adapter_failed|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|declared|<change>
+worktree|human|msg_wt_land_proof_adapter_failed|hone/<change>||bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|added|<area>/<probe>|scripts/proof-probes/<area>/<probe>.sh
+worktree|human|msg_wt_land_proof_signoff_stale|<change>|hone/<change>|<tip>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|bash scripts/proof.sh <probe>|scripts/proof-probes/<probe>.sh
+worktree|human|msg_wt_land_proof_missing|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|bash scripts/proof.sh <probe>|scripts/proof-probes/<probe>.sh
+worktree|human|msg_wt_land_proof_adapter_change|hone/<change>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|bash scripts/proof.sh <change>|scripts/proof.sh
 worktree|human|msg_wt_land_proof_always_no_adapter|<plugin-root>/templates/proof/
 worktree|human|msg_wt_land_conflict|hone/<change>|- <path>
 worktree|human|msg_wt_land_hook_refused|hone/<change>|<git-common-dir>/hone-land.<change>.log|<output-tail>
@@ -1867,6 +1937,8 @@ coordinate|plain|msg_coord_admit_compare|<change>|2
 coordinate|human|msg_coord_no_herdr
 coordinate|human|msg_coord_plan_uncommitted|<slug>
 coordinate|human|msg_coord_herdr_old|0.8.2
+coordinate|plain|msg_coord_progress|csv-export verify … · pdf-export land ✗ (exit 7, proof gate) · plan:invoices (working)
+coordinate|human|msg_coord_consolidate_no_base
 watch|agent|msg_watch_no_wait|  csv-export  (sub-csv-export)|bash <plugin-root>/scripts/coordinate.sh wait
 watch|human|msg_watch_let_go
 worktree|human|msg_wt_land_primary_moved|main|3
@@ -1904,6 +1976,7 @@ worktree|human|msg_wt_attest_recorded|<change>|<tip>
 worktree|human|msg_wt_attest_empty
 worktree|human|msg_wt_attest_placeholder|what you ran
 worktree|human|msg_wt_attest_no_branch|<change>
+worktree|human|msg_wt_attest_no_file|<path>
 worktree|human|msg_wt_remove_needs_path
 worktree|human|msg_wt_remove_foreign|<path>
 worktree|human|msg_wt_remove_self|<path>

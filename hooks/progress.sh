@@ -2,7 +2,9 @@
 # Shows the progress lines of run and garden to the person (PostToolUse and
 # PostToolUseFailure on Bash, and Stop). The step subcommands of
 # scripts/worktree.sh queue each line in <git-common-dir>/hone-progress/<session>
-# (see progress_emit there). This hook takes its own session's queue and returns
+# (see progress_emit there). In a coordinator session, scripts/coordinate.sh
+# wait queues one line with each watched session's last progress line.
+# This hook takes its own session's queue and returns
 # it as a systemMessage, which Claude Code shows in the terminal. A nonzero exit
 # fires PostToolUseFailure, not PostToolUse, so a failed land shows too. Stop
 # shows the line of a land that ran in the background.

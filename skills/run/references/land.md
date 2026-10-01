@@ -96,27 +96,31 @@ tree's HEAD.
 
 ## 7: the proof gate
 
-The change needs real-environment proof, and that proof is missing. Three things
+The change needs real-environment proof, and that proof is missing. Four things
 ask for it. A `Proof: real-environment` trailer on a branch commit asks for it.
 So does a committed `.hone-proof-always` marker, which gates every change, with
 a trailer or without one. So does the change rewriting the proof harness: any
 edit to `scripts/proof.sh`, or an edit to a probe under
-`scripts/proof-probes/` that already exists. That third gate fires on the file
-change itself. It needs no trailer and no marker. Adding a *new* probe does
-not fire it.
+`scripts/proof-probes/` that already exists, or to a file there that a probe
+runs. That third gate fires on the file change itself. It needs no trailer and
+no marker. An edit to comments only, a test file, or a README there does not
+fire it. A *new* probe asks for proof too: land runs the adapter on it, and
+only a red run stops the land.
 
 Two things discharge it. A green `scripts/proof.sh` discharges it, and so does
 a `.hone-proof/<change>` sign-off naming the current branch tip. land runs the
 primary tree's reviewed copy of the adapter, from the worktree, so it reaches
 the code under test. A proof.sh the change itself adds does not count until it
-lands. A sign-off written for an earlier commit stops counting, by design: it
-must not outlive the code it vouched for.
+lands. A sign-off survives a merge of main or a rebase onto it. A new commit
+of the change's own, or a changed probe, ends it, by design: it must not
+outlive the code it vouched for.
 
 The merge did not happen and the worktree is kept. Run the check the refusal
 names where you can reach it, then **stop and hand over**. Quote what you ran
 and what it printed, verbatim, with the `worktree.sh attest` command the
-refusal printed. The sign-off is the human's act. You never run `attest`, and
-the `bash-guard` denies it to you. The human reads the output, runs the check
+refusal printed. For a long output, save it to a file and hand over the
+`--file <path>` form of that command. The sign-off is the human's act. You
+never run `attest`, and the `bash-guard` denies it to you. The human reads the output, runs the check
 again if they want, and records it. Where the declared check is outside your
 reach, stop with what you tried. A report naming a check nobody ran is worse
 than no gate, because the human signs on the strength of it.
@@ -131,13 +135,15 @@ Read the message to see which of the five refusals fired:
   and prints the same attest command.
 - *The adapter failed.* The message points at the adapter output above it. Fix
   the change, then land again. This refusal prints no attest command, because
-  the real environment refused the change.
+  the real environment refused the change. One exception: where the change
+  adds a probe, the adapter may not be able to run it, and the message prints
+  the attest command.
 - *The marker without an adapter.* The message asks the human to add
   `scripts/proof.sh`, and prints no attest command. Never remove
   `.hone-proof-always` to get past it. The marker is project policy, and both
   guards protect it.
-- *The change edits the adapter.* The message names the file change as the
-  reason, because the branch declared nothing. It prints the same attest
+- *The change rewrites the harness.* The message names the files that
+  changed, because the branch declared nothing. It prints the same attest
   command.
 
 One case has no automatic route. Where the change itself rewrites the proof
@@ -147,12 +153,10 @@ yourself, read its output, and hand it to the human with the attest command.
 That run is a real check of the branch's own adapter, so the output you hand
 over is honest evidence. The signature stays the human's.
 
-Rewriting the harness means one of two diffs: any edit to `scripts/proof.sh`,
-or an edit to a probe under `scripts/proof-probes/` that already exists. A
-change that only *adds* a new probe is not rewriting the harness. It is
+A change that only *adds* a new probe is not rewriting the harness. It is
 writing its own check, the way it writes its own tests, and the adapter that
-will judge it is untouched. So an added probe lands on the ordinary route, and
-`/code-review` reads it in the same diff.
+will judge it is untouched. So land runs that adapter on the added probe, and
+`/code-review` reads the probe in the same diff.
 
 You may author a harness change in the worktree, and you should. The gate is
 what holds it, not a ban on writing it. land reads the diff, so the gate fires

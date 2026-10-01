@@ -4,8 +4,8 @@
 from the test tiers in `templates/run-tests/`. Those assert against the working
 tree. This one proves the change against a *real environment*: a browser
 journey, a canary, deployed health, a real API. It runs only when a change
-declared `Proof: real-environment — <the check>` in its Plan, and only at land,
-before the merge. Copy a template here to `scripts/proof.sh` and adapt it.
+declared `Proof: real-environment — <the check>` in its Plan, or adds a probe,
+and only at land, before the merge. Copy a template here to `scripts/proof.sh` and adapt it.
 
 ## Contract
 
@@ -14,11 +14,15 @@ before the merge. Copy a template here to `scripts/proof.sh` and adapt it.
   its own. land trusts a change that introduces or edits `proof.sh` only after
   that adapter change has landed. Until then, the sign-off is the way through
   the gate. The same holds for a change that edits a probe which already
-  exists. A change that only *adds* its own new probe is not gated this way.
-  The adapter that judges it stays the reviewed copy, and a new probe is a
-  check the change writes for itself, like its tests.
-- `land` invokes it as `proof.sh <change>`, with the working directory set to
-  the *change's worktree* when it exists. That tree holds the code under test.
+  exists, or a file beside it that a probe runs. A change that only *adds*
+  its own new probe is not gated this way. The adapter that judges it stays
+  the reviewed copy, and land runs it once for each added probe.
+- A probe is `scripts/proof-probes/<name>.sh`, and `proof.sh <name>` runs it.
+  land names a probe this way when it runs an added probe, and when it asks
+  a person to run an edited one.
+- `land` invokes it as `proof.sh <change>`, and as `proof.sh <name>` for each
+  added probe, with the working directory set to the *change's worktree* when
+  it exists. That tree holds the code under test.
   The primary tree is still pre-merge at this point, so a proof run against it
   would validate the old code's behavior, not the change.
 - Environment: `HONE_CHANGE` (the change name), `HONE_BRANCH` (`hone/<change>`),

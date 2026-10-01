@@ -696,8 +696,7 @@
         {
           "file": "scripts/worktree.sh",
           "from": [
-            "    if [ -n \"$proof_always\" ] || [ -n \"$bootstrap\" ] \\",
-            "       || [ -n \"$(land_proof_required \"$main_root\" \"$base\" \"$branch\")\" ]; then"
+            "    if [ -n \"$proof_always\" ] || [ -n \"$bootstrap\" ] || [ -n \"$declared\" ] || [ -n \"$added\" ]; then"
           ],
           "to": ["    if false; then   # variant.py: the proof gate is off in this copy"],
           "count": 1

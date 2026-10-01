@@ -17,10 +17,12 @@ invokes it between changes. It runs the same loop, driven by a scan instead of a
 Plan, and it has two units of work: a **cut** and a **repair**.
 
 `garden` writes no new behaviour. A **cut** removes something, and the gate's
-suite is the proof it was safe. A deletion that keeps the suite green was dead.
-One that reddens it was load-bearing, so the cut is wrong and abandoned. That
-makes the loop self-verifying: the same mechanical check that lets `run` land a
-feature lets `garden` prove a removal.
+suite is the proof it was safe. A deletion of code or prose that keeps the
+suite green was dead. One that reddens it was load-bearing, so the cut is wrong
+and abandoned. A test is the exception: deleting a test cannot redden the suite,
+so green proves nothing about a test cut. That makes the loop self-verifying:
+the same mechanical check that lets `run` land a feature lets `garden` prove a
+removal.
 
 A **repair** is the one change `garden` makes that removes nothing. A durable
 line in `docs/` names a path, a symbol, a document, or an id that moved. The
@@ -52,9 +54,9 @@ behind the team's, so first run
   the prose governs nothing and it is a cut.
 - **Orphan or oversized Note**: a `docs/notes/<area>.md` with no `src/<area>/`, or
   one past the size cap that has drifted toward a spec.
-- **Oversized area**: a `src/<area>/` whose tracked text files hold more lines
-  than `HONE_AREA_MAX_LINES` (default 3000). The `nag` names one only when a
-  change touched it.
+- **Oversized area**: a `src/<area>/` whose tracked text files, generated ones
+  aside, hold more lines than `HONE_AREA_MAX_LINES` (default 3000). The `nag`
+  names one only when a change touched it.
 - **Redundant test**: two tests pinning the same behaviour through the same
   surface, or a test the codebase made dead.
 - **Dead code**: a `src/` symbol or file with no remaining caller (confirm with a
@@ -68,10 +70,12 @@ behind the team's, so first run
   at a Decision, Note, or open question that no longer exists. Or one whose note
   has started describing what the system does *today*. Never cut a spike for
   being old, and never update one. The date says it is frozen history, which is
-  the whole reason it escapes the staleness rules. Cut a spike whose pointer is
-  dead, and cut it **whole**, note and probe and captures together, because the
-  stem is the unit. Treat a note that drifted into a second spec as judgment.
-  The live sentence belongs in a Note or a Decision, and the spike then goes.
+  the whole reason it escapes the staleness rules. Cut a spike whose pointer to
+  a Decision, Note, or open question is dead, and cut it **whole**, note and
+  probe and captures together, because the stem is the unit. A pointer to a Plan
+  dies by design when the Plan lands, so it is no reason to cut. Treat a note
+  that drifted into a second spec as judgment. The live sentence belongs in a
+  Note or a Decision, and the spike then goes.
   An undated entry under `docs/spikes/` is the `nag`'s finding, and it is a
   rename, not a cut.
 - **Prompt-layer drift**: the project's own instructions to the agent
@@ -91,9 +95,12 @@ run covered: a silent scope is indistinguishable from a scan that found nothing.
 Split every finding three ways:
 
 - **Mechanical cut**: the removal is obvious and the suite can prove it safe.
-  Examples are a dead symbol, a redundant test, a resolved question, and a
-  leftover branch. A stale Note or Decision counts too, when its `Governs:` path
-  is gone and its claim went with it. These `garden` executes.
+  Examples are a dead symbol, a resolved question, and a leftover branch. A
+  stale Note or Decision counts too, when its `Governs:` path is gone and its
+  claim went with it. These `garden` executes. **A test cut is never
+  mechanical**, because green proves nothing about it. It goes to the
+  `consolidate-critic` (step 4) with the name of the test that still covers its
+  claim. With no such test, the test stays.
 - **Mechanical repair**: the pointer moved and the claim did not. `garden`
   replaces the pointer. This is admissible only when all four hold:
   - **One target for one target.** If you cannot write the change as "`<old>`
@@ -111,8 +118,8 @@ Split every finding three ways:
   auto-applied. Durable *rationale* is never cut by machine on a hunch.
 
 A repair has its own proof, and it is **not** the suite. Green proves a deletion
-was dead. It proves nothing about a pointer, because no test reads a Decision's
-prose. What proves a repair is the target itself. The old one is gone and the
+of code or prose was dead. It proves nothing about a pointer, because no test
+reads a Decision's prose. What proves a repair is the target itself. The old one is gone and the
 new one is there, both established by search. The suite then runs green
 afterwards to show that nothing else moved. Some projects pin their references
 with a conformance test, such as a link check over `docs/`. That test is the
@@ -168,7 +175,8 @@ WT=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" add garden/<slug>)
   found the new target, and state that the old one is gone. Red means the repoint
   disturbed something, so discard the worktree exactly as for a cut.
 - Then commit in `$WT` with a Conventional Commits message. Its body carries the
-  **`Cut:` line** naming exactly what was removed, or the **`Repair:` line**
+  **`Cut:` line** naming exactly what was removed (for a test, also the test
+  that still covers its claim), or the **`Repair:` line**
   naming `<old> → <new>` and the search that confirmed it. Then land it:
 
 ```bash

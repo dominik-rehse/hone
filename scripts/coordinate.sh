@@ -14,6 +14,8 @@
 #   ticker.lock         held by the one live ticker
 #   wait.<session>.pid  the live wait of a watching session
 #   cursor.<session>    the last event that session's wait printed
+#   batch-base          the primary branch tip at the batch's first run start
+#   consolidated        the last event number when the last consolidate started
 #
 #   coordinate.sh watch <change> <agent> [<tab-id>]
 #       Register a herdr agent that runs <change>, and start the ticker. The
@@ -71,6 +73,12 @@
 #       garden, consolidate, or plan:<idea>, where <idea> is the idea's first
 #       40 characters in lowercase, with hyphens and slashes, and -2, -3 when
 #       a watched plan holds the label. A plan's watch is under that label.
+#       The first run start of a batch records the primary branch tip in
+#       batch-base. start consolidate names that base commit and the count of
+#       merges since it in the prompt, and asks for cuts named
+#       consolidate/<slug>. With no recorded base, the base is the first
+#       parent of the oldest merge that a landed event names since the last
+#       pass. With neither, it exits 2. Its start ends the batch.
 #       The workspace names the repository. The agent name is the label in
 #       the form herdr accepts (run-<change>, plan-<idea>), with -2, -3 on a
 #       collision.
@@ -96,7 +104,10 @@
 #       Block until an event arrives that this session has not seen, print
 #       every such event, and exit 0. Run it in the background and end the
 #       turn. The harness wakes the session when it exits. It starts the
-#       ticker when none runs. With no watched session and no unseen event it
+#       ticker when none runs. After the events it prints one line with each
+#       watched session's last progress line (its own claim), and queues that
+#       line for the progress hook of this session, so the person sees it in
+#       the coordinator tab. With no watched session and no unseen event it
 #       prints so and exits 0 at once. --since <n> reads from event n on,
 #       for a caller with no session id.
 #       Exit: 0 printed · 2 usage/not-a-repo.
@@ -123,8 +134,9 @@
 #                     (default 600) after it last worked, with no land
 #                     since. That is a stop, a report, or a question in text.
 #         gone        herdr no longer knows the agent
-#         finished    a garden or consolidate session went quiet, and for
-#                     garden no hone/garden/* worktree is left. Both land
+#         finished    a garden or consolidate session went quiet, and no
+#                     worktree of its cuts is left (hone/garden/* or
+#                     hone/consolidate/*). Both land
 #                     under names of their own, so no landed event ends
 #                     their watch.
 #         planned     a plan session committed its Plan (planned writes
@@ -290,13 +302,14 @@ coord_tick_session() {
 }
 
 # True when the pass behind a garden or consolidate watch is over: the
-# session went quiet, and for garden no hone/garden/* worktree is left.
+# session went quiet, and no worktree of its cuts is left (hone/garden/* or
+# hone/consolidate/*). A cut that stopped at land keeps its worktree, so the
+# pass is not over while it waits for the person.
 coord_pass_finished() {
     case "$1" in
-        consolidate) return 0 ;;
-        garden)
+        consolidate|garden)
             ! git -C "$(main_root_of)" worktree list --porcelain 2>/dev/null \
-                | grep -q '^branch refs/heads/hone/garden/' ;;
+                | grep -q "^branch refs/heads/hone/$1/" ;;
         *) return 1 ;;
     esac
 }
@@ -525,7 +538,7 @@ coord_plan_change() {
 
 cmd_start() {
     local verb="${1:-}" arg="" model=opus main_root label agent prompt slug
-    local out tab pane change dir admitted rc
+    local out tab pane change dir admitted rc base primary short merges
     local -a after_ok=()
     shift || true
     case "$verb" in
@@ -551,7 +564,12 @@ cmd_start() {
         garden) change=garden; label=garden; prompt="/hone:garden"; agent=$(coord_agent_name hone garden) ;;
         consolidate)
             change=consolidate; label=consolidate; agent=$(coord_agent_name hone consolidate)
-            prompt="Run the global consolidate pass that the hone run skill's references/parallel.md describes: a consolidate-critic over the combined result of the changes that just landed. Land each accepted cut through a worktree change of its own, with the ordinary hone loop. Report when it landed, or that there is nothing to cut." ;;
+            base=$(coord_batch_base "$main_root" "$dir")
+            [ -n "$base" ] || { msg_coord_consolidate_no_base >&2; return 2; }
+            primary=$(git -C "$main_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
+            short=$(git -C "$main_root" rev-parse --short "$base")
+            merges=$(git -C "$main_root" rev-list --count --first-parent --merges "$base..HEAD" 2>/dev/null)
+            prompt="Run the global consolidate pass that the hone run skill's references/parallel.md describes: a consolidate-critic over the combined result of the changes that just landed. The batch's base commit is $short. Cover all ${merges:-0} merges that \`git log --first-parent --merges --oneline $short..$primary\` lists, not only the latest. Land each accepted cut through a worktree change of its own, named consolidate/<slug>, with the ordinary hone loop. Report when it landed, or that there is nothing to cut." ;;
         plan)   # The idea's first words name the tab: at most 40 of [a-z0-9/-],
                 # so a slug like auth/retry stays as run:auth/retry has it.
                 slug=$(printf '%s' "$arg" | tr '[:upper:]' '[:lower:]' | sed -E 's#[^a-z0-9/]+#-#g; s#^[-/]+##' \
@@ -573,7 +591,33 @@ cmd_start() {
     out=$(herdr_call agent prompt "$agent" "$prompt" 2>&1) \
         || { msg_coord_herdr_step "agent prompt" "$out" >&2; return 2; }
     cmd_watch "$change" "$agent" "$tab" >/dev/null
+    # The first run of a batch records the primary branch tip, the base
+    # that the global consolidate pass reviews from. Its start ends the batch.
+    case "$verb" in
+        run) [ -s "$dir/batch-base" ] || git -C "$main_root" rev-parse HEAD > "$dir/batch-base" 2>/dev/null ;;
+        consolidate) rm -f "$dir/batch-base"
+                     awk -F'\t' 'END { print $1 + 0 }' "$dir/events" > "$dir/consolidated" 2>/dev/null ;;
+    esac
     msg_coord_started "$verb" "$change" "$label" "$agent" "$model"
+}
+
+# The base commit of the global consolidate pass, in full: the primary
+# branch tip that the batch's first run start recorded. With none, the first
+# parent of the oldest merge that a landed event names since the last pass.
+# Nothing when neither is known.
+coord_batch_base() {
+    local main_root="$1" dir="$2" from sha parents="" b
+    b=$(cat "$dir/batch-base" 2>/dev/null)
+    if [ -n "$b" ] && git -C "$main_root" cat-file -e "$b^{commit}" 2>/dev/null; then
+        printf '%s' "$b"; return 0
+    fi
+    from=$(cat "$dir/consolidated" 2>/dev/null); from=${from:-0}
+    while IFS= read -r sha; do
+        b=$(git -C "$main_root" rev-parse -q --verify "$sha^1" 2>/dev/null) && parents+=" $b"
+    done < <(awk -F'\t' -v n="$from" '$1 > n && $4 == "landed" { print $5 }' "$dir/events" 2>/dev/null)
+    [ -n "$parents" ] || return 0
+    # shellcheck disable=SC2086
+    git -C "$main_root" merge-base --octopus $parents 2>/dev/null
 }
 
 cmd_open() {
@@ -751,6 +795,7 @@ cmd_wait() {
         [ -n "$last" ] || last=0
         if [ "$last" -gt "$since" ]; then
             print_events "$dir/events" "$since"
+            coord_progress_board "$dir" "$sid"
             [ -n "$sid" ] && printf '%s\n' "$last" > "$dir/cursor.$key"
             return 0
         fi
@@ -762,6 +807,50 @@ cmd_wait() {
         coord_ensure_ticker "$dir"
         sleep 2
     done
+}
+
+# The step a progress line stands at, with its mark and note: the last
+# segment of its chain that carries a mark. "◆ [c] worktree ✓ > verify … >
+# land" gives "verify …".
+coord_progress_step() {
+    printf '%s' "${1#*] }" | awk -F' > ' '{ for (i = 1; i <= NF; i++) if ($i ~ / /) s = $i; print s }'
+}
+
+# One line of every watched session, as its own progress line reports it,
+# after a wait printed events. The progress lines are each run's claim, and
+# the line says so. A session with no line shows its herdr state. The line
+# goes to stdout, and to the queue of the watching session $2, so the
+# progress hook shows it to the person in the coordinator tab.
+coord_progress_board() {
+    local dir="$1" sid="$2" prog f items="" line best bt t c
+    prog="${dir%/hone-coordinate}/hone-progress"
+    for f in "$dir"/sessions/*; do
+        [ -f "$f" ] || continue
+        kv_load "$f"
+        [ -z "$sid" ] || [ "$kv_owner" = "$sid" ] || continue
+        best="" bt=0
+        for line in "$prog"/*.last; do
+            [ -f "$line" ] || continue
+            case "$(head -c 300 "$line")" in
+                "◆ [$kv_change] "*|"◆ [$kv_change/"*) ;;
+                *) continue ;;
+            esac
+            t=$(stat -c %Y "$line" 2>/dev/null || echo 0)
+            [ "$t" -ge "$bt" ] && { bt=$t; best=$line; }
+        done
+        if [ -n "$best" ]; then
+            line=$(head -1 "$best"); c=${line#◆ [}; c=${c%%]*}
+            items+="$c $(coord_progress_step "$line")"$'\n'
+        else
+            items+="$kv_change ($kv_status)"$'\n'
+        fi
+    done
+    [ -n "$items" ] || return 0
+    line=$(msg_coord_progress "$(printf '%s' "$items" | sort | paste -sd'\t' | sed 's/\t/ · /g')")
+    printf '%s\n' "$line"
+    case "$sid" in ""|*/*|.*) return 0 ;; esac
+    { mkdir -p "$prog" && printf '%s\n' "$line" >> "$prog/$sid"; } 2>/dev/null
+    return 0
 }
 
 cmd_list() {

@@ -567,7 +567,7 @@ part_gone() {
         land)                printf '%s\n' 'skills/run/SKILL.md|worktree.sh" land' ;;
         shape-gate)          printf '%s\n' "scripts/worktree.sh|grep -E '^(Cut|Repair): " ;;
         grant-gate)          printf '%s\n' 'scripts/worktree.sh|reasons=$(land_irreversible' ;;
-        proof-gate)          printf '%s\n' 'scripts/worktree.sh|land_proof_required "$main_root"' ;;
+        proof-gate)          printf '%s\n' 'scripts/worktree.sh|[ -n "$declared" ] || [ -n "$added" ]; then' ;;
     esac
 }
 for p in $(python3 "$VB" --parts | awk '$2 != "setting" && $2 != "fixture" {print $1}'); do

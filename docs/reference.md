@@ -24,11 +24,11 @@ Slash commands, in the order a change flows:
 - `/hone:coordinate [request]` makes this tab in
   [herdr](https://github.com/herdrdev/herdr) 0.9.0 or later the repository's
   coordinator, labelled `hone`. It starts each plan, run, or garden session
-  in a background tab (`run:<change>`, `plan:<idea>`; `opus` unless
-  `--model` says otherwise), watches it, and prints a board. A plan tab
+  in a background tab on `opus`, watches it, and prints a board. A plan tab
   closes once its Plan is committed. `/hone:run --all` inside herdr hands over
   to it. Its ticker (`scripts/coordinate.sh`) notifies you when a session
-  needs you. Its `admit` checks a change against every change in flight,
+  needs you, and shows each session's progress line. Its `admit`
+  checks a change against every change in flight,
   colleagues' claims included. It holds garden apart, and a Plan until its
   predecessor lands. On an `updated` event, restart the
   coordinator for the newer hone.
@@ -114,7 +114,8 @@ work. The loop calls it, and you can too:
   the real-environment check ran (writes `.hone-proof/<change>`, stamped with
   the branch tip, the git user, and the time). You run it, and only you: the
   `bash-guard` denies it to the loop, which runs the check where it can and
-  hands you the output. Same sole-route rule as grant. Like grant, it
+  hands you the output. `--file <path>` reads a long text from a file.
+  Same sole-route rule as grant. Like grant, it
   refuses an empty text and the placeholder `what you ran`, exits 2, and
   writes nothing, because such a sign-off reads as evidence and carries none.
 
@@ -195,7 +196,7 @@ Two more variables tune a hook. `HONE_AREA_MAX_LINES` sets the size above
 which the nag names a `src/<area>/` (default 3000). `HONE_GATE_BLOCK_CAP`
 sets how many identical failures the gate blocks a turn end for before it
 lets the turn end (default 3). `HONE_COORD_TICK` (15) and `HONE_COORD_QUIET`
-(600) set the seconds of the coordinate ticker. Its header says more.
+(600) set the seconds of the coordinate ticker.
 
 ## Hooks
 
@@ -316,21 +317,22 @@ neither. When you want that record, route the edit through the loop.
   - a Plan that survived its landing
   - an oversized or orphan Note
   - a broken `Governs:` link
-  - a relative markdown link in a Decision or Note that does not resolve,
-    outside code
-  - a merged `hone/*` branch left behind
+  - a broken relative link in a Decision or Note, outside code
+  - a merged `hone/*` branch
   - a claim this clone holds on the remote with no worktree (shared mode)
   - a change about to land that deletes nothing
-  - a `src/<area>/` that a change about to land touched, with more lines
-    in its tracked text files than `HONE_AREA_MAX_LINES` (default 3000)
+  - a `src/<area>/` that a change about to land touched, with more
+    tracked lines than `HONE_AREA_MAX_LINES` (default 3000), generated
+    files aside (`nag_area_files`)
+  - pending Plans, in the primary tree with no coordinator
   - a `type: project` entry in the harness's own memory store
 
-  It prints the full list once per session and tree, and again when it
-  changes. Otherwise it prints the count.
+  It prints the full list once per session and tree, and again on a
+  change. Otherwise it prints the count.
 - *progress* (after each Bash call, and Stop) shows the loop's progress
   line: `◆ [csv-export] worktree ✓ > build ... > verify > …`. A garden
-  change gets `worktree > cut > verify > land`. The step subcommands of
-  `worktree.sh` queue it, and it never blocks.
+  change gets `worktree > cut > verify > land`. `worktree.sh` and
+  `coordinate.sh wait` queue it, and it never blocks.
 - *watch* (Stop) blocks a session that watches SUBs from ending its turn
   with no `coordinate.sh wait` armed, twice at most. It also restarts a dead
   ticker.
@@ -374,31 +376,28 @@ and a proof sign-off names the tip.
   files*). A diff that touches the adapter itself arms the gate too, with no
   trailer needed (below).
 
-The proof gate's refusal prints the check the trailer declared, the text
-after the dash on the `Proof: real-environment` line. You run that check, so
-you should not have to open the Plan to read it. An older trailer carries no
-description, and the message stays generic.
+The refusal prints the check that the trailer declared, the text after its
+dash.
 
 One change has no automatic route. Where the diff rewrites the proof harness,
 land cannot prove it, because the copy land holds is the one the change
-replaces. Two diffs count as rewriting it: any change to `scripts/proof.sh`,
-and a change to a probe under `scripts/proof-probes/` that already exists. The
-refusal then tells you to run `bash scripts/proof.sh <change>` from the
-worktree in your own terminal, and to attest with its output.
+replaces. The harness is `scripts/proof.sh`, each probe that already exists
+(`scripts/proof-probes/<name>.sh`), and any other file there that a probe or
+the adapter names. A test file, a README, and an edit to whole-line comments
+only are not rewrites. The refusal names the files and tells you to run
+`bash scripts/proof.sh <name>` from the worktree in your own terminal, and to
+attest with its output. Such a diff arms the gate on its own, with no trailer
+and no marker, because the adapter defines the verdict this gate trusts.
 
-That same diff also *arms* the gate on its own. Such a change needs no trailer
-and no marker to reach exit 7. The adapter defines the verdict this gate
-trusts, so a change to it always reaches you. The loop may still write that
-change in its worktree, which is why the gate carries the weight instead of a
-ban on writing.
+A change that *adds* a probe asks for proof, trailer or not. land runs the
+reviewed adapter once for each added probe, under the probe's name. A green
+run needs no sign-off, and a red run is exit 7.
 
-A change that only *adds* a new probe is outside this. It writes its own check,
-the way it writes its own tests, and the adapter that judges it stays the
-reviewed copy. Without this exception the gate fired on every proof-carrying
-change in a project whose adapter asks each change for its own probe. That is
-the shape [`templates/proof/README.md`](../templates/proof/README.md)
-recommends. An edit to a probe that already exists still arms the gate: that
-probe guards a change that landed earlier.
+A sign-off names the tip you proved. It still counts after a merge of the
+primary branch or a rebase onto it, while the branch's own diff and the
+proof files stay the same. Any other new commit needs a new sign-off. The
+merge commit records each sign-off and each green adapter run under
+`Proven (real-environment):`.
 
 Only you record a grant or a sign-off. The `bash-guard` denies the loop both
 helpers. At exit 8 the loop hands you a short briefing, and at exit 7 the

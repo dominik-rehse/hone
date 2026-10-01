@@ -974,7 +974,7 @@ for target in scripts/proof.sh scripts/proof-probes/journey.sh; do
     n=$((n+1))
     WT_BS=$(bash "$WSH" add "bootstrap-$n") || die "worktree add bootstrap-$n"
     mkdir -p "$WT_BS/$(dirname "$target")"
-    printf '#!/bin/bash\n# rewritten by bootstrap-%s\nexit 0\n' "$n" > "$WT_BS/$target"
+    printf '#!/bin/bash\necho "rewritten by bootstrap-%s"\nexit 0\n' "$n" > "$WT_BS/$target"
     (cd "$WT_BS" && git add -A && git commit -qm "feat(proof): rewrite $target
 
 Cut: nothing, a test change
@@ -993,18 +993,18 @@ Proof: real-environment - run the new adapter by hand")
     echo "$out" | grep -qF "$expect" || die "the gate should print '$expect' for $target: $out"
     bash "$WSH" remove "$WT_BS" >/dev/null 2>&1; git branch -D "hone/bootstrap-$n" >/dev/null 2>&1
 done
-# An edited file under proof-probes/ that is not a .sh names no probe. Its
-# edit still gates, under the change's own name, never as a bogus command.
+# An edited file under proof-probes/ that is not a .sh, and that no probe
+# names, is no part of a probe. Its edit opens no gate. The field shape: a
+# test file there opened the gate under the change's own name, and the
+# project's adapter exited 3 on that name. Section 5g2 covers a named helper.
 printf '{"url":"a"}\n' > "$REPO/scripts/proof-probes/fixture.json"
 git add scripts/proof-probes/fixture.json && git commit -qm "chore(proof): land a probe fixture"
 WT_BS=$(bash "$WSH" add bootstrap-fixture) || die "worktree add bootstrap-fixture"
 printf '{"url":"b"}\n' > "$WT_BS/scripts/proof-probes/fixture.json"
 (cd "$WT_BS" && git add -A && git commit -qm "chore(proof): edit the fixture" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" land bootstrap-fixture 2>&1); rc=$?
-[ "$rc" -eq 7 ] || die "an edited probe fixture should exit 7 (got $rc): $out"
-echo "$out" | grep -qF "bash scripts/proof.sh bootstrap-fixture" || die "the gate should name the change's own command: $out"
+[ "$rc" -eq 0 ] || die "an edited fixture that no probe names should open no gate (got $rc): $out"
 echo "$out" | grep -qF "proof.sh fixture.json" && die "the gate must not turn a fixture into a command: $out"
-bash "$WSH" remove "$WT_BS" >/dev/null 2>&1; git branch -D hone/bootstrap-fixture >/dev/null 2>&1
 # A change that only ADDS its own probe is writing its own check, like a test,
 # and the adapter that judges it is untouched. Its trailer still gates it, but
 # the bootstrap rule never does.
@@ -1206,7 +1206,7 @@ step "an adapter change with no trailer is gated too (exit 7), and a sign-off la
 # trailer or not: that probe guards a change that landed before this one.
 WT_BP=$(bash "$WSH" add probe-silent) || die "worktree add probe-silent"
 mkdir -p "$WT_BP/scripts/proof-probes"
-printf '#!/bin/bash\n# weakened, and nothing declared\nexit 0\n' > "$WT_BP/scripts/proof-probes/journey.sh"
+printf '#!/bin/bash\n# weakened, and nothing declared\ntrue\nexit 0\n' > "$WT_BP/scripts/proof-probes/journey.sh"
 (cd "$WT_BP" && git add -A && git commit -qm "chore(proof): weaken a probe, no trailer" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" land probe-silent 2>&1); rc=$?
 [ "$rc" -eq 7 ] || die "an undeclared probe edit should exit 7 (got $rc)"
@@ -1300,6 +1300,221 @@ git rm -q .hone-proof-always && git commit -qm "chore: drop the marker again"
 out=$(bash "$WSH" status) || die "status failed without the marker"
 echo "$out" | grep -q ".hone-proof-always" && die "status should say nothing without the marker"
 step "status reports the proof-always marker and flags an uncommitted one"
+
+echo "== 5g2. proof gate: the field shapes of 2026-10-01 =="
+# Field shapes from a coordinated batch. A test file beside the probes opened
+# the gate under the change's own name, and the project's adapter exited 3 on
+# that name. Comment-only probe edits opened it too. A sign-off died each time
+# main moved. A green adapter run left no line in the merge commit, and an
+# added probe with no trailer ran nowhere.
+# The base: a probe that runs a helper, the helper's test, a README, and a
+# probe with a heredoc.
+cat > "$REPO/scripts/proof-probes/journey.sh" <<'EOF'
+#!/bin/bash
+# walks the journey on the box
+node "$(dirname "$0")/shape.js"
+node "$(dirname "$0")/payload.js"
+EOF
+cat > "$REPO/scripts/proof-probes/shape.js" <<'EOF'
+// rebuilds the shape
+const n = 1;
+EOF
+cat > "$REPO/scripts/proof-probes/payload.js" <<'EOF'
+const msg = `a
+// inside a template
+b`;
+EOF
+printf '// tests shape.js\n' > "$REPO/scripts/proof-probes/shape.test.js"
+printf '# The probes\n' > "$REPO/scripts/proof-probes/README.md"
+cat > "$REPO/scripts/proof-probes/heredoc.sh" <<'EOF'
+#!/bin/bash
+# sends a payload
+cat <<PAYLOAD
+# not a comment
+PAYLOAD
+echo done
+EOF
+git add scripts/proof-probes && git commit -qm "chore(proof): probes for the field shapes"
+# probe_edit <change> <file> <sed expression>: edit one file under
+# scripts/proof-probes/ on a branch of its own, and land it. Sets out and rc.
+probe_edit() {
+    local wt
+    wt=$(bash "$WSH" add "$1") || die "worktree add $1"
+    sed -i "$3" "$wt/scripts/proof-probes/$2"
+    (cd "$wt" && git add -A && git commit -qm "chore(proof): edit $2" -m "Cut: nothing, a test change")
+    out=$(bash "$WSH" land "$1" 2>&1); rc=$?
+}
+gone() { bash "$WSH" remove "$1" >/dev/null 2>&1; git branch -D "hone/$1" >/dev/null 2>&1; }
+# (a) A test file or a README is no probe, and no probe names it.
+probe_edit probe-test shape.test.js 's/tests/checks/'
+[ "$rc" -eq 0 ] || die "a probe's test file should open no proof gate (got $rc): $out"
+probe_edit probe-readme README.md 's/probes/proof probes/'
+[ "$rc" -eq 0 ] || die "a README under proof-probes/ should open no proof gate (got $rc): $out"
+step "a test file or a README beside the probes opens no gate"
+# A helper that a probe runs is part of that probe. Its edit opens the gate
+# under the probe's name, never under the change's own.
+probe_edit probe-helper shape.js 's/const n = 1/const n = 2/'
+[ "$rc" -eq 7 ] || die "an edited helper that a probe runs should open the gate (got $rc): $out"
+echo "$out" | grep -qF "bash scripts/proof.sh journey" || die "the gate should name the probe that runs the helper: $out"
+echo "$out" | grep -qF "bash scripts/proof.sh probe-helper" && die "the gate must not name the change's own command for a helper: $out"
+echo "$out" | grep -qF "scripts/proof-probes/shape.js" || die "the refusal should name the file it gates on: $out"
+echo "$out" | grep -q "proof adapter" && die "the refusal must not claim an adapter change: $out"
+# The person may put a long sign-off text in a file.
+echo "$out" | grep -qF -- "--file" || die "the refusal should offer the --file form of attest: $out"
+gone probe-helper
+probe_edit probe-named heredoc.sh 's/^echo done$/echo finished/'
+[ "$rc" -eq 7 ] || die "a code edit to a probe should open the gate (got $rc): $out"
+echo "$out" | grep -qF "rewrites the probe file scripts/proof-probes/heredoc.sh" || die "the refusal should name the probe that changed: $out"
+gone probe-named
+step "an edited helper gates under the probe that runs it, and the refusal names the file"
+# (b) A comment-only edit to a probe or a helper opens no gate.
+probe_edit probe-comment journey.sh 's/walks the journey/walks the journey from src\/area/'
+[ "$rc" -eq 0 ] || die "a comment-only probe edit should open no gate (got $rc): $out"
+probe_edit helper-comment shape.js 's/rebuilds the shape/rebuilds the shape in one process/'
+[ "$rc" -eq 0 ] || die "a comment-only helper edit should open no gate (got $rc): $out"
+# A '#' line in a heredoc and a '//' line in a template literal are data.
+probe_edit heredoc-data heredoc.sh 's/# not a comment/# still not a comment/'
+[ "$rc" -eq 7 ] || die "a heredoc line that looks like a comment should open the gate (got $rc): $out"
+gone heredoc-data
+probe_edit template-data payload.js 's/inside a template/inside the template/'
+[ "$rc" -eq 7 ] || die "a template line that looks like a comment should open the gate (got $rc): $out"
+gone template-data
+# A '*/' on a '//' line ends a block comment it sits in, and code can follow.
+probe_edit block-end shape.js 's|in one process|in one process */ const m = 3;|'
+[ "$rc" -eq 7 ] || die "a '//' line that holds '*/' should open the gate (got $rc): $out"
+gone block-end
+# A comment after code, and a shebang, are not whole-line comments.
+probe_edit trailing-comment heredoc.sh 's/^echo done$/echo done # finished/'
+[ "$rc" -eq 7 ] || die "a comment after code should open the gate (got $rc): $out"
+gone trailing-comment
+probe_edit shebang heredoc.sh '1s/.*/#!\/bin\/sh/'
+[ "$rc" -eq 7 ] || die "a shebang edit should open the gate (got $rc): $out"
+gone shebang
+step "a comment-only probe edit opens no gate, and data that looks like a comment does"
+# (c) A sign-off carries across a merge of main or a rebase onto it, when the
+# branch's own change and the proof files stay as they were.
+# carry_change <change>: a declared change, signed off at its tip.
+carry_change() {
+    local wt
+    wt=$(bash "$WSH" add "$1") || die "worktree add $1"
+    echo "// $1" > "$wt/src/mathx/$1.js"
+    (cd "$wt" && git add -A && git commit -qm "feat(mathx): $1
+
+Cut: nothing, a test change
+Proof: real-environment - walk the $1 flow")
+    bash "$WSH" attest "$1" "walked the $1 flow on staging: ok" >/dev/null || die "attest $1"
+    printf '%s' "$wt"
+}
+main_moves() {
+    echo "// $1" > "$REPO/src/mathx/$1.js"
+    git add "src/mathx/$1.js" && git commit -qm "chore: main moves ($1)"
+}
+WT_C=$(carry_change carry-merge)
+SIGNED=$(git rev-parse hone/carry-merge | cut -c1-7)
+main_moves moved-1
+(cd "$WT_C" && git merge -q --no-edit main) || die "merge main into carry-merge"
+main_moves moved-2
+(cd "$WT_C" && git merge -q --no-edit main) || die "merge main into carry-merge again"
+out=$(bash "$WSH" land carry-merge 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "a sign-off should carry across merges of main (got $rc): $out"
+body=$(git log --format=%B -1)
+echo "$body" | grep -qF "walked the carry-merge flow on staging: ok" || die "the merge body should keep the sign-off: $body"
+echo "$body" | grep -qF "signed at $SIGNED" || die "the merge body should name the commit the person signed: $body"
+WT_C=$(carry_change carry-rebase)
+main_moves moved-3
+(cd "$WT_C" && git rebase -q main) || die "rebase carry-rebase"
+out=$(bash "$WSH" land carry-rebase 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "a sign-off should carry across a rebase onto main (got $rc): $out"
+step "a sign-off carries across merges of main and a rebase onto it"
+# It does not carry where main changed a probe since the sign-off, or where
+# the branch's own change moved.
+WT_C=$(carry_change carry-probe)
+printf 'echo journey ok\n' >> "$REPO/scripts/proof-probes/journey.sh"
+git add scripts/proof-probes/journey.sh && git commit -qm "chore(proof): main edits a probe"
+(cd "$WT_C" && git merge -q --no-edit main) || die "merge main into carry-probe"
+out=$(bash "$WSH" land carry-probe 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "a sign-off must not carry across a probe change (got $rc): $out"
+gone carry-probe; rm -f "$REPO/.hone-proof/carry-probe"
+WT_C=$(carry_change carry-amend)
+main_moves moved-4
+(cd "$WT_C" && git rebase -q main && echo "// amended" >> src/mathx/carry-amend.js \
+    && git commit -qa --amend --no-edit) || die "rebase and amend carry-amend"
+out=$(bash "$WSH" land carry-amend 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "a sign-off must not carry to a changed change (got $rc): $out"
+gone carry-amend; rm -f "$REPO/.hone-proof/carry-amend"
+step "a sign-off does not carry across a probe change or an amended change"
+# (d) A green adapter run leaves its line in the merge commit.
+cat > "$REPO/scripts/proof.sh" <<'PROOF'
+#!/bin/bash
+echo "$1" >> "$HONE_MAIN_ROOT/proof-runs"
+[ -f "$HONE_MAIN_ROOT/proof-red" ] && exit 1
+exit 0
+PROOF
+git add scripts/proof.sh && git commit -qm "chore: a proof adapter that logs its runs"
+WT_G=$(bash "$WSH" add proof-record) || die "worktree add proof-record"
+echo "// recorded" > "$WT_G/src/mathx/recorded.js"
+(cd "$WT_G" && git add -A && git commit -qm "feat(mathx): recorded flow
+
+Cut: nothing, a test change
+Proof: real-environment")
+TIP=$(git rev-parse hone/proof-record | cut -c1-7)
+out=$(bash "$WSH" land proof-record 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "a green adapter should land the change (got $rc): $out"
+body=$(git log --format=%B -1)
+echo "$body" | grep -qF "Proven (real-environment):" || die "a green adapter run should leave a proof line: $body"
+echo "$body" | grep -qF "automatic: bash scripts/proof.sh proof-record exit 0 at $TIP" \
+    || die "the proof line should name the run, its exit, and the tip: $body"
+step "a green adapter run is recorded in the merge commit"
+# (e) A branch that adds a probe asks for a real-environment run. land runs
+# the adapter on the probe, and a green run needs no person.
+rm -f "$REPO/proof-runs"
+WT_A=$(bash "$WSH" add probe-added) || die "worktree add probe-added"
+mkdir -p "$WT_A/scripts/proof-probes/area"
+printf '#!/bin/bash\nexit 0\n' > "$WT_A/scripts/proof-probes/area/added-check.sh"
+(cd "$WT_A" && git add -A && git commit -qm "test(proof): add a probe" -m "Cut: nothing, a test change")
+out=$(bash "$WSH" land probe-added 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "an added probe with a green adapter run should land (got $rc): $out"
+grep -qx "area/added-check" "$REPO/proof-runs" 2>/dev/null || die "land should run the adapter on the added probe: $(cat "$REPO/proof-runs" 2>/dev/null)"
+git log --format=%B -1 | grep -qF "automatic: bash scripts/proof.sh area/added-check exit 0" \
+    || die "the merge body should record the added probe's run"
+# A red run stops the land, and the refusal names the added probe.
+touch "$REPO/proof-red"
+WT_A=$(bash "$WSH" add probe-added-red) || die "worktree add probe-added-red"
+mkdir -p "$WT_A/scripts/proof-probes/area"
+printf '#!/bin/bash\nexit 0\n' > "$WT_A/scripts/proof-probes/area/red-check.sh"
+(cd "$WT_A" && git add -A && git commit -qm "test(proof): add a red probe" -m "Cut: nothing, a test change")
+out=$(bash "$WSH" land probe-added-red 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "an added probe with a red adapter run should exit 7 (got $rc): $out"
+echo "$out" | grep -qF "adds the probe scripts/proof-probes/area/red-check.sh" || die "the refusal should name the added probe: $out"
+echo "$out" | grep -q "declares real-environment proof" && die "the refusal must not claim an absent trailer: $out"
+rm -f "$REPO/proof-red"; gone probe-added-red
+# A test file is no probe, so adding one runs nothing.
+rm -f "$REPO/proof-runs"
+WT_A=$(bash "$WSH" add probe-test-added) || die "worktree add probe-test-added"
+printf '// a test\n' > "$WT_A/scripts/proof-probes/area/added-check.test.js"
+(cd "$WT_A" && git add -A && git commit -qm "test(proof): add a probe test" -m "Cut: nothing, a test change")
+out=$(bash "$WSH" land probe-test-added 2>&1); rc=$?
+[ "$rc" -eq 0 ] || die "an added test file should land (got $rc): $out"
+[ -f "$REPO/proof-runs" ] && die "an added test file must not run the adapter"
+step "an added probe runs the adapter, a green run lands it, and a red run stops it"
+# (f) attest reads a long text from a file, so nobody pastes a long quote.
+mkdir -p "$REPO.bin"
+git branch hone/attest-file >/dev/null 2>&1 || die "branch for the attest-file checks"
+printf 'ran bash scripts/proof.sh journey: exit 0\nboth lanes ok\n' > "$REPO.bin/attest.txt"
+bash "$WSH" attest attest-file --file "$REPO.bin/attest.txt" >/dev/null || die "attest --file should record the file's text"
+grep -qF "ran bash scripts/proof.sh journey: exit 0" "$REPO/.hone-proof/attest-file" || die "the sign-off should hold the file's text"
+grep -qF -- "--file" "$REPO/.hone-proof/attest-file" && die "the sign-off must not record the flag as its text"
+rm -f "$REPO/.hone-proof/attest-file"
+printf '   \n' > "$REPO.bin/attest.txt"
+bash "$WSH" attest attest-file --file "$REPO.bin/attest.txt" >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 2 ] || die "attest --file with an empty file should exit 2 (got $rc)"
+bash "$WSH" attest attest-file --file "$REPO.bin/no-such-file" >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 2 ] || die "attest --file with a missing file should exit 2 (got $rc)"
+[ -f "$REPO/.hone-proof/attest-file" ] && die "a refused attest --file must not write a sign-off"
+git branch -D hone/attest-file >/dev/null 2>&1
+step "attest --file records a text from a file, and refuses an empty or missing one"
+git rm -q scripts/proof.sh && git commit -qm "chore: drop the logging proof adapter"
+rm -f "$REPO/proof-runs"
 
 echo "== 5h. tier summaries: land warns about a tier that ran nothing =="
 # The adapter reports one line per tier. A tier that matches no test still

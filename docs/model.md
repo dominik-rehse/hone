@@ -384,8 +384,8 @@ off. The loop runs the check where it can reach it and hands you the
 output, and you sign off. It never signs a proof off itself, because a
 sign-off the run writes for its own change is the record the gate exists
 to prevent. A sign-off naming a check nobody ran is evidence of nothing. The landing commit copies that whole line, because consolidate
-deletes the Plan and the trailer is all that reaches land. The sign-off
-names the commit it covers, so it expires when new commits arrive.
+deletes the Plan and the trailer is all that reaches land. A sign-off
+lapses when the change or its probes change.
 Mechanics are in [`reference.md`](reference.md).
 
 ### Property-based tests (build-time)
@@ -528,18 +528,17 @@ the remote. The merge still verifies it, and a collision is the same exit 9.
 `plan → run` cleans up at the point of change, but staleness also builds
 up *between* changes, in the parts nothing touches. Examples: a Decision
 whose code moved, a Note nobody re-checked, a test a later change made
-redundant, an open question that running code has answered. No
-diff-scoped hook can see any of that.
+redundant, an open question that running code has answered.
 
-`garden` (`/hone:garden`) closes the gap. It scans the whole repo for
-that staleness and lands the safe changes through the same worktree
-loop, one at a time. It has two units of work, and each carries its own
+`garden` (`/hone:garden`) scans the whole repo for that staleness and
+lands the safe changes through the worktree loop, one at a time. It has two units of work, and each carries its own
 proof.
 
 A *cut* removes something, and the suite is the proof. A deletion that
 keeps the suite green removed something dead. One that turns it red
 removed something load-bearing, and garden abandons it. That is what
-makes the loop self-verifying.
+makes the loop self-verifying. A test cut is the exception. It cannot
+turn the suite red, so it goes to review.
 
 A *repair* repoints a reference in `docs/` whose target moved, and the
 proof is the target, not the suite. No test reads a Decision's prose, so

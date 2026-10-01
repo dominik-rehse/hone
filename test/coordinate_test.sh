@@ -460,6 +460,91 @@ out=$(bash "$COORD" admit needs-a); rc=$?
 git rm -q .plans/base-b.md .plans/needs-a.md .plans/needs-ab.md && git commit -qm 'clean'
 exec 7>&-
 
+echo "== field shapes 2026-10-01 (coordinator: consolidate base, cuts, progress) =="
+exec 7>"$STATE/ticker.lock"; flock -n 7
+rm -f "$STATE"/sessions/* "$STATE/batch-base"
+# G6: the global consolidate pass covered 17 of 32 merges, because its
+# prompt named no base commit.
+base=$(git rev-parse HEAD)
+HERDR_ENV=1 HERDR_WORKSPACE_ID=w bash "$COORD" start run g6-a >/dev/null 2>&1
+[ "$(cat "$STATE/batch-base" 2>/dev/null)" = "$base" ] \
+    && ok "the first run start of a batch records the primary branch tip" || bad "batch base: $(cat "$STATE/batch-base" 2>/dev/null) vs $base"
+merge_one() {
+    git checkout -q -b "hone/$1" && echo "$1" > "$1.txt" && git add "$1.txt" && git commit -qm "$1"
+    git checkout -q main && git merge -q --no-ff "hone/$1" -m "Merge branch 'hone/$1'" && git branch -q -D "hone/$1"
+}
+merge_one g6-a; merge_one g6-b
+HERDR_ENV=1 HERDR_WORKSPACE_ID=w bash "$COORD" start run g6-c >/dev/null 2>&1
+merge_one g6-c
+[ "$(cat "$STATE/batch-base" 2>/dev/null)" = "$base" ] \
+    && ok "a later run start keeps the base of the batch" || bad "batch base moved: $(cat "$STATE/batch-base")"
+rm -f "$STATE"/sessions/*
+: > "$FAKE/log"
+out=$(HERDR_ENV=1 HERDR_WORKSPACE_ID=w bash "$COORD" start consolidate 2>&1); rc=$?
+prompt=$(grep '^agent prompt hone-consolidate' "$FAKE/log")
+[ "$rc" -eq 0 ] && echo "$prompt" | grep -q "base commit is $(git rev-parse --short "$base")" \
+    && echo "$prompt" | grep -q 'all 3 merges' && echo "$prompt" | grep -q "git log --first-parent --merges --oneline $(git rev-parse --short "$base")..main" \
+    && ok "start consolidate names the batch's base commit and its merge count in the prompt" || bad "consolidate base (rc $rc): $out / $prompt"
+echo "$prompt" | grep -q 'consolidate/<slug>' && ok "the consolidate prompt names its cuts consolidate/<slug>" || bad "cut name: $prompt"
+[ ! -f "$STATE/batch-base" ] && ok "start consolidate ends the batch" || bad "batch base should go"
+rm -f "$STATE"/sessions/*
+# With no recorded base, the oldest landed merge since the last pass gives it.
+merge_one g6-d; m1=$(git rev-parse --short HEAD)
+merge_one g6-e; m2=$(git rev-parse --short HEAD)
+( . "$PLUGIN_ROOT/hooks/common.sh"; hone_coord_event "$STATE" g6-d landed "$m1"; hone_coord_event "$STATE" g6-e landed "$m2" )
+: > "$FAKE/log"
+out=$(HERDR_ENV=1 HERDR_WORKSPACE_ID=w bash "$COORD" start consolidate 2>&1); rc=$?
+prompt=$(grep '^agent prompt hone-consolidate' "$FAKE/log")
+[ "$rc" -eq 0 ] && echo "$prompt" | grep -q "base commit is $(git rev-parse --short "$m1^1")" && echo "$prompt" | grep -q 'all 2 merges' \
+    && ok "with no recorded base, the first parent of the oldest landed merge is the base" || bad "fallback base (rc $rc): $out / $prompt"
+rm -f "$STATE"/sessions/*
+: > "$FAKE/log"
+out=$(HERDR_ENV=1 HERDR_WORKSPACE_ID=w bash "$COORD" start consolidate 2>&1); rc=$?
+[ "$rc" -eq 2 ] && echo "$out" | grep -q 'no base commit' && ! grep -q '^tab create' "$FAKE/log" \
+    && ok "with no base and no land since the last pass, start consolidate refuses" || bad "no base (rc $rc): $out"
+
+# A4: consolidate's finished came while two of its cuts sat stopped at land.
+agent hone-consolidate idle 3
+bash "$COORD" watch consolidate hone-consolidate w:t1 >/dev/null
+git worktree add -q -b hone/consolidate/dedupe .worktrees/consolidate/dedupe
+nf=$(events | grep -cP '\tconsolidate\tfinished\t')
+tick hone-consolidate
+[ -f "$STATE/sessions/hone-consolidate" ] && [ "$(events | grep -cP '\tconsolidate\tfinished\t')" -eq "$nf" ] \
+    && ok "a quiet consolidate session whose cut holds a worktree stays watched" || bad "consolidate with a cut: $(events | tail -2)"
+git worktree remove .worktrees/consolidate/dedupe && git branch -q -D hone/consolidate/dedupe
+agent hone-consolidate working 4; tick hone-consolidate
+agent hone-consolidate idle 5; tick hone-consolidate
+[ ! -f "$STATE/sessions/hone-consolidate" ] && [ "$(events | grep -cP '\tconsolidate\tfinished\t')" -eq $((nf + 1)) ] \
+    && ok "once no cut is in flight, a quiet consolidate session writes finished" || bad "consolidate finished: $(events | tail -2)"
+
+# A11: the coordinator tab showed no progress line in a whole batch.
+PROG="$REPO/.git/hone-progress"
+mkdir -p "$PROG"
+agent run-p1 working 1; agent run-p2 idle 1; agent run-p3 working 1; agent hone-garden working 1
+for c in p1 p2 p3; do CLAUDE_CODE_SESSION_ID=main-9 bash "$COORD" watch "$c" "run-$c" w:t1 >/dev/null; done
+CLAUDE_CODE_SESSION_ID=main-9 bash "$COORD" watch garden hone-garden w:t1 >/dev/null
+tick run-p3
+printf '◆ [p1] worktree ✓ > build ✓ > verify … > consolidate > review > land\n' > "$PROG/sub-a.last"
+printf '◆ [p2] worktree ✓ > build ✓ > verify ✓ > consolidate ✓ > review ✓ > land ✗ (exit 7, proof gate)\n' > "$PROG/sub-b.last"
+printf '◆ [p2-old] worktree ✓ > build …\n' > "$PROG/sub-c.last"
+printf '◆ [garden/cut-y] worktree ✓ > cut ✓ > verify … > land\n' > "$PROG/sub-d.last"
+n=$(events | wc -l)
+( . "$PLUGIN_ROOT/hooks/common.sh"; hone_coord_event "$STATE" p2 stopped "exit 7, proof gate" )
+out=$(CLAUDE_CODE_SESSION_ID=main-9 timeout 10 bash "$COORD" wait --since "$n"); rc=$?
+line=$(echo "$out" | grep '^◆ ')
+[ "$rc" -eq 0 ] && [ "$(echo "$line" | wc -l)" -eq 1 ] \
+    && echo "$line" | grep -qF 'p1 verify …' && echo "$line" | grep -qF 'p2 land ✗ (exit 7, proof gate)' \
+    && echo "$line" | grep -qF 'p3 (working)' && echo "$line" | grep -qF 'garden/cut-y verify …' \
+    && ! echo "$line" | grep -qF 'p2-old' \
+    && ok "wait ends with a one-line board of each watched session's last progress line" || bad "progress board (rc $rc): $out"
+grep -qF 'p1 verify …' "$PROG/main-9" 2>/dev/null \
+    && ok "wait queues the board for the coordinator's own progress hook" || bad "queue: $(cat "$PROG/main-9" 2>/dev/null)"
+hook=$(printf '{"session_id":"main-9","cwd":"%s"}' "$REPO" | bash "$PLUGIN_ROOT/hooks/progress.sh")
+echo "$hook" | grep -q '"systemMessage"' && echo "$hook" | grep -qF 'p2 land ✗' \
+    && ok "the progress hook shows the board in the coordinator tab" || bad "hook: $hook"
+rm -f "$STATE"/sessions/*; rm -rf "$PROG"
+exec 7>&-
+
 echo
 echo "coordinate_test: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]

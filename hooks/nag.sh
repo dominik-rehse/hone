@@ -10,8 +10,10 @@
 #      "No worktree" alone is NOT evidence: that is the normal plan→run gap
 #      (hone authors Plans first and runs them later, often from another
 #      session). Flagging it nags every queued Plan into alarm fatigue.
-#      Pending Plans get at most one aggregate advisory line. (A Plan whose
-#      worktree still exists is active work, and the nag does not flag it.)
+#      Pending Plans get at most one aggregate advisory line, only in the
+#      primary tree and only while no coordinator is active (see
+#      nag_pending_quiet). (A Plan whose worktree still exists is active
+#      work, and the nag does not flag it.)
 #      <change> may be nested (auth/refresh-token): the plan skill derives
 #      slugs mirroring src/, so the scan must recurse. The sibling-<dir>.md
 #      signal below stays unambiguous because the plan skill refuses a slug
@@ -69,7 +71,8 @@
 #      small enough for an agent to hold in context, and a line count is the
 #      exact, tool-free proxy for that. The check is scoped to the areas of
 #      the change at hand. A repo-wide check would name every old large area
-#      on every turn, which is the alarm fatigue check 1 describes.
+#      on every turn, which is the alarm fatigue check 1 describes. A
+#      generated file does not count (see nag_area_files).
 #
 # The nag is ADVISORY: it reports its findings and exits 0, never blocking the
 # stop (the gate is the blocking hook). Findings go out as a {"systemMessage":
@@ -145,6 +148,21 @@ nag_branch_carried_work() {
     [ -z "$(git rev-list --first-parent "$primary" 2>/dev/null | grep -xF "$tip")" ]
 }
 
+# The files of area $1 that count toward its size, NUL-separated: tracked,
+# and not generated. A generated output.css was 11,699 of 17,764 lines in one
+# area, and an agent never reads such a file to work in the area. Generated
+# means marked linguist-generated in .gitattributes, or a header in its first
+# five lines that says @generated, DO NOT EDIT, or auto-generated.
+nag_area_files() {
+    local f
+    git ls-files -z -- ":(literal)$1" ":(exclude,literal,attr:linguist-generated)$1" \
+        ":(exclude,literal,attr:linguist-generated=true)$1" 2>/dev/null \
+        | while IFS= read -r -d '' f; do
+              head -n 5 -- "$f" 2>/dev/null | grep -Eiq '@generated|do not edit|auto-?generated' && continue
+              printf '%s\0' "$f"
+          done
+}
+
 # The primary tree and the branches checked out in any worktree, for the
 # active-work test of check 1.
 PRIMARY_ROOT="."
@@ -153,6 +171,36 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
     PRIMARY_ROOT=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)/.." 2>/dev/null && pwd -P) || PRIMARY_ROOT="."
     ATTACHED=$(git worktree list --porcelain 2>/dev/null | sed -n 's|^branch refs/heads/||p')
 fi
+
+# The pending-Plans advisory is for a person in the primary tree with no
+# coordinator. A run's worktree holds the Plans of an old snapshot, and the
+# count there said 3 when 1 was pending. A coordinator starts runs itself, so
+# "run /hone:run" is wrong for it and for the sessions it watches: 149 such
+# lines reached one coordinator in one batch. A coordinator is active when
+# scripts/coordinate.sh watches a session, when a wait of it is alive, or when
+# this session once waited (its cursor file).
+nag_pending_quiet() {
+    local git_dir common st f pid
+    git rev-parse --git-dir >/dev/null 2>&1 || return 1
+    git_dir=$(git rev-parse --absolute-git-dir 2>/dev/null)
+    common=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P) || return 1
+    [ "$git_dir" = "$common" ] || return 0
+    st="$common/hone-coordinate"
+    [ -d "$st" ] || return 1
+    for f in "$st"/sessions/*; do
+        [ -f "$f" ] && return 0
+    done
+    case "$SESSION" in
+        ''|*/*|.*) ;;
+        *) [ -f "$st/cursor.$SESSION" ] || [ -f "$st/wait.$SESSION.pid" ] && return 0 ;;
+    esac
+    for f in "$st"/wait.*.pid; do
+        [ -f "$f" ] || continue
+        pid=$(cat "$f" 2>/dev/null)
+        [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null && return 0
+    done
+    return 1
+}
 
 # 1. Leftover Plan. Recurse: slugs are nested (.plans/<area>/<change>.md).
 # Flag only on landed evidence (see the header). Otherwise count as pending.
@@ -189,7 +237,7 @@ if [ -d ".plans" ]; then
             pending=$((pending+1))
         fi
     done < <(find .plans -type f -name '*.md' 2>/dev/null)
-    [ "$pending" -gt 0 ] && add_finding "$(msg_nag_plans_pending "$pending")"
+    [ "$pending" -gt 0 ] && ! nag_pending_quiet && add_finding "$(msg_nag_plans_pending "$pending")"
 fi
 
 # 2. Oversized Note.
@@ -321,7 +369,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
                     # 11. Oversized area, for the areas this change touched.
                     while IFS= read -r area; do
                         [ -n "$area" ] && [ -d "src/$area" ] || continue
-                        lines=$(git ls-files -z -- ":(literal)src/$area" 2>/dev/null | xargs -0 -r grep -I -c '' 2>/dev/null \
+                        lines=$(nag_area_files "src/$area" | xargs -0 -r grep -I -c '' 2>/dev/null \
                             | awk -F: '{ n += $NF } END { print n + 0 }')
                         if [ "${lines:-0}" -gt "$AREA_MAX_LINES" ]; then
                             add_finding "$(msg_nag_area_oversized "src/$area/" "$lines" "$AREA_MAX_LINES")"

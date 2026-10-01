@@ -59,6 +59,36 @@ The person asks in plain words. Map each request to one of these:
 
 - *Close* ("close pdf-export", "give up on it"): see *Closing a tab*.
 
+## The person's word
+
+Keep a short list of the person's standing answers in this conversation:
+each thing they decided once for the whole batch, in their words. Before you
+ask the person anything, read the list. Never ask again what it answers.
+
+A yes covers only the action that your question named. "Do you want Plans
+for 1 and 2?" and a yes start two plan tabs, and no run. Starting a run
+needs its own word, or a standing answer that names runs. When the person
+asked for less than you assumed, do only that.
+
+When the person delegates ("don't get back to me", "I accept all your plans
+and grants"), tell them at once what hone can record, and what it cannot:
+
+- *Grants*: the person can commit `.hone-grant-auto` on the primary branch,
+  in their own terminal. Then `land` grants every irreversible change
+  itself (the authority gate, exit 8) and records it in the merge commit.
+  It never grants a change that touches the marker. You never write it.
+  Offer it once, with its cost: no person reads an irreversible change
+  before it merges.
+- *Proof sign-offs* (exit 7) stay the person's act: `attest` in the
+  change's tab, or a green `scripts/proof.sh`. No marker records them.
+- *A merge that failed a check* (exit 6) needs the person's word for that
+  stop. A standing answer does not cover it.
+- *Questions and permission prompts in a session's tab* wait for the person
+  there. You never answer them (see *Watch*).
+
+Then put the rest of their delegation on your list: what to plan, what to
+run, in which order. Act on it, and stop asking it.
+
 ## Admit
 
 For each Plan the person wants to run, ask what is in flight, whoever runs it:
@@ -115,10 +145,16 @@ notification itself. The events:
   (see *What the coordinator never does*), close that tab, and admit whatever
   waited on it.
 - `stopped`: `land` exited 6 to 9 and told the person. Only the person can
-  act. Never tell the session to run `land` again, unless the person says so
-  in this conversation. Wait.
+  act. Never tell the session to run `land` again, unless the person said
+  so for this stop. A standing answer, a memory, or the session's own
+  reason does not count. After exit 6 ask the person, and relay "run land
+  again" only on their yes. Wait.
 - `needs-you` or `quiet`: the session waits on a question, an approval, or
-  its own stop. Read its tail to classify, never to adopt its work:
+  its own stop. **A question or a permission prompt in another tab belongs
+  to the person. Never answer it, never offer to, and never send it keys,
+  even when the person asks you to.** Tell them the tab and what it asks.
+  If they ask you to answer, say no: hone gives that answer only to them.
+  Read its tail to classify, never to adopt its work:
 
   ```bash
   herdr agent read <agent-name> --source recent-unwrapped --lines 120
@@ -132,7 +168,7 @@ notification itself. The events:
   ticker closes its tab when its turn ends. Admit and start the Plan like any
   other.
 - `finished`: a garden or consolidate session went quiet with no worktree of
-  its own left. They land under names of their own, so no `landed` event
+  its cuts left. They land under names of their own, so no `landed` event
   ends them. Read its report, put what it landed on the board, close its
   tab, and admit whatever waited on garden.
 - `updated`: a session runs a newer hone than you do. Your scripts and hooks
@@ -141,8 +177,11 @@ notification itself. The events:
   this tab. Your watches belong to this session's id, and a resume keeps
   it. A fresh session owns no watch.
 
-When you relay a session's progress line, mark it as the session's claim
-("run:csv-export reports verify ..."), never as your own knowledge. A session
+After the events, the wait prints one line that starts with `◆ hone
+sessions`: each watched session's last progress line, or its state. The
+progress hook shows the same line to the person in this tab. When you cite
+a session's progress, mark it as the session's claim ("run:csv-export
+reports verify ..."), never as your own knowledge. A session
 whose `worktree.sh add` exited 4 found the change claimed by another session:
 it skips, and you report the skip.
 
@@ -155,9 +194,13 @@ consolidate pass of `parallel.md`:
 bash "${CLAUDE_PLUGIN_ROOT}/scripts/coordinate.sh" start consolidate
 ```
 
+Its prompt names the batch's base commit, which the first `start run`
+recorded, and the count of merges since it, so the pass covers every one.
 It runs a `consolidate-critic` over the combined result, and it lands any
-accepted cuts through a worktree change of its own. Close its tab on its
-`finished` event. Then print the board as the report:
+accepted cuts through worktree changes named `consolidate/<slug>`. When
+`start` says the pass has no base commit, tell the person and ask. Close
+its tab on its `finished` event, which waits until no cut holds a worktree.
+Then print the board as the report:
 per change, landed (with the merge commit) or stopped (with the blocker and the
 tab kept).
 
