@@ -98,9 +98,10 @@ in git.
   `coordinate.sh send` is the one path from MAIN to a session, and it
   refuses a `!` command. `admit` caps the runs in flight at 4.
 - Still open: a Stop hook that blocks the stop (the gate, the nag) does
-  not hold back `turn-ended`, so MAIN can wake on a turn that goes on. No
-  lab scenario covers the redesign yet. Next step: read the next
-  coordinated batch, and count the pollers MAIN still writes.
+  not hold back `turn-ended`, so MAIN can wake on a turn that goes on. On
+  2026-10-01 the maintainer chose no lab run for the redesign. Next step:
+  read the next coordinated batch, and count the pollers MAIN still
+  writes.
 
 #### Parallel runs starve the suite lock, and the gate repeats work
 
@@ -225,8 +226,9 @@ Each comes from [the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-b
   mechanical, and it names the test that still covers the claim.
 - `rules/workflow.md` allows `docs/` edits only at consolidate. Two Plans
   could not run, because a test checks that the docs cite `src` paths.
-  The `plan-critic` caught both. Next step: decide whether such a test
-  makes a docs edit part of the build.
+  The `plan-critic` caught both. Done in 0.74.0, on the maintainer's
+  word: build may edit `docs/` where the change makes a line wrong or a
+  test reads it. Consolidate still writes new Decisions and Notes.
 - A flaky new test landed, and a later land's exit 6 caught it. Done in
   0.73.0: the run skill calls a red without a change in between a flake
   that the run made, and the run finds its cause first.

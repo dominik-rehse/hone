@@ -61,8 +61,9 @@ skills point to it.
 The hooks enforce these rules. The primary tree is a merge target, never a
 workspace (`guard`). No production code without a failing test (`guard`).
 Tests, type-check, and lint stay green (`gate`). Plans and Notes stay small
-and owned (`nag`). `docs/` is written only at consolidate, apart from spikes
-and plan-time open questions. Code and tests are written only at build. The
+and owned (`nag`). Code and tests are written only at build. Build may also
+edit `docs/` where the change makes a line wrong, or where a test reads it.
+Consolidate sorts what the change leaves into Decisions and Notes. The
 detail lives in the `plan`, `run`, and `garden` skills, loaded when invoked.
 
 Work with a denied action, never around it. A denied write in the primary

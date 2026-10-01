@@ -573,9 +573,10 @@ split works as a lean `CLAUDE.md` pointing at local skills.)
 
 ## Invariants
 
-1. Each artifact has exactly one writer among the steps (the full grid is
-   in [`reference.md`](reference.md)). Code and tests come only from
-   *build*, and `docs/` prose only from *consolidate*. Only *consolidate*
+1. One step writes each artifact new (grid in
+   [`reference.md`](reference.md)). Code and tests come from *build*, and
+   new `docs/` prose from *consolidate*. *build* only amends a doc that
+   a change makes wrong. Only *consolidate*
    prunes permanent artifacts, or, between changes, *garden*, whose one
    non-deleting change repoints a `docs/` reference whose target moved.
    Exactly two steps empty `.plans/`: *build* promotes a

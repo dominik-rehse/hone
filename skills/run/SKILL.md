@@ -221,7 +221,9 @@ If verify cannot go green and you have exhausted the fix, **stop and escalate**
 
 ### 4. Consolidate: sort the leftovers, prune, delete the Plan
 
-This is the only step that writes `docs/` and the only step that prunes tests.
+This step sorts the change's leftovers into `docs/`, and it is the only step
+that prunes tests. Build may already have edited a doc that the change made
+wrong, or one that a test reads.
 Sort everything the change leaves behind that is worth keeping into the place
 where it can't go stale, applying the **cut test**. Never write a line an agent
 could recover from the code. If it can be a type, it already became one at

@@ -581,7 +581,7 @@ W = writes, M = amends, P = prunes/deletes, R = reads, . = untouched
 | Operation   | .plans/ | code | tests | decisions/ | notes/ | open-q | .git |
 |-------------|---------|------|-------|------------|--------|--------|------|
 | plan        | W       | R    | R     | R          | R      | (W)    | W    |
-| build       | R/P     | W    | W     | .          | .      | .      | .    |
+| build       | R/P     | W    | W     | M          | M      | .      | .    |
 | verify      | .       | R    | R     | R          | R      | R      | .    |
 | consolidate | P       | .    | P     | W/M        | W/M    | M      | .    |
 | land        | .       | .    | .     | .          | .      | .      | W    |
@@ -593,7 +593,8 @@ change replaces. plan's `(W)` on open questions covers only a new
 question the Plan surfaces. Its `.git` write is the commit of the Plan
 and its references on the primary branch. build's `.plans/` prune is a
 reference promoted out, `git mv`'d next to the test that reads it. (build
-is the only step that writes tests.) consolidate's `.plans/` prune is the `git rm` of the
+is the only step that writes tests.) build's `M` in `docs/` amends a
+line that the change makes wrong, or one that a test reads. consolidate's `.plans/` prune is the `git rm` of the
 Plan and any references build did not promote. garden is not part of a
 change, but the standalone maintenance loop. Every column it touches is
 a deletion, apart from the three `M` cells. Those carry its one non-deleting
