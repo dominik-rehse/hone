@@ -23,15 +23,16 @@ Slash commands, in the order a change flows:
   consolidate, review, land). `/hone:run --all` runs every ready Plan.
 - `/hone:coordinate [request]` makes this tab in
   [herdr](https://github.com/herdrdev/herdr) 0.9.0 or later the repository's
-  coordinator, labelled `hone`. It starts each plan, run, or garden session
-  in a background tab on `opus`, watches it, and prints a board. A plan tab
-  closes once its Plan is committed. `/hone:run --all` inside herdr hands over
-  to it. Its ticker (`scripts/coordinate.sh`) notifies you when a session
-  needs you, and shows each session's progress line. Its `admit`
-  checks a change against every change in flight,
-  colleagues' claims included. It holds garden apart, and a Plan until its
-  predecessor lands. On an `updated` event, restart the
-  coordinator for the newer hone.
+  coordinator, labelled `hone`. It starts and watches plan, run, and garden
+  sessions in background tabs on `opus`. `/hone:run --all` inside herdr
+  hands over to it. It notifies you when a session needs you. A session's
+  turn end wakes it. Its ticker derives missed events from the
+  repository, and its board shows each run's sign-off and grant. It
+  reaches a session only through `coordinate.sh send`, which refuses a `!`
+  command. `admit` checks a change against all in flight, colleagues'
+  too. It holds garden apart, a Plan until its predecessor
+  lands, and a fifth run (`HONE_COORD_MAX_RUNS`, 4). Restart it on an
+  `updated` event.
 - `/hone:garden` scans the repo for stale docs, dead code, and redundant tests
   between changes, and lands the safe deletions. It also repoints a `docs/`
   reference whose target moved, and escalates the rest as one proposed Plan per
@@ -195,8 +196,8 @@ the remote rejected its push (default 3).
 Two more variables tune a hook. `HONE_AREA_MAX_LINES` sets the size above
 which the nag names a `src/<area>/` (default 3000). `HONE_GATE_BLOCK_CAP`
 sets how many identical failures the gate blocks a turn end for before it
-lets the turn end (default 3). `HONE_COORD_TICK` (15) and `HONE_COORD_QUIET`
-(600) set the seconds of the coordinate ticker.
+lets the turn end (default 3). `HONE_COORD_TICK` (15), `HONE_COORD_QUIET`
+(600), and `HONE_COORD_WAIT` (540, then exit 3) set the coordinate seconds.
 
 ## Hooks
 
@@ -331,11 +332,10 @@ neither. When you want that record, route the edit through the loop.
   change. Otherwise it prints the count.
 - *progress* (after each Bash call, and Stop) shows the loop's progress
   line: `◆ [csv-export] worktree ✓ > build ... > verify > …`. A garden
-  change gets `worktree > cut > verify > land`. `worktree.sh` and
-  `coordinate.sh wait` queue it, and it never blocks.
+  change gets `worktree > cut > verify > land`. It never blocks.
 - *watch* (Stop) blocks a session that watches SUBs from ending its turn
   with no `coordinate.sh wait` armed, twice at most. It also restarts a dead
-  ticker.
+  ticker. In a watched session it writes a `turn-ended` event.
 - *session-start* injects the workflow rule from the plugin. It warns when
   the test adapter or the `src/` layout is missing. It also warns, naming
   the missing rules, when the settings lack any rule from the canonical deny
@@ -382,9 +382,8 @@ dash.
 One change has no automatic route. Where the diff rewrites the proof harness,
 land cannot prove it, because the copy land holds is the one the change
 replaces. The harness is `scripts/proof.sh`, each probe that already exists
-(`scripts/proof-probes/<name>.sh`), and any other file there that a probe or
-the adapter names. A test file, a README, and an edit to whole-line comments
-only are not rewrites. The refusal names the files and tells you to run
+(`scripts/proof-probes/<name>.sh`), and any other file there, a test file or a
+README too. The refusal names the files and tells you to run
 `bash scripts/proof.sh <name>` from the worktree in your own terminal, and to
 attest with its output. Such a diff arms the gate on its own, with no trailer
 and no marker, because the adapter defines the verdict this gate trusts.

@@ -14,7 +14,7 @@ and only at land, before the merge. Copy a template here to `scripts/proof.sh` a
   its own. land trusts a change that introduces or edits `proof.sh` only after
   that adapter change has landed. Until then, the sign-off is the way through
   the gate. The same holds for a change that edits a probe which already
-  exists, or a file beside it that a probe runs. A change that only *adds*
+  exists, or any other file beside the probes. A change that only *adds*
   its own new probe is not gated this way. The adapter that judges it stays
   the reviewed copy, and land runs it once for each added probe.
 - A probe is `scripts/proof-probes/<name>.sh`, and `proof.sh <name>` runs it.

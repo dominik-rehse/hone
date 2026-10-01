@@ -993,18 +993,20 @@ Proof: real-environment - run the new adapter by hand")
     echo "$out" | grep -qF "$expect" || die "the gate should print '$expect' for $target: $out"
     bash "$WSH" remove "$WT_BS" >/dev/null 2>&1; git branch -D "hone/bootstrap-$n" >/dev/null 2>&1
 done
-# An edited file under proof-probes/ that is not a .sh, and that no probe
-# names, is no part of a probe. Its edit opens no gate. The field shape: a
-# test file there opened the gate under the change's own name, and the
-# project's adapter exited 3 on that name. Section 5g2 covers a named helper.
+# An edited file under proof-probes/ that is not a .sh can be read or run by
+# a probe through a computed path, so its edit gates. No probe names this one,
+# so the gate names the change's own command, never a bogus one. Section 5g2
+# covers a named helper and the shapes that open no gate.
 printf '{"url":"a"}\n' > "$REPO/scripts/proof-probes/fixture.json"
 git add scripts/proof-probes/fixture.json && git commit -qm "chore(proof): land a probe fixture"
 WT_BS=$(bash "$WSH" add bootstrap-fixture) || die "worktree add bootstrap-fixture"
 printf '{"url":"b"}\n' > "$WT_BS/scripts/proof-probes/fixture.json"
 (cd "$WT_BS" && git add -A && git commit -qm "chore(proof): edit the fixture" -m "Cut: nothing, a test change")
 out=$(bash "$WSH" land bootstrap-fixture 2>&1); rc=$?
-[ "$rc" -eq 0 ] || die "an edited fixture that no probe names should open no gate (got $rc): $out"
+[ "$rc" -eq 7 ] || die "an edited fixture should open the gate (got $rc): $out"
+echo "$out" | grep -qF "bash scripts/proof.sh bootstrap-fixture" || die "the gate should name the change's own command: $out"
 echo "$out" | grep -qF "proof.sh fixture.json" && die "the gate must not turn a fixture into a command: $out"
+bash "$WSH" remove "$WT_BS" >/dev/null 2>&1; git branch -D hone/bootstrap-fixture >/dev/null 2>&1
 # A change that only ADDS its own probe is writing its own check, like a test,
 # and the adapter that judges it is untouched. Its trailer still gates it, but
 # the bootstrap rule never does.
@@ -1141,7 +1143,7 @@ bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
 step "real-environment change with a red scripts/proof.sh refused (exit 7)"
 # (h) A human sign-off naming the tip satisfies the gate even when the adapter
 # is red: the sign-off is checked first, and it says a human ran the real check.
-git rev-parse --short hone/ui-flow3 > "$REPO/.hone-proof/ui-flow3"
+git rev-parse hone/ui-flow3 > "$REPO/.hone-proof/ui-flow3"
 bash "$WSH" land ui-flow3 >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a tip-naming sign-off should land the change despite a red adapter (got $rc)"
 grep -qP "\tui-flow3\tlanded\t$(git rev-parse --short HEAD)\$" "$COORD_EVENTS" \
@@ -1255,7 +1257,7 @@ bash "$WSH" land always-red >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 7 ] || die "a red adapter should refuse a proof-always change (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "a failed proof-always run must not touch the trunk"
 # (c) A sign-off naming the tip still discharges it, adapter or not.
-git rev-parse --short hone/always-red > "$REPO/.hone-proof/always-red"
+git rev-parse hone/always-red > "$REPO/.hone-proof/always-red"
 bash "$WSH" land always-red >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] || die "a tip-naming sign-off should discharge proof-always (got $rc)"
 rm -f "$REPO/.hone-proof/always-red"
@@ -1304,7 +1306,7 @@ step "status reports the proof-always marker and flags an uncommitted one"
 echo "== 5g2. proof gate: the field shapes of 2026-10-01 =="
 # Field shapes from a coordinated batch. A test file beside the probes opened
 # the gate under the change's own name, and the project's adapter exited 3 on
-# that name. Comment-only probe edits opened it too. A sign-off died each time
+# that name. A sign-off died each time
 # main moved. A green adapter run left no line in the merge commit, and an
 # added probe with no trailer ran nowhere.
 # The base: a probe that runs a helper, the helper's test, a README, and a
@@ -1326,6 +1328,8 @@ b`;
 EOF
 printf '// tests shape.js\n' > "$REPO/scripts/proof-probes/shape.test.js"
 printf '# The probes\n' > "$REPO/scripts/proof-probes/README.md"
+printf 'exit 0\n' > "$REPO/scripts/proof-probes/mdcheck.sh"
+printf '# What the doc probe checks\n' > "$REPO/scripts/proof-probes/mdcheck.md"
 cat > "$REPO/scripts/proof-probes/heredoc.sh" <<'EOF'
 #!/bin/bash
 # sends a payload
@@ -1334,7 +1338,15 @@ cat <<PAYLOAD
 PAYLOAD
 echo done
 EOF
-git add scripts/proof-probes && git commit -qm "chore(proof): probes for the field shapes"
+# Shapes from the review of 0.72.1: a dotfile, a helper reached by a glob, a
+# probe that reads its own text, a helper whose diff an attribute hides, and
+# probe names that git quotes or that hold a space.
+printf 'node "$(dirname "$0")/attr.js"\n' > "$REPO/scripts/proof-probes/attrprobe.sh"
+printf '/*\n// doc\n*/\nprocess.exit(1)\n' > "$REPO/scripts/proof-probes/attr.js"
+printf 'scripts/proof-probes/attr.js -diff\n' > "$REPO/.gitattributes"
+printf 'curl -f http://x || exit 1\n' > "$REPO/scripts/proof-probes/prüf.sh"
+printf 'curl -f http://y || exit 1\n' > "$REPO/scripts/proof-probes/a b.sh"
+git add .gitattributes scripts/proof-probes && git commit -qm "chore(proof): probes for the field shapes"
 # probe_edit <change> <file> <sed expression>: edit one file under
 # scripts/proof-probes/ on a branch of its own, and land it. Sets out and rc.
 probe_edit() {
@@ -1345,12 +1357,24 @@ probe_edit() {
     out=$(bash "$WSH" land "$1" 2>&1); rc=$?
 }
 gone() { bash "$WSH" remove "$1" >/dev/null 2>&1; git branch -D "hone/$1" >/dev/null 2>&1; }
-# (a) A test file or a README is no probe, and no probe names it.
+# (a) A test file, a README, or a .md file under proof-probes/ gates too: a
+# probe can run or read it by a glob or a runner. The gate names a probe that
+# exists where it can: one that names the file, else the probe with the same
+# stem beside it, else the change's own name.
 probe_edit probe-test shape.test.js 's/tests/checks/'
-[ "$rc" -eq 0 ] || die "a probe's test file should open no proof gate (got $rc): $out"
+[ "$rc" -eq 7 ] || die "a probe's test file should open the gate (got $rc): $out"
+echo "$out" | grep -qF "bash scripts/proof.sh probe-test" || die "an unnamed test file should gate under the change's name: $out"
+gone probe-test
 probe_edit probe-readme README.md 's/probes/proof probes/'
-[ "$rc" -eq 0 ] || die "a README under proof-probes/ should open no proof gate (got $rc): $out"
-step "a test file or a README beside the probes opens no gate"
+[ "$rc" -eq 7 ] || die "a README under proof-probes/ should open the gate (got $rc): $out"
+echo "$out" | grep -qF "bash scripts/proof.sh probe-readme" || die "an unnamed README should gate under the change's name: $out"
+gone probe-readme
+probe_edit probe-doc mdcheck.md 's/checks/proves/'
+[ "$rc" -eq 7 ] || die "a .md file under proof-probes/ should open the gate (got $rc): $out"
+echo "$out" | grep -qF "bash scripts/proof.sh mdcheck" || die "a .md file should gate under the probe with its stem: $out"
+echo "$out" | grep -qF "bash scripts/proof.sh probe-doc" && die "a .md file beside its probe must not gate under the change's name: $out"
+gone probe-doc
+step "a test file, a README, or a .md file under proof-probes/ gates, under a probe that exists"
 # A helper that a probe runs is part of that probe. Its edit opens the gate
 # under the probe's name, never under the change's own.
 probe_edit probe-helper shape.js 's/const n = 1/const n = 2/'
@@ -1367,11 +1391,15 @@ probe_edit probe-named heredoc.sh 's/^echo done$/echo finished/'
 echo "$out" | grep -qF "rewrites the probe file scripts/proof-probes/heredoc.sh" || die "the refusal should name the probe that changed: $out"
 gone probe-named
 step "an edited helper gates under the probe that runs it, and the refusal names the file"
-# (b) A comment-only edit to a probe or a helper opens no gate.
+# (b) A comment edit to a probe or a helper gates like any edit. A comment
+# can be data: a heredoc, a template literal, or a file that some harness
+# file reads.
 probe_edit probe-comment journey.sh 's/walks the journey/walks the journey from src\/area/'
-[ "$rc" -eq 0 ] || die "a comment-only probe edit should open no gate (got $rc): $out"
+[ "$rc" -eq 7 ] || die "a comment edit to a probe should open the gate (got $rc): $out"
+gone probe-comment
 probe_edit helper-comment shape.js 's/rebuilds the shape/rebuilds the shape in one process/'
-[ "$rc" -eq 0 ] || die "a comment-only helper edit should open no gate (got $rc): $out"
+[ "$rc" -eq 7 ] || die "a comment edit to a helper should open the gate (got $rc): $out"
+gone helper-comment
 # A '#' line in a heredoc and a '//' line in a template literal are data.
 probe_edit heredoc-data heredoc.sh 's/# not a comment/# still not a comment/'
 [ "$rc" -eq 7 ] || die "a heredoc line that looks like a comment should open the gate (got $rc): $out"
@@ -1380,7 +1408,7 @@ probe_edit template-data payload.js 's/inside a template/inside the template/'
 [ "$rc" -eq 7 ] || die "a template line that looks like a comment should open the gate (got $rc): $out"
 gone template-data
 # A '*/' on a '//' line ends a block comment it sits in, and code can follow.
-probe_edit block-end shape.js 's|in one process|in one process */ const m = 3;|'
+probe_edit block-end shape.js 's|rebuilds the shape|rebuilds the shape */ const m = 3;|'
 [ "$rc" -eq 7 ] || die "a '//' line that holds '*/' should open the gate (got $rc): $out"
 gone block-end
 # A comment after code, and a shebang, are not whole-line comments.
@@ -1390,7 +1418,85 @@ gone trailing-comment
 probe_edit shebang heredoc.sh '1s/.*/#!\/bin\/sh/'
 [ "$rc" -eq 7 ] || die "a shebang edit should open the gate (got $rc): $out"
 gone shebang
-step "a comment-only probe edit opens no gate, and data that looks like a comment does"
+step "a comment edit to a probe or a helper opens the gate"
+# The review shapes. A '//' line that ends a block comment, behind 6000 lines
+# of padding.
+WT_X=$(bash "$WSH" add pipe-padding) || die "worktree add pipe-padding"
+{ printf '// rebuilds the shape */ process.exit(0); /*\nconst n = 1;\n'
+  for i in $(seq 1 6000); do printf '// padding line %s xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx\n' "$i"; done
+} > "$WT_X/scripts/proof-probes/shape.js"
+(cd "$WT_X" && git add -A && git commit -qm "chore(proof): pad the helper" -m "Cut: nothing, a test change")
+out=$(bash "$WSH" land pipe-padding 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "a '*/' line behind a large diff should open the gate (got $rc)"
+gone pipe-padding
+# A carriage return ends a JS line, so code can follow a '//' on one line.
+probe_edit cr-line shape.js 's|^// rebuilds the shape$|// note\rprocess.exit(0)|'
+[ "$rc" -eq 7 ] || die "a '//' line with a carriage return should open the gate (got $rc): $out"
+gone cr-line
+# An attribute that hides the diff must not hide the hunks from the filter.
+probe_edit attr-hidden attr.js 's|^// doc$|// */ process.exit(0); /*|'
+[ "$rc" -eq 7 ] || die "a hunk behind a -diff attribute should open the gate (got $rc): $out"
+gone attr-hidden
+# Another harness file can read a probe's comments. An adapter that skips a
+# probe with a `# skip` line turns that comment into a switch.
+printf 'p=scripts/proof-probes/$1.sh\ngrep -q "^# skip" "$p" && exit 0\nbash "$p"\n' > "$REPO/scripts/proof.sh"
+git add scripts/proof.sh && git commit -qm "chore(proof): an adapter that reads probe comments"
+probe_edit skip-line journey.sh 's/^\(# walks the journey.*\)$/\1\n# skip/'
+[ "$rc" -eq 7 ] || die "a comment that the adapter reads should open the gate (got $rc): $out"
+gone skip-line
+git rm -q scripts/proof.sh && git commit -qm "chore(proof): drop the reading adapter"
+# A probe that reads its siblings' comments through a directory variable.
+printf '#!/bin/bash\nhere=$(dirname "$0")\ngrep -h "^# url:" "$here"/*.sh | cut -c8- | xargs curl -f\n' \
+    > "$REPO/scripts/proof-probes/urls.sh"
+git add scripts/proof-probes/urls.sh && git commit -qm "chore(proof): a probe that reads its siblings"
+probe_edit url-line journey.sh 's/^\(# walks the journey.*\)$/\1\n# url: http:\/\/fake/'
+[ "$rc" -eq 7 ] || die "a comment that a sibling probe reads should open the gate (got $rc): $out"
+gone url-line
+git rm -q scripts/proof-probes/urls.sh && git commit -qm "chore(proof): drop the reading probe"
+# The rest of the review shapes.
+printf 'X=1\n' > "$REPO/scripts/proof-probes/.env"
+printf 'for f in "$(dirname "$0")"/checks/*.py; do python3 "$f"; done\n' > "$REPO/scripts/proof-probes/py.sh"
+mkdir -p "$REPO/scripts/proof-probes/checks"
+printf 'print(1)\n' > "$REPO/scripts/proof-probes/checks/zcheck_one.py"
+printf '#!/bin/bash\n# one comment\n[ "$(grep -c "^#" "$0")" -eq 2 ] || exit 1\n' > "$REPO/scripts/proof-probes/selfread.sh"
+git add scripts/proof-probes && git commit -qm "chore(proof): a dotfile, a glob, and a self-reading probe"
+# A probe that reads its own text turns a comment into data.
+probe_edit self-read selfread.sh 's/^# one comment$/# one comment\n# and a second/'
+[ "$rc" -eq 7 ] || die "a comment in a probe that reads itself should open the gate (got $rc): $out"
+gone self-read
+# A dotfile, and a helper that a probe reaches by a glob, gate though no
+# probe names them.
+probe_edit dotfile .env 's/X=1/X=2/'
+[ "$rc" -eq 7 ] || die "an edited dotfile under proof-probes/ should open the gate (got $rc): $out"
+gone dotfile
+probe_edit glob-helper checks/zcheck_one.py 's/print(1)/import os; os._exit(0)/'
+[ "$rc" -eq 7 ] || die "a helper reached by a glob should open the gate (got $rc): $out"
+echo "$out" | grep -qF "bash scripts/proof.sh glob-helper" || die "an unnamed helper should gate under the change's name: $out"
+gone glob-helper
+# git quotes a non-ASCII path, and a name with a space must stay one word.
+probe_edit quoted-path prüf.sh 's/curl -f http:\/\/x || exit 1/exit 0/'
+[ "$rc" -eq 7 ] || die "an edit to a probe with a non-ASCII name should open the gate (got $rc): $out"
+gone quoted-path
+probe_edit spaced-path 'a b.sh' 's/curl -f http:\/\/y || exit 1/exit 0/'
+[ "$rc" -eq 7 ] || die "an edit to a probe with a space in its name should open the gate (got $rc): $out"
+echo "$out" | grep -qF 'bash scripts/proof.sh a\ b' || die "the command should quote the probe name: $out"
+gone spaced-path
+# A test file can be the proof itself, when a probe runs a test runner on its
+# directory. A test file beside its probe gates under that probe's name.
+mkdir -p "$REPO/scripts/proof-probes/e2e" "$REPO/scripts/proof-probes/area2"
+printf 'npx playwright test "$(dirname "$0")/e2e"\n' > "$REPO/scripts/proof-probes/pw.sh"
+printf 'test("login", () => {})\n' > "$REPO/scripts/proof-probes/e2e/login.spec.ts"
+printf 'exit 0\n' > "$REPO/scripts/proof-probes/area2/thing.sh"
+printf 'const t = 1;\n' > "$REPO/scripts/proof-probes/area2/thing.test.js"
+git add scripts/proof-probes && git commit -qm "chore(proof): a playwright probe and a test beside its probe"
+probe_edit spec-proof e2e/login.spec.ts 's/login/logout/'
+[ "$rc" -eq 7 ] || die "a spec that a probe runs should open the gate (got $rc): $out"
+gone spec-proof
+probe_edit beside-probe area2/thing.test.js 's/1/2/'
+[ "$rc" -eq 7 ] || die "a test file under a test runner should open the gate (got $rc): $out"
+echo "$out" | grep -qF "bash scripts/proof.sh area2/thing" || die "a test beside its probe should gate under that probe: $out"
+gone beside-probe
+step "the review shapes gate: a padded diff, a CR, an attribute, a read comment, a dotfile, a glob, a quoted path, a spec"
 # (c) A sign-off carries across a merge of main or a rebase onto it, when the
 # branch's own change and the proof files stay as they were.
 # carry_change <change>: a declared change, signed off at its tip.
@@ -1442,6 +1548,44 @@ main_moves moved-4
 out=$(bash "$WSH" land carry-amend 2>&1); rc=$?
 [ "$rc" -eq 7 ] || die "a sign-off must not carry to a changed change (got $rc): $out"
 gone carry-amend; rm -f "$REPO/.hone-proof/carry-amend"
+# A whitespace change of the branch's own is a change: a line moved out of an
+# if block. git patch-id ignores whitespace, and the sign-off carried.
+WT_C=$(carry_change carry-indent)
+(cd "$WT_C" && printf '    // carry-indent\n' > src/mathx/carry-indent.js \
+    && git commit -qam "style(mathx): indent" -m "Cut: nothing, a test change") || die "indent carry-indent"
+out=$(bash "$WSH" land carry-indent 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "a sign-off must not carry across a whitespace change (got $rc): $out"
+gone carry-indent; rm -f "$REPO/.hone-proof/carry-indent"
+# The sign-off names its commit where attest writes it. A tip id that the
+# text quotes elsewhere names nothing.
+WT_C=$(bash "$WSH" add tip-in-text) || die "worktree add tip-in-text"
+echo "// tip-in-text" > "$WT_C/src/mathx/tip-in-text.js"
+(cd "$WT_C" && git add -A && git commit -qm "feat(mathx): tip-in-text
+
+Cut: nothing, a test change
+Proof: real-environment")
+printf 'ran it, see %s\n' "$(git rev-parse hone/tip-in-text)" > "$REPO/.hone-proof/tip-in-text"
+out=$(bash "$WSH" land tip-in-text 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "a tip id inside the text must not discharge the gate (got $rc): $out"
+gone tip-in-text; rm -f "$REPO/.hone-proof/tip-in-text"
+# The same edit in a twin function is another change. A diff without its
+# line numbers matched it, and the sign-off carried.
+printf 'function f() {\n  a();\n  b();\n  c();\n  x();\n  d();\n  e();\n  f();\n}\n' > "$REPO/src/mathx/twin.js"
+sed -n '1,9p' "$REPO/src/mathx/twin.js" | sed 's/function f/function g/' >> "$REPO/src/mathx/twin.js"
+git add src/mathx/twin.js && git commit -qm "chore: two twin functions"
+WT_C=$(bash "$WSH" add carry-twin) || die "worktree add carry-twin"
+sed -i '5s/x()/drop()/' "$WT_C/src/mathx/twin.js"
+(cd "$WT_C" && git commit -qam "feat(mathx): carry-twin
+
+Cut: nothing, a test change
+Proof: real-environment")
+bash "$WSH" attest carry-twin "walked the twin flow: ok" >/dev/null || die "attest carry-twin"
+git show main:src/mathx/twin.js > "$WT_C/src/mathx/twin.js"
+sed -i '14s/x()/drop()/' "$WT_C/src/mathx/twin.js"
+(cd "$WT_C" && git commit -qam "fix(mathx): the other twin" -m "Cut: nothing, a test change")
+out=$(bash "$WSH" land carry-twin 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "a sign-off must not carry to the same edit in another function (got $rc): $out"
+gone carry-twin; rm -f "$REPO/.hone-proof/carry-twin"
 step "a sign-off does not carry across a probe change or an amended change"
 # (d) A green adapter run leaves its line in the merge commit.
 cat > "$REPO/scripts/proof.sh" <<'PROOF'
@@ -1496,6 +1640,15 @@ printf '// a test\n' > "$WT_A/scripts/proof-probes/area/added-check.test.js"
 out=$(bash "$WSH" land probe-test-added 2>&1); rc=$?
 [ "$rc" -eq 0 ] || die "an added test file should land (got $rc): $out"
 [ -f "$REPO/proof-runs" ] && die "an added test file must not run the adapter"
+# A probe named like an option would reach the adapter as one. It gates.
+rm -f "$REPO/proof-runs"
+WT_A=$(bash "$WSH" add probe-dash) || die "worktree add probe-dash"
+printf '#!/bin/bash\nexit 0\n' > "$WT_A/scripts/proof-probes/--help.sh"
+(cd "$WT_A" && git add -A && git commit -qm "test(proof): add a probe named like an option" -m "Cut: nothing, a test change")
+out=$(bash "$WSH" land probe-dash 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "an added probe named like an option should open the gate (got $rc): $out"
+grep -qx -- "--help" "$REPO/proof-runs" 2>/dev/null && die "land must not pass an option-like name to the adapter"
+gone probe-dash
 step "an added probe runs the adapter, a green run lands it, and a red run stops it"
 # (f) attest reads a long text from a file, so nobody pastes a long quote.
 mkdir -p "$REPO.bin"
@@ -1511,6 +1664,14 @@ bash "$WSH" attest attest-file --file "$REPO.bin/attest.txt" >/dev/null 2>&1; rc
 bash "$WSH" attest attest-file --file "$REPO.bin/no-such-file" >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 2 ] || die "attest --file with a missing file should exit 2 (got $rc)"
 [ -f "$REPO/.hone-proof/attest-file" ] && die "a refused attest --file must not write a sign-off"
+git branch -D hone/attest-file >/dev/null 2>&1
+git branch hone/attest-file >/dev/null 2>&1 || die "branch for the attest --file usage checks"
+for args in "--file" "--file ''" "--file a b"; do
+    eval "set -- $args"
+    bash "$WSH" attest attest-file "$@" >/dev/null 2>&1; rc=$?
+    [ "$rc" -eq 2 ] || die "attest '$args' should exit 2 (got $rc)"
+    [ -f "$REPO/.hone-proof/attest-file" ] && die "attest '$args' must not write a sign-off"
+done
 git branch -D hone/attest-file >/dev/null 2>&1
 step "attest --file records a text from a file, and refuses an empty or missing one"
 git rm -q scripts/proof.sh && git commit -qm "chore: drop the logging proof adapter"

@@ -101,11 +101,10 @@ ask for it. A `Proof: real-environment` trailer on a branch commit asks for it.
 So does a committed `.hone-proof-always` marker, which gates every change, with
 a trailer or without one. So does the change rewriting the proof harness: any
 edit to `scripts/proof.sh`, or an edit to a probe under
-`scripts/proof-probes/` that already exists, or to a file there that a probe
-runs. That third gate fires on the file change itself. It needs no trailer and
-no marker. An edit to comments only, a test file, or a README there does not
-fire it. A *new* probe asks for proof too: land runs the adapter on it, and
-only a red run stops the land.
+`scripts/proof-probes/` that already exists, or to another file there. That
+third gate fires on the file change itself. It needs no trailer and no marker.
+A *new* probe asks for proof too: land runs the adapter on it, and only a red
+run stops the land.
 
 Two things discharge it. A green `scripts/proof.sh` discharges it, and so does
 a `.hone-proof/<change>` sign-off naming the current branch tip. land runs the

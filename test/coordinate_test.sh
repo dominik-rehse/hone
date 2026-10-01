@@ -42,8 +42,8 @@ case "$1 ${2:-}" in
         if [ ! -f "$f" ]; then
             echo '{"error":{"code":"agent_not_found","message":"agent target not found"}}' >&2; exit 1
         fi
-        read -r st sq tab < "$f"
-        printf '{"result":{"agent":{"agent_status":"%s","state_change_seq":%s,"tab_id":"%s"}}}\n' "$st" "$sq" "$tab" ;;
+        read -r st sq tab pane < "$f"
+        printf '{"result":{"agent":{"agent_status":"%s","pane_id":"%s","state_change_seq":%s,"tab_id":"%s"}}}\n' "$st" "${pane:-}" "$sq" "$tab" ;;
     "tab get") printf '{"result":{"tab":{"agent_status":"idle","label":"%s","number":1,"tab_id":"%s"}}}\n' "$(cat "$FAKE/tabs/$3" 2>/dev/null)" "$3" ;;
     "tab list")
         # herdr 0.9.2's order: label before tab_id, other fields between.
@@ -291,9 +291,10 @@ out=$(HERDR_TAB_ID=w:t99 bash "$COORD" planned invoice-export 2>&1 >/dev/null); 
     && events | grep -qP '\tplan:invoice-export\tplanned\tinvoice-export$' \
     && ok "planned in a tab no watch names says so on stderr and still writes the event" || bad "planned elsewhere (rc $rc): $out / $(events)"
 out=$(HERDR_TAB_ID=$ptab bash "$COORD" planned invoice-export 2>&1); rc=$?
-[ "$rc" -eq 0 ] && events | grep -qP '\tplan:an-invoice-export-for-q3\tplanned\tinvoice-export$' \
+# The event above told the coordinator already, so this one adds none.
+[ "$rc" -eq 0 ] && [ "$(events | grep -cP '\tplanned\tinvoice-export$')" -eq 1 ] \
     && grep -qx "tab rename $ptab plan:invoice-export" "$FAKE/log" \
-    && ok "planned writes a planned event for the tab's watch and relabels the tab by the slug" || bad "planned (rc $rc): $out / $(events)"
+    && ok "planned relabels the tab by the slug, and a Plan already announced gets no second event" || bad "planned (rc $rc): $out / $(events)"
 agent plan-an-invoice-export-for-q3 working 3 "$ptab"; tick plan-an-invoice-export-for-q3
 [ -f "$STATE/sessions/plan-an-invoice-export-for-q3" ] && ! grep -q "^tab close $ptab" "$FAKE/log" \
     && ok "a planned session keeps its tab while its turn runs" || bad "planned closed a working tab"
@@ -543,6 +544,211 @@ hook=$(printf '{"session_id":"main-9","cwd":"%s"}' "$REPO" | bash "$PLUGIN_ROOT/
 echo "$hook" | grep -q '"systemMessage"' && echo "$hook" | grep -qF 'p2 land ✗' \
     && ok "the progress hook shows the board in the coordinator tab" || bad "hook: $hook"
 rm -f "$STATE"/sessions/*; rm -rf "$PROG"
+exec 7>&-
+
+echo "== redesign: push, wait, send =="
+# A2, A3: a stop that ends in text reached the coordinator only through quiet,
+# 600 s later, and nothing followed a stopped event when the session finished
+# its report. A6: the harness killed the coordinator's background wait at its
+# time limit. A7: a relayed "! attest" with a leading space arrived as text.
+exec 7>"$STATE/ticker.lock"; flock -n 7
+
+printf 'working 1 w:t7 w:p7\n' > "$FAKE/agents/run-te"
+printf 'run:te\n' > "$FAKE/tabs/w:t7"
+CLAUDE_CODE_SESSION_ID=main-te bash "$COORD" watch te run-te w:t7 >/dev/null
+sub_stop() {  # $1 = tab, $2 = the rest of the JSON object
+    printf '{"session_id":"sub-te","cwd":"%s"%s}' "$REPO" "$2" | HERDR_TAB_ID="$1" bash "$WATCH"
+}
+last_ev() { tail -1 "$STATE/events"; }
+n0=$(events | wc -l)
+out=$(sub_stop w:t7 ',"last_assistant_message":"Done.\n\nThe land stopped at exit 7. Run attest in this tab.\n"')
+[ -z "$out" ] && last_ev | grep -qP '\tte\tturn-ended\tThe land stopped at exit 7\. Run attest in this tab\.$' \
+    && ok "a watched session's turn end writes turn-ended with the last line of its message, and prints nothing" \
+    || bad "turn-ended: out=$out / $(last_ev)"
+n1=$(events | wc -l)
+sub_stop w:t7 ',"last_assistant_message":"Done.\n\nThe land stopped at exit 7. Run attest in this tab."' >/dev/null
+[ "$(events | wc -l)" -eq "$n1" ] && ok "the same turn end twice writes one event" || bad "repeat: $(events | tail -2)"
+long=$(printf 'x%.0s' $(seq 300))
+sub_stop w:t7 ",\"last_assistant_message\":\"$long\"" >/dev/null
+d=$(last_ev | cut -f5)
+[ "${#d}" -le 160 ] && [ "${#d}" -ge 100 ] && ok "a long last line is trimmed to 160 characters" || bad "trim: ${#d}"
+printf '%s\n' '{"type":"user","message":{"content":"go"}}' \
+    '{"type":"assistant","message":{"content":[{"type":"text","text":"Report.\nAll four tests pass."}]}}' > "$FAKE/t.jsonl"
+sub_stop w:t7 ",\"transcript_path\":\"$FAKE/t.jsonl\"" >/dev/null
+last_ev | grep -qP '\tte\tturn-ended\tAll four tests pass\.$' \
+    && ok "with no last message in the input, the hook reads the transcript" || bad "transcript: $(last_ev)"
+n2=$(events | wc -l)
+sub_stop w:t99 ',"last_assistant_message":"Hello."' >/dev/null
+[ "$(events | wc -l)" -eq "$n2" ] && ok "a session in a tab that no watch names writes no event" || bad "unwatched tab: $(last_ev)"
+( . "$PLUGIN_ROOT/hooks/common.sh"; hone_coord_event "$STATE" te stopped "exit 7, proof gate" )
+n3=$(events | wc -l)
+sub_stop w:t7 ',"last_assistant_message":"The land stopped."' >/dev/null
+[ "$(events | wc -l)" -eq "$n3" ] && ok "a turn that ends just after a stopped event writes no second event" \
+    || bad "dedupe stopped: $(last_ev)"
+touch "$REPO/.hone-off"
+sub_stop w:t7 ',"last_assistant_message":"Off."' >/dev/null
+rm -f "$REPO/.hone-off"
+[ "$(events | wc -l)" -eq "$n3" ] && ok ".hone-off disables the turn-ended event" || bad ".hone-off: $(last_ev)"
+# Quiet stays the fallback: after a turn-ended event it neither writes nor notifies.
+# A session of its own, so no stopped event of te dedupes the turn end.
+printf 'working 1 w:t8 w:p8\n' > "$FAKE/agents/run-tf"
+CLAUDE_CODE_SESSION_ID=main-te bash "$COORD" watch tf run-tf w:t8 >/dev/null
+tick run-tf
+before=$(notified)
+# The tick set worked to its own second, and has_event counts that second.
+sub_stop w:t8 ',"last_assistant_message":"Waiting for your word on the grant."' >/dev/null
+printf 'idle 2 w:t8 w:p8\n' > "$FAKE/agents/run-tf"; tick run-tf
+last_ev | grep -qP '\ttf\tturn-ended\t' && [ "$(notified)" -eq "$before" ] \
+    && ok "a quiet session that already sent turn-ended gets no quiet event and no notification" \
+    || bad "quiet after turn-ended: $(events | tail -4) / notified $(notified) vs $before"
+
+# A6: the wait ends by itself before the harness limit.
+printf '%s\n' "$(events | wc -l)" > "$STATE/cursor.main-te"
+out=$(CLAUDE_CODE_SESSION_ID=main-te HONE_COORD_WAIT=3 timeout 20 bash "$COORD" wait); rc=$?
+[ "$rc" -eq 3 ] && echo "$out" | grep -q 'ended on time' && [ ! -f "$STATE/wait.main-te.pid" ] \
+    && ok "with no event, wait ends on time with exit 3 and says so" || bad "wait limit (rc $rc): $out"
+
+# A7: one path from the coordinator to a session.
+: > "$FAKE/log"
+out=$(bash "$COORD" send te '! attest te' 2>&1); rc=$?
+out2=$(bash "$COORD" send te '  ! attest te' 2>&1); rc2=$?
+[ "$rc" -eq 4 ] && [ "$rc2" -eq 4 ] && ! grep -q '^pane run' "$FAKE/log" && echo "$out2" | grep -q 'person' \
+    && ok "send refuses a shell command for the person, with a leading space too" || bad "send ! (rc $rc/$rc2): $out2"
+printf '%s\n' "$(events | wc -l)" > "$STATE/cursor.main-te"
+out=$(CLAUDE_CODE_SESSION_ID=main-te bash "$COORD" send te 'land again' 2>&1); rc=$?
+[ "$rc" -eq 0 ] && grep -qx 'pane run w:p7 land again' "$FAKE/log" && last_ev | grep -qP '\tte\tsent\tland again$' \
+    && ok "send types the text into the session's pane and records a sent event" || bad "send (rc $rc): $out / $(cat "$FAKE/log")"
+[ "$(cat "$STATE/cursor.main-te")" -eq "$(events | wc -l)" ] \
+    && ok "the coordinator's own sent event does not wake its wait" || bad "cursor: $(cat "$STATE/cursor.main-te")"
+: > "$FAKE/log"
+bash "$COORD" send w:t7 'go on' >/dev/null 2>&1; rc=$?
+[ "$rc" -eq 0 ] && grep -qx 'pane run w:p7 go on' "$FAKE/log" && ok "send finds the session by its tab too" || bad "send by tab (rc $rc)"
+out=$(bash "$COORD" send nosuch 'go' 2>&1); rc=$?
+[ "$rc" -eq 2 ] && ok "send to a change that no watch names exits 2" || bad "send unknown (rc $rc): $out"
+printf 'blocked 4 w:t7 w:p7\n' > "$FAKE/agents/run-te"; : > "$FAKE/log"
+out=$(bash "$COORD" send te 'yes' 2>&1); rc=$?
+[ "$rc" -eq 4 ] && ! grep -q '^pane run' "$FAKE/log" \
+    && ok "send refuses a session that waits on a question or a prompt" || bad "send blocked (rc $rc): $out"
+rm -f "$STATE"/sessions/*
+exec 7>&-
+
+echo "== redesign: ticker and board =="
+# Each event below comes from a session, and a missed one left the
+# coordinator blind (findings A1, A4, A5, A8, B1). The ticker now derives the
+# state from git and the files on each tick, and the board reads the
+# person's records.
+exec 7>"$STATE/ticker.lock"; flock -n 7
+rm -f "$STATE"/sessions/*
+# One tick of one session with the land grace at zero, and a quiet
+# threshold that the test sets.
+rtick() {
+    # shellcheck source=scripts/coordinate.sh disable=SC2034
+    ( . "$COORD"; cd "$REPO" || exit 1; COORD_BLOCKED=0; COORD_LAND_GRACE=0
+      HONE_COORD_QUIET=${2:-0}; coord_tick_session "$STATE/sessions/$1" "$STATE" )
+}
+kinds() { events | awk -F'\t' -v c="$1" -v k="$2" '$3 == c && $4 == k' | wc -l; }
+# A1: planned stayed silent in 30 plan sessions, and the planner renamed the slug.
+agent plan-invoices working 1 w:t40; printf 'plan:invoices\n' > "$FAKE/tabs/w:t40"
+bash "$COORD" watch plan:invoices plan-invoices w:t40 >/dev/null
+printf '# invoice-pdf\n\nFiles: src/invoice/pdf.ts\n' > .plans/invoice-pdf.md
+mkdir -p .plans/invoice-pdf && printf 'a reference\n' > .plans/invoice-pdf/notes.md
+git add .plans/invoice-pdf.md .plans/invoice-pdf/notes.md && git commit -qm "plan: invoice-pdf"
+rtick plan-invoices 600
+[ "$(kinds plan:invoice-pdf planned)" -eq 1 ] && events | grep -P '\tplanned\t' | tail -1 | grep -qP '\tinvoice-pdf$' \
+    && ! events | grep -qP '\tplanned\tinvoice-pdf/notes' \
+    && ok "A1: the ticker derives planned from a Plan committed on the primary branch" || bad "derived planned: $(events | tail -3)"
+rtick plan-invoices 600
+[ "$(events | grep -cP '\tplanned\tinvoice-pdf$')" -eq 1 ] && ok "a derived planned fires once" || bad "planned twice: $(events | tail -3)"
+n=$(events | wc -l)
+out=$(HERDR_TAB_ID=w:t40 bash "$COORD" planned invoice-pdf 2>&1)
+[ "$(events | wc -l)" -eq "$n" ] && ok "the planner's own planned after a derived one adds no second event" \
+    || bad "planned dedupe: $(events | tail -2)"
+agent plan-invoices idle 2 w:t40; rtick plan-invoices 600
+[ ! -f "$STATE/sessions/plan-invoices" ] && grep -q '^tab close w:t40' "$FAKE/log" \
+    && ok "the plan tab still closes when its turn ends" || bad "plan tab close: $(tail -3 "$FAKE/log")"
+# A5: the landed event named the caller's HEAD, and a missed event leaves the run watched.
+agent run-ledger working 1
+bash "$COORD" watch ledger run-ledger w:t1 >/dev/null
+git checkout -q -b hone/ledger && echo l > ledger.txt && git add ledger.txt && git commit -qm ledger
+git checkout -q main && git merge -q --no-ff hone/ledger -m "Merge branch 'hone/ledger'"
+merge=$(git rev-parse --short HEAD); git branch -q -D hone/ledger
+echo after > after.txt && git add after.txt && git commit -qm "a later commit"
+rtick run-ledger 600
+[ ! -f "$STATE/sessions/run-ledger" ] && events | grep -qP "\tledger\tlanded\t$merge\$" \
+    && ok "A5: the ticker derives landed and names the merge commit, not HEAD" || bad "derived landed ($merge): $(events | tail -2)"
+agent run-ledger2 working 1
+bash "$COORD" watch ledger2 run-ledger2 w:t1 >/dev/null
+git checkout -q -b hone/ledger2 && echo l > ledger2.txt && git add ledger2.txt && git commit -qm ledger2
+git checkout -q main && git merge -q --no-ff hone/ledger2 -m "Merge branch 'hone/ledger2'" && git branch -q -D hone/ledger2
+( . "$PLUGIN_ROOT/hooks/common.sh"; hone_coord_event "$STATE" ledger2 landed "$(git rev-parse --short HEAD)" )
+rtick run-ledger2 600
+[ "$(kinds ledger2 landed)" -eq 1 ] && ok "a landed event from land is not derived a second time" || bad "landed twice: $(events | tail -2)"
+# A8: the coordinator guessed the person's sign-off and grant five times.
+agent run-refund working 1
+bash "$COORD" watch refund run-refund w:t1 >/dev/null
+git checkout -q -b hone/refund && echo r > refund.txt && git add refund.txt && git commit -qm refund
+tip=$(git rev-parse HEAD); git checkout -q main
+mkdir -p .hone-proof .hone-grant
+printf '%s | old | stale sign-off\n' "$(git rev-parse HEAD~1)" > .hone-proof/refund; touch -d @1000 .hone-proof/refund
+rtick run-refund 600
+( . "$PLUGIN_ROOT/hooks/common.sh"; hone_coord_event "$STATE" refund stopped "exit 8, authority gate" )
+rtick run-refund 600
+[ "$(kinds refund signed)" -eq 0 ] && ok "a sign-off older than the stop derives no signed event" || bad "stale signed: $(events | tail -2)"
+out=$(bash "$COORD" board refund)
+echo "$out" | grep -q '^refund .*NEEDS YOU: land stopped.*sign-off names another commit, not the tip' \
+    && echo "$out" | grep -q 'no grant' \
+    && ok "the board shows a sign-off that does not name the tip, and no grant" || bad "board stale: $out"
+printf '%s | t | ran it\n' "$tip" > .hone-proof/refund
+printf 't | the person allows it\n' > .hone-grant/refund
+rtick run-refund 600
+[ "$(kinds refund signed)" -eq 1 ] && [ "$(kinds refund granted)" -eq 1 ] \
+    && events | grep -P '\trefund\tsigned\t' | grep -q "names the tip ${tip:0:7}" \
+    && ok "after a stop at exit 8 the ticker derives signed and granted" || bad "signed/granted: $(events | tail -3)"
+rtick run-refund 600
+[ "$(kinds refund signed)" -eq 1 ] && [ "$(kinds refund granted)" -eq 1 ] && ok "signed and granted fire once" \
+    || bad "signed twice: $(events | tail -3)"
+out=$(bash "$COORD" board refund)
+echo "$out" | grep -q "sign-off names the tip ${tip:0:7}" && echo "$out" | grep -q 'grant recorded' \
+    && ok "the board shows a sign-off that names the tip, and the grant" || bad "board signed: $out"
+out=$(bash "$COORD" list)
+echo "$out" | grep -q "^refund .*sign-off names the tip ${tip:0:7}.*grant recorded" \
+    && ok "list shows the sign-off and the grant of each watched change" || bad "list signed: $out"
+git checkout -q hone/refund && echo r2 >> refund.txt && git commit -qam "refund 2" && git checkout -q main
+out=$(bash "$COORD" list)
+echo "$out" | grep -q "^refund .*sign-off names another commit, not the tip $(git rev-parse --short=7 hone/refund)" \
+    && ok "a new commit on the branch shows the sign-off as not the tip" || bad "list stale: $out"
+rm -rf .hone-proof .hone-grant; git branch -q -D hone/refund
+rm -f "$STATE"/sessions/*
+# A4: the consolidate pass ended 10 minutes after its last cut, or before it.
+agent hone-consolidate idle 1
+bash "$COORD" watch consolidate hone-consolidate w:t1 >/dev/null
+rtick hone-consolidate 600
+[ -f "$STATE/sessions/hone-consolidate" ] && ok "an idle pass with no cut landed waits for the quiet threshold" \
+    || bad "pass ended early: $(events | tail -2)"
+git worktree add -q -b hone/consolidate/cut-a .worktrees/consolidate/cut-a
+echo c > .worktrees/consolidate/cut-a/cut.txt && git -C .worktrees/consolidate/cut-a add cut.txt \
+    && git -C .worktrees/consolidate/cut-a commit -qm cut
+git merge -q --no-ff hone/consolidate/cut-a -m "Merge branch 'hone/consolidate/cut-a'"
+rtick hone-consolidate 600
+[ -f "$STATE/sessions/hone-consolidate" ] && ok "a pass whose cut still holds a worktree stays watched" || bad "pass with worktree: $(events | tail -2)"
+git worktree remove .worktrees/consolidate/cut-a && git branch -q -D hone/consolidate/cut-a
+n=$(kinds consolidate finished)
+rtick hone-consolidate 600
+[ ! -f "$STATE/sessions/hone-consolidate" ] && [ "$(kinds consolidate finished)" -eq $((n + 1)) ] \
+    && ok "an idle pass whose cuts landed ends before the quiet threshold" || bad "pass finished: $(events | tail -2)"
+rm -f "$STATE"/sessions/*
+# B1: up to 7 runs shared one suite lock.
+for c in r1 r2 r3; do printf 'change=%s\nagent=run-%s\nowner=m\n' "$c" "$c" > "$STATE/sessions/run-$c"; done
+printf 'change=plan:x\nagent=plan-x\nowner=m\n' > "$STATE/sessions/plan-x"
+out=$(bash "$COORD" admit tax-report); rc=$?
+[ "$rc" -eq 0 ] && ok "three runs and a plan leave room under the default cap of 4" || bad "under cap (rc $rc): $out"
+printf 'change=r4\nagent=run-r4\nowner=m\n' > "$STATE/sessions/run-r4"
+out=$(bash "$COORD" admit tax-report); rc=$?
+[ "$rc" -eq 4 ] && echo "$out" | grep -q 'tax-report waits, because 4 runs are in flight' \
+    && ok "B1: admit waits when 4 runs are in flight" || bad "cap (rc $rc): $out"
+out=$(HONE_COORD_MAX_RUNS=6 bash "$COORD" admit tax-report); rc=$?
+[ "$rc" -eq 0 ] && ok "HONE_COORD_MAX_RUNS raises the cap" || bad "cap tunable (rc $rc): $out"
+rm -f "$STATE"/sessions/*
 exec 7>&-
 
 echo

@@ -1648,7 +1648,7 @@ usage:
   coordinate.sh open | board [<path>] | admit <change> [--after-ok <name>]...
   coordinate.sh start run <change> [--after-ok <name>]... | start garden | start consolidate | start plan "<idea>" [--model <model>]
   coordinate.sh watch <change> <agent> [<tab-id>] | unwatch <change> | planned <slug>
-  coordinate.sh wait [--since <n>] | list | events | ensure | ticker
+  coordinate.sh wait [--since <n>] | send <change|tab> <text> | list | events | ensure | ticker
 EOF
 }
 
@@ -1738,6 +1738,15 @@ Why: the Plan states the order, and admit keeps it.
 EOF
 }
 
+msg_coord_admit_cap() {
+    local change="$1" n="$2" max="$3"
+    cat <<EOF
+hone coordinate: $change waits, because $n runs are in flight and the cap is $max.
+Do: start $change after a run lands or stops for good.
+Why: the runs share one suite lock.
+EOF
+}
+
 msg_coord_planned_unwatched() {
     local slug="$1"
     cat <<EOF
@@ -1768,6 +1777,42 @@ EOF
 # by " · ": a session's change and the step its last progress line names.
 msg_coord_progress() {
     printf '◆ hone sessions, as each reports: %s\n' "$1"
+}
+
+# The wait reached HONE_COORD_WAIT with no event. $1 = the seconds.
+msg_coord_wait_on_time() {
+    cat <<EOF
+hone coordinate: the wait ended on time after $1 s, with no event.
+Do: start the wait again at once, in the background, and end the turn.
+Why: the harness kills a background command at its time limit, and then nothing wakes you.
+EOF
+}
+
+# send refused text that Claude Code would run as a shell command. $1 = the target.
+msg_coord_send_bang() {
+    cat <<EOF
+hone coordinate: the text starts with !, so it is not sent to $1.
+Do: tell the person the command, and ask them to type it in that tab.
+Why: a shell command for the person must be typed by the person.
+EOF
+}
+
+# send refused a session that herdr reports blocked. $1 = the change, $2 = the tab.
+msg_coord_send_blocked() {
+    cat <<EOF
+hone coordinate: $1 waits on a question or a prompt, so nothing is sent.
+Do: tell the person that tab $2 waits for them.
+Why: the answer there belongs to the person.
+EOF
+}
+
+# send found no watch for the target. $1 = the target.
+msg_coord_send_unwatched() {
+    cat <<EOF
+hone coordinate: no watched session has the change, tab, or agent $1.
+Do: run coordinate.sh list, and send to a change it names.
+Why: send reaches only the sessions that this repository watches.
+EOF
 }
 
 msg_coord_consolidate_no_base() {
@@ -1930,6 +1975,7 @@ coordinate|human|msg_coord_admit_inflight|<change>|anna on laptop
 coordinate|human|msg_coord_admit_garden_waits|csv-export (this clone)
 coordinate|human|msg_coord_admit_waits_for_garden
 coordinate|human|msg_coord_admit_waits_for|<change>|base-a, base-b
+coordinate|human|msg_coord_admit_cap|<change>|4|4
 coordinate|human|msg_coord_planned_unwatched|<slug>
 coordinate|human|msg_coord_planned_no_coordinator|<slug>
 coordinate|human|msg_coord_admit_owned|<change>|anna
@@ -1939,6 +1985,10 @@ coordinate|human|msg_coord_plan_uncommitted|<slug>
 coordinate|human|msg_coord_herdr_old|0.8.2
 coordinate|plain|msg_coord_progress|csv-export verify … · pdf-export land ✗ (exit 7, proof gate) · plan:invoices (working)
 coordinate|human|msg_coord_consolidate_no_base
+coordinate|agent|msg_coord_wait_on_time|540
+coordinate|agent|msg_coord_send_bang|<change>
+coordinate|agent|msg_coord_send_blocked|<change>|w:t2
+coordinate|agent|msg_coord_send_unwatched|<change>
 watch|agent|msg_watch_no_wait|  csv-export  (sub-csv-export)|bash <plugin-root>/scripts/coordinate.sh wait
 watch|human|msg_watch_let_go
 worktree|human|msg_wt_land_primary_moved|main|3

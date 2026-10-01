@@ -11,6 +11,7 @@
 #   sessions/<agent>    one watched session, key=value lines, with the
 #                       hone version of the coordinator that watches it
 #   events              one event per line: n, epoch, change, kind, detail
+#   derived/<agent>     the events the ticker derived for one watch
 #   ticker.lock         held by the one live ticker
 #   wait.<session>.pid  the live wait of a watching session
 #   cursor.<session>    the last event that session's wait printed
@@ -57,7 +58,9 @@
 #       after `a` has landed" or "`a`: run it first". A sentence that
 #       says "either order" orders nothing. `--after-ok <name>`, once per
 #       name, lifts the hold for that name, when the person says the order
-#       does not bind.
+#       does not bind. A run also waits (exit 4) while HONE_COORD_MAX_RUNS
+#       runs are watched already (default 4, 0 turns the cap off). Every
+#       watch but a plan counts, because all runs share one suite lock.
 #       Exit: 0 compare · 4 wait · 2 usage/not-a-repo.
 #
 #   coordinate.sh start run <change> [--model <model>] [--after-ok <name>]...
@@ -109,12 +112,28 @@
 #       line for the progress hook of this session, so the person sees it in
 #       the coordinator tab. With no watched session and no unseen event it
 #       prints so and exits 0 at once. --since <n> reads from event n on,
-#       for a caller with no session id.
-#       Exit: 0 printed · 2 usage/not-a-repo.
+#       for a caller with no session id. With no event for HONE_COORD_WAIT
+#       seconds (default 540), it says so and exits 3, before the harness
+#       limit on a background command kills it. The caller starts it again.
+#       Exit: 0 printed · 3 ended on time, no event · 2 usage/not-a-repo.
+#
+#   coordinate.sh send <change | tab-id | agent> <text>
+#       The one path from the coordinator to a watched session. It types
+#       <text> into the session's herdr pane with `herdr pane run`, and
+#       writes a sent event, which the sender's own wait skips. It refuses
+#       text that starts with `!`, after any blank: a shell command for the
+#       person is the person's to type. It refuses a session that herdr
+#       reports blocked, because a question or a prompt there belongs to
+#       the person.
+#       Exit: 0 sent · 4 refused · 2 usage/not-a-repo/no watch/herdr failed.
 #
 #   coordinate.sh list
 #       Print each watched session: change, agent, tab ID, state, and for
-#       how long.
+#       how long. For a run, also its sign-off (.hone-proof/<change>: none,
+#       names the tip, carries to the tip, or names another commit, by
+#       land's own test) and whether a grant (.hone-grant/<change>) exists.
+#       The board shows the same for a run that has either, or that stopped
+#       at exit 7 or 8.
 #       Exit: 0.
 #
 #   coordinate.sh events
@@ -125,7 +144,10 @@
 #       the watch hook starts it again when it died. Only one runs per
 #       repository. Every HONE_COORD_TICK seconds (default 15) it reads each
 #       watched agent with `herdr agent get`, and it writes these events:
-#         landed      land merged the change (land writes this one itself)
+#         landed      land merged the change (land writes this one itself).
+#                     The ticker derives it too, from a merge of
+#                     hone/<change> on the primary branch that is 60 seconds
+#                     old, and names that merge.
 #         stopped     land stopped at exit 6 to 9 (land writes this one too,
 #                     and land's own notification told the person)
 #         needs-you   the agent sat blocked (a question or an approval) for
@@ -134,21 +156,33 @@
 #                     (default 600) after it last worked, with no land
 #                     since. That is a stop, a report, or a question in text.
 #         gone        herdr no longer knows the agent
+#         turn-ended  the session's turn ended, with the last line of its
+#                     message (the watch hook writes this one, in the
+#                     session). After it, the ticker writes no quiet event
+#                     and shows no notification until the session works again.
+#         sent        the coordinator sent the session text (send)
 #         finished    a garden or consolidate session went quiet, and no
 #                     worktree of its cuts is left (hone/garden/* or
 #                     hone/consolidate/*). Both land
 #                     under names of their own, so no landed event ends
-#                     their watch.
+#                     their watch. When a cut of the pass has merged, an
+#                     idle session ends it at once, with no quiet wait.
 #         planned     a plan session committed its Plan (planned writes
 #                     this one). When the session is next idle, the ticker
-#                     closes its tab.
+#                     closes its tab. The ticker derives it too, for a
+#                     .plans/<slug>.md added on the primary branch since a
+#                     plan watch began, under plan:<slug>.
+#         signed      after a stop at exit 7 or 8, a sign-off appeared at
+#         granted     .hone-proof/<change>, or a grant at .hone-grant/<change>
+#                     (derived). signed says whether it names the tip.
 #         updated     a newer hone wrote to the event file than the
 #                     coordinator runs (every writer checks, once per
 #                     version). The coordinator must restart to load it.
 #       A needs-you or a quiet event also shows a herdr notification that
 #       names the repository and the tab, so the person hears of it while the
 #       watching session sleeps. A landed, gone, finished, or planned session
-#       leaves the watch.
+#       leaves the watch. A derived event fires once per watch (the state
+#       file derived/<agent>), and never after the same event from a session.
 #       The ticker exits when no session is left. Exit: 0.
 #
 #   coordinate.sh ensure
@@ -245,6 +279,8 @@ coord_notify() {
 coord_tick_session() {
     local sf="$1" dir="$2" out st sq now
     kv_load "$sf"
+    # The state that git and the files show, for an event a session missed.
+    coord_reconcile "$sf" "$dir" || return 1
     if has_event "$dir/events" "$kv_change" landed "$kv_registered"; then
         rm -f "$sf"; return 1
     fi
@@ -266,7 +302,8 @@ coord_tick_session() {
     # A plan whose Plan is committed is done: close its tab once its turn ends.
     case "$kv_change:$kv_status" in
         plan:*:idle|plan:*:done)
-            if has_event "$dir/events" "$kv_change" planned "$kv_registered"; then
+            if has_event "$dir/events" "$kv_change" planned "$kv_registered" \
+               || [ -n "$(coord_derived_get "$dir" "$sf" planned)" ]; then
                 herdr_call tab close "$kv_tab" >/dev/null 2>&1
                 rm -f "$sf"; return 1
             fi ;;
@@ -282,7 +319,9 @@ coord_tick_session() {
             idle|done)
                 if [ $((now - kv_since)) -ge "${HONE_COORD_QUIET:-600}" ]; then
                     # A land that stopped already told the person.
-                    if ! has_event "$dir/events" "$kv_change" stopped "$kv_worked"; then
+                    # A turn-ended event already woke the coordinator.
+                    if ! has_event "$dir/events" "$kv_change" stopped "$kv_worked" \
+                        && ! has_event "$dir/events" "$kv_change" turn-ended "$kv_worked"; then
                         hone_coord_event "$dir" "$kv_change" quiet "idle for $(( (now - kv_since) / 60 )) min"
                         coord_notify "$kv_change" "the session went quiet: a stop, a report, or a question" "$kv_tab"
                     fi
@@ -312,6 +351,159 @@ coord_pass_finished() {
                 | grep -q "^branch refs/heads/hone/$1/" ;;
         *) return 1 ;;
     esac
+}
+
+# ---- reconcile: the state that git and the files show ----------------------
+# A session writes most events, and a missed one left the coordinator blind.
+# So each tick also derives planned, landed, signed, granted, and finished
+# from the repository. An event fires once: the file derived/<agent> holds
+# what the ticker derived for one watch, and an event that a session wrote
+# already is not derived again.
+
+# The ticker derives landed only from a merge this many seconds old, so
+# land's own landed event comes first.
+COORD_LAND_GRACE=60
+
+# Value $3 of the derived file of session file $2 in state dir $1. A file of
+# an earlier watch of the same agent name counts as empty.
+coord_derived_get() {
+    local df="$1/derived/${2##*/}" reg
+    reg=$(sed -n 's/^registered=//p' "$2" 2>/dev/null)
+    [ "$(sed -n 's/^registered=//p' "$df" 2>/dev/null)" = "$reg" ] || return 0
+    sed -n "s/^$3=//p" "$df" 2>/dev/null | tail -1
+}
+
+coord_derived_set() {
+    local df="$1/derived/${2##*/}" reg
+    reg=$(sed -n 's/^registered=//p' "$2" 2>/dev/null)
+    mkdir -p "$1/derived" 2>/dev/null || return 0
+    [ "$(sed -n 's/^registered=//p' "$df" 2>/dev/null)" = "$reg" ] || printf 'registered=%s\n' "$reg" > "$df"
+    { grep -v "^$3=" "$df"; printf '%s=%s\n' "$3" "$4"; } > "$df.$$" 2>/dev/null && mv -f "$df.$$" "$df"
+}
+
+# True when event file $1 holds a planned event for Plan slug $2 at or after epoch $3.
+coord_planned_seen() {
+    awk -F'\t' -v s="$2" -v t="${3:-0}" '$4 == "planned" && $5 == s && $2 >= t { f = 1 } END { exit !f }' "$1" 2>/dev/null
+}
+
+# The short SHA and the commit time of the newest merge of branch $2 on the
+# primary branch's first parents since epoch $3. A branch that ends in / is a
+# prefix: hone/consolidate/ matches every cut. Land writes the subject
+# "Merge branch 'hone/<change>'".
+coord_merge_since() {
+    local pat="Merge branch '$2"
+    case "$2" in */) ;; *) pat+="'" ;; esac
+    git -C "$1" log --first-parent --merges --since="@$3" -F --grep="$pat" \
+        --format='%h %ct' -n 1 HEAD 2>/dev/null
+}
+
+# Each Plan committed on the primary branch since epoch $2 that no planned
+# event names gets one. The watch whose label slug is the Plan's slug owns
+# it, and the ticker closes that tab. A planner that chose another slug
+# leaves it under plan:<slug>, so the coordinator still hears of the Plan.
+coord_reconcile_plans() {
+    local dir="$1" since="$2" main_root p slug d skip
+    main_root=$(main_root_of)
+    while IFS= read -r p; do
+        case "$p" in .plans/*.md) ;; *) continue ;; esac
+        slug=${p#.plans/}; slug=${slug%.md}
+        # A file under the directory of another Plan is its reference.
+        skip=0; d=$slug
+        while [ "$d" != "${d%/*}" ]; do
+            d=${d%/*}
+            git -C "$main_root" cat-file -e "HEAD:.plans/$d.md" 2>/dev/null && skip=1
+        done
+        [ "$skip" -eq 0 ] || continue
+        coord_planned_seen "$dir/events" "$slug" "$since" && continue
+        hone_coord_event "$dir" "plan:$slug" planned "$slug"
+    done < <(git -C "$main_root" log --first-parent --since="@$since" --diff-filter=A \
+                 --name-only --format= HEAD -- .plans 2>/dev/null | sort -u)
+}
+
+# Derive what the repository shows for watched session $1 (kv_* loaded).
+# Returns 1 when the session left the watch.
+coord_reconcile() {
+    local sf="$1" dir="$2" main_root m now stop detail kind rec f sum t
+    main_root=$(main_root_of)
+    now=$(date +%s)
+    case "$kv_change" in
+        plan:*)
+            coord_reconcile_plans "$dir" "$kv_registered" ;;
+        garden|consolidate)
+            # A pass whose cuts landed, with no worktree left, ends when its
+            # turn ends. With no cut landed, the quiet threshold ends it.
+            case "$kv_status" in idle|done) ;; *) return 0 ;; esac
+            [ $((now - kv_since)) -ge "$COORD_BLOCKED" ] || return 0
+            has_event "$dir/events" "$kv_change" finished "$kv_registered" && return 0
+            [ -n "$(coord_merge_since "$main_root" "hone/$kv_change/" "$kv_registered")" ] || return 0
+            coord_pass_finished "$kv_change" || return 0
+            hone_coord_event "$dir" "$kv_change" finished "its cuts landed, and no worktree of them is left"
+            rm -f "$sf"; return 1 ;;
+        *)
+            if ! has_event "$dir/events" "$kv_change" landed "$kv_registered"; then
+                m=$(coord_merge_since "$main_root" "hone/$kv_change" "$kv_registered")
+                # land retires the branch after a reinstall that can take
+                # minutes, and writes its event after that. Wait for both.
+                if [ -n "$m" ] && [ $((now - ${m#* })) -ge "$COORD_LAND_GRACE" ] \
+                   && { ! git -C "$main_root" rev-parse -q --verify "refs/heads/hone/$kv_change" >/dev/null 2>&1 \
+                        || [ $((now - ${m#* })) -ge 600 ]; }; then
+                    hone_coord_event "$dir" "$kv_change" landed "${m%% *}"
+                    return 0
+                fi
+            fi
+            # After a stop at a person gate, the person's record in the
+            # primary tree. A record from before the stop is the one the
+            # stop refused.
+            stop=$(awk -F'\t' -v c="$kv_change" -v t="$kv_registered" \
+                '$3 == c && $4 == "stopped" && $2 >= t { s = $2; d = $5 } END { if (s != "") print s "\t" d }' \
+                "$dir/events" 2>/dev/null)
+            IFS=$'\t' read -r t detail <<<"$stop"
+            case "$detail" in "exit 7"*|"exit 8"*) ;; *) return 0 ;; esac
+            for rec in signed:.hone-proof granted:.hone-grant; do
+                kind=${rec%%:*}; f="$main_root/${rec#*:}/$kv_change"
+                [ -f "$f" ] || continue
+                [ "$(stat -c %Y "$f" 2>/dev/null || stat -f %m "$f" 2>/dev/null || echo 0)" -ge "$t" ] || continue
+                sum=$(cksum < "$f" | cut -d' ' -f1)
+                [ "$(coord_derived_get "$dir" "$sf" "$kind")" = "$sum" ] && continue
+                coord_derived_set "$dir" "$sf" "$kind" "$sum"
+                has_event "$dir/events" "$kv_change" "$kind" "$t" && continue
+                if [ "$kind" = signed ]; then
+                    hone_coord_event "$dir" "$kv_change" signed "$(coord_signoff_state "$main_root" "$kv_change")"
+                else
+                    hone_coord_event "$dir" "$kv_change" granted "the person's grant is in the primary tree"
+                fi
+            done ;;
+    esac
+    return 0
+}
+
+# The person's sign-off of change $2 in primary tree $1, in words. land's
+# own test decides whether it names the tip or carries to it.
+coord_signoff_state() {
+    local root="$1" c="$2" f="$1/.hone-proof/$2" tip base carried
+    tip=$(git -C "$root" rev-parse -q --verify "refs/heads/hone/$c^{commit}" 2>/dev/null)
+    if [ ! -f "$f" ]; then
+        printf 'no sign-off'
+    elif [ -z "$tip" ]; then
+        printf 'a sign-off, and no branch hone/%s' "$c"
+    elif [ -n "$(land_proof_signoff_names_tip "$f" "$tip")" ]; then
+        printf 'sign-off names the tip %s' "${tip:0:7}"
+    else
+        base=$(git -C "$root" merge-base HEAD "$tip" 2>/dev/null)
+        carried=$(land_proof_signoff_carries "$root" "$f" "$base" "$tip")
+        if [ -n "$carried" ]; then
+            printf 'sign-off carries from %s to the tip %s' "${carried:0:7}" "${tip:0:7}"
+        else
+            printf 'sign-off names another commit, not the tip %s' "${tip:0:7}"
+        fi
+    fi
+}
+
+# Both of the person's records of change $2, for the board and the list.
+coord_person_state() {
+    local g="no grant"
+    [ -f "$1/.hone-grant/$2" ] && g="grant recorded"
+    printf '%s, %s' "$(coord_signoff_state "$1" "$2")" "$g"
 }
 
 cmd_ticker() {
@@ -465,8 +657,18 @@ coord_unlanded_preds() {
     printf '%s' "$out"
 }
 
+# The count of runs watched in state dir $1: every watch but a plan.
+coord_runs_watched() {
+    local f n=0
+    for f in "$1"/sessions/*; do
+        [ -f "$f" ] || continue
+        grep -q '^change=plan:' "$f" || n=$((n + 1))
+    done
+    printf '%s' "$n"
+}
+
 cmd_admit() {
-    local change="${1:-}" main_root dir inflight c owner garden_now=0 others="" preds ok=" " p
+    local change="${1:-}" main_root dir inflight c owner garden_now=0 others="" preds ok=" " p max n
     [ -n "$change" ] || { msg_coord_usage >&2; return 2; }
     shift
     # --after-ok <name>: the person says this predecessor need not land
@@ -499,7 +701,13 @@ cmd_admit() {
                 case "$ok" in *" $p "*) ;; *) preds+="${preds:+, }$p" ;; esac
             done
             [ -z "$preds" ] || { msg_coord_admit_waits_for "$change" "$preds"; return 4; }
-            [ "$garden_now" -eq 0 ] || { msg_coord_admit_waits_for_garden; return 4; } ;;
+            [ "$garden_now" -eq 0 ] || { msg_coord_admit_waits_for_garden; return 4; }
+            # Every run here shares one suite lock. Past the cap, a land
+            # waited on the lock for hours.
+            max=${HONE_COORD_MAX_RUNS:-4}
+            case "$max" in ''|*[!0-9]*) max=4 ;; esac
+            n=$(coord_runs_watched "$dir")
+            [ "$max" -eq 0 ] || [ "$n" -lt "$max" ] || { msg_coord_admit_cap "$change" "$n" "$max"; return 4; } ;;
     esac
     msg_coord_admit_compare "$change" "$(printf '%s' "$inflight" | grep -c .)"
     case "$change" in garden|garden/*) return 0 ;; esac
@@ -676,10 +884,19 @@ cmd_board() {
     for f in "$dir"/sessions/*; do
         [ -f "$f" ] || continue
         kv_load "$f"
-        ev=$(awk -F'\t' -v c="$kv_change" '$3 == c { k = $4; d = $5; t = $2 } END { if (k != "") print k "\t" t "\t" d }' "$dir/events" 2>/dev/null)
+        # The person's own records answer nothing the session asked.
+        ev=$(awk -F'\t' -v c="$kv_change" '$3 == c && $4 != "signed" && $4 != "granted" { k = $4; d = $5; t = $2 } END { if (k != "") print k "\t" t "\t" d }' "$dir/events" 2>/dev/null)
         IFS=$'\t' read -r kind when detail <<<"$ev"
         label=$(json_str "$(herdr_call tab get "$kv_tab" 2>/dev/null)" label)
-        label=${label:-$kv_tab}
+        label="${label:-$kv_tab}"
+        # The sign-off and the grant, read from the primary tree, so no one
+        # guesses them: when either exists, or a land stopped at a person gate.
+        case "$kv_change" in plan:*|garden|consolidate) ;; *)
+            if [ -f "$main_root/.hone-proof/$kv_change" ] || [ -f "$main_root/.hone-grant/$kv_change" ] \
+               || { [ "$kind" = stopped ] && case "$detail" in "exit 7"*|"exit 8"*) true ;; *) false ;; esac; }; then
+                label+=", $(coord_person_state "$main_root" "$kv_change")"
+            fi ;;
+        esac
         # A land that stopped needs the person at once. The ticker waits for
         # the quiet threshold only before it calls an idle session a need.
         if [ "$kind" = stopped ] && [ "${when:-0}" -ge "$kv_worked" ]; then
@@ -727,7 +944,13 @@ cmd_planned() {
         kv_load "$f"
         case "$kv_change" in plan:*) ;; *) continue ;; esac
         [ "$kv_tab" = "$HERDR_TAB_ID" ] || continue
-        hone_coord_event "$dir" "$kv_change" planned "$slug"
+        # The ticker may have derived the event already. Then this tab
+        # only learns that it is done, and the coordinator hears once.
+        if coord_planned_seen "$dir/events" "$slug" "$kv_registered"; then
+            coord_derived_set "$dir" "$f" planned "$slug"
+        else
+            hone_coord_event "$dir" "$kv_change" planned "$slug"
+        fi
         herdr_call tab rename "$kv_tab" "plan:$slug" >/dev/null 2>&1
         printf 'hone coordinate: %s is planned. This tab closes when the turn ends.\n' "$slug"
         return 0
@@ -736,7 +959,7 @@ cmd_planned() {
     # tabs with no watch. The event still goes to its event file, so its
     # wait prints it. The Plan is committed, so this is no failure: exit 0.
     if [ -d "$dir" ]; then
-        hone_coord_event "$dir" "plan:$slug" planned "$slug"
+        coord_planned_seen "$dir/events" "$slug" "$(( $(date +%s) - 86400 ))" || hone_coord_event "$dir" "plan:$slug" planned "$slug"
         msg_coord_planned_unwatched "$slug" >&2
     else
         msg_coord_planned_no_coordinator "$slug" >&2
@@ -775,7 +998,7 @@ watching_any() {
 }
 
 cmd_wait() {
-    local dir sid="${CLAUDE_CODE_SESSION_ID:-}" since="" key last
+    local dir sid="${CLAUDE_CODE_SESSION_ID:-}" since="" key last end
     if [ "${1:-}" = --since ]; then
         since="${2:-}"
         case "$since" in ''|*[!0-9]*) msg_coord_usage >&2; return 2 ;; esac
@@ -790,6 +1013,7 @@ cmd_wait() {
     printf '%s\n' "$$" > "$COORD_WAIT_PID"
     trap 'rm -f "$COORD_WAIT_PID"' EXIT
     coord_ensure_ticker "$dir"
+    end=$(( $(date +%s) + ${HONE_COORD_WAIT:-540} ))
     while :; do
         last=$(awk -F'\t' 'END { print $1 + 0 }' "$dir/events" 2>/dev/null || echo 0)
         [ -n "$last" ] || last=0
@@ -802,6 +1026,12 @@ cmd_wait() {
         if ! watching_any "$dir" "$sid"; then
             printf 'hone coordinate: no session is watched, and no event is new.\n'
             return 0
+        fi
+        # The harness kills a background command at its time limit, and
+        # then nothing wakes the session. End first, and say so.
+        if [ "$(date +%s)" -ge "$end" ]; then
+            msg_coord_wait_on_time "${HONE_COORD_WAIT:-540}"
+            return 3
         fi
         # The ticker may have died with a session still watched.
         coord_ensure_ticker "$dir"
@@ -854,14 +1084,57 @@ coord_progress_board() {
 }
 
 cmd_list() {
-    local dir f now
+    local dir f now main_root ps
     dir=$(coord_state_dir) || return 0
+    main_root=$(main_root_of)
     now=$(date +%s)
     for f in "$dir"/sessions/*; do
         [ -f "$f" ] || continue
         kv_load "$f"
-        printf '%-24s %-24s %-10s %-8s %s min\n' "$kv_change" "$kv_agent" "$kv_tab" "$kv_status" $(( (now - kv_since) / 60 ))
+        # A run's sign-off and grant, as land would read them.
+        ps=""
+        case "$kv_change" in plan:*|garden|consolidate) ;; *)
+            ps="  $(coord_person_state "$main_root" "$kv_change")" ;;
+        esac
+        printf '%-24s %-24s %-10s %-8s %s min%s\n' "$kv_change" "$kv_agent" "$kv_tab" "$kv_status" \
+            $(( (now - kv_since) / 60 )) "$ps"
     done
+}
+
+cmd_send() {
+    local target="${1:-}" text="${2:-}" dir f out pane st last cur sid="${CLAUDE_CODE_SESSION_ID:-}"
+    [ -n "$target" ] && [ -n "$text" ] && [ $# -eq 2 ] || { msg_coord_usage >&2; return 2; }
+    # Claude Code runs input that starts with ! as a shell command. Leading
+    # blanks made such a relay arrive as text, so both are refused.
+    if printf '%s' "$text" | head -1 | grep -qE '^[[:space:]]*!'; then
+        msg_coord_send_bang "$target"; return 4
+    fi
+    dir=$(coord_state_dir) || { msg_coord_usage >&2; return 2; }
+    for f in "$dir"/sessions/*; do
+        [ -f "$f" ] || continue
+        kv_load "$f"
+        [ "$kv_change" = "$target" ] || [ "$kv_tab" = "$target" ] || [ "$kv_agent" = "$target" ] || continue
+        out=$(herdr_call agent get "$kv_agent" 2>&1)
+        pane=$(json_str "$out" pane_id); st=$(json_str "$out" agent_status)
+        [ -n "$pane" ] || { msg_coord_herdr_step "agent get" "$out" >&2; return 2; }
+        [ "$st" != blocked ] || { msg_coord_send_blocked "$kv_change" "$kv_tab"; return 4; }
+        out=$(herdr_call pane run "$pane" "$text" 2>&1) || { msg_coord_herdr_step "pane run" "$out" >&2; return 2; }
+        # The sender's own event must not wake its wait: move its cursor
+        # past the event when nothing else came between.
+        last=$(awk -F'\t' 'END { print $1 + 0 }' "$dir/events" 2>/dev/null); last=${last:-0}
+        hone_coord_event "$dir" "$kv_change" sent "$text"
+        case "$sid" in ""|*/*|.*) ;; *)
+            cur=$(cat "$dir/cursor.$sid" 2>/dev/null)
+            if [ "$cur" = "$last" ] && awk -F'\t' -v n=$((last + 1)) -v c="$kv_change" \
+                'END { exit !($1 == n && $3 == c && $4 == "sent") }' "$dir/events" 2>/dev/null; then
+                printf '%s\n' "$((last + 1))" > "$dir/cursor.$sid"
+            fi ;;
+        esac
+        printf 'hone coordinate: sent to %s (tab %s): %s\n' "$kv_change" "$kv_tab" "$text"
+        return 0
+    done
+    msg_coord_send_unwatched "$target" >&2
+    return 2
 }
 
 cmd_events() {
@@ -890,6 +1163,7 @@ main() {
         wait)    cmd_wait "$@" ;;
         list)    cmd_list "$@" ;;
         events)  cmd_events "$@" ;;
+        send)    cmd_send "$@" ;;
         ticker)  cmd_ticker "$@" ;;
         ensure)  coord_ensure_ticker "$(coord_state_dir)" ;;
         *) msg_coord_usage >&2; return 2 ;;

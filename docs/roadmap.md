@@ -88,7 +88,19 @@ in git.
   `planned` with no watch says so on stderr and still writes the event.
   `landed` names the merge that land made. `admit` holds a Plan whose
   predecessor has not landed, and `--after-ok <name>` lifts that hold on
-  the person's word. The rest of the list above stays open.
+  the person's word.
+- Done in 0.73.0, each with a test in `test/coordinate_test.sh`: a
+  watched session's Stop hook pushes `turn-ended` with the last line of
+  its reply, so `quiet` is only the fallback. The ticker derives planned,
+  landed with the merge SHA, signed, granted, and finished from git and
+  the sign-off files, once each. `list` and `board` show sign-off and
+  grant state. `wait` ends by itself after 9 minutes with exit 3.
+  `coordinate.sh send` is the one path from MAIN to a session, and it
+  refuses a `!` command. `admit` caps the runs in flight at 4.
+- Still open: a Stop hook that blocks the stop (the gate, the nag) does
+  not hold back `turn-ended`, so MAIN can wake on a turn that goes on. No
+  lab scenario covers the redesign yet. Next step: read the next
+  coordinated batch, and count the pollers MAIN still writes.
 
 #### Parallel runs starve the suite lock, and the gate repeats work
 
@@ -108,7 +120,8 @@ in git.
     then reports "already passed" before the change exists.
   - Nested `/code-review` sessions run hone's Stop hooks. One held the
     suite lock for 3.7 minutes.
-  - The gate blocked 12 times on a background subagent's red-green steps.
+  - The gate blocked 12 times on a background subagent's red-green steps. 0.73.0 adds the cap: 4
+  runs in flight by default.
     The cap of three counts one failure signature, so distinct reds pass
     it.
   - Each land empties the shared `hone-land.log`, and a concurrent land
@@ -158,10 +171,18 @@ in git.
   3 attests for an unchanged probe. One land stopped at exit 8 and then at
   exit 7. MAIN also relayed sign-off requests as the session's own claims,
   not as the verbatim output that `land.md` asks for.
-- Next step: open no gate for a test file or a comment-only probe edit.
-  Carry a sign-off across commits that do not touch the probe. List every
-  person gate in one stop. Each fix gets a test in
-  `test/e2e_land_test.sh`.
+- Done in 0.73.0, each with a test in `test/e2e_land_test.sh`: a gate
+  for a file under `scripts/proof-probes/` names a probe that exists, so
+  `proof.sh` no longer exits 3 on it. A sign-off carries when `git
+  merge-tree` rebuilds the tip's exact tree from the signed commit. An
+  added probe makes land run the adapter, and every green run writes a
+  line in the merge commit. A sign-off counts only by the full commit id
+  on its first line. `attest --file` reads the text from a file.
+- Tried and removed: an exemption for comment-only probe edits, and one
+  for README and test files. Three review rounds found ways for each to
+  let a weakened probe land, and in the field repo 140 harness lines read
+  probe text, so the comment exemption could never apply there. A
+  sign-off for such an edit stays the cost.
 
 #### A person's standing acceptance has no channel
 
@@ -176,35 +197,39 @@ in git.
   answer permission prompts for the person, which the coordinate skill
   forbids. Three runs ran `land` again after exit 6, citing a memory in
   the project, against `land.md`.
-- Next step: the coordinate skill offers `.hone-grant-auto` when the
-  person delegates. MAIN stops asking a question that the person has
-  answered. The skill says what MAIN does with a delegation it cannot
-  record. That is
-  prompt text, so it owes the unit suites the release rules name.
+- Done in 0.73.0: the coordinate skill has a section on the person's
+  word. MAIN offers `.hone-grant-auto` when the person delegates, keeps
+  their standing answers, takes a yes only for the action the question
+  named, and never answers a prompt in another tab. A field batch must
+  show whether this holds.
 
 #### Smaller defects from the coordinated batch
 
 Each comes from [the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-batch.md).
 
 - The nag tells MAIN, runs, and plan sessions that Plans are pending and
-  to run `/hone:run`, 149 times in MAIN alone. Next step: stay silent on
-  pending Plans while a coordinator watches the repository, with a test in
-  `test/hooks_test.sh`.
+  to run `/hone:run`, 149 times in MAIN alone. Done in 0.73.0: the
+  line shows only in the primary tree with no coordinator. A worktree's
+  old copy of `.plans/` caused a count of 3 for 1.
 - The nag's area-size count includes generated output, 11,699 of 17,764
-  lines in one area. Next step: skip gitignored and generated files.
+  lines in one area. Done in 0.73.0: the count reads tracked files only
+  and skips `linguist-generated` files and generated headers. A project
+  marks its own generated files in `.gitattributes`.
 - The global consolidate pass covered 17 of 32 merges, because its prompt
-  names no base commit. Next step: `coordinate` passes the base commit.
+  names no base commit. Done in 0.73.0: the first run of a batch records
+  the base, and the consolidate prompt names it. `finished` waits for the
+  pass's cuts.
 - Garden cut 3 tests as dead because the suite stayed green. That proves
   nothing for a test, and those cuts skipped review. All were safe on
-  reading. Next step: a test cut needs review and names the test that
-  still covers the claim.
+  reading. Done in 0.73.0: in the garden skill a test cut is never
+  mechanical, and it names the test that still covers the claim.
 - `rules/workflow.md` allows `docs/` edits only at consolidate. Two Plans
   could not run, because a test checks that the docs cite `src` paths.
   The `plan-critic` caught both. Next step: decide whether such a test
   makes a docs edit part of the build.
-- A flaky new test landed, and a later land's exit 6 caught it. Next step:
-  a rule in the run skill for an intermittent red in a test that the
-  change adds.
+- A flaky new test landed, and a later land's exit 6 caught it. Done in
+  0.73.0: the run skill calls a red without a change in between a flake
+  that the run made, and the run finds its cause first.
 
 #### Two MAINs in one repository coordinate with no rule
 

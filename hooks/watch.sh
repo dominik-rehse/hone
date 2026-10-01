@@ -19,6 +19,16 @@
 # the turn and tells the person, so a session that cannot comply still gets
 # its report out. The ticker notifies the person either way.
 #
+# It also pushes a turn end to the coordinator. In a session that a watch
+# names by its herdr tab (HERDR_TAB_ID), each Stop appends one turn-ended
+# event with the last line of the final message. The coordinator's wait wakes
+# on it at once. Before, a stop that ended in text reached it only through the
+# ticker's quiet event, 600 s later, and nothing followed a stopped event when
+# the session finished its report. The event is skipped when the change landed
+# or was planned since the watch began, when a stopped event came in the last
+# 20 seconds, and when it repeats the session's last event word for word.
+# This half never blocks and never prints.
+#
 # .hone-off disables it. Every failure ends in a silent exit 0.
 
 set -uo pipefail
@@ -41,6 +51,40 @@ COMMON=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -
 STATE="$COMMON/hone-coordinate"
 [ -d "$STATE/sessions" ] || exit 0
 [ -f "$COMMON/../.hone-off" ] && exit 0
+
+# The last non-empty line of the session's final message: from the hook
+# input, else from the transcript's last assistant text.
+last_line() {
+    local msg tp
+    msg=$(hone_extract_top_field "$INPUT" last_assistant_message)
+    tp=$(hone_extract_top_field "$INPUT" transcript_path)
+    if [ -z "$msg" ] && [ -f "$tp" ] && command -v jq >/dev/null 2>&1; then
+        msg=$(tail -n 400 "$tp" 2>/dev/null | jq -rs '[.[] | select(.type? == "assistant")
+            | .message.content? | if type == "array" then .[] else empty end
+            | select(.type? == "text") | .text] | last // empty' 2>/dev/null)
+    fi
+    printf '%s\n' "$msg" | sed 's/[[:space:]]*$//' | grep -v '^$' | tail -1 | sed -E 's/^[[:space:]]+//; s/^(.{160}).*/\1/'
+}
+
+# A session that a watch names by its tab: push its turn end.
+if [ -n "${HERDR_TAB_ID:-}" ]; then
+    for f in "$STATE"/sessions/*; do
+        [ -f "$f" ] || continue
+        grep -qxF "tab=$HERDR_TAB_ID" "$f" || continue
+        change=$(sed -n 's/^change=//p' "$f" | head -1)
+        since=$(sed -n 's/^registered=//p' "$f" | head -1)
+        line=$(last_line)
+        [ -n "$change" ] && [ -n "$line" ] || break
+        awk -F'\t' -v c="$change" -v t="${since:-0}" -v now="$(date +%s)" -v d="$line" '
+            $3 != c { next }
+            ($4 == "landed" || $4 == "planned") && $2 >= t { skip = 1 }
+            $4 == "stopped" && $2 >= now - 20 { skip = 1 }
+            { k = $4; x = $5 }
+            END { exit !(skip || (k == "turn-ended" && x == d)) }' "$STATE/events" 2>/dev/null && break
+        hone_coord_event "$STATE" "$change" turn-ended "$line"
+        break
+    done
+fi
 
 mine=""
 for f in "$STATE"/sessions/*; do

@@ -82,11 +82,10 @@
 #       not. With the marker present and no scripts/proof.sh, land refuses (7)
 #       rather than proving nothing.
 #       A change that edits scripts/proof.sh, a probe under
-#       scripts/proof-probes/ that already exists, or a file there that a probe
-#       runs, opens the gate on the file change alone. It needs no trailer and
-#       no marker, and only a sign-off discharges it: land holds the copy such
-#       a change replaces, so no automatic route can judge it. An edit to
-#       whole-line comments only does not open it. A change that ADDS a probe
+#       scripts/proof-probes/ that already exists, or any other file there,
+#       opens the gate on the file change alone. It needs no trailer and no marker, and only a sign-off
+#       discharges it: land holds the copy such a change replaces, so no
+#       automatic route can judge it. A change that ADDS a probe
 #       opens it too, and land runs the adapter once per added probe, under
 #       the probe's name. A green run needs no person.
 #       When the primary branch changed a lockfile since the cut and the
@@ -784,21 +783,23 @@ land_proof_required() {
 
 # Print one line per file of the proof HARNESS that the branch rewrites, as
 # "<file><TAB><name>". bash scripts/proof.sh <name> is the command the human
-# runs for that file. The harness is the adapter scripts/proof.sh, a probe
-# under scripts/proof-probes/ that already exists, and a file there that a
-# probe or the adapter runs. land runs the PRIMARY tree's copy, which for
-# such a change is the copy the change replaces, so no automatic route
-# exists. The caller runs the branch's own adapter from the worktree and
-# attests with its output.
+# runs for that file. Both fields are shell-quoted (printf %q), so a path
+# with a space, a quote, or a newline stays one safe word on one line. The
+# harness is the adapter scripts/proof.sh, a probe under scripts/proof-probes/
+# that already exists, and any other file there that a probe can run. land
+# runs the PRIMARY tree's copy, which for such a change is the copy the change
+# replaces, so no automatic route exists. The caller runs the branch's own
+# adapter from the worktree and attests with its output.
 #
-# A probe is a .sh file under scripts/proof-probes/. The adapter finds it by
-# name: `proof.sh <name>` runs scripts/proof-probes/<name>.sh. Any other file
-# there is part of a probe only when a probe, the adapter, or another such
-# file names it (land_proof_users). A helper that a probe runs is such a
-# file. A test of the probe code, a README, or a fixture that nothing names
-# is not, and its edit opens no gate. In the field, a test file there opened
-# the gate under the change's own name. The adapter found no probe of that
-# name and exited 3, and the person signed off on that exit.
+# A probe is a .sh file under scripts/proof-probes/, in any subdirectory. The
+# adapter finds it by name: `proof.sh <name>` runs
+# scripts/proof-probes/<name>.sh, and a name can hold a slash. Any other file
+# there gates too, because a probe can reach it by a computed path, a glob, or
+# a directory, or a test runner. No list of shapes that no probe runs held:
+# a review found runners and globs that each list missed. The gate names a
+# probe that exists where it can (land_proof_sibling). In the field, a test
+# file there gated under the change's own name. The adapter found no probe of
+# that name and exited 3, and the person signed off on that exit.
 #
 # A change that only ADDS a new probe is not that case, and does not gate here.
 # The adapter decides what a green run means, and it stays the reviewed copy. A
@@ -807,58 +808,95 @@ land_proof_required() {
 # an added probe cost a sign-off on every proof-carrying change in a project
 # whose adapter asks each change for its own probe. That is the shape
 # templates/proof/README.md recommends. land_proof_added instead makes land
-# run the adapter on it. An edit to a probe that already exists still gates:
-# that probe guards a change that landed before this one.
-#
-# An edit that touches only whole-line comments changes no check, so it does
-# not gate (land_proof_comment_only). In the field, 7 of 9 area moves only
-# changed a path in a probe comment, and each one asked for a sign-off.
+# run the adapter on it. An added probe whose name holds a control character
+# cannot be passed on safely, so it gates here instead. An edit to a probe
+# that already exists still gates: that probe guards a change that landed
+# before this one.
 #
 # An edited probe usually serves another, landed change, and an adapter that
 # picks its probe by change name finds no probe under this change's name. So
 # each edited probe gets the command under its own name. A rewritten adapter,
 # or a deleted probe, gets the change's own.
+#
+# Every path list here is NUL-separated (-z). core.quotePath otherwise
+# quotes a path with a non-ASCII byte or a quote, and the quoted path matched
+# no pattern, so its edit gated nothing.
 land_proof_harness() {
-    local root="$1" base="$2" branch="$3" change="$4" status src dst name user
+    local root="$1" base="$2" branch="$3" change="$4" status src dst name user found
     [ -n "$base" ] || return 0
     if [ -n "$(git -C "$root" diff --name-only "$base" "$branch" \
         -- scripts/proof.sh 2>/dev/null)" ]; then
-        printf 'scripts/proof.sh\t%s\n' "$change"
+        printf 'scripts/proof.sh\t%q\n' "$change"
     fi
-    # A: an added file, and C: a copy. Neither replaces a file that exists.
-    while IFS=$'\t' read -r status src dst; do
-        [ -n "$src" ] || continue
-        [ -n "$dst" ] || dst="$src"
+    while IFS= read -r -d '' status && IFS= read -r -d '' src; do
+        dst="$src"
+        case "$status" in R*|C*) IFS= read -r -d '' dst || break ;; esac
         case "$status" in
-            M) [ -n "$(land_proof_comment_only "$root" "$base" "$branch" "$src")" ] && continue ;;
-        esac
-        case "$status:$src:$dst" in
-            D:*.sh:*)
-                # A deleted probe: no probe of that name is left to run.
-                printf '%s\t%s\n' "$src" "$change" ;;
-            D:*) ;;
-            *:*.sh:*.sh)
-                name=${dst#scripts/proof-probes/}
-                printf '%s\t%s\n' "$src" "${name%.sh}" ;;
-            *:*.sh:*|*:*:*.sh)
-                # A probe renamed to a name the adapter cannot find, or a file
-                # renamed into a probe.
-                printf '%s\t%s\n' "$src" "$change"
+            A*|C*)
+                # An added file replaces nothing. An added probe runs through
+                # land_proof_added, unless its name cannot be passed on.
+                case "$dst" in
+                    *.sh)
+                        name=${dst#scripts/proof-probes/}
+                        case "$name" in
+                            -*|*[[:cntrl:]]*) printf '%q\t%q\n' "$dst" "$change" ;;
+                        esac ;;
+                esac
                 continue ;;
-            *) ;;
         esac
-        case "$src" in *.sh) continue ;; esac
-        # Not a probe. It counts only when a probe or the adapter runs it.
-        while IFS= read -r user; do
-            [ -n "$user" ] || continue
+        case "$status" in
+            D*)
+                case "$src" in
+                    # A deleted probe: no probe of that name is left to run.
+                    *.sh) printf '%q\t%q\n' "$src" "$change"; continue ;;
+                esac ;;
+            *)
+                case "$src:$dst" in
+                    *.sh:*.sh)
+                        name=${dst#scripts/proof-probes/}
+                        printf '%q\t%q\n' "$src" "${name%.sh}"; continue ;;
+                    *.sh:*|*:*.sh)
+                        # A probe renamed to a name the adapter cannot find,
+                        # or a file renamed into a probe.
+                        printf '%q\t%q\n' "$src" "$change"; continue ;;
+                esac ;;
+        esac
+        # Not a probe. It gates under each probe that names it, else under
+        # the probe with its stem beside it, else under the change's name.
+        found=""
+        while IFS= read -r -d '' user; do
+            found=yes
             case "$user" in
                 scripts/proof.sh) name=$change ;;
                 *) name=${user#scripts/proof-probes/}; name=${name%.sh} ;;
             esac
-            printf '%s\t%s\n' "$src" "$name"
+            printf '%q\t%q\n' "$src" "$name"
         done < <(land_proof_users "$root" "$base" "$src")
-    done < <(git -C "$root" diff --name-status --diff-filter=MRTUXBD "$base" "$branch" \
+        [ -n "$found" ] && continue
+        name=$(land_proof_sibling "$root" "$base" "$src")
+        printf '%q\t%q\n' "$src" "${name:-$change}"
+    done < <(git -C "$root" diff -z --name-status --diff-filter=ACMRTUXBD "$base" "$branch" \
         -- scripts/proof-probes 2>/dev/null)
+}
+
+# Print the name of the probe with the same stem as the file $3, in the same
+# directory, at $2: for scripts/proof-probes/a/x.test.ts, x.spec.ts, x_test.py,
+# or x.json, the probe a/x when a/x.sh exists. In the field, a test file gated
+# under the change's own name, and the adapter exited 3 on a name with no
+# probe.
+land_proof_sibling() {
+    local root="$1" rev="$2" path="$3" dir name
+    dir=${path%/*}; name=${path##*/}
+    case "$name" in
+        *.test.*) name=${name%%.test.*} ;;
+        *.spec.*) name=${name%%.spec.*} ;;
+        *_test.*) name=${name%%_test.*} ;;
+        *) name=${name%.*} ;;
+    esac
+    [ -n "$name" ] || return 0
+    git -C "$root" cat-file -e "$rev:$dir/$name.sh" 2>/dev/null || return 0
+    name="$dir/$name"
+    printf '%s' "${name#scripts/proof-probes/}"
 }
 
 # Print the commands the human runs for the harness rewrite, one per line, and
@@ -881,130 +919,106 @@ land_proof_harness_files() {
 }
 
 # Print the probes (.sh files under scripts/proof-probes/) and the adapter
-# that run the file $3 at commit $2, directly or through other files there.
-# "Run" is read from the text: a file names another by its base name without
-# the extension, as a whole word. A false match only gates more.
+# that run the file $3 at commit $2, directly or through other files there,
+# each followed by a NUL. "Run" is read from the text: a file names another by
+# its base name without the extension, as a whole word. A false match only
+# gates more. A file with no such name (`.env`) names nothing here, and its
+# caller gates it under the change's own name.
 land_proof_users() {
-    local root="$1" rev="$2" queue="$3" file stem user seen=$'\n'"$3"$'\n'
-    while [ -n "$queue" ]; do
-        file=${queue%%$'\n'*}
-        [ "$file" = "$queue" ] && queue="" || queue=${queue#*$'\n'}
+    local root="$1" rev="$2" file stem user i=0
+    local -a queue=("$3")
+    local -A seen=(["$3"]=1)
+    while [ "$i" -lt "${#queue[@]}" ]; do
+        file=${queue[$i]}; i=$((i+1))
         stem=${file##*/}; stem=${stem%.*}
         [ -n "$stem" ] || continue
-        while IFS= read -r user; do
+        while IFS= read -r -d '' user; do
             user=${user#"$rev":}
-            case "$seen" in *$'\n'"$user"$'\n'*) continue ;; esac
-            seen="$seen$user"$'\n'
+            [ -n "${seen[$user]:-}" ] && continue
+            seen[$user]=1
             case "$user" in
-                scripts/proof.sh|*.sh) printf '%s\n' "$user" ;;
-                *) queue="$queue${queue:+$'\n'}$user" ;;
+                scripts/proof.sh|*.sh) printf '%s\0' "$user" ;;
+                *) queue+=("$user") ;;
             esac
-        done < <(git -C "$root" grep -l -w -F -e "$stem" "$rev" \
+        done < <(git -C "$root" grep -z -l -w -F -e "$stem" "$rev" \
             -- scripts/proof.sh scripts/proof-probes 2>/dev/null)
     done
-}
-
-# Print non-empty when the edit to file $4 between $2 and $3 touches only
-# whole-line comments. Any doubt prints nothing, and the edit gates.
-#
-# A shell file: every changed line is blank or starts with `#` (not `#!`).
-# A `#` line can still be data inside a heredoc or a quoted string, so bash
-# must also parse both versions to the same commands. `bash --pretty-print`
-# parses with no execution and drops the comments. A bash without it fails
-# here, and the edit gates.
-# A JS or TS file: every changed line starts with `//` and holds no `*/`.
-# Inside a block comment, a `*/` on such a line ends the comment, and code
-# can follow it. A `//` line is data inside a template literal or after a
-# line that ends in a backslash. So a backtick anywhere outside a `//` line,
-# or a line that ends in a backslash, keeps the gate. JSX is out: a `//`
-# line there can be rendered text.
-land_proof_comment_only() {
-    local root="$1" base="$2" branch="$3" file="$4" kind pat old new
-    case "$file" in
-        *.sh)  kind=sh; pat='^[[:space:]]*(#([^!].*)?)?$' ;;
-        *.ts|*.js|*.mjs|*.cjs|*.mts|*.cts) kind=js; pat='^[[:space:]]*//([^*]|[*]+[^*/])*[*]*$' ;;
-        *) return 0 ;;
-    esac
-    # Every line of the hunks, with its +/- prefix taken off. A line with no
-    # such prefix is git's "no newline" note, and it counts as a change.
-    git -C "$root" diff --no-color --no-ext-diff -U0 "$base" "$branch" -- "$file" 2>/dev/null \
-        | awk '/^@@/{h=1; next} h' | sed -E 's/^[-+]//' \
-        | grep -qvE "$pat" && return 0
-    old=$(git -C "$root" show "$base:$file" 2>/dev/null) || return 0
-    new=$(git -C "$root" show "$branch:$file" 2>/dev/null) || return 0
-    [ "$old" != "$new" ] || return 0
-    if [ "$kind" = sh ]; then
-        local p_old p_new
-        p_old=$(printf '%s\n' "$old" | bash --pretty-print 2>/dev/null) || return 0
-        p_new=$(printf '%s\n' "$new" | bash --pretty-print 2>/dev/null) || return 0
-        [ "$p_old" = "$p_new" ] || return 0
-    else
-        printf '%s\n%s\n' "$old" "$new" | grep -vE '^[[:space:]]*//' \
-            | grep -qE '`|\\$' && return 0
-        # The lines that are not `//` lines must be the same, in order.
-        [ "$(printf '%s\n' "$old" | grep -vE '^[[:space:]]*//')" \
-          = "$(printf '%s\n' "$new" | grep -vE '^[[:space:]]*//')" ] || return 0
-    fi
-    echo yes
 }
 
 # Print the added probes the adapter should run, one name per line: each .sh
 # file the branch adds under scripts/proof-probes/. An added probe is a
 # request for real-environment proof, trailer or not. Before, a branch that
 # added a probe and no trailer ran it nowhere. land runs the adapter on each
-# such name, and a green run needs no person.
+# such name, and a green run needs no person. A name with a control character,
+# or one that starts with `-` and would reach the adapter as an option, is
+# left out here, and land_proof_harness gates it. The adapter contract has no
+# `--`, so land does not pass one.
 land_proof_added() {
     local root="$1" base="$2" branch="$3" probe
     [ -n "$base" ] || return 0
-    while IFS= read -r probe; do
+    while IFS= read -r -d '' probe; do
+        probe=${probe#scripts/proof-probes/}
         case "$probe" in
-            *.sh) probe=${probe#scripts/proof-probes/}; printf '%s\n' "${probe%.sh}" ;;
+            -*|*[[:cntrl:]]*) ;;
+            *.sh) printf '%s\n' "${probe%.sh}" ;;
         esac
-    done < <(git -C "$root" diff --name-only --diff-filter=AC "$base" "$branch" \
+    done < <(git -C "$root" diff -z --name-only --diff-filter=AC "$base" "$branch" \
         -- scripts/proof-probes 2>/dev/null)
 }
 
-# Print non-empty if the sign-off at .hone-proof/<change> names the commit it
-# proved. Naming means any hex token of >=7 chars in the file that prefixes the
-# branch tip (so `git rev-parse --short` works as well as the full SHA).
+# Print the commit at the head of the sign-off $1: the full commit id that
+# attest writes first, followed by a space or the end of the line. Every
+# attest since the first one wrote it there. A hand-written file, or a short
+# id, names nothing.
+land_proof_signoff_commit() {
+    local first=""
+    IFS= read -r first < "$1" 2>/dev/null || [ -n "$first" ] || return 0
+    if [[ "$first" =~ ^([0-9a-f]{64}|[0-9a-f]{40})([[:space:]]|$) ]]; then
+        printf '%s' "${BASH_REMATCH[1]}"
+    fi
+}
+
+# Print non-empty if the sign-off at .hone-proof/<change> names the branch
+# tip, in the place attest writes it (land_proof_signoff_commit).
 # Binding the sign-off to a commit is what stops it going stale. Unbound, a
 # sign-off written for one commit would silently cover every later commit on
 # the same branch. That is the one failure mode a human gate cannot notice from
-# the inside.
+# the inside. An id anywhere else in the text does not count: the text can
+# quote any commit.
 land_proof_signoff_names_tip() {
-    local file="$1" tip="$2" tok
-    for tok in $(tr 'A-Z' 'a-z' < "$file" 2>/dev/null | grep -oE '[0-9a-f]{7,40}'); do
-        case "$tip" in "$tok"*) echo yes; return 0 ;; esac
-    done
+    local file="$1" tip="$2"
+    [ -n "$tip" ] && [ "$(land_proof_signoff_commit "$file")" = "$tip" ] && echo yes
 }
 
-# Print the commit the sign-off at $2 names first, when that sign-off carries
-# to the branch tip $4. attest writes that commit first. The sign-off carries
-# when two things hold. First, scripts/proof.sh and scripts/proof-probes/ are
-# the same at both commits. Second, the branch's own change is the same: its
-# diff from its merge base has the same patch id at both commits. A merge of
-# the primary branch, or a rebase onto it, keeps both. A new commit of the
-# branch's own, an amended commit, or a conflict fix changes the patch id,
-# and the person signs again. In the field, one run needed 3 sign-offs for
-# an unchanged probe, because main moved twice.
+# Print the commit the sign-off at $2 names, when that sign-off carries to the
+# branch tip $4. The sign-off carries when two things hold. First,
+# scripts/proof.sh and scripts/proof-probes/ are the same at both commits.
+# Second, the tip is exactly the signed change moved onto the current base:
+# `git merge-tree` replays the signed commit's change (from its own merge base)
+# onto the current base $3, and the tree it writes must be the tip's tree. A
+# merge of the primary branch, or a rebase onto it, passes. A new commit of
+# the branch's own, an amended commit, or a conflict fix fails, and the person
+# signs again. In the field, one run needed 3 sign-offs for an unchanged
+# probe, because main moved twice.
 #
-# The patch id, not ancestry, is the test. A rebase drops ancestry and keeps
-# the change, and a branch commit keeps ancestry and changes the code that
-# the person proved. $3 = the branch's merge base with the primary branch.
+# The tree, not ancestry and not a diff, is the test. A rebase drops ancestry
+# and keeps the change. `git patch-id` ignores whitespace, and a diff without
+# its line numbers matched the same edit made in another function. A git
+# without `merge-tree --merge-base` (before 2.40) carries nothing.
 land_proof_signoff_carries() {
-    local root="$1" file="$2" base="$3" tip="$4" tok signed sbase own_s own_t
-    tok=$(head -n 1 "$file" 2>/dev/null | tr 'A-Z' 'a-z' | grep -oE '^[0-9a-f]{7,40}')
-    [ -n "$tok" ] && [ -n "$base" ] || return 0
-    signed=$(git -C "$root" rev-parse -q --verify "$tok^{commit}" 2>/dev/null) || return 0
+    local root="$1" file="$2" base="$3" tip="$4" signed sbase out tree
+    signed=$(land_proof_signoff_commit "$file")
+    [ -n "$signed" ] && [ -n "$base" ] || return 0
+    git -C "$root" cat-file -e "$signed^{commit}" 2>/dev/null || return 0
     [ "$signed" != "$tip" ] || return 0
     [ -z "$(git -C "$root" diff --name-only "$signed" "$tip" \
         -- scripts/proof.sh scripts/proof-probes 2>/dev/null)" ] || return 0
     sbase=$(git -C "$root" merge-base HEAD "$signed" 2>/dev/null) || return 0
-    own_s=$(git -C "$root" diff --no-color --no-ext-diff "$sbase" "$signed" 2>/dev/null \
-        | git patch-id --stable | cut -d' ' -f1)
-    own_t=$(git -C "$root" diff --no-color --no-ext-diff "$base" "$tip" 2>/dev/null \
-        | git patch-id --stable | cut -d' ' -f1)
-    [ -n "$own_s" ] && [ "$own_s" = "$own_t" ] || return 0
+    out=$(git -C "$root" merge-tree --write-tree --merge-base="$sbase" \
+        "$base" "$signed" 2>/dev/null) || return 0
+    tree=${out%%$'\n'*}
+    [ -n "$tree" ] && [ "$tree" = "$(git -C "$root" rev-parse "$tip^{tree}" 2>/dev/null)" ] \
+        || return 0
     printf '%s' "$signed"
 }
 
@@ -1627,13 +1641,13 @@ land_proof_gate() {
                               bash "$main_root/scripts/proof.sh" "$name" ); then
                         check=$(land_proof_trailer "$main_root" "$base" "$branch")
                         msg_wt_land_proof_adapter_failed "$branch" "$check" "$attest_cmd" \
-                            "$why" "$name" "$(land_proof_added_files "$main_root" "$base" "$branch")" >&2
+                            "$why" "$(printf '%q' "$name")" "$(land_proof_added_files "$main_root" "$base" "$branch")" >&2
                         return 7
                     fi
                     # A green run leaves its line in the merge commit, as a
                     # sign-off does. Without it, a reader of the history
                     # found no record that the proof ran.
-                    signoff_note="$signoff_note${signoff_note:+$'\n'}$(hone_msg_proof_automatic "$name" "$short")"
+                    signoff_note="$signoff_note${signoff_note:+$'\n'}$(hone_msg_proof_automatic "$(printf '%q' "$name")" "$short")"
                 done <<< "$names"
             elif [ -f "$signoff" ]; then
                 # A sign-off exists but does not name this tip. That is the
@@ -1674,7 +1688,7 @@ land_proof_gate() {
 land_proof_added_files() {
     local name
     while IFS= read -r name; do
-        [ -n "$name" ] && printf 'scripts/proof-probes/%s.sh\n' "$name"
+        [ -n "$name" ] && printf 'scripts/proof-probes/%q.sh\n' "$name"
     done < <(land_proof_added "$@")
 }
 
@@ -2205,7 +2219,12 @@ cmd_attest() {
     # `--file <path>` reads the text from a file. A person who pasted a long
     # quoted text once lost its closing quote, and the shell waited for it.
     # A relative path is the caller's, so it resolves from WT_CALLER_PWD.
-    if [ "${1:-}" = "--file" ] && [ "$#" -eq 2 ]; then
+    if [ "${1:-}" = "--file" ]; then
+        # No path, an empty one, or more words: the flag is not a sign-off
+        # text, and recording it would read as evidence.
+        if [ "$#" -ne 2 ] || [ -z "$2" ]; then
+            msg_wt_attest_usage >&2; return 2
+        fi
         local src="$2"
         case "$src" in /*) ;; *) src="${WT_CALLER_PWD:-$PWD}/$src" ;; esac
         if [ ! -f "$src" ] || [ ! -r "$src" ]; then
