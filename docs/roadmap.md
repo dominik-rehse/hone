@@ -102,6 +102,16 @@ in git.
   2026-10-01 the maintainer chose no lab run for the redesign. Next step:
   read the next coordinated batch, and count the pollers MAIN still
   writes.
+- Not verified: that `claude --resume <id>` keeps the session id, so a
+  restarted coordinator still owns its watches. And that Claude Code
+  passes `last_assistant_message` to a Stop hook. The watch hook falls
+  back to the transcript when it does not. Next step: check both in the
+  first coordinated session on 0.73.0 or later.
+- `start` still types a session's first prompt with `herdr agent
+  prompt`, and `send` does not cover that path. One first prompt arrived
+  garbled as "ude/hone:plan ..." (session aa340d60 of the 2026-10-01
+  note). Next step: route the first prompt through the same code as
+  `send`, and check that the text arrived whole.
 
 #### Parallel runs starve the suite lock, and the gate repeats work
 
@@ -121,8 +131,7 @@ in git.
     then reports "already passed" before the change exists.
   - Nested `/code-review` sessions run hone's Stop hooks. One held the
     suite lock for 3.7 minutes.
-  - The gate blocked 12 times on a background subagent's red-green steps. 0.73.0 adds the cap: 4
-  runs in flight by default.
+  - The gate blocked 12 times on a background subagent's red-green steps.
     The cap of three counts one failure signature, so distinct reds pass
     it.
   - Each land empties the shared `hone-land.log`, and a concurrent land
@@ -145,8 +154,13 @@ in git.
   receipt. No suite runs on a `hone/*` branch with no commits. The land log
   is per change, and a failure tail shows the failing lines. A nested
   `/code-review` runs no gate and no nag. The progress line keeps a red
-  verify red. Still open: the cap on concurrent runs, and the gate blocks
-  on a background subagent's red-green steps.
+  verify red. 0.73.0 adds a cap of 4 runs in flight.
+- Still open: the Stop gate blocks a run while a background subagent is
+  in the red half of a red-green cycle (12 blocks in one run, 4 in
+  another). Next step: decide what the gate should do while a subagent
+  of the session still runs. For example, it could skip the suite while
+  the transcript shows a running background task. Then add a test that
+  replays the 12 blocks.
 
 #### The proof gate asks for sign-offs that prove nothing
 
@@ -184,6 +198,17 @@ in git.
   let a weakened probe land, and in the field repo 140 harness lines read
   probe text, so the comment exemption could never apply there. A
   sign-off for such an edit stays the cost.
+- Still open: land never compares the branch's `Proof:` trailer with the
+  Plan's `Proof:` line. A run that drops the trailer lands without
+  proof, unless the project commits `.hone-proof-always`. Next step: at
+  land, read the Plan's `Proof:` line from the branch's first commit and
+  refuse when the trailer is missing, with a test in
+  `test/e2e_land_test.sh`.
+- Still open: MAIN relayed sign-off requests in its own words and
+  recommended signing. `land.md` asks a run for the verbatim output, but
+  the coordinate skill has no such rule for MAIN. Next step: one rule in
+  the coordinate skill that MAIN relays a sign-off request verbatim, or
+  points the person at the run's tab, and never recommends signing.
 
 #### A person's standing acceptance has no channel
 
@@ -232,6 +257,33 @@ Each comes from [the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-b
 - A flaky new test landed, and a later land's exit 6 caught it. Done in
   0.73.0: the run skill calls a red without a change in between a flake
   that the run made, and the run finds its cause first.
+- A Plan slug pointed under a gitignored directory (`build/...`). The
+  planner caught it, and no check in hone does. Next step: `plan` or
+  `worktree.sh add` refuses a slug whose path git ignores, with a test.
+- A spike under `docs/spikes/` could not be deleted, because a deny rule
+  for `rm -rf` in the project's settings blocked the agent. It sat on the
+  board for about 10 hours. Next step: decide whether `garden` deletes a
+  spike with `git rm`, which the rule does not block, and say so in the
+  garden skill.
+- The `plan-critic` approved four Plans whose sketches the person had
+  delegated, through an exception to its fork rule that the prompt does
+  not state (sessions dc2375dc, ded93235, ef64d91d, afacbc56). Next step:
+  state the exception in `agents/plan-critic.md`, or remove it. Either
+  way the `plan-critic` unit suite runs.
+- 5 of 15 Plans changed after the `plan-critic` approved them, and no
+  critic read them again. Low. Next step: the plan skill runs the critic
+  again after an edit that changes the Plan's scope or its Files line.
+
+#### Open in the field repository, not in hone
+
+The 2026-10-01 batches showed two problems that the field repository must
+fix itself. hone only reports them.
+
+- An old flaky e2e test failed three lands with exit 6. The re-lands
+  waited up to 1.5 hours for its fix.
+- A generated `output.css` counts toward the nag's area-size cap until
+  the repository marks it `linguist-generated` in `.gitattributes`. The
+  repository has an open Plan for that.
 
 #### Two MAINs in one repository coordinate with no rule
 
@@ -518,6 +570,12 @@ holes: `sed` writes by `-i` after the operands or by `w`, the `>|`
 redirect, `bun --cwd <primary> add` with the option before the verb, and
 `diff --output`.
 
+Still open from this batch: the `$F` ask and the `stryker.conf.json`
+ask stay by design, so each still stops an unattended run until a
+person answers. And 0.72.0 adds one false ask: `npm -w <pkg> ...` asks,
+because the guard reads `<pkg>` as an npm verb. Next step: read `-w` and
+`--workspace` as options that take a value, with a test.
+
 How we know that the fixes hold in the field: we do not yet. The tests
 replay each shape from the transcripts. Next step: after the release, read
 the next field window and count fires per hook again.
@@ -561,9 +619,13 @@ the next field window and count fires per hook again.
   printed its line in all 34 runs ([the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-batch.md)). But the coordinator tab shows no
   progress, and MAIN relayed none. The line shows only when a Bash call
   returns, so a foreground land showed nothing for 4 to 10 minutes, once
-  57. It sits in the scrollback and scrolls away. Next step: show the
-  runs' lines in the coordinator tab, and find a place for the line that
-  stays in view.
+  57. It sits in the scrollback and scrolls away. Done in 0.73.0:
+  `coordinate.sh wait` prints a one-line board of the runs, and the
+  progress hook shows it in the coordinator tab.
+- Still open: the line shows only when a Bash call returns, so a long
+  foreground step shows nothing while it runs. And the line scrolls away.
+  Next step: test whether a Claude Code status line can read the
+  session's last progress line, so that it stays in view.
 - Next step: in the next lab pass, read `progress_starts` and
   `hook_lines` in each `result.json`. For garden, watch the next field
   pass for the line, or add a lab scenario that runs `/hone:garden`.
