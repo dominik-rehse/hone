@@ -11,12 +11,159 @@ scenario, a probe, or an eval case, its line names it. A case path is below
 `evals/`.
 
 The counts and the method are in
-[the 2026-09-20 field-data note](spikes/2026-09-20-field-data-from-real-sessions.md)
-and [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md).
+[the 2026-09-20 field-data note](spikes/2026-09-20-field-data-from-real-sessions.md),
+[the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md),
+and [the 2026-10-01 note on a coordinated batch](spikes/2026-10-01-field-data-coordinated-batch.md).
 "Not recorded" in the version field means the source did not record it.
-The MAIN incidents below are counted in
+The MAIN incidents up to 2026-09-28 are counted in
 [the 2026-09-28 note](spikes/2026-09-28-main-tracking-of-subs.md).
 
+- 2026-09-29 to 2026-10-01 · 0.70.1 · `coordinate` · MAIN ran the 0.70.1
+  scripts in 250 of 250 calls, while its sessions moved to 0.71.1. The
+  0.71.1 `coordinate.sh planned` found no watch and exited 0 with no
+  event, in all 30 plan sessions. Each planner reported the signal as
+  sent. MAIN wrote about 49 pollers of its own, and two hung when a
+  planner renamed the slug. Nothing warned MAIN of the newer version.
+- 2026-09-29 to 2026-10-01 · 0.70.1 · `coordinate` · no event follows
+  `stopped` when the session finishes its report. MAIN wrote about 12
+  waiters for it.
+- 2026-09-29 to 2026-10-01 · 0.70.1 · `coordinate` · `finished` for the
+  consolidate pass fired while its cuts were still unlanded. For the
+  garden pass it came 10.5 minutes after the last land.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `coordinate` · two
+  `landed` events named the same wrong commit. `worktree.sh` takes HEAD in
+  the caller's directory, not the merge commit. MAIN relayed the wrong SHA
+  once.
+- 2026-09-29 to 2026-10-01 · 0.70.1 · `coordinate` · MAIN guessed a
+  sign-off or grant state 5 times, and was wrong once for 8 minutes.
+  `list` and `board` do not read `.hone-proof/` or `.hone-grant/`.
+- 2026-09-29 to 2026-10-01 · 0.70.1 · `coordinate` · MAIN sent "go" and
+  "land again" to sessions with `herdr agent prompt`. A relayed `! attest`
+  with a leading space reached the session as text, and the sign-off
+  waited 18 minutes.
+- 2026-09-29 to 2026-10-01 · 0.70.1 · `coordinate` · `admit` ignored the
+  predecessor that a Plan declared, twice. The run skill's Plan read
+  stopped both runs before they claimed.
+- 2026-09-29 to 2026-10-01 · 0.70.1 · `coordinate` · the person said early
+  to accept all plans and grants. They still acted 22 times in run tabs in
+  the first half, and gave 9 attests, 3 grants, and 6 prompt answers in
+  the second. MAIN never offered `.hone-grant-auto`, and asked 4 questions
+  the person had already answered.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · progress line · MAIN
+  relayed no progress line in 280 messages. The coordinator tab shows
+  none. A line shows only when a Bash call returns: a foreground
+  land showed nothing for 4 to 10 minutes, once 57. A background verify's
+  line came 4 to 19 minutes late.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · progress line · one run
+  showed `verify ✓` after a red verify.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `worktree.sh land` · the
+  land lock starved. A new verify took the lock ahead of a waiting land.
+  One land hit exit 5 seven times over 2 hours 17 minutes, another four
+  times over about 45 minutes. The first wave had about 8 exit-5 timeouts.
+  Up to 7 runs ran at once.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `worktree.sh land` · land
+  took the lock before the authority and proof gates. Waits of 9, 9, and
+  36 minutes ended in exit 7 or exit 8, and one more cost 23 minutes.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `worktree.sh land` · a
+  concurrent land emptied the shared `hone-land.log`, and one run lost the
+  evidence for its exit 6.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `worktree.sh land` ·
+  stopped at exit 8, then after the grant at exit 7. Land names the
+  person's gates one at a time.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `gate` · `verify` writes
+  no gate receipt. So the Stop gate ran `--all` again while the run only
+  waited for the person, for 30 and 32 minutes. Two gates hit the 600-second
+  hook timeout and failed open.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `gate` · picked `--all` on
+  a fresh `hone/*` branch with no commits. The receipt then reported
+  "already passed" before the change existed.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `gate`/`nag` · ran in
+  every nested `/code-review` session. One review held the suite lock for
+  3.7 minutes, and the nag told a reviewer to run `/hone:run`.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `gate` · blocked on a
+  background subagent's red-green steps, 12 times in one run and 4 in
+  another. Each distinct red counts on its own, so the cap of three never
+  applied.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `gate`/`worktree.sh land`
+  · the failure tail of a red suite showed only passing lines, twice.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · proof gate · a `*.test.ts`
+  edit under `scripts/proof-probes/` asked for the change's own probe,
+  which exited 3. The person signed two attests that recorded the exit 3.
+  The message said the change "rewrites an existing probe", which was
+  false.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · proof gate · 7 of 9 area
+  moves changed only a path in a probe's comment, and each needed a proof
+  run. 8 of 40 probe runs failed the same way on main, and the person
+  signed them.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · proof gate · one run
+  needed 3 attests for an unchanged probe, because main moved twice and
+  the sign-off is pinned to the tip.
+- 2026-09-28 to 2026-10-01 · 0.65.0 to 0.70.1 · herdr MAIN · relayed a
+  SUB's probe output as fact and drafted the sign-off from it. The person
+  signed stale output, and MAIN caught it before land. In the coordinated
+  batch, MAIN relayed sign-off requests as the session's own claims and
+  recommended signing. `land.md` asks for the verbatim output.
+- 2026-09-21 to 2026-10-01 · mixed · `bash-guard` · denied a formatter run
+  as writing a durable file, three times. Its target path was an
+  unresolved variable. It also denied a read-only listing under
+  `.hone-grant/triggers/` as a write into it. It denied a package-manager
+  init or install in a scratchpad or worktree as writing its own files,
+  four times. Fixed in 0.63.0 where the command sets the path itself. On
+  0.70.1 to 0.71.1 both shapes asked again in worktrees. A formatter on an
+  unresolved `$F` waited 97 minutes, 98 seconds, and 30 seconds, and the
+  message said "primary tree". MAIN advised the person to answer No. `bun
+  install --cwd <worktree>` waited 54 minutes, about 2 minutes, and once
+  more. That shape still asks on 0.71.1.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `bash-guard` · a Python
+  heredoc whose text held `git reset --keep` asked as a move of HEAD, for
+  8.7 minutes. Still asks on 0.71.1.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `bash-guard` · `grep
+  "chmod" scripts/proof.sh` asked as a change to a protected artifact, for
+  2.5 minutes. Still asks on 0.71.1.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `bash-guard` · a `sed -i`
+  on a Plan held `stryker.conf.json` in its expression. It asked as a
+  change to a check config, for 11.3 minutes. Still asks on 0.71.1.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `guard` · rule 1b asked on
+  a `stryker.conf.json` repoint that the Plan required, for 20 minutes.
+- 2026-09-21 to 2026-10-01 · mixed · run loop · a session ran land again
+  after an exit 9 or exit 6 with no word from the person, 5 times. Twice a
+  Sonnet main session on 0.58.1 did it, once citing a memory file against
+  `land.md`. On 0.70.1 to 0.71.1 three runs did it after exit 6, each
+  citing a memory in the project. The run skill forbids it since 0.61.0.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `nag` · told MAIN, runs,
+  and plan sessions that Plans are pending and to run `/hone:run`, 149
+  times in MAIN alone. That advice is wrong for a coordinator.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `nag` · the area-size
+  count included a generated `output.css`, 11,699 of 17,764 lines.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `plan` · the rule that
+  `docs/` changes only at consolidate made two Plans that could not run,
+  because a test checks that the docs cite `src` paths. The `plan-critic`
+  caught both.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `plan` · a Plan slug sat
+  under a gitignored directory. Only the planner caught it.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · `plan-critic` · approved 4
+  explicitly delegated sketches by an exception that the prompt does not
+  state. 5 of 15 Plans changed after APPROVE with no second check.
+- 2026-09-29 to 2026-10-01 · 0.71.1 · `consolidate` · the global pass
+  covered 17 of 32 merges. Its prompt names no base commit.
+- 2026-09-29 to 2026-10-01 · 0.71.1 · `garden` · 3 of 4 cuts were test
+  deletions. The skill reads a cut that keeps the suite green as dead
+  code, so they skipped review. All 4 were safe on reading. A spike could
+  not go, because the person's deny rule blocks `rm -rf`, and it sat on
+  the board for about 10 hours.
+- 2026-09-29 to 2026-10-01 · 0.70.1 to 0.71.1 · run loop · a flaky new
+  test landed. A later land's exit 6 caught it. The run skill has no rule
+  for an intermittent red in a test the change adds.
+- 2026-10-01 · 0.70.1 · `coordinate` · MAIN agreed to answer permission
+  prompts in the garden tab for the person. The skill says MAIN never
+  answers for the person. No prompt followed.
+- 2026-09-30 · 0.70.1 · `coordinate` · a stop that ended in text reached
+  MAIN only when the person asked "Status?", 9 minutes later. About 10
+  `quiet` events in the first night carried nothing new. The person asked
+  for status 5 times in the batch.
+- 2026-09-30 · 0.70.1 · `coordinate` · the harness stopped MAIN's
+  background wait at its time limit 3 times, and 4 of MAIN's own pollers.
+  Once MAIN asked the person to send any message to wake it.
 - 2026-09-28 · 0.67.0 · `/hone:grant` · in auto mode, Claude Code handed
   the skill's shell block to the model. The `bash-guard` then denied the
   grant as the model's own. The person granted with a `!` line instead.
@@ -36,9 +183,6 @@ The MAIN incidents below are counted in
 - 2026-09-27 to 2026-09-28 · 0.65.0 · `bash-guard` · held 3 of 3
   `herdr notification show` calls for approval. Their body text named a
   formatter command. The person waited 4, 28, and 12 minutes.
-- 2026-09-28 · 0.65.0 · herdr MAIN · relayed a SUB's probe output as fact
-  and drafted the sign-off from it. The person signed stale output. MAIN
-  caught it before land.
 - 2026-09-27 · 0.65.0 · herdr MAIN · forwarded another MAIN's acceptance
   to a SUB that had stopped at a Plan precondition meant for the person.
 - 2026-09-25 to 2026-09-26 · 0.59.0 to 0.63.0 · herdr MAIN · told a SUB
@@ -81,12 +225,6 @@ The MAIN incidents below are counted in
   and a checkout addressed only by a shell variable. One false ask sat
   40 minutes. Fixed in 0.63.0 where the command sets the path itself. A
   directory that another command found still asks.
-- 2026-09-21 to 2026-09-25 · mixed · `bash-guard` · denied a formatter run
-  as writing a durable file, three times. Its target path was an
-  unresolved variable. It also denied a read-only listing under
-  `.hone-grant/triggers/` as a write into it. It denied a package-manager
-  init or install in a scratchpad or worktree as writing its own files,
-  four times. Fixed in 0.63.0 where the command sets the path itself.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · `gate` · the suite-lock block named
   "another session" as the holder, about 20 times. The real holder was
   the session's own land, or its background verify. The block skips the
@@ -121,10 +259,6 @@ The MAIN incidents below are counted in
   own worktree exited 2 after a successful merge, three times. It also
   printed getcwd noise. `worktree.sh remove` also rejected a change name
   or a relative path, twice. Fixed in 0.60.0.
-- 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · a Sonnet main session
-  retried land blindly after an exit 9 or exit 6, twice. Once this went
-  against `land.md`'s own "stop and escalate," citing a memory file
-  instead. The run skill forbids it since 0.61.0.
 - 2026-09-21 to 2026-09-25 · 0.58.1 · run loop · `/hone:plan` fired when
   the person had asked for a chat handoff instead ("No, don't plan").
   Addressed in 0.61.0: the plan skill fires only for a Plan.

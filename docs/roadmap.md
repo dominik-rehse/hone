@@ -48,9 +48,148 @@ in git.
   ticker sends the notifications from a script, so the `bash-guard` no
   longer sees them. The skill forbids a new `land` after a stop unless the
   person asks. `test/coordinate_test.sh` replays the three field shapes.
-- Next step: after 0.69.0 has run in the maintainer's repositories, read
-  the MAIN transcripts. Count the stops that reached the person only when
-  they asked, and compare with the 13 of the 2026-09-28 note.
+- What the field shows since: in a batch of about 34 Plans on 0.70.1 and
+  0.71.1, `landed` and `stopped` reached MAIN within seconds. One stop
+  reached MAIN only when the person asked, against 13 before ([the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-batch.md)).
+  The channel is still thin, and MAIN filled each gap with a watcher of
+  its own again:
+  - MAIN ran the 0.70.1 scripts while its sessions ran 0.71.1. So
+    `coordinate.sh planned` found no watch and exited 0 with no event in
+    all 30 plan sessions. MAIN wrote about 49 pollers for the Plan file,
+    and two hung on a renamed slug. Nothing warns a running MAIN of a newer
+    install.
+  - A stop that ends in text reaches MAIN only through `quiet`, after 600
+    seconds. No event follows `stopped` when the session finishes its
+    report, so MAIN wrote about 12 waiters for it.
+  - `finished` fires at once for a consolidate pass, with its cuts
+    unlanded (`coord_pass_finished`). `landed` carries HEAD of the caller's
+    directory, not the merge commit, and named a wrong SHA twice.
+  - The harness stopped MAIN's wait at its time limit 3 times. Once MAIN
+    asked the person to send any message to wake it.
+  - MAIN has no defined way to send a word to a session. It used `herdr
+    agent prompt`, and a relayed `! attest` arrived as text.
+  - MAIN guessed sign-off and grant state 5 times, because `list` and
+    `board` do not read `.hone-proof/` or `.hone-grant/`.
+  - `admit` ignores the predecessor a Plan declares. Two runs started
+    early, and the run skill stopped both.
+- Next step, the first priority on this page: give the channel
+  redundancy, so that MAIN needs no watcher of its own.
+  - A hook in each watched session pushes an event when its turn ends.
+  - The ticker reconciles from git and the sign-off files: planned,
+    landed with the merge SHA on main, signed, granted, and a consolidate
+    pass whose cuts have landed.
+  - The wait ends by itself before the harness limit, and says so.
+  - `coordinate.sh` warns when the installed version is newer than the
+    one MAIN runs.
+  - One subcommand, such as `coordinate.sh send`, is the only path from
+    MAIN to a session.
+  - `admit` honors a Plan's declared predecessor.
+  Each part gets a test in `test/coordinate_test.sh` that replays the
+  field shape.
+
+#### Parallel runs starve the suite lock, and the gate repeats work
+
+- What happens: under `/hone:coordinate`, up to 7 runs share one suite
+  lock. `flock -w` is not a queue, so a new verify can take the lock
+  ahead of a land that waits. A land then ends in exit 5 (lock timeout)
+  and tries again. `land` takes the lock before it checks the authority
+  gate and the proof gate. So a land can wait half an hour only to stop at
+  exit 7 or exit 8. `verify` writes no gate receipt, so the Stop gate runs
+  `--all` again while the run only waits for the person.
+- How we know: [the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-batch.md). One land hit exit 5 seven times over 2 hours 17
+  minutes. Three lands waited 9, 9, and 36 minutes for exit 7 or 8. The
+  Stop gate's repeat cost 30 and 32 minutes, and twice it hit the
+  600-second hook timeout. Smaller shapes from the same batch:
+  - On a fresh `hone/*` branch with no commits the gate runs `--all`. Its
+    receipt is keyed on the version and the branch, never the tree, so it
+    then reports "already passed" before the change exists.
+  - Nested `/code-review` sessions run hone's Stop hooks. One held the
+    suite lock for 3.7 minutes.
+  - The gate blocked 12 times on a background subagent's red-green steps.
+    The cap of three counts one failure signature, so distinct reds pass
+    it.
+  - Each land empties the shared `hone-land.log`, and a concurrent land
+    erased one run's exit-6 evidence.
+  - Twice the tail of a red suite showed only passing lines.
+- Next step, the second priority on this page:
+  - a fair queue for the lock.
+  - the authority and proof checks before the lock.
+  - a gate receipt from `verify`.
+  - no `--all` on a branch with no commits, or while the run waits for a
+    person.
+  - a cap on concurrent runs in `coordinate`.
+  - a land log per change.
+  - no hone hooks in a nested review.
+  Each fix gets a test in `test/` that replays the shape. A change to
+  `scripts/worktree.sh` or the hooks also owes a lab pass.
+
+#### The proof gate asks for sign-offs that prove nothing
+
+- Check first: on 2026-10-01 MAIN claimed that three changes landed with
+  no proof run on the box. An added probe does not open the bootstrap gate
+  of `land_proof_bootstrap`, by design. Nobody checked whether land ran
+  those probes. Read the three lands, and decide whether the design
+  leaves a hole, before the rest of this item.
+- What happens: `land_proof_bootstrap` maps any non-`.sh` file under
+  `scripts/proof-probes/` to the change's own probe command. A test file
+  there is such a file. The project's `proof.sh` exits 3 on that command,
+  and the person still signs. A comment-only edit to a probe also arms
+  the gate. A sign-off is pinned to the tip, so a probe that did not
+  change needs a new sign-off each time main moves. Land names the
+  person's gates one at a time.
+- How we know: [the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-batch.md). The person signed two attests that recorded "exit 3".
+  7 of 9 area moves changed only a path in a probe comment. 8 of 40 probe
+  runs failed the same way on main, and the person signed them. One run needed
+  3 attests for an unchanged probe. One land stopped at exit 8 and then at
+  exit 7. MAIN also relayed sign-off requests as the session's own claims,
+  not as the verbatim output that `land.md` asks for.
+- Next step: open no gate for a test file or a comment-only probe edit.
+  Carry a sign-off across commits that do not touch the probe. List every
+  person gate in one stop. Each fix gets a test in
+  `test/e2e_land_test.sh`.
+
+#### A person's standing acceptance has no channel
+
+- What happens: the person told MAIN early in a batch that they accept
+  all plans and grants. hone has no way to record that. So the person
+  still answered in the run tabs, and MAIN asked again what they had
+  answered.
+- How we know: [the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-batch.md). The person acted 22 times in run tabs in the first
+  half of the batch. In the second half they gave 9 attests, 3 grants, and
+  6 prompt answers. MAIN never offered `.hone-grant-auto`, and asked 4
+  questions that the person had already answered. Once MAIN agreed to
+  answer permission prompts for the person, which the coordinate skill
+  forbids. Three runs ran `land` again after exit 6, citing a memory in
+  the project, against `land.md`.
+- Next step: the coordinate skill offers `.hone-grant-auto` when the
+  person delegates. MAIN stops asking a question that the person has
+  answered. The skill says what MAIN does with a delegation it cannot
+  record. That is
+  prompt text, so it owes the unit suites the release rules name.
+
+#### Smaller defects from the coordinated batch
+
+Each comes from [the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-batch.md).
+
+- The nag tells MAIN, runs, and plan sessions that Plans are pending and
+  to run `/hone:run`, 149 times in MAIN alone. Next step: stay silent on
+  pending Plans while a coordinator watches the repository, with a test in
+  `test/hooks_test.sh`.
+- The nag's area-size count includes generated output, 11,699 of 17,764
+  lines in one area. Next step: skip gitignored and generated files.
+- The global consolidate pass covered 17 of 32 merges, because its prompt
+  names no base commit. Next step: `coordinate` passes the base commit.
+- Garden cut 3 tests as dead because the suite stayed green. That proves
+  nothing for a test, and those cuts skipped review. All were safe on
+  reading. Next step: a test cut needs review and names the test that
+  still covers the claim.
+- `rules/workflow.md` allows `docs/` edits only at consolidate. Two Plans
+  could not run, because a test checks that the docs cite `src` paths.
+  The `plan-critic` caught both. Next step: decide whether such a test
+  makes a docs edit part of the build.
+- A flaky new test landed, and a later land's exit 6 caught it. Next step:
+  a rule in the run skill for an intermittent red in a test that the
+  change adds.
 
 #### Two MAINs in one repository coordinate with no rule
 
@@ -331,6 +470,25 @@ Still open:
   `git -C ""` stays in it. The fix is on the agent's side: set the
   variable in the same command.
 
+Seen on 0.70.1 to 0.71.1 ([the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-batch.md)). Each ask stopped an unattended run:
+
+- A formatter on an unresolved `$F` in a worktree: 97 minutes, and the
+  message said "primary tree".
+- `bun install --cwd <worktree>`: 54 minutes. The message said to run it
+  in a worktree, and it already did.
+- A Python heredoc whose text holds `git reset --keep`, read as a move of
+  HEAD: 8.7 minutes.
+- `grep "chmod" scripts/proof.sh`, read as a change to a protected file:
+  2.5 minutes.
+- A `sed -i` on a Plan with `stryker.conf.json` in its expression, read
+  as a change to a check config: 11.3 minutes.
+- `guard` rule 1b on a `stryker.conf.json` repoint that the Plan
+  required: 20 minutes.
+
+The middle four still ask on 0.71.1. Next step: a test per shape in
+`test/hooks_test.sh`, then the fix, then a code review of the guard diff
+at `high`, as `releasing.md` asks.
+
 How we know that the fixes hold in the field: we do not yet. The tests
 replay each shape from the transcripts. Next step: after the release, read
 the next field window and count fires per hook again.
@@ -370,6 +528,13 @@ the next field window and count fires per hook again.
   nonzero fires `PostToolUseFailure` instead. So the progress hook and the
   `dirty-guard` check both run on both events. Before that, the
   `dirty-guard` never ran after a failed command.
+- What the field shows: in a coordinated batch every `worktree.sh` step
+  printed its line in all 34 runs ([the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-batch.md)). But the coordinator tab shows no
+  progress, and MAIN relayed none. The line shows only when a Bash call
+  returns, so a foreground land showed nothing for 4 to 10 minutes, once
+  57. It sits in the scrollback and scrolls away. Next step: show the
+  runs' lines in the coordinator tab, and find a place for the line that
+  stays in view.
 - Next step: run the lab after the merge and read `progress_starts` and
   `hook_lines` in each `result.json`. For garden, watch the next field
   pass for the line, or add a lab scenario that runs `/hone:garden`.
@@ -542,10 +707,12 @@ then, a real base buys the lab a price comparison and no outcome room.
 [`field-log.md`](field-log.md) collects what hone does wrong in the
 repositories that use it, one dated line per incident. These fails are the
 best source of new scenarios, because they are real. The first entries came
-on 2026-09-20 from about 220 recorded sessions, and more on 2026-09-25
-from 37. The counts per hook are in
-[the first field-data note](spikes/2026-09-20-field-data-from-real-sessions.md)
-and [the second](spikes/2026-09-25-field-data-since-0-58.md).
+on 2026-09-20 from about 220 recorded sessions. More came on 2026-09-25
+from 37, and on 2026-10-01 from a coordinated batch of 105. The counts
+per hook are in
+[the first field-data note](spikes/2026-09-20-field-data-from-real-sessions.md),
+[the second](spikes/2026-09-25-field-data-since-0-58.md), and
+[the third](spikes/2026-10-01-field-data-coordinated-batch.md).
 
 #### Probes
 
