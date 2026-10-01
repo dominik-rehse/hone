@@ -18,6 +18,20 @@ and [the 2026-10-01 note on a coordinated batch](spikes/2026-10-01-field-data-co
 The MAIN incidents up to 2026-09-28 are counted in
 [the 2026-09-28 note](spikes/2026-09-28-main-tracking-of-subs.md).
 
+- 2026-10-01 · 0.71.1 · `coordinate` · MAIN asked whether to plan two
+  items. On "yes" it also started two runs. The person wanted only Plans,
+  and one run's edits were thrown away.
+- 2026-10-01 · 0.71.1 · `land` · MAIN claimed that three changes landed with
+  no proof run. Land had run `proof.sh` green for each, but a green
+  automatic run leaves no line in the merge commit. The person re-ran four
+  probes by hand.
+- 2026-10-01 · 0.71.1 · `land` · an exit 7 message said "changes the proof
+  adapter" when only probes changed.
+- 2026-10-01 · 0.71.1 · `bash-guard` · `cd <scratch> && bun install
+  >/dev/null` asked as a write in the primary tree. The redirect broke the
+  reading of the `cd`. Fixed in 0.72.0, with a test.
+- 2026-10-01 · 0.71.1 · `land` · an old flaky e2e test failed three lands
+  with exit 6. The re-lands waited up to 1.5 hours for its fix.
 - 2026-09-29 to 2026-10-01 · 0.70.1 · `coordinate` · MAIN ran the 0.70.1
   scripts in 250 of 250 calls, while its sessions moved to 0.71.1. The
   0.71.1 `coordinate.sh planned` found no watch and exited 0 with no

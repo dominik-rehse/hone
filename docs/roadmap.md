@@ -83,6 +83,12 @@ in git.
   - `admit` honors a Plan's declared predecessor.
   Each part gets a test in `test/coordinate_test.sh` that replays the
   field shape.
+- Done in 0.72.0: a newer hone that writes an event warns a coordinator
+  that runs an older one, once, and names `claude --resume <id>`.
+  `planned` with no watch says so on stderr and still writes the event.
+  `landed` names the merge that land made. `admit` holds a Plan whose
+  predecessor has not landed, and `--after-ok <name>` lifts that hold on
+  the person's word. The rest of the list above stays open.
 
 #### Parallel runs starve the suite lock, and the gate repeats work
 
@@ -118,14 +124,27 @@ in git.
   - a land log per change.
   - no hone hooks in a nested review.
   Each fix gets a test in `test/` that replays the shape.
+- Done in 0.72.0, each with a test: a queue for the lock in which a land
+  goes before a verify and keeps its place while a run holds the lock.
+  The checks that need no `proof.sh` run come before the lock. Both person
+  gates show in one stop (exit 8). A green `verify` writes the gate
+  receipt. No suite runs on a `hone/*` branch with no commits. The land log
+  is per change, and a failure tail shows the failing lines. A nested
+  `/code-review` runs no gate and no nag. The progress line keeps a red
+  verify red. Still open: the cap on concurrent runs, and the gate blocks
+  on a background subagent's red-green steps.
 
 #### The proof gate asks for sign-offs that prove nothing
 
-- Check first: on 2026-10-01 MAIN claimed that three changes landed with
-  no proof run on the box. An added probe does not open the bootstrap gate
-  of `land_proof_bootstrap`, by design. Nobody checked whether land ran
-  those probes. Read the three lands, and decide whether the design
-  leaves a hole, before the rest of this item.
+- Checked on 2026-10-01: MAIN claimed that three changes landed with no
+  proof run on the box. The claim was false. Each branch carried a
+  `Proof: real-environment` trailer, and land ran `proof.sh` green. But a
+  green automatic run leaves no line in the merge commit, so MAIN found no
+  record, and the person re-ran four probes by hand. Two gaps are real:
+  land never compares the trailer with the Plan's `Proof:` line, and an
+  added probe with no trailer runs nowhere. Next step: record every green
+  run in the merge commit, and treat an added probe as a request for proof
+  that the adapter discharges with no sign-off.
 - What happens: `land_proof_bootstrap` maps any non-`.sh` file under
   `scripts/proof-probes/` to the change's own probe command. A test file
   there is such a file. The project's `proof.sh` exits 3 on that command,
@@ -461,9 +480,16 @@ Seen on 0.70.1 to 0.71.1 ([the 2026-10-01 note](spikes/2026-10-01-field-data-coo
 - `guard` rule 1b on a `stryker.conf.json` repoint that the Plan
   required: 20 minutes.
 
-The middle four still ask on 0.71.1. Next step: a test per shape in
-`test/hooks_test.sh`, then the fix, then a code review of the guard diff
-at `high`, as `releasing.md` asks.
+Done in 0.72.0, each with a test in `test/hooks_test.sh`. The `--cwd`
+install, the Python heredoc, the read-only `grep`, and the `sed` script
+now pass, and so does `cd <scratch> && bun install >/dev/null`, a shape
+from the next batch. The `$F` ask was right, so only its message changed.
+The `stryker.conf.json` ask stays, and its message now names the Plan. A
+replay of 96 crafted commands through both versions found no harmful
+command that 0.72.0 passes and 0.71.1 stopped. The work closed four older
+holes: `sed` writes by `-i` after the operands or by `w`, the `>|`
+redirect, `bun --cwd <primary> add` with the option before the verb, and
+`diff --output`.
 
 How we know that the fixes hold in the field: we do not yet. The tests
 replay each shape from the transcripts. Next step: after the release, read
