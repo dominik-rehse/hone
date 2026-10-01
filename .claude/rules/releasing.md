@@ -123,8 +123,10 @@ template as the agent would.
 
 ## After the push
 
-The push is what makes a release reachable, and the maintainer's own repos
-take it in two more steps. Each has hone installed at project scope:
+The push is what makes a release reachable. Do not update the maintainer's
+repos as part of a release. The maintainer decides when each repo takes a
+new version (2026-10-01). When they ask, these are the steps. Each repo has
+hone installed at project scope:
 `~/repos/agent`, `~/repos/capital-provider-db`, `~/repos/fileduct`, and
 `~/repos/mailduct`.
 
@@ -138,5 +140,4 @@ The marketplace clone under `~/.claude/plugins/marketplaces/hone` is what the
 update reads, and only the second command refreshes it. Run the third once
 per repo, from inside it. Sessions in those repos must restart to load the
 new hooks. Confirm the version per repo in
-`~/.claude/plugins/installed_plugins.json`. Do these steps as part of the
-release, not as a suggestion afterwards.
+`~/.claude/plugins/installed_plugins.json`.
