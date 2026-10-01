@@ -64,6 +64,12 @@ case "$1 ${2:-}" in
         pane=$(printf '%s\n' "$@" | grep -A1 -x -- --pane | tail -1)
         printf 'idle 1 %s\n' "$(cat "$FAKE/panes/$pane")" > "$FAKE/agents/$3" ;;
     "agent prompt") read -r _ _ tab < "$FAKE/agents/$3"; printf 'working 2 %s\n' "$tab" > "$FAKE/agents/$3" ;;
+    # Claude Code echoes typed text as `❯ <text>`. FAKE_CUT drops its first
+    # four characters, as a field prompt arrived.
+    # FAKE_DROP loses the keys.
+    "pane run") t="$4"; [ -n "${FAKE_CUT:-}" ] && t=${t:4}
+                [ -n "${FAKE_DROP:-}" ] || printf '❯ %s\n' "$t" >> "$FAKE/screen" ;;
+    "agent read") cat "$FAKE/screen" 2>/dev/null ;;
     "notification show") echo '{"result":{"shown":true}}' ;;
 esac
 STUB
@@ -253,11 +259,18 @@ out=$(CLAUDE_CODE_SESSION_ID=main-1 bash "$COORD" start run pdf-export 2>&1); rc
     && ok "start run opens the tab, starts the agent, and says so" || bad "start run (rc $rc): $out"
 grep -q -- "^tab create --workspace w --cwd $REPO --label run:pdf-export --no-focus$" "$FAKE/log" \
     && grep -q -- '^agent start run-pdf-export --kind claude --pane w:p[0-9]* -- --permission-mode auto --model opus$' "$FAKE/log" \
-    && grep -q -- '^agent prompt run-pdf-export /hone:run pdf-export$' "$FAKE/log" \
-    && [ "$(grep -c '^agent prompt' "$FAKE/log")" -eq 1 ] \
+    && grep -q -- '^pane run w:p[0-9]* /hone:run pdf-export$' "$FAKE/log" \
+    && [ "$(grep -c '^pane run' "$FAKE/log")" -eq 1 ] \
     && ok "the session opens in the background, in auto mode, on opus, with one prompt" || bad "start calls: $(cat "$FAKE/log")"
 grep -qx 'owner=main-1' "$STATE/sessions/run-pdf-export" && grep -qx 'change=pdf-export' "$STATE/sessions/run-pdf-export" \
     && ok "start registers the watch for the calling session" || bad "start should watch"
+# The field shape: a first prompt arrived as "ude/hone:plan ...". start
+# reads the pane back, and a prompt that does not show whole exits 3.
+out=$(FAKE_CUT=1 HONE_COORD_TYPE_TRIES=2 bash "$COORD" start run cut-prompt 2>&1); rc=$?
+[ "$rc" -eq 3 ] && echo "$out" | grep -q 'did not show in tab' && echo "$out" | grep -q '/hone:run cut-prompt' \
+    && [ -f "$STATE/sessions/run-cut-prompt" ] \
+    && ok "start exits 3 when the prompt does not show whole, and still watches the session" || bad "cut prompt (rc $rc): $out"
+rm -f "$STATE/sessions/run-cut-prompt"
 : > "$FAKE/log"
 out=$(bash "$COORD" start run pdf-export 2>&1); rc=$?
 [ "$rc" -eq 4 ] && ! grep -q '^tab create' "$FAKE/log" \
@@ -270,7 +283,7 @@ echo "$out" | grep -q 'agent run-auth-retry-2, model sonnet' \
 : > "$FAKE/log"
 out=$(bash "$COORD" start plan "An invoice export, for Q3" 2>&1); rc=$?
 [ "$rc" -eq 0 ] && grep -q -- '--label plan:an-invoice-export-for-q3 --no-focus$' "$FAKE/log" \
-    && grep -q -- '^agent prompt plan-an-invoice-export-for-q3 /hone:plan An invoice export, for Q3$' "$FAKE/log" \
+    && grep -q -- '^pane run w:p[0-9]* /hone:plan An invoice export, for Q3$' "$FAKE/log" \
     && grep -qx 'change=plan:an-invoice-export-for-q3' "$STATE/sessions/plan-an-invoice-export-for-q3" \
     && ok "start plan names the tab by the idea, opens it behind, prompts /hone:plan, and watches it" || bad "start plan (rc $rc): $out / $(cat "$FAKE/log")"
 ptab=$(sed -n 's/^tab=//p' "$STATE/sessions/plan-an-invoice-export-for-q3")
@@ -314,7 +327,7 @@ out=$(bash "$COORD" start garden 2>&1); rc=$?
     && ok "start garden waits while runs are in flight" || bad "start garden (rc $rc): $out"
 : > "$FAKE/log"
 out=$(bash "$COORD" start consolidate 2>&1); rc=$?
-[ "$rc" -eq 0 ] && grep -q -- '^agent prompt hone-consolidate Run the global consolidate pass' "$FAKE/log" \
+[ "$rc" -eq 0 ] && grep -q -- '^pane run w:p[0-9]* Run the global consolidate pass' "$FAKE/log" \
     && [ -f "$STATE/sessions/hone-consolidate" ] \
     && ok "start consolidate prompts the global consolidate pass and watches it" || bad "start consolidate (rc $rc): $out"
 
@@ -482,7 +495,7 @@ merge_one g6-c
 rm -f "$STATE"/sessions/*
 : > "$FAKE/log"
 out=$(HERDR_ENV=1 HERDR_WORKSPACE_ID=w bash "$COORD" start consolidate 2>&1); rc=$?
-prompt=$(grep '^agent prompt hone-consolidate' "$FAKE/log")
+prompt=$(grep '^pane run w:p[0-9]* Run the global consolidate' "$FAKE/log")
 [ "$rc" -eq 0 ] && echo "$prompt" | grep -q "base commit is $(git rev-parse --short "$base")" \
     && echo "$prompt" | grep -q 'all 3 merges' && echo "$prompt" | grep -q "git log --first-parent --merges --oneline $(git rev-parse --short "$base")..main" \
     && ok "start consolidate names the batch's base commit and its merge count in the prompt" || bad "consolidate base (rc $rc): $out / $prompt"
@@ -495,7 +508,7 @@ merge_one g6-e; m2=$(git rev-parse --short HEAD)
 ( . "$PLUGIN_ROOT/hooks/common.sh"; hone_coord_event "$STATE" g6-d landed "$m1"; hone_coord_event "$STATE" g6-e landed "$m2" )
 : > "$FAKE/log"
 out=$(HERDR_ENV=1 HERDR_WORKSPACE_ID=w bash "$COORD" start consolidate 2>&1); rc=$?
-prompt=$(grep '^agent prompt hone-consolidate' "$FAKE/log")
+prompt=$(grep '^pane run w:p[0-9]* Run the global consolidate' "$FAKE/log")
 [ "$rc" -eq 0 ] && echo "$prompt" | grep -q "base commit is $(git rev-parse --short "$m1^1")" && echo "$prompt" | grep -q 'all 2 merges' \
     && ok "with no recorded base, the first parent of the oldest landed merge is the base" || bad "fallback base (rc $rc): $out / $prompt"
 rm -f "$STATE"/sessions/*
@@ -623,6 +636,12 @@ out=$(CLAUDE_CODE_SESSION_ID=main-te bash "$COORD" send te 'land again' 2>&1); r
 : > "$FAKE/log"
 bash "$COORD" send w:t7 'go on' >/dev/null 2>&1; rc=$?
 [ "$rc" -eq 0 ] && grep -qx 'pane run w:p7 go on' "$FAKE/log" && ok "send finds the session by its tab too" || bad "send by tab (rc $rc)"
+out=$(FAKE_CUT=1 HONE_COORD_TYPE_TRIES=2 bash "$COORD" send te 'run the suite again' 2>&1); rc=$?
+[ "$rc" -eq 3 ] && echo "$out" | grep -q 'did not show in tab w:t7' \
+    && ok "send exits 3 when the text does not show whole in the pane" || bad "send cut (rc $rc): $out"
+# An earlier echo of the same text does not count for lost keys.
+out=$(FAKE_DROP=1 HONE_COORD_TYPE_TRIES=2 bash "$COORD" send te 'land again' 2>&1); rc=$?
+[ "$rc" -eq 3 ] && ok "send exits 3 for lost keys, though an earlier echo of the text shows" || bad "send dropped (rc $rc): $out"
 out=$(bash "$COORD" send nosuch 'go' 2>&1); rc=$?
 [ "$rc" -eq 2 ] && ok "send to a change that no watch names exits 2" || bad "send unknown (rc $rc): $out"
 printf 'blocked 4 w:t7 w:p7\n' > "$FAKE/agents/run-te"; : > "$FAKE/log"

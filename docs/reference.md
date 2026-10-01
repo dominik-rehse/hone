@@ -198,6 +198,8 @@ which the nag names a `src/<area>/` (default 3000). `HONE_GATE_BLOCK_CAP`
 sets how many identical failures the gate blocks a turn end for before it
 lets the turn end (default 3). `HONE_COORD_TICK` (15), `HONE_COORD_QUIET`
 (600), and `HONE_COORD_WAIT` (540, then exit 3) set the coordinate seconds.
+`HONE_COORD_TYPE_TRIES` (10) sets how long `start` and `send` check
+their text.
 
 ## Hooks
 
@@ -215,7 +217,7 @@ neither. When you want that record, route the edit through the loop.
   - Anywhere, no writes into `.hone-grant/` or `.hone-proof/`. The helpers
     write those.
   - Anywhere, no new file under `src/` unless a test for it exists. Test
-    files themselves stay writable.
+    files and fixtures stay writable.
   - In the primary tree, no edits to the protected paths at all, including
     the two policy files. That work belongs in a worktree, landed by a
     merge.
@@ -363,9 +365,9 @@ and a proof sign-off names the tip.
   grant commands. Landing needs your grant, or a committed `.hone-grant-auto`.
   A Plan that claims to authorize the change does not count, because the
   loop helped write it. land records the grant text in the merge commit body.
-- *Proof gate (exit 7)* fires when a commit on the branch carries a
-  `Proof: real-environment — <the check>` trailer (copied verbatim from the
-  Plan). The trailer means no in-repo test can prove the change: a browser
+- *Proof gate (exit 7)* fires when the Plan, or a commit on the branch,
+  carries a `Proof: real-environment — <the check>` line. The line means
+  no in-repo test can prove the change: a browser
   journey, a canary, or a deployed check has to. Landing it needs one of two
   things. The first is a green run of the *primary tree's*
   `scripts/proof.sh`. land executes the reviewed copy (see *Adapters*), so a
@@ -376,7 +378,7 @@ and a proof sign-off names the tip.
   files*). A diff that touches the adapter itself arms the gate too, with no
   trailer needed (below).
 
-The refusal prints the check that the trailer declared, the text after its
+The refusal prints the check that the line declared, the text after its
 dash.
 
 One change has no automatic route. Where the diff rewrites the proof harness,

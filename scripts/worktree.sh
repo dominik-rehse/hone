@@ -65,7 +65,8 @@
 #       receipt. The marker never grants a change that adds, edits, or
 #       deletes the marker itself.
 #       Proof gate: a change whose Plan declared real-environment proof (a
-#       `Proof: real-environment` trailer on a branch commit) may not land on
+#       `Proof: real-environment` trailer on a branch commit, or that line in
+#       .plans/<change>.md when the branch dropped it) may not land on
 #       the test suite alone. Satisfy it either with a green scripts/proof.sh
 #       or with a human sign-off at .hone-proof/<change>. land runs the PRIMARY
 #       tree's reviewed copy of proof.sh, from the change's WORKTREE, since
@@ -757,28 +758,39 @@ land_diffstat() {
 # bare trailer (an older Plan, no description) is exit 0 with empty output.
 # Callers must read the exit code, never the emptiness of the output.
 #
+# A branch with no trailer falls back to the Plan, .plans/$4.md at the
+# primary tree's HEAD or at the merge base. A run that dropped the trailer
+# used to land with no proof, because land never read the Plan.
+#
 # The prefix and the separator come off case-insensitively (`sed s///I`). The
 # separator may be an em dash, an en dash, one or more hyphens, or nothing
 # at all. A single parser is why `PROOF: REAL-ENVIRONMENT — x` no longer prints
 # its own prefix back, and why `-- x` no longer keeps a stray dash.
 land_proof_trailer() {
-    local root="$1" base="$2" branch="$3" line
+    local root="$1" base="$2" branch="$3" change="${4:-}" line ref
+    local pattern='^[[:space:]]*Proof:[[:space:]]*real-environment'
     [ -n "$base" ] || return 1
     line=$(git -C "$root" log --format=%B "$base..$branch" 2>/dev/null \
-        | grep -iE '^[[:space:]]*Proof:[[:space:]]*real-environment' \
-        | head -n 1)
+        | grep -iE "$pattern" | head -n 1)
+    if [ -z "$line" ] && [ -n "$change" ]; then
+        for ref in HEAD "$base"; do
+            line=$(git -C "$root" show "$ref:.plans/$change.md" 2>/dev/null \
+                | grep -iE "$pattern" | head -n 1)
+            [ -n "$line" ] && break
+        done
+    fi
     [ -n "$line" ] || return 1
     printf '%s' "$line" | sed -E \
         -e 's/^[[:space:]]*Proof:[[:space:]]*real-environment[[:space:]]*(—|–|-+)?[[:space:]]*//I' \
         -e 's/[[:space:]]+$//'
 }
 
-# Print non-empty if the branch declares real-environment proof. A change with
-# no such trailer is assertion-class: the gate's suite already proves it, and
-# this gate never fires for it. So a project that never declares
+# Print non-empty if the branch or its Plan ($4) declares real-environment
+# proof. A change with no such declaration is assertion-class: the gate's
+# suite already proves it, and this gate never fires for it. So a project that never declares
 # real-environment proof is unaffected.
 land_proof_required() {
-    land_proof_trailer "$1" "$2" "$3" >/dev/null && echo yes
+    land_proof_trailer "$1" "$2" "$3" "${4:-}" >/dev/null && echo yes
 }
 
 # Print one line per file of the proof HARNESS that the branch rewrites, as
@@ -1427,7 +1439,7 @@ cmd_land() {
     # and the cleanup. It goes to stdout, because it is the success path.
     local kept=""
     [ "$remove_rc" -eq 0 ] || kept="$wt"
-    msg_wt_land_receipt "$merge_sha" "$branch" "$consumed" "$kept" "$lossless" "$auto_granted"
+    msg_wt_land_receipt "$merge_sha" "$branch" "$consumed" "$kept" "$lossless" "$auto_granted" "$main_root"
     [ -n "$kept" ] && msg_wt_land_worktree_kept "$kept" "bash $HONE_WSH remove $change" "$leftovers"
     [ -n "$remote" ] && msg_wt_land_pushed "$remote" "$primary"
     if [ -n "$lockfiles" ]; then
@@ -1574,7 +1586,7 @@ land_proof_gate() {
     local bootstrap harness="" declared="" added=""
     bootstrap=$(land_proof_bootstrap "$main_root" "$base" "$branch" "$change")
     [ -n "$bootstrap" ] && harness=$(land_proof_harness_files "$main_root" "$base" "$branch" "$change")
-    [ -n "$(land_proof_required "$main_root" "$base" "$branch")" ] && declared=yes
+    [ -n "$(land_proof_required "$main_root" "$base" "$branch" "$change")" ] && declared=yes
     [ -f "$main_root/scripts/proof.sh" ] && added=$(land_proof_added "$main_root" "$base" "$branch")
     if [ -n "$proof_always" ] || [ -n "$bootstrap" ] || [ -n "$declared" ] || [ -n "$added" ]; then
         local tip signoff="$main_root/.hone-proof/$change" discharged="" attest_cmd check carried=""
@@ -1639,7 +1651,7 @@ land_proof_gate() {
                            && HONE_CHANGE="$change" HONE_BRANCH="$branch" \
                               HONE_WORKTREE="$proof_wt" HONE_MAIN_ROOT="$main_root" \
                               bash "$main_root/scripts/proof.sh" "$name" ); then
-                        check=$(land_proof_trailer "$main_root" "$base" "$branch")
+                        check=$(land_proof_trailer "$main_root" "$base" "$branch" "$change")
                         msg_wt_land_proof_adapter_failed "$branch" "$check" "$attest_cmd" \
                             "$why" "$(printf '%q' "$name")" "$(land_proof_added_files "$main_root" "$base" "$branch")" >&2
                         return 7
@@ -1656,7 +1668,7 @@ land_proof_gate() {
                 # and only has to run it again for the new tip. The marker
                 # message would instead hide that route and offer removing
                 # project policy.
-                check=$(land_proof_trailer "$main_root" "$base" "$branch")
+                check=$(land_proof_trailer "$main_root" "$base" "$branch" "$change")
                 msg_wt_land_proof_signoff_stale "$change" "$branch" "$tip" "$check" "$attest_cmd" "$bootstrap" "$harness" >&2
                 return 7
             elif [ -n "$proof_always" ] && [ ! -f "$main_root/scripts/proof.sh" ]; then
@@ -1667,7 +1679,7 @@ land_proof_gate() {
                 msg_wt_land_proof_always_no_adapter "$HONE_PLUGIN_ROOT/templates/proof/" >&2
                 return 7
             else
-                check=$(land_proof_trailer "$main_root" "$base" "$branch")
+                check=$(land_proof_trailer "$main_root" "$base" "$branch" "$change")
                 if [ -n "$bootstrap" ] && [ -z "$declared" ]; then
                     # The change declared nothing, and the harness edit alone
                     # opened the gate. Saying "this branch declares

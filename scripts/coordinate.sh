@@ -85,8 +85,11 @@
 #       The workspace names the repository. The agent name is the label in
 #       the form herdr accepts (run-<change>, plan-<idea>), with -2, -3 on a
 #       collision.
-#       Exit: 0 started · 4 admit refused · 2 usage/not-a-repo/not in
-#       herdr/herdr too old/herdr refused a step (the tab stays).
+#       start waits until the session is idle, types the prompt as send
+#       does, and checks that its start shows in the pane.
+#       Exit: 0 started · 3 started, but the prompt did not show ·
+#       4 admit refused · 2 usage/not-a-repo/not in herdr/herdr too
+#       old/herdr refused a step (the tab stays).
 #
 #   coordinate.sh planned <slug>
 #       The plan skill runs this last, in a plan tab that start opened, once
@@ -119,13 +122,15 @@
 #
 #   coordinate.sh send <change | tab-id | agent> <text>
 #       The one path from the coordinator to a watched session. It types
-#       <text> into the session's herdr pane with `herdr pane run`, and
-#       writes a sent event, which the sender's own wait skips. It refuses
+#       <text> into the session's herdr pane with `herdr pane run`, checks
+#       that its start shows there, and writes a sent event, which the
+#       sender's own wait skips. It refuses
 #       text that starts with `!`, after any blank: a shell command for the
 #       person is the person's to type. It refuses a session that herdr
 #       reports blocked, because a question or a prompt there belongs to
 #       the person.
-#       Exit: 0 sent · 4 refused · 2 usage/not-a-repo/no watch/herdr failed.
+#       Exit: 0 sent · 3 typed, but the text did not show · 4 refused
+#       · 2 usage/not-a-repo/no watch/herdr failed.
 #
 #   coordinate.sh list
 #       Print each watched session: change, agent, tab ID, state, and for
@@ -244,6 +249,28 @@ json_num() { printf '%s' "$1" | sed -n "s/.*\"$2\":\([0-9][0-9]*\).*/\1/p" | hea
 # herdr, bounded: a server that does not answer must not hang a tick.
 herdr_call() {
     if command -v timeout >/dev/null 2>&1; then timeout 10 herdr "$@"; else herdr "$@"; fi
+}
+
+# Type text $3 into pane $2 of agent $1, then read the pane until one more
+# echo of its start shows: Claude Code echoes typed text as `❯ <text>`. One
+# first prompt arrived as "ude/hone:plan ...", and nothing noticed. The check
+# reads the first 30 characters, so a text cut later still passes. Exit 0
+# seen · 3 typed but not seen · 2 herdr refused, with the step printed.
+coord_type() {
+    local agent="$1" pane="$2" text="$3" out head i n0 tries="${HONE_COORD_TYPE_TRIES:-10}"
+    head=${text%%$'\n'*}; head=${head:0:30}
+    n0=$(coord_echoes "$agent" "$head")
+    out=$(herdr_call pane run "$pane" "$text" 2>&1) || { msg_coord_herdr_step "pane run" "$out" >&2; return 2; }
+    for ((i = 0; i < tries; i++)); do
+        [ "$(coord_echoes "$agent" "$head")" -gt "$n0" ] && return 0
+        sleep 1
+    done
+    return 3
+}
+
+# Count the echoes of text $2 in the recent output of agent $1.
+coord_echoes() {
+    herdr_call agent read "$1" --source recent --lines 200 2>/dev/null | grep -cF "❯ $2"
 }
 
 # True when event file $1 holds a `$3` event for change $2 at or after epoch $4.
@@ -796,8 +823,12 @@ cmd_start() {
     [ -n "$tab" ] && [ -n "$pane" ] || { msg_coord_herdr_step "tab create" "$out" >&2; return 2; }
     out=$(herdr agent start "$agent" --kind claude --pane "$pane" -- --permission-mode auto --model "$model" 2>&1) \
         || { msg_coord_herdr_step "agent start" "$out" >&2; return 2; }
-    out=$(herdr_call agent prompt "$agent" "$prompt" 2>&1) \
-        || { msg_coord_herdr_step "agent prompt" "$out" >&2; return 2; }
+    # agent start returns when herdr sees the agent. Claude Code's input box
+    # can come later, so wait for idle before the first keys.
+    herdr_call agent wait "$agent" --until idle --timeout 9000 >/dev/null 2>&1 || true
+    local typed=0
+    coord_type "$agent" "$pane" "$prompt" || typed=$?
+    [ "$typed" -eq 2 ] && return 2
     cmd_watch "$change" "$agent" "$tab" >/dev/null
     # The first run of a batch records the primary branch tip, the base
     # that the global consolidate pass reviews from. Its start ends the batch.
@@ -807,6 +838,7 @@ cmd_start() {
                      awk -F'\t' 'END { print $1 + 0 }' "$dir/events" > "$dir/consolidated" 2>/dev/null ;;
     esac
     msg_coord_started "$verb" "$change" "$label" "$agent" "$model"
+    [ "$typed" -eq 0 ] || { msg_coord_typed_unseen "$change" "$tab" "$prompt"; return 3; }
 }
 
 # The base commit of the global consolidate pass, in full: the primary
@@ -1118,7 +1150,9 @@ cmd_send() {
         pane=$(json_str "$out" pane_id); st=$(json_str "$out" agent_status)
         [ -n "$pane" ] || { msg_coord_herdr_step "agent get" "$out" >&2; return 2; }
         [ "$st" != blocked ] || { msg_coord_send_blocked "$kv_change" "$kv_tab"; return 4; }
-        out=$(herdr_call pane run "$pane" "$text" 2>&1) || { msg_coord_herdr_step "pane run" "$out" >&2; return 2; }
+        local typed=0
+        coord_type "$kv_agent" "$pane" "$text" || typed=$?
+        [ "$typed" -eq 2 ] && return 2
         # The sender's own event must not wake its wait: move its cursor
         # past the event when nothing else came between.
         last=$(awk -F'\t' 'END { print $1 + 0 }' "$dir/events" 2>/dev/null); last=${last:-0}
@@ -1131,6 +1165,7 @@ cmd_send() {
             fi ;;
         esac
         printf 'hone coordinate: sent to %s (tab %s): %s\n' "$kv_change" "$kv_tab" "$text"
+        [ "$typed" -eq 0 ] || { msg_coord_typed_unseen "$kv_change" "$kv_tab" "$text"; return 3; }
         return 0
     done
     msg_coord_send_unwatched "$target" >&2

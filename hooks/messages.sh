@@ -1200,7 +1200,7 @@ EOF
 }
 
 msg_wt_land_receipt() {
-    local sha="$1" branch="$2" consumed="${3:-}" kept="${4:-}" lossless="${5:-}" auto="${6:-}"
+    local sha="$1" branch="$2" consumed="${3:-}" kept="${4:-}" lossless="${5:-}" auto="${6:-}" main="${7:-}"
     cat <<EOF
 hone worktree: landed $branch as merge commit $sha.
 The suite ran on that merge commit in the worktree and passed.
@@ -1210,6 +1210,13 @@ land deleted the branch and kept the worktree $kept.
 EOF
     else
         echo "land removed the worktree and deleted the branch."
+        # A session whose shell stood in the worktree while land ran in the
+        # background saw its next command exit 1 in the deleted directory,
+        # and read the land as failed (8 field sessions).
+        [ -z "$main" ] || cat <<EOF
+A shell that stood in the worktree now stands in a deleted directory, so its
+next command exits 1 from pwd. That is not this land. Run: cd $main
+EOF
     fi
     if [ -n "$consumed" ]; then cat <<EOF
 land deleted the spent record(s): $consumed. The text of every record that
@@ -1806,6 +1813,18 @@ Why: the answer there belongs to the person.
 EOF
 }
 
+# start or send typed text that did not show whole in the pane. $1 = the
+# change, $2 = the tab, $3 = the text.
+msg_coord_typed_unseen() {
+    cat <<EOF
+hone coordinate: the text for $1 did not show in tab $2.
+Do: read tab $2. If the text is missing, run send for $1 once more. If it shows cut, tell the person.
+Why: one first prompt arrived cut, and its session ran on the wrong words.
+Text:
+$(hone_msg_block "$3")
+EOF
+}
+
 # send found no watch for the target. $1 = the target.
 msg_coord_send_unwatched() {
     cat <<EOF
@@ -1988,6 +2007,7 @@ coordinate|human|msg_coord_consolidate_no_base
 coordinate|agent|msg_coord_wait_on_time|540
 coordinate|agent|msg_coord_send_bang|<change>
 coordinate|agent|msg_coord_send_blocked|<change>|w:t2
+coordinate|agent|msg_coord_typed_unseen|<change>|w:t2|/hone:run <change>
 coordinate|agent|msg_coord_send_unwatched|<change>
 watch|agent|msg_watch_no_wait|  csv-export  (sub-csv-export)|bash <plugin-root>/scripts/coordinate.sh wait
 watch|human|msg_watch_let_go
@@ -1997,7 +2017,7 @@ worktree|human|msg_wt_land_setup_tree_primary_failed|- <lockfile>|<git-common-di
 worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.<change>.log|<output-tail>
 worktree|human|msg_wt_land_adapter_red|<typecheck or lint>|hone/<change>|<git-common-dir>/hone-land.<change>.log|<output-tail>
 worktree|human|msg_wt_land_tier_empty|- <tier>
-worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>|.hone-grant/<change> .hone-proof/<change>||db/migrations/<file>.sql: <new> copies all <n> columns of <table> (<columns>) with no filter|- <signal>. <why it counts>
+worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>|.hone-grant/<change> .hone-proof/<change>||db/migrations/<file>.sql: <new> copies all <n> columns of <table> (<columns>) with no filter|- <signal>. <why it counts>|<main-root>
 worktree|human|msg_wt_land_worktree_kept|<main-root>/.worktrees/<change>|bash <plugin-root>/scripts/worktree.sh remove <change>|?? <path>
 worktree|human|msg_wt_land_lockfile|- <lockfile>
 worktree|human|msg_wt_add_remote_claimed|<change>|origin

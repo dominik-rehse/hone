@@ -146,6 +146,24 @@ SELF_WRITERS="$SELF_WRITERS"'|(pip|pip3|uv|poetry|cargo|bundle|gem|mix|composer)
 SELF_WRITERS="$SELF_WRITERS"'|(pip|pip3|uv|poetry|cargo|bundle|gem|mix|composer)[[:space:]]+(install|sync|deps\.get)'"$NAMED_ARG"
 SELF_WRITERS="$SELF_WRITERS"'|go[[:space:]]+(get|mod)([[:space:]]|$)'
 RE_SELF="(^|[^A-Za-z0-9_.-])(${SELF_WRITERS})"
+
+# True when text $1 runs a package manager that writes its own manifest.
+# npm's `-w`/`--workspace` takes a value, so the value is dropped first:
+# `npm -w pkg test` read `pkg` as the verb, and `npm install -w web` read
+# `web` as a package. Only npm's: pnpm's `-w` takes no value, and
+# `pnpm -w add x` still writes. Only options and an install verb may stand
+# between npm and the `-w`, and the value holds only the characters of a
+# package name, so `npm exec pnpm -w add x` and `npm -w $(...)` keep the ask.
+# A bare `--` ends the options, so `npm i -- -w x` keeps it too. On npm 6,
+# which has no workspaces, `npm i -w x` installs x and passes. npm 6 is
+# past its end of life.
+hone_self_writer() {
+    local t
+    t=$(printf '%s\n' "$1" | sed -E ':a
+s/((^|[^A-Za-z0-9_.-])npm([[:space:]]+(-[-]?[A-Za-z0-9=@._\/~+][A-Za-z0-9=@._\/~+-]*|install|i|ci))*)[[:space:]]+(-w|--workspace)([[:space:]]+|=)[A-Za-z0-9@._\/~+][A-Za-z0-9@._\/~+-]*([[:space:]]|$)/\1\7/
+ta') || t=$1
+    [[ $t =~ $RE_SELF ]]
+}
 FMT_WRITERS='(biome|eslint|prettier|dprint|ruff|black|isort|rustfmt|gofmt|jscodeshift|codemod)[^|;&]*(migrate|--write|--fix|--apply|[[:space:]]-w([[:space:]]|$)|[[:space:]]fmt([[:space:]]|$)|[[:space:]]format([[:space:]]|$))'
 RE_FMT="(^|[^A-Za-z0-9_.-])(${FMT_WRITERS})"
 
@@ -1008,7 +1026,7 @@ hone_an_primary_unsafe() {
         [[ $tt =~ $RE_DASHDASH ]] || [[ $tt =~ $RE_RESET_BARE ]] || hone_an_reset_paths "$d" || return 0
     fi
     AN_MSG=msg_bashguard_self_writer
-    [[ $tt =~ $RE_SELF ]] && return 0
+    hone_self_writer "$tt" && return 0
     AN_MSG=msg_bashguard_formatter
     if [[ $tt =~ $RE_FMT ]]; then
         [ "$d" = "$PRIMARY_TOP" ] || return 0
@@ -2295,8 +2313,8 @@ fi
 # or redirections only means sync. A non-flag argument names a package, which mutates the
 # manifest. So `npm install lodash`, `bun add x`, and `poetry add y` still
 # escalate, as does every add/remove/update/upgrade/link verb below.
-# (NAMED_ARG and SELF_WRITERS are defined above.)
-if [ "$IN_PRIMARY_TREE" -eq 1 ] && echo "$CMD" | grep -Eq "(^|[^A-Za-z0-9_.-])(${SELF_WRITERS})"; then
+# (NAMED_ARG, SELF_WRITERS, and hone_self_writer are defined above.)
+if [ "$IN_PRIMARY_TREE" -eq 1 ] && hone_self_writer "$CMD"; then
     primary_ask msg_bashguard_self_writer
 fi
 

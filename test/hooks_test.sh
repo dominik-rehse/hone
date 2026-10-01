@@ -105,6 +105,19 @@ denied "$out" && bad "src should be allowed once its test exists" || ok "src all
 out=$(guard_write "src/auth/test_login.py" "$WT")
 denied "$out" && bad "pytest prefix test file should be allowed in worktree" || ok "pytest prefix test file allowed (RED)"
 
+# 7c. A fixture is data for a test. In the field 5 of 6 denies of rule 2 hit
+# one, and the agent wrote a test for each fixture.
+for f in src/retrieval/__fixtures__/latch-worker.ts \
+         src/strip/background-strip.fixtures.ts src/strip/cart.fixture.json; do
+    out=$(guard_write "$f" "$WT")
+    denied "$out" && bad "a fixture should be allowed with no test: $f" || ok "a fixture needs no test: $f"
+done
+# A plain fixtures/ directory can be a domain module, such as sports fixtures.
+for f in src/fixturesx/login.ts src/auth/fixture.ts src/auth/my-fixtures.ts src/fixtures/schedule.ts; do
+    out=$(guard_write "$f" "$WT")
+    denied "$out" && ok "a near-fixture name still needs a test: $f" || bad "should deny untested $f"
+done
+
 echo "== guard: land-gate sign-offs denied in every tree =="
 out=$(guard_write ".hone-grant/db-drop" "$REPO")
 denied "$out" && ok ".hone-grant/ write denied in primary tree" || bad "should deny .hone-grant/ writes"
@@ -728,6 +741,17 @@ asks "$(bgj 'rg --hostname-bin "chmod +x" x scripts/proof.sh')" "rg with a --hos
 asks "$(bgj 'bun --cwd=. add left-pad')" "an option before the verb does not hide an add in the primary tree"
 asks "$(bgj "bun --cwd=$REPO add left-pad" "$WT")" "--cwd=<primary tree> before the verb still asks"
 passes "$(bgj "bun --cwd $WT add left-pad")" "--cwd <worktree> before the verb passes"
+# npm's -w and --workspace take a value. 0.72.0 read the value as the verb
+# (`npm -w pkg test`) or as a package (`npm install -w web`).
+for c in 'npm -w pkg test' 'npm --workspace=pkg test' 'npm --workspace link run build' \
+         'npm install -w web' 'npm ci --workspace web' 'npm i -w @app/ui -w api'; do
+    passes "$(bgj "$c")" "npm's workspace value is no verb and no package: $c"
+done
+for c in 'npm install -w web lodash' 'npm install lodash -w web' 'npm -w pkg add x' \
+         'pnpm -w add x' 'npm exec pnpm -w add x' 'npm test $(pnpm -w add x)' \
+         'npm -w $(pnpm -w add x) test' 'npm -w web test; pnpm -w add x' 'npm i -- -w lodash'; do
+    asks "$(bgj "$c")" "a write beside an npm workspace still asks: $c"
+done
 # A value with a dash, as most real paths have, hid the option from the rule.
 ln -s "$REPO" "$GS/prim-tree"
 for c in "bun --cwd $GS/prim-tree add left-pad" "bun --cwd $GS/prim-tree install left-pad" \

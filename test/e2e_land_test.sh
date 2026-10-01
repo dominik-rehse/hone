@@ -92,6 +92,13 @@ echo "$out" | grep -q "The suite ran on that merge commit" || die "the receipt s
 echo "$out" | grep -q "removed the worktree" || die "the receipt should report the cleanup"
 echo "$out" | grep -q "changed a lockfile" && die "a change with no lockfile should draw no reinstall notice"
 step "the receipt names the merge commit, the green suite, and the cleanup"
+# In the field the session's shell stood in the worktree while land ran from
+# the primary tree in the background. The next command then exited 1 in the
+# deleted directory, and the agent read the land as failed. The receipt says
+# so and names the cd.
+echo "$out" | grep -qF "next command exits 1 from pwd" || die "the receipt should explain the exit 1 after a removed worktree: $out"
+echo "$out" | grep -qF "Run: cd $REPO" || die "the receipt should name the cd to the primary tree: $out"
+step "the receipt warns that a shell in the removed worktree exits 1, and names the cd"
 
 echo "== 5-cut. shape gate: a change says what it removed =="
 # The run skill asks for a `Cut:` line in the commit body. Words alone do not
@@ -889,6 +896,25 @@ out=$(bash "$WSH" land ui-flow 2>&1); rc=$?
 # A bare trailer (an older Plan) declares no check, so the message stays generic.
 echo "$out" | grep -q "The Plan declares this check" && die "a bare trailer should not print a declared check"
 step "real-environment change without proof refused (exit 7), trunk untouched"
+# (b0) The Plan declares proof and the branch dropped the trailer. land reads
+# the Plan, so the change still needs proof. In the field such a branch landed
+# with no proof run.
+mkdir -p .plans
+printf '# Plan\n\nProof: real-environment — open the dropped page on staging\n' > .plans/dropped-trailer.md
+git add .plans/dropped-trailer.md && git commit -qm "plan: dropped-trailer"
+WT_DT=$(bash "$WSH" add dropped-trailer) || die "worktree add dropped-trailer"
+echo "// dropped" > "$WT_DT/src/mathx/dropped.js"
+(cd "$WT_DT" && git rm -q .plans/dropped-trailer.md && git add -A \
+    && git commit -qm "feat(mathx): dropped trailer" -m "Cut: the spent Plan")
+PRE=$(git rev-parse HEAD)
+out=$(bash "$WSH" land dropped-trailer 2>&1); rc=$?
+[ "$rc" -eq 7 ] || die "a Plan's Proof: line with no trailer should exit 7 (got $rc): $out"
+[ "$(git rev-parse HEAD)" = "$PRE" ] || die "a Plan's Proof: line must keep the trunk untouched"
+echo "$out" | grep -q "open the dropped page on staging" \
+    || die "the refusal should print the Plan's check: $out"
+git worktree remove --force "$WT_DT" && git branch -qD hone/dropped-trailer
+git rm -q .plans/dropped-trailer.md && git commit -qm "plan: drop dropped-trailer"
+step "a Plan's Proof: line gates a branch that dropped the trailer (exit 7)"
 # (b1) Under herdr, the stop tells the person, because the watching session
 # may be asleep. The stub logs each call. A land outside herdr shows nothing.
 mkdir -p "$REPO.bin"

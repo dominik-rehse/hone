@@ -118,7 +118,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/coordinate.sh" start run <change> [--model <
 It opens the tab `run:<change>` in the background, in the primary tree,
 because `/hone:run` makes its own worktree. It starts Claude Code there in
 auto permission mode, prompts `/hone:run <change>` once, and watches the
-session. After that, reach it only through *Send*. Use the model the person named. Where they named
+session. After that, reach it only through *Send*. Exit 3 means the prompt
+did not show in the tab. Do what its `Do:` line says. Use the model the person named. Where they named
 none, leave out `--model`, and the session runs on `opus`. Never start a
 session on `fable` unless the person asked for that model by name.
 
@@ -212,7 +213,8 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/coordinate.sh" send <change> "<text>"
 Never use `herdr agent prompt`, `herdr pane run`, or `herdr pane send-text`
 for this. `send` refuses text that starts with `!` (exit 4), even after a
 blank: a shell command for the person, such as `! attest`, is the person's
-to type. Tell them the command and the tab instead. It also refuses a
+to type. Tell them the command and the tab instead. Exit 3 means the text
+did not show in the tab, as with `start`. It also refuses a
 session that waits on a question or a prompt, because that answer belongs
 to the person. Send only what the person said to send, and nothing that
 routes around a gate.
@@ -249,6 +251,10 @@ there. That is the design, not an obstacle:
 - It never writes a grant or a sign-off, and never prompts a session to route
   around a gate. Only the person runs the grant and attest helpers: after a
   `!` in the change's tab, or in their own terminal.
+- It never puts a sign-off or grant request in its own words, and never
+  recommends signing or granting. It quotes the refusal verbatim from the
+  session's tab, or names the tab. The person judges the check, not your
+  summary of it.
 - It never guesses state. Whether a sign-off or a grant exists, and whether
   the sign-off names the tip, comes from `list` or `board`. They read the
   files as `land` does. Run one and quote it, never a memory or a session's

@@ -383,8 +383,8 @@ real-environment check passes, or until whoever ran the check signs it
 off. The loop runs the check where it can reach it and hands you the
 output, and you sign off. It never signs a proof off itself, because a
 sign-off the run writes for its own change is the record the gate exists
-to prevent. A sign-off naming a check nobody ran is evidence of nothing. The landing commit copies that whole line, because consolidate
-deletes the Plan and the trailer is all that reaches land. A sign-off
+to prevent. A sign-off naming a check nobody ran is evidence of nothing. land reads that line in the Plan and the landing commit, so a
+run that drops it meets the gate. A sign-off
 lapses when the change or its probes change.
 Mechanics are in [`reference.md`](reference.md).
 

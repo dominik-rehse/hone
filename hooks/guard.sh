@@ -22,7 +22,9 @@
 #
 #   2. No production code without a failing test. The guard denies a NEW
 #      non-test file under src/ unless a test file for it already exists. Test
-#      files (the RED artifact) are always writable. The guard allows an edit
+#      files (the RED artifact) and fixtures (under __fixtures__/, or named
+#      *.fixture.* or *.fixtures.*) are always writable.
+#      The guard allows an edit
 #      to an existing src/ file, whose creation already required a test.
 #
 # Rule 1 needs a git repo to tell primary from worktree. Without one it is a
@@ -155,6 +157,12 @@ for _g in "${TEST_GLOBS[@]}"; do
     case "$BN" in $_g) exit 0 ;; esac
 done
 case "$BN" in test_*|spec_*) exit 0 ;; esac
+# A fixture is data for a test, not production code. In the field 5 of 6
+# denies of this rule hit a fixture, and the agent wrote a test for each.
+# A plain fixtures/ directory can be a domain module, so only the
+# __fixtures__/ convention counts.
+case "/$REL" in */__fixtures__/*) exit 0 ;; esac
+case "$BN" in *.fixture.*|*.fixtures.*) exit 0 ;; esac
 
 BASE_NO_EXT=$(echo "$REL" | sed 's/\.[^.]*$//')   # e.g. src/auth/login
 STEM=$(basename "$BASE_NO_EXT")                    # e.g. login
