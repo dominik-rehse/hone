@@ -92,6 +92,10 @@ set -uo pipefail
 # shellcheck source=hooks/messages.sh
 . "$(dirname -- "${BASH_SOURCE[0]}")/messages.sh"
 
+# A nested review session (the run skill's `claude -p "/code-review ..."`)
+# owns no change. The nag there told the reviewer to start a run.
+hone_nested_review && exit 0
+
 # The Stop payload, for the session id alone (see the header).
 NAG_INPUT=$(cat 2>/dev/null)
 SESSION=$(hone_extract_top_field "$NAG_INPUT" session_id)

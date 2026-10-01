@@ -118,8 +118,28 @@ fi
 # Some such edits are the Plan's own work, which is why this asks rather than
 # denies: the human decides. bash-guard.sh asks on the same set for the shell
 # route, and hone_is_check_config (common.sh) holds the one definition.
+#
+# An unattended run stops on this ask until a person answers, for 20 minutes
+# once on a repoint that the Plan required. So the ask names the Plan of the
+# worktree's change (`hone/<change>` reads `.plans/<change>.md` in the primary
+# tree) and says whether it names the file. It does not pass on that, because
+# the run helped write the Plan.
 if hone_is_check_config "$REL"; then
-    hone_pretool_decision ask "$(msg_guard_check_config "$REL")"
+    PLAN=""; NAMED=0
+    BRANCH=$(git symbolic-ref -q --short HEAD 2>/dev/null)
+    case "$BRANCH" in
+        hone/?*)
+            PLAN=".plans/${BRANCH#hone/}.md"
+            PTOP=$(git worktree list --porcelain 2>/dev/null | sed -n '1s/^worktree //p')
+            if [ -n "$PTOP" ] && [ -f "$PTOP/$PLAN" ]; then
+                grep -qF -- "$REL" "$PTOP/$PLAN" && NAMED=1
+            elif [ -f "$PLAN" ]; then
+                grep -qF -- "$REL" "$PLAN" && NAMED=1
+            else
+                PLAN=""
+            fi ;;
+    esac
+    hone_pretool_decision ask "$(msg_guard_check_config "$REL" "$PLAN" "$NAMED")"
     exit 0
 fi
 

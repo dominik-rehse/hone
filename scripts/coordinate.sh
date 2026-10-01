@@ -8,7 +8,8 @@
 #
 # State lives in <git-common-dir>/hone-coordinate/, beside the land lock, so
 # every worktree of the repository sees the same state and git never tracks it:
-#   sessions/<agent>    one watched session, key=value lines
+#   sessions/<agent>    one watched session, key=value lines, with the
+#                       hone version of the coordinator that watches it
 #   events              one event per line: n, epoch, change, kind, detail
 #   ticker.lock         held by the one live ticker
 #   wait.<session>.pid  the live wait of a watching session
@@ -35,7 +36,7 @@
 #       the event file, and the watched sessions, never a session's report.
 #       In shared mode it fetches the claims. Exit: 0.
 #
-#   coordinate.sh admit <change | garden>
+#   coordinate.sh admit <change | garden> [--after-ok <name>]...
 #       Say whether <change> may start now, against every change in flight:
 #       a worktree here, a session this repository watches, and in shared
 #       mode each claim on the remote, whoever holds it. Mechanical refusals
@@ -48,9 +49,16 @@
 #       A Plan with an `Owner: <name>` line (the plan skill writes it in
 #       shared mode) is admitted only for the developer whose git user.name
 #       is <name>, so a coordinator never takes a colleague's Plan.
+#       A Plan that orders another change first waits (exit 4) while that
+#       change is open: its Plan is still in the primary tree, or it is in
+#       flight. admit reads the order from a sentence like "start it only
+#       after `a` has landed" or "`a`: run it first". A sentence that
+#       says "either order" orders nothing. `--after-ok <name>`, once per
+#       name, lifts the hold for that name, when the person says the order
+#       does not bind.
 #       Exit: 0 compare · 4 wait · 2 usage/not-a-repo.
 #
-#   coordinate.sh start run <change> [--model <model>]
+#   coordinate.sh start run <change> [--model <model>] [--after-ok <name>]...
 #   coordinate.sh start garden [--model <model>]
 #   coordinate.sh start plan "<idea>" [--model <model>]
 #   coordinate.sh start consolidate [--model <model>]
@@ -73,7 +81,10 @@
 #       The plan skill runs this last, in a plan tab that start opened, once
 #       it committed .plans/<slug>.md. It writes a planned event for the
 #       watch of this tab (HERDR_TAB_ID), and relabels the tab plan:<slug>.
-#       In a tab that no watch names, it does nothing. Exit: 0 · 2 usage/not-a-repo/.plans/<slug>.md not in
+#       In a tab that no watch names, it says so on stderr and still writes
+#       the event, under plan:<slug>, where a coordinator's event file
+#       exists. The tab then stays open. Exit: 0 (the Plan is committed, so
+#       the plan did not fail) · 2 usage/not-a-repo/.plans/<slug>.md not in
 #       HEAD.
 #
 #   coordinate.sh unwatch <change>
@@ -119,6 +130,9 @@
 #         planned     a plan session committed its Plan (planned writes
 #                     this one). When the session is next idle, the ticker
 #                     closes its tab.
+#         updated     a newer hone wrote to the event file than the
+#                     coordinator runs (every writer checks, once per
+#                     version). The coordinator must restart to load it.
 #       A needs-you or a quiet event also shows a herdr notification that
 #       names the repository and the tab, so the person hears of it while the
 #       watching session sleeps. A landed, gone, finished, or planned session
@@ -154,14 +168,14 @@ coord_state_dir() {
 # The session's key=value file, read into the kv_* variables.
 kv_load() {
     kv_change="" kv_agent="" kv_tab="" kv_owner="" kv_registered=0 kv_seq=-1
-    kv_status=unknown kv_since=0 kv_worked=0 kv_notified=0
+    kv_status=unknown kv_since=0 kv_worked=0 kv_notified=0 kv_version=""
     local k v
     while IFS='=' read -r k v; do
         case "$k" in
             change) kv_change=$v ;; agent) kv_agent=$v ;; tab) kv_tab=$v ;;
             owner) kv_owner=$v ;; registered) kv_registered=$v ;; seq) kv_seq=$v ;;
             status) kv_status=$v ;; since) kv_since=$v ;; worked) kv_worked=$v ;;
-            notified) kv_notified=$v ;;
+            notified) kv_notified=$v ;; version) kv_version=$v ;;
         esac
     done < "$1"
 }
@@ -170,7 +184,10 @@ kv_save() {
     local tmp="$1.$$"
     printf 'change=%s\nagent=%s\ntab=%s\nowner=%s\nregistered=%s\nseq=%s\nstatus=%s\nsince=%s\nworked=%s\nnotified=%s\n' \
         "$kv_change" "$kv_agent" "$kv_tab" "$kv_owner" "$kv_registered" "$kv_seq" \
-        "$kv_status" "$kv_since" "$kv_worked" "$kv_notified" > "$tmp" && mv -f "$tmp" "$1"
+        "$kv_status" "$kv_since" "$kv_worked" "$kv_notified" > "$tmp" || return 1
+    # The coordinator's hone version. A newer writer compares against it.
+    [ -z "$kv_version" ] || printf 'version=%s\n' "$kv_version" >> "$tmp"
+    mv -f "$tmp" "$1"
 }
 
 # One string field of a herdr JSON answer. herdr prints compact JSON, and the
@@ -326,7 +343,7 @@ cmd_watch() {
     f="$dir/sessions/$agent"
     kv_change=$change kv_agent=$agent kv_tab=$tab kv_owner="${CLAUDE_CODE_SESSION_ID:-}"
     kv_registered=$(date +%s) kv_seq=-1 kv_status=unknown kv_since=$kv_registered
-    kv_worked=$kv_registered kv_notified=0
+    kv_worked=$kv_registered kv_notified=0 kv_version=$(hone_version)
     kv_save "$f"
     coord_ensure_ticker "$dir"
     printf 'hone coordinate: watching %s (agent %s, tab %s).\n' "$change" "$agent" "${tab:-unknown}"
@@ -387,9 +404,64 @@ coord_plan_text() {
     printf '(no Plan for %s here or on the shared remote)\n' "$c"
 }
 
+# The changes a Plan's text on stdin orders before it, one per line: each
+# backticked name in a sentence of the form "after `a` (and `b`) land(s|ed)"
+# or "`a` ...: run it first". A sentence that says "either order" orders
+# nothing. The caller keeps only the names that are open changes.
+coord_plan_after() {
+    # Markdown wraps a sentence over lines. A blank line or a list item
+    # starts a new unit, and a unit's lines join into one.
+    awk '
+        function unit(   l, ns, i, s, ls, seg, rest, lr, q, j) {
+            ns = split(buf, sent, /\. /)
+            for (i = 1; i <= ns; i++) {
+                s = sent[i]; ls = tolower(s); seg = ""
+                if (ls ~ /either order/) continue
+                if (match(ls, /(^|[^a-z])after /)) {
+                    rest = substr(s, RSTART); lr = substr(ls, RSTART); q = 0
+                    for (j = 1; j <= length(lr) - 3; j++) if (substr(lr, j, 4) == "land") q = j
+                    if (q > 0) seg = substr(rest, 1, q)
+                }
+                if (match(ls, /(run|land|start) (it|this|that|them) first/)) seg = seg " " substr(s, 1, RSTART)
+                while (match(seg, /`[^`]+`/)) {
+                    print substr(seg, RSTART + 1, RLENGTH - 2)
+                    seg = substr(seg, RSTART + RLENGTH)
+                }
+            }
+            buf = ""
+        }
+        /^[[:space:]]*$/ { unit(); next }
+        /^[[:space:]]*([-*]|[0-9]+\.)[[:space:]]/ { unit() }
+        { buf = buf " " $0 }
+        END { unit() }'
+}
+
+# The open changes that change $2's Plan orders before it, comma-separated:
+# a change whose Plan is still in the primary tree, or one in flight ($3).
+# A land removes the Plan, so a change with neither has landed.
+coord_unlanded_preds() {
+    local main_root="$1" change="$2" inflight="$3" p out="" seen=" "
+    while IFS= read -r p; do
+        case "$p" in "$change"|*[!A-Za-z0-9._/-]*|'') continue ;; esac
+        case "$seen" in *" $p "*) continue ;; esac
+        seen+="$p "
+        if [ -f "$main_root/.plans/$p.md" ] || printf '%s\n' "$inflight" | cut -f1 | grep -qxF -- "$p"; then
+            out+="${out:+, }$p"
+        fi
+    done < <(coord_plan_text "$main_root" "$change" | coord_plan_after)
+    printf '%s' "$out"
+}
+
 cmd_admit() {
-    local change="${1:-}" main_root dir inflight c owner garden_now=0 others=""
+    local change="${1:-}" main_root dir inflight c owner garden_now=0 others="" preds ok=" " p
     [ -n "$change" ] || { msg_coord_usage >&2; return 2; }
+    shift
+    # --after-ok <name>: the person says this predecessor need not land
+    # first. It lifts a false hold of the order parser for that name only.
+    while [ $# -gt 0 ]; do
+        [ "$1" = --after-ok ] && [ -n "${2:-}" ] || { msg_coord_usage >&2; return 2; }
+        ok+="$2 "; shift 2
+    done
     main_root=$(main_root_of)
     dir=$(coord_state_dir) || { msg_coord_usage >&2; return 2; }
     inflight=$(coord_inflight "$main_root" "$dir")
@@ -409,6 +481,11 @@ cmd_admit() {
             if [ -n "$owner" ] && [ "$owner" != "$(git config user.name 2>/dev/null)" ]; then
                 msg_coord_admit_owned "$change" "$owner"; return 4
             fi
+            preds=""
+            for p in $(coord_unlanded_preds "$main_root" "$change" "$inflight" | tr ',' ' '); do
+                case "$ok" in *" $p "*) ;; *) preds+="${preds:+, }$p" ;; esac
+            done
+            [ -z "$preds" ] || { msg_coord_admit_waits_for "$change" "$preds"; return 4; }
             [ "$garden_now" -eq 0 ] || { msg_coord_admit_waits_for_garden; return 4; } ;;
     esac
     msg_coord_admit_compare "$change" "$(printf '%s' "$inflight" | grep -c .)"
@@ -449,15 +526,22 @@ coord_plan_change() {
 cmd_start() {
     local verb="${1:-}" arg="" model=opus main_root label agent prompt slug
     local out tab pane change dir admitted rc
+    local -a after_ok=()
     shift || true
     case "$verb" in
         run|plan) arg="${1:-}"; shift || true; [ -n "$arg" ] || { msg_coord_usage >&2; return 2; } ;;
         garden|consolidate) ;;
         *) msg_coord_usage >&2; return 2 ;;
     esac
-    if [ "${1:-}" = --model ]; then
-        model="${2:-}"; [ -n "$model" ] || { msg_coord_usage >&2; return 2; }
-    fi
+    while [ $# -gt 0 ]; do
+        case "$1" in
+            --model) model="${2:-}"; [ -n "$model" ] || { msg_coord_usage >&2; return 2; } ;;
+            --after-ok) [ "$verb" = run ] && [ -n "${2:-}" ] || { msg_coord_usage >&2; return 2; }
+                        after_ok+=(--after-ok "$2") ;;
+            *) msg_coord_usage >&2; return 2 ;;
+        esac
+        shift 2
+    done
     [ "${HERDR_ENV:-}" = 1 ] && [ -n "${HERDR_WORKSPACE_ID:-}" ] || { msg_coord_not_in_herdr >&2; return 2; }
     herdr_ready || return 2
     main_root=$(main_root_of)
@@ -477,7 +561,7 @@ cmd_start() {
                 agent=$(coord_agent_name plan "$slug") ;;
     esac
     if [ "$verb" != plan ]; then
-        admitted=$(cmd_admit "$change"); rc=$?
+        admitted=$(cmd_admit "$change" ${after_ok[@]+"${after_ok[@]}"}); rc=$?
         if [ "$rc" -eq 4 ]; then printf '%s\n' "$admitted"; return 4; fi
         [ "$rc" -eq 0 ] || return "$rc"
     fi
@@ -592,19 +676,27 @@ cmd_planned() {
     local slug="${1:-}" dir f
     [ -n "$slug" ] || { msg_coord_usage >&2; return 2; }
     dir=$(coord_state_dir) || { msg_coord_usage >&2; return 2; }
-    [ -n "${HERDR_TAB_ID:-}" ] || return 0
+    git -C "$(main_root_of)" cat-file -e "HEAD:.plans/$slug.md" 2>/dev/null \
+        || { msg_coord_plan_uncommitted "$slug" >&2; return 2; }
     for f in "$dir"/sessions/*; do
-        [ -f "$f" ] || continue
+        [ -n "${HERDR_TAB_ID:-}" ] && [ -f "$f" ] || continue
         kv_load "$f"
         case "$kv_change" in plan:*) ;; *) continue ;; esac
         [ "$kv_tab" = "$HERDR_TAB_ID" ] || continue
-        git -C "$(main_root_of)" cat-file -e "HEAD:.plans/$slug.md" 2>/dev/null \
-            || { msg_coord_plan_uncommitted "$slug" >&2; return 2; }
         hone_coord_event "$dir" "$kv_change" planned "$slug"
         herdr_call tab rename "$kv_tab" "plan:$slug" >/dev/null 2>&1
         printf 'hone coordinate: %s is planned. This tab closes when the turn ends.\n' "$slug"
         return 0
     done
+    # No watch names this tab: a coordinator on an older hone starts plan
+    # tabs with no watch. The event still goes to its event file, so its
+    # wait prints it. The Plan is committed, so this is no failure: exit 0.
+    if [ -d "$dir" ]; then
+        hone_coord_event "$dir" "plan:$slug" planned "$slug"
+        msg_coord_planned_unwatched "$slug" >&2
+    else
+        msg_coord_planned_no_coordinator "$slug" >&2
+    fi
     return 0
 }
 

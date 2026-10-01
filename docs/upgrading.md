@@ -3,8 +3,10 @@
 Moving a repo from an earlier hone version to the current one is three
 mechanical steps.
 
-1. *Take the new plugin version.* The marketplace distributes hone. Update
-   it there, and the hooks and skills pick the change up automatically.
+1. *Take the new plugin version.* Update hone in the marketplace. A new
+   session loads it. A running session keeps the old hooks and
+   scripts until it restarts. Restart a running coordinator with
+   `claude --resume <id>` to keep its watches.
 
 2. *Re-run setup.* Run `/hone:setup` in the repo, with you present. It runs
    the setup script, then executes each installed adapter and fixes what

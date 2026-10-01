@@ -73,11 +73,24 @@ Why: the primary tree only receives merges. /hone:run creates the worktree. For 
 EOF
 }
 
+# The ask stops an unattended run until a person answers. So it says whether
+# the change's Plan names the file, and the person can answer from the
+# prompt. The ask stays even then, because the run helped write the Plan.
+# $2 = the Plan of the worktree's change, or empty. $3 = 1 when it names $1.
 msg_guard_check_config() {
-    local rel="$1"
+    local rel="$1" plan="${2:-}" named="${3:-0}" line act
+    line="hone guard: $rel is a config the gate's checks read."
+    act="Do: confirm that the Plan calls for this edit before you allow it."
+    if [ -n "$plan" ] && [ "$named" = 1 ]; then
+        line="hone guard: $rel is a config the gate's checks read, and the Plan $plan names it."
+        act="Do: check that this edit is the change the Plan asks for, then allow it."
+    elif [ -n "$plan" ]; then
+        line="hone guard: $rel is a config the gate's checks read, and the Plan $plan does not name it."
+        act="Do: allow the edit only if you expect it, because the Plan does not call for it."
+    fi
     cat <<EOF
-hone guard: $rel is a config the gate's checks read.
-Do: confirm that the Plan calls for this edit before you allow it.
+$line
+$act
 Why: the test, lint, format, and type-check runs are only as strict as their config. An edit here can turn a red check green without touching the code.
 EOF
 }
@@ -205,6 +218,37 @@ msg_bashguard_formatter() {
 hone bash-guard: this formatter run can write a durable file in the primary tree.
 Do: name the paths you want formatted, such as 'dprint fmt .plans/<change>.md'.
 Why: an unscoped run also formats src/ and docs/, which change through a worktree and a merge. A run scoped to relative non-durable paths passes here.
+EOF
+}
+
+# Rule 5 asks where the hook cannot place a guarded command, and it does not
+# know the tree then. The old fallback said "in the primary tree" from a
+# worktree, and a person answered No to a safe command. A variable it cannot
+# read gets its own message, because the fix is on the agent's side.
+# $1 = the variable, $2 = 1 when this command sets it.
+msg_bashguard_unread_var() {
+    local var="$1" set="$2"
+    if [ "$set" = 1 ]; then
+        cat <<EOF
+hone bash-guard: the hook cannot read the value of \$$var, so it cannot tell which tree this command writes in.
+Do: write the paths out in the command instead of \$$var, or set $var to a literal value.
+Why: the hook does not run a command substitution or a loop to learn a value. It asks when a guarded command may reach the primary tree.
+EOF
+    else
+        cat <<EOF
+hone bash-guard: this command does not set \$$var, so the hook cannot tell which tree the command writes in.
+Do: set $var in this same command, or write the path out.
+Why: each Bash call starts a fresh shell, so a variable set in an earlier call is empty here.
+EOF
+    fi
+}
+
+# $1 = what the hook could not place, as a noun phrase.
+msg_bashguard_unplaced() {
+    cat <<EOF
+hone bash-guard: the hook cannot tell which tree this command runs in, because of $1.
+Do: run the git command, package manager, or formatter on its own, with literal paths and no runner such as xargs, sudo, or bash -c.
+Why: the hook asks when a guarded command may move or write the primary tree.
 EOF
 }
 
@@ -351,8 +395,16 @@ msg_gate_green() {
     printf 'hone gate: green (%s)\n' "$1"
 }
 
+# $2 = same when the receipt's tree is the tree now, else earlier. $3 = the
+# writer of the receipt, gate or verify. $4 = the checks the gate ran on a
+# skip, when verify wrote the receipt.
 msg_gate_green_cached() {
-    printf 'hone gate: the full suite already passed on this branch (at tree %s), so the gate skipped it. land re-runs --all before the merge.\n' "$1"
+    local tree="$1" at="$2" by="$3" ran="${4:-}" where="at this exact tree" who="the gate"
+    [ "$at" = same ] || where="at an earlier tree"
+    [ "$by" = verify ] && who="worktree.sh verify"
+    printf 'hone gate: the full suite already passed on this branch %s (%s, run by %s), so the gate skipped it.' "$where" "$tree" "$who"
+    [ -n "$ran" ] && printf ' It ran %s.' "$ran"
+    printf ' land re-runs --all on the merge.\n'
 }
 
 # ------------------------------------------------------------------ nag
@@ -753,9 +805,9 @@ EOF
 msg_wt_lock_timeout() {
     local timeout="$1"
     cat <<EOF
-hone worktree: a land or a full-suite run held the lock for more than $timeout seconds.
-Do: wait for that run to finish, then retry. It can be this session's own background run.
-Why: one lock serializes every land and full-suite run.
+hone worktree: other land or full-suite runs held the lock, or waited ahead in its queue, for more than $timeout seconds.
+Do: wait for those runs to finish, then retry. One can be this session's own background run.
+Why: one queue serializes every land and full-suite run.
 EOF
 }
 
@@ -820,6 +872,17 @@ EOF
     [ -z "$lossless" ] || cat <<EOF
 land read these table rewrites as lossless, and they need no grant:
 $(hone_msg_block "$lossless")
+EOF
+}
+
+# Joins the authority refusal above it to the proof refusal below it, when
+# both gates wait on a person. One stop then names every act the person owes.
+msg_wt_land_gates_both() {
+    local branch="$1"
+    cat <<EOF
+hone worktree: the proof gate is open for $branch too, so land names both gates in this one stop.
+Do: stop here. A person grants the change above and signs off the proof below, then land runs again.
+Why: one stop names every act a person owes.
 EOF
 }
 
@@ -1527,8 +1590,8 @@ msg_coord_notify() {
 msg_coord_usage() {
     cat <<'EOF'
 usage:
-  coordinate.sh open | board [<path>] | admit <change>
-  coordinate.sh start run <change> | start garden | start consolidate | start plan "<idea>" [--model <model>]
+  coordinate.sh open | board [<path>] | admit <change> [--after-ok <name>]...
+  coordinate.sh start run <change> [--after-ok <name>]... | start garden | start consolidate | start plan "<idea>" [--model <model>]
   coordinate.sh watch <change> <agent> [<tab-id>] | unwatch <change> | planned <slug>
   coordinate.sh wait [--since <n>] | list | events | ensure | ticker
 EOF
@@ -1611,6 +1674,33 @@ Why: the owner runs their own Plan.
 EOF
 }
 
+msg_coord_admit_waits_for() {
+    local change="$1" preds="$2" first_pred="${2%%,*}"
+    cat <<EOF
+hone coordinate: $change waits for $preds, which its Plan orders first and which have not landed.
+Do: start $change after each of them lands. If the person says the order does not bind, rerun with --after-ok $first_pred, once per name.
+Why: the Plan states the order, and admit keeps it.
+EOF
+}
+
+msg_coord_planned_unwatched() {
+    local slug="$1"
+    cat <<EOF
+hone coordinate: no watch names this tab, so the planned event for $slug went to the event file and this tab stays open.
+Do: report that you committed the Plan of $slug, and that the person may close this tab.
+Why: the coordinator may run an older hone.
+EOF
+}
+
+msg_coord_planned_no_coordinator() {
+    local slug="$1"
+    cat <<EOF
+hone coordinate: no coordinator watches this repository, so no one hears of the Plan of $slug.
+Do: report that you committed the Plan of $slug.
+Why: planned only signals a coordinator.
+EOF
+}
+
 msg_coord_admit_waits_for_garden() {
     cat <<'EOF'
 hone coordinate: a garden pass is in flight, so no run starts now.
@@ -1660,6 +1750,8 @@ guard|agent|msg_guard_no_file_path
 guard|agent|msg_guard_signoff|.hone-grant/<change>
 guard|agent|msg_guard_primary_tree|src/<area>/<file>
 guard|agent|msg_guard_check_config|biome.json
+guard|agent|msg_guard_check_config|biome.json|.plans/<change>.md|1
+guard|agent|msg_guard_check_config|biome.json|.plans/<change>.md|0
 guard|agent|msg_guard_no_test|src/<area>/<file>.<ext>|src/<area>/<file>|<area>/<file>
 bash-guard|agent|msg_bashguard_unparsed
 bash-guard|agent|msg_bashguard_sabotage
@@ -1673,6 +1765,9 @@ bash-guard|agent|msg_bashguard_head_move
 bash-guard|agent|msg_bashguard_branch_move
 bash-guard|agent|msg_bashguard_self_writer
 bash-guard|agent|msg_bashguard_formatter
+bash-guard|agent|msg_bashguard_unread_var|F|1
+bash-guard|agent|msg_bashguard_unread_var|F|0
+bash-guard|agent|msg_bashguard_unplaced|a guarded command named inside xargs
 dirty-guard|agent|msg_dirtyguard_primary_tree|src/<area>/<file>|git checkout HEAD -- 'src/<area>/<file>'|docs/<topic>.md
 dirty-guard|agent|msg_dirtyguard_outside|src/<area>/<file>
 dirty-guard|agent|msg_dirtyguard_no_snapshot|src/<area>/<file>
@@ -1683,7 +1778,7 @@ gate|human|msg_gate_cap_reached|<check>|<count>
 gate|agent|msg_gate_lock_report_now|<count>
 gate|human|msg_gate_lock_cap_reached|<count>
 gate|plain|msg_gate_green|<checks that ran>
-gate|plain|msg_gate_green_cached|<tree-hash>
+gate|plain|msg_gate_green_cached|<tree-hash>|earlier|verify|type-check, lint
 nag|plain|msg_nag_header
 nag|plain|msg_nag_unchanged|<count>
 nag|human|msg_nag_plan_survived|.plans/<change>.md|<evidence>
@@ -1737,6 +1832,7 @@ worktree|human|msg_wt_land_no_branch|hone/<change>
 worktree|human|msg_wt_land_detached
 worktree|human|msg_wt_land_no_cut_line|hone/<change>|<main-root>/.worktrees/<change>
 worktree|human|msg_wt_land_authority_missing|hone/<change>|- <signal>. <why it counts>|<diffstat>|git -C <main-root> diff <primary>...hone/<change>|<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "your reason"|db/migrations/<file>.sql: <new> copies all <n> columns of <table> (<columns>) with no filter
+worktree|human|msg_wt_land_gates_both|hone/<change>
 worktree|human|msg_wt_land_grant_empty|<change>|bash <plugin-root>/scripts/worktree.sh grant <change> "your reason"
 worktree|human|msg_wt_land_proof_adapter_failed|hone/<change>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_proof_signoff_stale|<change>|hone/<change>|<tip>|<the check the Plan declared>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
@@ -1744,10 +1840,10 @@ worktree|human|msg_wt_land_proof_missing|hone/<change>|<the check the Plan decla
 worktree|human|msg_wt_land_proof_adapter_change|hone/<change>|bash <plugin-root>/scripts/worktree.sh attest <change> "what you ran and the outcome"   (stamps the tip commit)|<change>
 worktree|human|msg_wt_land_proof_always_no_adapter|<plugin-root>/templates/proof/
 worktree|human|msg_wt_land_conflict|hone/<change>|- <path>
-worktree|human|msg_wt_land_hook_refused|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
-worktree|human|msg_wt_land_merge_failed|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
+worktree|human|msg_wt_land_hook_refused|hone/<change>|<git-common-dir>/hone-land.<change>.log|<output-tail>
+worktree|human|msg_wt_land_merge_failed|hone/<change>|<git-common-dir>/hone-land.<change>.log|<output-tail>
 worktree|human|msg_wt_release_not_shared
-worktree|human|msg_wt_land_rebuild_failed|<main-root>/.worktrees/<change>|<git-common-dir>/hone-land.log|<output-tail>
+worktree|human|msg_wt_land_rebuild_failed|<main-root>/.worktrees/<change>|<git-common-dir>/hone-land.<change>.log|<output-tail>
 worktree|human|msg_wt_land_bad_retries|<value>
 worktree|human|msg_wt_land_primary_switched|main
 worktree|human|msg_wt_land_worktree_dirty|<main-root>/.worktrees/<change>
@@ -1763,6 +1859,9 @@ coordinate|plain|msg_coord_started|run|<change>|run:<change>|run-<change>|opus
 coordinate|human|msg_coord_admit_inflight|<change>|anna on laptop
 coordinate|human|msg_coord_admit_garden_waits|csv-export (this clone)
 coordinate|human|msg_coord_admit_waits_for_garden
+coordinate|human|msg_coord_admit_waits_for|<change>|base-a, base-b
+coordinate|human|msg_coord_planned_unwatched|<slug>
+coordinate|human|msg_coord_planned_no_coordinator|<slug>
 coordinate|human|msg_coord_admit_owned|<change>|anna
 coordinate|plain|msg_coord_admit_compare|<change>|2
 coordinate|human|msg_coord_no_herdr
@@ -1771,10 +1870,10 @@ coordinate|human|msg_coord_herdr_old|0.8.2
 watch|agent|msg_watch_no_wait|  csv-export  (sub-csv-export)|bash <plugin-root>/scripts/coordinate.sh wait
 watch|human|msg_watch_let_go
 worktree|human|msg_wt_land_primary_moved|main|3
-worktree|human|msg_wt_land_ff_refused|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
-worktree|human|msg_wt_land_setup_tree_primary_failed|- <lockfile>|<git-common-dir>/hone-land.log
-worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
-worktree|human|msg_wt_land_adapter_red|<typecheck or lint>|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
+worktree|human|msg_wt_land_ff_refused|hone/<change>|<git-common-dir>/hone-land.<change>.log|<output-tail>
+worktree|human|msg_wt_land_setup_tree_primary_failed|- <lockfile>|<git-common-dir>/hone-land.<change>.log
+worktree|human|msg_wt_land_suite_red|hone/<change>|<git-common-dir>/hone-land.<change>.log|<output-tail>
+worktree|human|msg_wt_land_adapter_red|<typecheck or lint>|hone/<change>|<git-common-dir>/hone-land.<change>.log|<output-tail>
 worktree|human|msg_wt_land_tier_empty|- <tier>
 worktree|plain|msg_wt_land_receipt|<sha>|hone/<change>|.hone-grant/<change> .hone-proof/<change>||db/migrations/<file>.sql: <new> copies all <n> columns of <table> (<columns>) with no filter|- <signal>. <why it counts>
 worktree|human|msg_wt_land_worktree_kept|<main-root>/.worktrees/<change>|bash <plugin-root>/scripts/worktree.sh remove <change>|?? <path>
@@ -1795,7 +1894,7 @@ worktree|human|msg_wt_land_push_rejected|origin|main|3
 worktree|plain|msg_wt_land_pushed|origin|main
 worktree|plain|msg_wt_land_retry|origin|main|2
 worktree|human|msg_wt_land_claim_delete_failed|<change>|origin
-worktree|human|msg_wt_land_setup_tree_red|hone/<change>|<git-common-dir>/hone-land.log|<output-tail>
+worktree|human|msg_wt_land_setup_tree_red|hone/<change>|<git-common-dir>/hone-land.<change>.log|<output-tail>
 worktree|plain|msg_wt_land_setup_tree_receipt|- <lockfile>
 worktree|human|msg_wt_grant_recorded|<change>
 worktree|human|msg_wt_grant_no_branch|<change>

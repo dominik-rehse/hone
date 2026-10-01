@@ -27,9 +27,15 @@
 #
 #   worktree.sh land <change>
 #       Land hone/<change> into the primary tree, serialized against every other
-#       session that shares it. Takes a flock on <git-common-dir>/hone-land.lock
-#       (waits up to HONE_LAND_LOCK_TIMEOUT s, default 600). While it holds the
-#       lock, it checks out the primary branch's tip in the change's
+#       session that shares it. First it runs every check that needs no suite
+#       and no adapter: the branch, the Cut line, the authority gate, the
+#       proof sign-off, and the worktree's state. scripts/proof.sh runs only
+#       under the lock. Then it takes a flock on
+#       <git-common-dir>/hone-land.lock (waits up to HONE_LAND_LOCK_TIMEOUT s,
+#       default 600). Takers queue in arrival order, and a land goes before a
+#       verify or a gate. Under the lock it runs the checks once more, because
+#       a grant, a sign-off, or the tip can change during the wait. While it
+#       holds the lock, it checks out the primary branch's tip in the change's
 #       worktree, merges --no-ff there, and re-runs scripts/run-tests.sh
 #       --all and the optional adapters on that merge. On green it
 #       fast-forwards the primary branch onto the tested merge commit, then
@@ -113,6 +119,11 @@
 #       session may not notice the stop. The notification never changes the
 #       exit. Where a session watches (scripts/coordinate.sh), land also
 #       writes `landed` or `stopped` to the coordinate event file.
+#       The merge and its suite write <git-common-dir>/hone-land.<change>.log
+#       (a slash in the change becomes a plus). A refusal prints the lines of
+#       that log that report a failure, else its tail.
+#       When the authority gate and the proof gate both wait on a person, the
+#       refusal names both and exits 8.
 #       Exit: 0 landed · 2 usage/not-a-repo/detached/push refused/caller in
 #       the worktree/dirty or untracked worktree/files in the way/primary
 #       tree left its branch/bad HONE_LAND_RETRIES/rebuild failed/undo
@@ -144,12 +155,14 @@
 #
 #   worktree.sh verify
 #       Run the full suite (scripts/run-tests.sh --all) in the current tree,
-#       serialized under the SAME lock as land. e2e tiers are load-sensitive:
-#       two concurrent full suites poison each other's signal (phantom flakes),
-#       and a suite racing a land's re-verify produces spurious reds. So
-#       every full-suite run shares the one lock. This is the sanctioned way to
+#       serialized under the SAME lock and queue as land. e2e tiers are
+#       load-sensitive: two concurrent full suites poison each other's signal
+#       (phantom flakes), and a suite racing a land's re-verify produces
+#       spurious reds. So every full-suite run shares the one lock. This is the sanctioned way to
 #       run --all by hand. Never invoke the adapter bare for a full run. The
-#       fast unit tier needs no lock and no wrapper. Exit: the adapter's exit ·
+#       fast unit tier needs no lock and no wrapper. A green run writes the
+#       receipt that the Stop gate reads (hooks/gate.sh), so the gate does not
+#       run the full suite again on that branch. Exit: the adapter's exit ·
 #       2 usage/not-a-repo/no-adapter · 5 lock timeout.
 #
 #   worktree.sh landable
@@ -322,9 +335,11 @@ cmd_add() {
         command -v flock >/dev/null 2>&1 || { msg_wt_no_flock add >&2; return 2; }
         primary=$(git -C "$main_root" symbolic-ref -q --short HEAD) || {
             msg_wt_land_detached >&2; return 2; }
-        exec 9>"$(git -C "$main_root" rev-parse --git-common-dir)/hone-land.lock" || return 2
-        flock -w "${HONE_LAND_LOCK_TIMEOUT:-600}" 9 || {
-            msg_wt_lock_timeout "${HONE_LAND_LOCK_TIMEOUT:-600}" >&2; return 5; }
+        local lrc=0
+        hone_suite_lock "$(git -C "$main_root" rev-parse --git-common-dir)/hone-land.lock" \
+            "${HONE_LAND_LOCK_TIMEOUT:-600}" land || lrc=$?
+        [ "$lrc" -eq 5 ] && { msg_wt_lock_timeout "${HONE_LAND_LOCK_TIMEOUT:-600}" >&2; return 5; }
+        [ "$lrc" -eq 0 ] || return 2
         shared_push_primary "$main_root" "$remote" "$primary" || return $?
         exec 9>&-
     fi
@@ -364,7 +379,7 @@ cmd_add() {
     if [ -f "$path/scripts/setup-tree.sh" ]; then
         local setup_out
         if ! setup_out=$( (cd "$path" && bash scripts/setup-tree.sh) 2>&1 ); then
-            msg_wt_add_setup_tree_failed "$path" "$(printf '%s\n' "$setup_out" | tail -n 20)" >&2
+            msg_wt_add_setup_tree_failed "$path" "$(printf '%s\n' "$setup_out" | hone_fail_excerpt 20)" >&2
             return 2
         fi
     fi
@@ -413,9 +428,17 @@ cmd_verify() {
     timeout="${HONE_LAND_LOCK_TIMEOUT:-600}"
     # Land's lock, on purpose: a full suite must never overlap another full
     # suite OR a land's merge/re-verify. One lock makes both exclusions hold.
-    exec 9>"$lock" || { msg_wt_lock_unopenable "$lock" >&2; return 2; }
-    flock -w "$timeout" 9 || { msg_wt_lock_timeout "$timeout" >&2; return 5; }
-    bash scripts/run-tests.sh --all
+    # The queue puts a waiting land first (hone_suite_lock).
+    local lrc=0
+    hone_suite_lock "$lock" "$timeout" suite || lrc=$?
+    [ "$lrc" -eq 2 ] && { msg_wt_lock_unopenable "$lock" >&2; return 2; }
+    [ "$lrc" -eq 0 ] || { msg_wt_lock_timeout "$timeout" >&2; return 5; }
+    local rc=0
+    bash scripts/run-tests.sh --all || rc=$?
+    # A green full suite is the receipt the Stop gate reads, so the gate does
+    # not run the same suite again at the run's next stop.
+    [ "$rc" -eq 0 ] && hone_gate_receipt_write verify
+    return "$rc"
 }
 
 # Classify how deep a change's judgment review must go, printing one word:
@@ -886,8 +909,9 @@ cmd_land() {
     # sharing this primary tree. One flock, held for the critical section by this
     # process and auto-released if it dies (so a killed land leaves no stale
     # lock). A concurrent land waits up to $timeout rather than interleaving on
-    # the shared HEAD/index/worktree. Everything that reads or moves the primary
-    # tree lives inside the lock. Checking outside it would be a TOCTOU race.
+    # the shared HEAD/index/worktree. Everything that moves the primary tree
+    # lives inside the lock. The checks that only read run before it, and
+    # again inside it, so no check that passed goes stale (see below).
     # A green land removes the worktree. A caller whose shell stands inside
     # it is left in a deleted directory, and every later command in that
     # shell fails. main() already moved this process to the tree root, so
@@ -901,178 +925,29 @@ cmd_land() {
         esac
     fi
 
-    exec 9>"$lock" || { msg_wt_lock_unopenable "$lock" >&2; return 2; }
-    flock -w "$timeout" 9 || { msg_wt_lock_timeout "$timeout" >&2; return 5; }
+    # The checks that need no suite and no adapter come BEFORE the lock: the
+    # branch, the primary tree's HEAD, the Cut line, the authority gate, the
+    # proof gate's sign-off, and the worktree's own state. A land used to
+    # queue for the lock first, and runs waited 9 to 36 minutes only to read
+    # exit 7 or 8. The proof adapter does not run here. A project's proof.sh
+    # can ship the branch to a shared server, and two lands that run it at
+    # once collide there. So where only the adapter can decide the proof
+    # gate, the pass under the lock decides it.
+    local base="" grant_note="" signoff_note="" lossless="" auto_granted=""
+    land_gates "$change" skip-adapter || return $?
+    if [ -d "$wt" ]; then land_worktree_clean "$wt" || return $?; fi
 
-    git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch" || {
-        msg_wt_land_no_branch "$branch" >&2; return 2; }
-    git -C "$main_root" symbolic-ref -q HEAD >/dev/null || {
-        msg_wt_land_detached >&2; return 2; }
+    local lrc=0
+    hone_suite_lock "$lock" "$timeout" land || lrc=$?
+    [ "$lrc" -eq 2 ] && { msg_wt_lock_unopenable "$lock" >&2; return 2; }
+    [ "$lrc" -eq 0 ] || { msg_wt_lock_timeout "$timeout" >&2; return 5; }
 
-    # Shape gate: the change says what it removed. Every cycle removes
-    # something, and the `Cut:` line in a commit body is the record of it. A
-    # garden repair removes nothing and carries `Repair:` instead. The run and
-    # garden skills ask for the line, and this gate is what holds them to it.
-    # It comes first, because an amended commit moves the tip, and a proof
-    # sign-off names the tip.
-    local base
-    base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
-    # A line that copies the placeholder of the refusal, or that says
-    # "nothing" and gives no reason, records nothing, so it does not count.
-    if [ -n "$(git -C "$main_root" rev-list "$base..$branch" 2>/dev/null)" ] \
-       && ! git -C "$main_root" log --format=%B "$base..$branch" \
-            | grep -E '^(Cut|Repair): +[^[:space:]<]' \
-            | grep -viE '^Cut: +nothing[[:space:][:punct:]]*$' >/dev/null; then
-        msg_wt_land_no_cut_line "$branch" "$wt" >&2
-        return 2
-    fi
-
-    # Authority gate: an IRREVERSIBLE change needs a scoped human grant before
-    # it may merge. Capability (guard/bash-guard) is "can the agent act". This
-    # is the separate contract: "may it, for this irreversible act". land
-    # checks this BEFORE the merge, so an ungranted irreversible change never
-    # touches the trunk. The grant is scoped (one change), revocable (delete
-    # the file), auditable (its text lands in the merge body below), and
-    # recoverable (the worktree stays until granted).
-    local grant_note="" signoff_note="" reasons grant grant_cmd lossless auto_granted=""
-    grant_cmd="bash $HONE_WSH grant $change \"$(hone_msg_grant_why)\""
-    reasons=$(land_irreversible "$main_root" "$base" "$branch")
-    # A rewrite read as lossless is named in the refusal and the receipt,
-    # so a person can check what land decided without asking.
-    lossless=$(land_lossless "$main_root" "$base" "$branch")
-    if [ -n "$reasons" ]; then
-        grant="$main_root/.hone-grant/$change"
-        if [ ! -f "$grant" ] && [ -n "$(land_auto_grant_on "$main_root")" ] \
-           && [ -z "$(land_changes_auto_marker "$main_root" "$base" "$branch")" ]; then
-            # The project's owner committed .hone-grant-auto, so a person
-            # decided in advance to let every irreversible change land. land
-            # records that decision as the grant, with the signals it
-            # covered, and the receipt names them. A person's own grant
-            # file still wins, because its text says more.
-            grant_note=$(land_auto_grant_note "$main_root" "$reasons")
-            auto_granted="$reasons"
-        elif [ ! -f "$grant" ]; then
-            # The refusal carries what the human needs to judge the change:
-            # each signal with the reason it counts, a diffstat, and the
-            # command that shows the whole diff. It names the range by
-            # branch, because a merge-base SHA tells the reader nothing.
-            msg_wt_land_authority_missing "$branch" "$reasons" \
-                "$(land_diffstat "$main_root" "$base" "$branch")" \
-                "git -C $main_root diff $(git -C "$main_root" symbolic-ref -q --short HEAD)...$branch" \
-                "$change" "$grant_cmd" "$lossless" >&2
-            return 8
-        else
-            grant_note=$(cat "$grant" 2>/dev/null)
-        fi
-        # An empty grant authorizes nothing and would leave no audit trail in
-        # the merge commit body, so it does not open the gate.
-        if ! printf '%s' "$grant_note" | grep '[^[:space:]]' >/dev/null; then
-            msg_wt_land_grant_empty "$change" "$grant_cmd" >&2
-            return 8
-        fi
-    fi
-
-    # Proof gate: a change whose Plan declared real-environment proof cannot
-    # land on the gate's assertion-level suite alone. A green check proves only
-    # its assertion, not a browser journey or deployed health. Prove it with a
-    # real-environment adapter (scripts/proof.sh) or a human sign-off
-    # (.hone-proof/<change>). Otherwise land refuses before the merge and
-    # escalates. This gate never fires for a change with no such declaration.
-    #
-    # A committed .hone-proof-always marker widens that to every change. The
-    # project has an adapter and wants it run each time, so land still proves
-    # a change that forgot its trailer. Existence is the whole switch, and
-    # the contents are free for a comment.
-    #
-    # A change to the adapter ITSELF gates on the file change, with no trailer
-    # and no marker needed. The adapter defines the verdict this gate trusts.
-    # So the copy a change rewrites must not judge that change, and the change
-    # must not merge unseen either. Gating on the trailer alone left that
-    # hole open. A branch that weakened scripts/proof.sh and declared nothing
-    # never reached the bootstrap check below, and merged with no human in the
-    # loop.
-    local proof_always=""
-    [ -f "$main_root/.hone-proof-always" ] && proof_always=yes
-    # Classify the bootstrap case here, OUTSIDE the condition. It is now
-    # one of the three things that open the gate, not a branch taken
-    # inside it.
-    local bootstrap
-    bootstrap=$(land_proof_bootstrap "$main_root" "$base" "$branch" "$change")
-    if [ -n "$proof_always" ] || [ -n "$bootstrap" ] \
-       || [ -n "$(land_proof_required "$main_root" "$base" "$branch")" ]; then
-        local tip signoff="$main_root/.hone-proof/$change" discharged="" attest_cmd check
-        tip=$(git -C "$main_root" rev-parse "$branch")
-        attest_cmd="bash $HONE_WSH attest $change \"$(hone_msg_attest_what_full)\"   (stamps the tip commit)"
-        if [ -f "$signoff" ] && [ -n "$(land_proof_signoff_names_tip "$signoff" "$tip")" ]; then
-            discharged=yes  # human attested this exact commit
-            # The green land below deletes the spent sign-off, so its text
-            # must survive in the merge commit body, like a grant's.
-            signoff_note=$(cat "$signoff" 2>/dev/null)
-        fi
-        if [ -z "$discharged" ]; then
-            # Execute the PRIMARY tree's copy of the adapter, the reviewed and
-            # already-landed one. So a change cannot ship an always-green
-            # proof.sh of its own and pass the gate with it. The
-            # working directory is still the change's WORKTREE when it exists:
-            # that tree holds the code under test (the primary tree is still
-            # pre-merge here). A proof.sh that first appears inside the change
-            # itself does not count until it has landed. That first change
-            # needs the human sign-off. Pass the change through, by argument
-            # and environment, so the adapter can address its own instance (a
-            # per-change port, DB, output dir) instead of guessing.
-            #
-            # A BOOTSTRAP change (one that writes or edits scripts/proof.sh or
-            # a probe) runs no adapter at all. The copy land holds is the copy
-            # this change replaces, so running it proves the OLD adapter passes
-            # against the new code. A green run would auto-land a change to
-            # the proof adapter itself. The documented contract gives this case
-            # no automatic route: the human runs the branch's own adapter from
-            # the worktree and attests with its output.
-            local proof_root="$main_root" proof_wt=""
-            [ -d "$wt" ] && { proof_root="$wt"; proof_wt="$wt"; }
-            # The trailer's own description only ever appears in a refusal, so
-            # each refusal reads it for itself and a green land pays for it.
-            if [ -f "$main_root/scripts/proof.sh" ] && [ -z "$bootstrap" ]; then
-                if ! ( cd "$proof_root" \
-                       && HONE_CHANGE="$change" HONE_BRANCH="$branch" \
-                          HONE_WORKTREE="$proof_wt" HONE_MAIN_ROOT="$main_root" \
-                          bash "$main_root/scripts/proof.sh" "$change" ); then
-                    check=$(land_proof_trailer "$main_root" "$base" "$branch")
-                    msg_wt_land_proof_adapter_failed "$branch" "$check" "$attest_cmd" "$bootstrap" >&2
-                    return 7
-                fi
-            elif [ -f "$signoff" ]; then
-                # A sign-off exists but does not name this tip. That is the
-                # precise diagnosis, and it comes BEFORE the marker's
-                # no-adapter refusal. The human already knows the attest route
-                # and only has to run it again for the new tip. The marker
-                # message would instead hide that route and offer removing
-                # project policy.
-                check=$(land_proof_trailer "$main_root" "$base" "$branch")
-                msg_wt_land_proof_signoff_stale "$change" "$branch" "$tip" "$check" "$attest_cmd" "$bootstrap" >&2
-                return 7
-            elif [ -n "$proof_always" ] && [ ! -f "$main_root/scripts/proof.sh" ]; then
-                # The marker asked for an adapter run on every change, and
-                # there is no adapter. Refusing beats quietly proving nothing.
-                # A bootstrap change skipped an adapter that DOES exist, so it
-                # never reaches this branch and never reads that it is missing.
-                msg_wt_land_proof_always_no_adapter "$HONE_PLUGIN_ROOT/templates/proof/" >&2
-                return 7
-            else
-                check=$(land_proof_trailer "$main_root" "$base" "$branch")
-                if [ -n "$bootstrap" ] && [ -z "$check" ]; then
-                    # The change declared nothing, and the adapter edit alone
-                    # opened the gate. Saying "this branch declares
-                    # real-environment proof" would name a trailer that is not
-                    # there, so this refusal names the file change instead.
-                    msg_wt_land_proof_adapter_change "$branch" "$attest_cmd" "$bootstrap" >&2
-                else
-                    msg_wt_land_proof_missing "$branch" "$check" "$attest_cmd" "$bootstrap" >&2
-                fi
-                return 7
-            fi
-        fi
-    fi
+    # The same checks again, under the lock. While this land waited, a person
+    # can revoke a grant, the run can commit a tip that no sign-off names, or
+    # another land can move the merge base. A gate that passed on the old
+    # state must not open the merge. This pass also runs the proof adapter,
+    # where the gate needs it.
+    land_gates "$change" || return $?
 
     # Read the landed lockfiles BEFORE the merge and cleanup below: the
     # setup-tree run keys on them, and the cleanup deletes the branch the
@@ -1115,36 +990,22 @@ cmd_land() {
     # it) cuts it again from the branch, the way add does.
     if [ ! -d "$wt" ]; then
         local add_log
-        add_log="$(cd "$common_dir" 2>/dev/null && pwd || printf '%s' "$common_dir")/hone-land.log"
+        add_log=$(land_log_path "$common_dir" "$change")
         if ! git -C "$main_root" worktree add -q "$wt" "$branch" >"$add_log" 2>&1; then
-            msg_wt_land_rebuild_failed "$wt" "$add_log" "$(tail -n 20 "$add_log" 2>/dev/null)" >&2
+            msg_wt_land_rebuild_failed "$wt" "$add_log" "$(hone_fail_excerpt 20 <"$add_log" 2>/dev/null)" >&2
             return 2
         fi
         if [ -f "$wt/scripts/setup-tree.sh" ]; then
             local setup_out
             if ! setup_out=$( (cd "$wt" && bash scripts/setup-tree.sh) 2>&1 ); then
-                msg_wt_add_setup_tree_failed "$wt" "$(printf '%s\n' "$setup_out" | tail -n 20)" >&2
+                msg_wt_add_setup_tree_failed "$wt" "$(printf '%s\n' "$setup_out" | hone_fail_excerpt 20)" >&2
                 return 2
             fi
         fi
     fi
-    # A tracked edit that nobody committed is not part of the branch, and the
-    # checkout below would carry it into the merge. Refuse before anything
-    # moves.
-    if [ -n "$(git -C "$wt" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
-        msg_wt_land_worktree_dirty "$wt" >&2
-        return 2
-    fi
-    # A file that git does not track and does not ignore is in the worktree,
-    # so the suite there sees it. The merge does not carry it, so the primary
-    # tree would get a change that passed only with that file beside it.
-    # Refuse, so the suite on the merge sees exactly what lands.
-    local untracked
-    untracked=$(git -C "$wt" ls-files --others --exclude-standard --directory 2>/dev/null)
-    if [ -n "$untracked" ]; then
-        msg_wt_land_worktree_untracked "$wt" "$(sed 's/^/- /' <<<"$untracked")" >&2
-        return 2
-    fi
+    # The worktree check again: the run may have edited it while this land
+    # waited, and a rebuilt worktree was never checked.
+    land_worktree_clean "$wt" || return $?
     # Shared mode: the primary branch belongs to the team, so the merge goes
     # on top of the team's latest and the result is pushed. Git rejects the
     # push when the remote moved while the suite ran, and a rejected push
@@ -1176,14 +1037,15 @@ cmd_land() {
     fi
     pre=$(git -C "$main_root" rev-parse HEAD)
     # Keep the output of the merge and of the run on it. On red it is the
-    # only record of what broke. One file per primary tree, and each land
-    # overwrites it.
-    land_log="$(cd "$common_dir" 2>/dev/null && pwd || printf '%s' "$common_dir")/hone-land.log"
+    # only record of what broke. One file per change, and each land of that
+    # change overwrites it. One shared file let a concurrent land empty it,
+    # and a run lost the evidence of its exit 6.
+    land_log=$(land_log_path "$common_dir" "$change")
     : >"$land_log"
     LAND_PENDING_WT="$wt" LAND_PENDING_BRANCH="$branch" LAND_PENDING_REINSTALL="$setup_tree_ran"
     if ! git -C "$wt" checkout -q --detach "$pre" >>"$land_log" 2>&1; then
         land_restore_tree "$wt" "$branch" "$setup_tree_ran"
-        msg_wt_land_merge_failed "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+        msg_wt_land_merge_failed "$branch" "$land_log" "$(hone_fail_excerpt 20 <"$land_log" 2>/dev/null)" >&2
         return 2
     fi
     if ! git -C "$wt" "${merge_args[@]}" >>"$land_log" 2>&1; then
@@ -1206,12 +1068,12 @@ cmd_land() {
         # failed on the merged tree, so it shares exit 6. The fix is what the
         # hook reports. Folding in serially would change nothing.
         if [ -n "$merging" ]; then
-            msg_wt_land_hook_refused "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+            msg_wt_land_hook_refused "$branch" "$land_log" "$(hone_fail_excerpt 20 <"$land_log" 2>/dev/null)" >&2
             return 6
         fi
         # git refused before it merged anything, for example because a lock
         # file was in the way. That is repo state, so exit 2.
-        msg_wt_land_merge_failed "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+        msg_wt_land_merge_failed "$branch" "$land_log" "$(hone_fail_excerpt 20 <"$land_log" 2>/dev/null)" >&2
         return 2
     fi
     merge_sha=$(git -C "$wt" rev-parse HEAD)
@@ -1228,7 +1090,7 @@ cmd_land() {
         LAND_PENDING_REINSTALL=yes
         if ! ( cd "$wt" && bash scripts/setup-tree.sh ) >>"$land_log" 2>&1; then
             land_restore_tree "$wt" "$branch" "$setup_tree_ran"
-            msg_wt_land_setup_tree_red "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+            msg_wt_land_setup_tree_red "$branch" "$land_log" "$(hone_fail_excerpt 20 <"$land_log" 2>/dev/null)" >&2
             return 6
         fi
     fi
@@ -1236,7 +1098,7 @@ cmd_land() {
         # Red means the merge regresses the trunk. The primary branch never
         # moved. The worktree goes back to its branch for investigation.
         land_restore_tree "$wt" "$branch" "$setup_tree_ran"
-        msg_wt_land_suite_red "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+        msg_wt_land_suite_red "$branch" "$land_log" "$(hone_fail_excerpt 20 <"$land_log" 2>/dev/null)" >&2
         return 6
     fi
     # The gate holds every worktree to tests, type-check, and lint. The merge
@@ -1247,7 +1109,7 @@ cmd_land() {
         [ -f "$wt/scripts/$adapter.sh" ] || continue
         if ! ( cd "$wt" && bash "scripts/$adapter.sh" ) >>"$land_log" 2>&1; then
             land_restore_tree "$wt" "$branch" "$setup_tree_ran"
-            msg_wt_land_adapter_red "$adapter" "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+            msg_wt_land_adapter_red "$adapter" "$branch" "$land_log" "$(hone_fail_excerpt 20 <"$land_log" 2>/dev/null)" >&2
             return 6
         fi
     done
@@ -1283,7 +1145,7 @@ cmd_land() {
         # fast-forward: an uncommitted edit or an untracked file that the
         # merge would overwrite. land never overwrites a person's file.
         land_restore_tree "$wt" "$branch" "$setup_tree_ran"
-        msg_wt_land_ff_refused "$branch" "$land_log" "$(tail -n 20 "$land_log" 2>/dev/null)" >&2
+        msg_wt_land_ff_refused "$branch" "$land_log" "$(hone_fail_excerpt 20 <"$land_log" 2>/dev/null)" >&2
         return 2
     fi
     # Shared mode: publish the tested merge. A rejection means the remote
@@ -1327,6 +1189,9 @@ cmd_land() {
     # The merge is on the primary branch now. The merge commit is the one the
     # suite judged, so the receipt names it, not whatever HEAD is by now.
     merge_sha=$(git -C "$main_root" rev-parse --short "$merge_sha")
+    # progress_step names this merge in the landed event. Reading HEAD after
+    # cmd_land returns could name a later land's merge.
+    LAND_MERGED_SHA="$merge_sha"
     # The fast-forward moved the primary tree's lockfiles past its installed
     # dependencies. Reinstall there when the project ships setup-tree. The
     # merge already stands, so a red install is a warning, not a failure.
@@ -1387,6 +1252,246 @@ cmd_land() {
             failed) msg_wt_land_setup_tree_primary_failed "$lockfiles" "$land_log" ;;
             *)      msg_wt_land_lockfile "$lockfiles" ;;
         esac
+    fi
+    return 0
+}
+
+# The land log of change $2 under the git common dir $1, as an absolute path:
+# <git-common-dir>/hone-land.<change>.log. A slash in a nested change name
+# becomes a plus, so the name stays one file name.
+land_log_path() {
+    printf '%s/hone-land.%s.log' \
+        "$(cd "$1" 2>/dev/null && pwd || printf '%s' "$1")" "${2//\//+}"
+}
+
+# The checks of land that need no suite, in their order: the branch exists,
+# the primary tree is on a branch, the Cut line, the authority gate, and the
+# proof gate. cmd_land runs them before it takes the lock, and once more
+# under it. They read cmd_land's main_root, branch, and wt, and they set its
+# base, grant_note, signoff_note, lossless, auto_granted. $1 = the change,
+# $2 = `skip-adapter` to leave a gate that only scripts/proof.sh can decide
+# open for now. Exit 0 pass · 2 · 7 · 8, with the refusal printed.
+#
+# When the authority gate and the proof gate both wait on a person, land
+# names both in one stop and exits 8. A person used to grant, land again,
+# and only then read that a sign-off was missing too.
+land_gates() {
+    local change="$1" adapter_mode="${2:-}"
+    git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch" || {
+        msg_wt_land_no_branch "$branch" >&2; return 2; }
+    git -C "$main_root" symbolic-ref -q HEAD >/dev/null || {
+        msg_wt_land_detached >&2; return 2; }
+
+    # Shape gate: the change says what it removed. Every cycle removes
+    # something, and the `Cut:` line in a commit body is the record of it. A
+    # garden repair removes nothing and carries `Repair:` instead. The run and
+    # garden skills ask for the line, and this gate is what holds them to it.
+    # It comes first, because an amended commit moves the tip, and a proof
+    # sign-off names the tip.
+    base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
+    # A line that copies the placeholder of the refusal, or that says
+    # "nothing" and gives no reason, records nothing, so it does not count.
+    if [ -n "$(git -C "$main_root" rev-list "$base..$branch" 2>/dev/null)" ] \
+       && ! git -C "$main_root" log --format=%B "$base..$branch" \
+            | grep -E '^(Cut|Repair): +[^[:space:]<]' \
+            | grep -viE '^Cut: +nothing[[:space:][:punct:]]*$' >/dev/null; then
+        msg_wt_land_no_cut_line "$branch" "$wt" >&2
+        return 2
+    fi
+
+    # Authority gate: an IRREVERSIBLE change needs a scoped human grant before
+    # it may merge. Capability (guard/bash-guard) is "can the agent act". This
+    # is the separate contract: "may it, for this irreversible act". land
+    # checks this BEFORE the merge, so an ungranted irreversible change never
+    # touches the trunk. The grant is scoped (one change), revocable (delete
+    # the file), auditable (its text lands in the merge body below), and
+    # recoverable (the worktree stays until granted).
+    local reasons grant grant_cmd auth_refused=""
+    grant_note=""; signoff_note=""; auto_granted=""
+    grant_cmd="bash $HONE_WSH grant $change \"$(hone_msg_grant_why)\""
+    reasons=$(land_irreversible "$main_root" "$base" "$branch")
+    # A rewrite read as lossless is named in the refusal and the receipt,
+    # so a person can check what land decided without asking.
+    lossless=$(land_lossless "$main_root" "$base" "$branch")
+    if [ -n "$reasons" ]; then
+        grant="$main_root/.hone-grant/$change"
+        if [ ! -f "$grant" ] && [ -n "$(land_auto_grant_on "$main_root")" ] \
+           && [ -z "$(land_changes_auto_marker "$main_root" "$base" "$branch")" ]; then
+            # The project's owner committed .hone-grant-auto, so a person
+            # decided in advance to let every irreversible change land. land
+            # records that decision as the grant, with the signals it
+            # covered, and the receipt names them. A person's own grant
+            # file still wins, because its text says more.
+            grant_note=$(land_auto_grant_note "$main_root" "$reasons")
+            auto_granted="$reasons"
+        elif [ ! -f "$grant" ]; then
+            # The refusal carries what the human needs to judge the change:
+            # each signal with the reason it counts, a diffstat, and the
+            # command that shows the whole diff. It names the range by
+            # branch, because a merge-base SHA tells the reader nothing.
+            msg_wt_land_authority_missing "$branch" "$reasons" \
+                "$(land_diffstat "$main_root" "$base" "$branch")" \
+                "git -C $main_root diff $(git -C "$main_root" symbolic-ref -q --short HEAD)...$branch" \
+                "$change" "$grant_cmd" "$lossless" >&2
+            auth_refused=yes
+        else
+            grant_note=$(cat "$grant" 2>/dev/null)
+        fi
+        # An empty grant authorizes nothing and would leave no audit trail in
+        # the merge commit body, so it does not open the gate.
+        if [ -z "$auth_refused" ] \
+           && ! printf '%s' "$grant_note" | grep '[^[:space:]]' >/dev/null; then
+            msg_wt_land_grant_empty "$change" "$grant_cmd" >&2
+            auth_refused=yes
+        fi
+    fi
+
+    if [ -n "$auth_refused" ]; then
+        # No adapter runs here, so the proof refusal can be captured whole
+        # and printed after a line that joins the two.
+        local proof_out
+        if ! proof_out=$(land_proof_gate "$change" skip-adapter 2>&1); then
+            msg_wt_land_gates_both "$branch" >&2
+            printf '%s\n' "$proof_out" >&2
+        fi
+        return 8
+    fi
+    land_proof_gate "$change" "$adapter_mode"
+}
+
+# The proof gate of land_gates. $1 = the change, $2 = `skip-adapter` to pass
+# where only scripts/proof.sh could decide. Exit 0 pass · 7 refused.
+land_proof_gate() {
+    local change="$1" skip_adapter="${2:-}"
+    # Proof gate: a change whose Plan declared real-environment proof cannot
+    # land on the gate's assertion-level suite alone. A green check proves only
+    # its assertion, not a browser journey or deployed health. Prove it with a
+    # real-environment adapter (scripts/proof.sh) or a human sign-off
+    # (.hone-proof/<change>). Otherwise land refuses before the merge and
+    # escalates. This gate never fires for a change with no such declaration.
+    #
+    # A committed .hone-proof-always marker widens that to every change. The
+    # project has an adapter and wants it run each time, so land still proves
+    # a change that forgot its trailer. Existence is the whole switch, and
+    # the contents are free for a comment.
+    #
+    # A change to the adapter ITSELF gates on the file change, with no trailer
+    # and no marker needed. The adapter defines the verdict this gate trusts.
+    # So the copy a change rewrites must not judge that change, and the change
+    # must not merge unseen either. Gating on the trailer alone left that
+    # hole open. A branch that weakened scripts/proof.sh and declared nothing
+    # never reached the bootstrap check below, and merged with no human in the
+    # loop.
+    local proof_always=""
+    [ -f "$main_root/.hone-proof-always" ] && proof_always=yes
+    # Classify the bootstrap case here, OUTSIDE the condition. It is now
+    # one of the three things that open the gate, not a branch taken
+    # inside it.
+    local bootstrap
+    bootstrap=$(land_proof_bootstrap "$main_root" "$base" "$branch" "$change")
+    if [ -n "$proof_always" ] || [ -n "$bootstrap" ] \
+       || [ -n "$(land_proof_required "$main_root" "$base" "$branch")" ]; then
+        local tip signoff="$main_root/.hone-proof/$change" discharged="" attest_cmd check
+        signoff_note=""
+        tip=$(git -C "$main_root" rev-parse "$branch")
+        attest_cmd="bash $HONE_WSH attest $change \"$(hone_msg_attest_what_full)\"   (stamps the tip commit)"
+        if [ -f "$signoff" ] && [ -n "$(land_proof_signoff_names_tip "$signoff" "$tip")" ]; then
+            discharged=yes  # human attested this exact commit
+            # The green land below deletes the spent sign-off, so its text
+            # must survive in the merge commit body, like a grant's.
+            signoff_note=$(cat "$signoff" 2>/dev/null)
+        fi
+        if [ -z "$discharged" ]; then
+            # Execute the PRIMARY tree's copy of the adapter, the reviewed and
+            # already-landed one. So a change cannot ship an always-green
+            # proof.sh of its own and pass the gate with it. The
+            # working directory is still the change's WORKTREE when it exists:
+            # that tree holds the code under test (the primary tree is still
+            # pre-merge here). A proof.sh that first appears inside the change
+            # itself does not count until it has landed. That first change
+            # needs the human sign-off. Pass the change through, by argument
+            # and environment, so the adapter can address its own instance (a
+            # per-change port, DB, output dir) instead of guessing.
+            #
+            # A BOOTSTRAP change (one that writes or edits scripts/proof.sh or
+            # a probe) runs no adapter at all. The copy land holds is the copy
+            # this change replaces, so running it proves the OLD adapter passes
+            # against the new code. A green run would auto-land a change to
+            # the proof adapter itself. The documented contract gives this case
+            # no automatic route: the human runs the branch's own adapter from
+            # the worktree and attests with its output.
+            local proof_root="$main_root" proof_wt=""
+            [ -d "$wt" ] && { proof_root="$wt"; proof_wt="$wt"; }
+            # The trailer's own description only ever appears in a refusal, so
+            # each refusal reads it for itself and a green land pays for it.
+            if [ -f "$main_root/scripts/proof.sh" ] && [ -z "$bootstrap" ]; then
+                # The adapter route needs no person, and it runs only under
+                # the lock (see cmd_land). Before the lock, or when the
+                # authority gate already stopped this land, it waits.
+                [ -n "$skip_adapter" ] && return 0
+                if ! ( cd "$proof_root" \
+                       && HONE_CHANGE="$change" HONE_BRANCH="$branch" \
+                          HONE_WORKTREE="$proof_wt" HONE_MAIN_ROOT="$main_root" \
+                          bash "$main_root/scripts/proof.sh" "$change" ); then
+                    check=$(land_proof_trailer "$main_root" "$base" "$branch")
+                    msg_wt_land_proof_adapter_failed "$branch" "$check" "$attest_cmd" "$bootstrap" >&2
+                    return 7
+                fi
+            elif [ -f "$signoff" ]; then
+                # A sign-off exists but does not name this tip. That is the
+                # precise diagnosis, and it comes BEFORE the marker's
+                # no-adapter refusal. The human already knows the attest route
+                # and only has to run it again for the new tip. The marker
+                # message would instead hide that route and offer removing
+                # project policy.
+                check=$(land_proof_trailer "$main_root" "$base" "$branch")
+                msg_wt_land_proof_signoff_stale "$change" "$branch" "$tip" "$check" "$attest_cmd" "$bootstrap" >&2
+                return 7
+            elif [ -n "$proof_always" ] && [ ! -f "$main_root/scripts/proof.sh" ]; then
+                # The marker asked for an adapter run on every change, and
+                # there is no adapter. Refusing beats quietly proving nothing.
+                # A bootstrap change skipped an adapter that DOES exist, so it
+                # never reaches this branch and never reads that it is missing.
+                msg_wt_land_proof_always_no_adapter "$HONE_PLUGIN_ROOT/templates/proof/" >&2
+                return 7
+            else
+                check=$(land_proof_trailer "$main_root" "$base" "$branch")
+                if [ -n "$bootstrap" ] && [ -z "$check" ]; then
+                    # The change declared nothing, and the adapter edit alone
+                    # opened the gate. Saying "this branch declares
+                    # real-environment proof" would name a trailer that is not
+                    # there, so this refusal names the file change instead.
+                    msg_wt_land_proof_adapter_change "$branch" "$attest_cmd" "$bootstrap" >&2
+                else
+                    msg_wt_land_proof_missing "$branch" "$check" "$attest_cmd" "$bootstrap" >&2
+                fi
+                return 7
+            fi
+        fi
+    fi
+    return 0
+}
+
+# Refuse a worktree whose state the merge would not carry: a tracked edit
+# nobody committed, or a file git neither tracks nor ignores. $1 = the
+# worktree. Exit 0 clean · 2 refused.
+land_worktree_clean() {
+    local wt="$1" untracked
+    # A tracked edit that nobody committed is not part of the branch, and the
+    # checkout below would carry it into the merge. Refuse before anything
+    # moves.
+    if [ -n "$(git -C "$wt" status --porcelain --untracked-files=no 2>/dev/null)" ]; then
+        msg_wt_land_worktree_dirty "$wt" >&2
+        return 2
+    fi
+    # A file that git does not track and does not ignore is in the worktree,
+    # so the suite there sees it. The merge does not carry it, so the primary
+    # tree would get a change that passed only with that file beside it.
+    # Refuse, so the suite on the merge sees exactly what lands.
+    untracked=$(git -C "$wt" ls-files --others --exclude-standard --directory 2>/dev/null)
+    if [ -n "$untracked" ]; then
+        msg_wt_land_worktree_untracked "$wt" "$(sed 's/^/- /' <<<"$untracked")" >&2
+        return 2
     fi
     return 0
 }
@@ -1715,9 +1820,11 @@ cmd_sync() {
         msg_wt_sync_not_shared >&2; return 2; }
     primary=$(git -C "$main_root" symbolic-ref -q --short HEAD) || {
         msg_wt_land_detached >&2; return 2; }
-    exec 9>"$(git -C "$main_root" rev-parse --git-common-dir)/hone-land.lock" || return 2
-    flock -w "${HONE_LAND_LOCK_TIMEOUT:-600}" 9 || {
-        msg_wt_lock_timeout "${HONE_LAND_LOCK_TIMEOUT:-600}" >&2; return 5; }
+    local lrc=0
+    hone_suite_lock "$(git -C "$main_root" rev-parse --git-common-dir)/hone-land.lock" \
+        "${HONE_LAND_LOCK_TIMEOUT:-600}" land || lrc=$?
+    [ "$lrc" -eq 5 ] && { msg_wt_lock_timeout "${HONE_LAND_LOCK_TIMEOUT:-600}" >&2; return 5; }
+    [ "$lrc" -eq 0 ] || return 2
     shared_push_primary "$main_root" "$remote" "$primary" || return $?
     msg_wt_sync_receipt "$remote" "$primary"
 }
@@ -1994,15 +2101,21 @@ cmd_remove() {
 # A garden change (garden/<slug>) has its own chain, the one the garden skill
 # names: worktree > cut > verify > land, with repair in place of cut. It calls
 # add, verify, and land only. $1 = the chain, as words.
+#
+# A step before $at shows ✓, unless PROGRESS_STATES names another mark for
+# it ("<step>=<mark>" words, see progress_state). One run went on to review
+# after a red verify, and its line said verify ✓.
 progress_line() {
-    local chain="$1" change="$2" at="$3" mark="$4" note="${5:-}" line s past=1 last
+    local chain="$1" change="$2" at="$3" mark="$4" note="${5:-}" line s past=1 last st
     last=${chain##* }
     line="◆ [$change]"
     for s in $chain; do
         if [ "$s" = "$at" ]; then
             line+=" $s $mark${note:+ ($note)}"; past=0
         elif [ "$past" -eq 1 ]; then
-            line+=" $s ✓"
+            st=" ${PROGRESS_STATES:-} "; st=${st#* "$s"=}
+            if [ "$st" != " ${PROGRESS_STATES:-} " ]; then line+=" $s ${st%% *}"
+            else line+=" $s ✓"; fi
         else
             line+=" $s"
         fi
@@ -2041,6 +2154,13 @@ progress_emit() {
     case " $1 " in *" $at "*) ;; *) return 0 ;; esac
     dir=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P) || return 0
     dir="$dir/hone-progress"
+    # A step that ends red keeps its ✗ on every later line, until it runs again.
+    case "$4" in
+        ✗) progress_state "$change" "$at" ✗ ;;
+        *) progress_state "$change" "$at" "" ;;
+    esac
+    local PROGRESS_STATES
+    PROGRESS_STATES=$(progress_state "$change")
     line=$(progress_line "$@")
     {
         mkdir -p "$dir"
@@ -2049,6 +2169,29 @@ progress_emit() {
         [ "$(cat "$dir/$sid.last" 2>/dev/null)" = "$line" ] && return 0
         printf '%s\n' "$line" >>"$dir/$sid"
         printf '%s\n' "$line" >"$dir/$sid.last"
+    } 2>/dev/null
+    return 0
+}
+
+# The last verdict of a step that no later line may hide, per session and
+# change, in <git-common-dir>/hone-progress/<session>.state. With $2 and $3,
+# record step $2 of change $1 as mark $3, or forget it when $3 is empty.
+# With $1 alone, print "<step>=<mark>" words for the change. Errors are
+# ignored, like every other part of the progress line.
+progress_state() {
+    local sid="${CLAUDE_CODE_SESSION_ID:-}" file
+    case "$sid" in ""|*/*|.*) return 0 ;; esac
+    file=$(cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P) || return 0
+    file="$file/hone-progress/$sid.state"
+    if [ "$#" -eq 1 ]; then
+        awk -F'\t' -v c="$1" '$1 == c { printf "%s%s=%s", sep, $2, $3; sep = " " }' "$file" 2>/dev/null
+        return 0
+    fi
+    {
+        mkdir -p "${file%/*}"
+        awk -F'\t' -v c="$1" -v s="$2" '!($1 == c && $2 == s)' "$file" >"$file.tmp" 2>/dev/null
+        [ -n "$3" ] && printf '%s\t%s\t%s\n' "$1" "$2" "$3" >>"$file.tmp"
+        mv -f "$file.tmp" "$file"
     } 2>/dev/null
     return 0
 }
@@ -2118,8 +2261,12 @@ progress_step() {
             case "$change" in hone/*) change=${change#hone/} ;; *) change="" ;; esac
             chain=$(progress_chain "$change")
             progress_emit "$chain" "$change" verify ...
+            # A verify that runs in the background must not read as green on
+            # the line of a step that starts meanwhile.
+            progress_state "$change" verify ...
             cmd_verify "$@" || rc=$?
-            [ "$rc" -eq 0 ] || progress_emit "$chain" "$change" verify ✗ "suite exit $rc" ;;
+            if [ "$rc" -eq 0 ]; then progress_state "$change" verify ""
+            else progress_emit "$chain" "$change" verify ✗ "suite exit $rc"; fi ;;
         governed)
             progress_emit "$(progress_chain "$change")" "$change" consolidate ...
             cmd_governed "$@" || rc=$? ;;
@@ -2139,8 +2286,12 @@ progress_step() {
             progress_emit "$chain" "$change" land ...
             cmd_land "$@" || rc=$?
             if [ "$rc" -eq 0 ]; then
-                progress_emit "$chain" "$change" land ✓ "merged $(git rev-parse --short HEAD 2>/dev/null)"
-                land_event "$change" landed "$(git rev-parse --short HEAD 2>/dev/null)"
+                # The merge that cmd_land made and recorded. The caller's
+                # HEAD can be any other branch, and the primary tree's HEAD
+                # can already hold another land's merge.
+                local merged="${LAND_MERGED_SHA:-}"
+                progress_emit "$chain" "$change" land ✓ "merged $merged"
+                land_event "$change" landed "$merged"
             else
                 progress_emit "$chain" "$change" land ✗ "exit $rc, $(progress_land_gate "$rc")"
                 case "$rc" in 6|7|8|9) land_event "$change" stopped "exit $rc, $(progress_land_gate "$rc")" ;; esac

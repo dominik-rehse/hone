@@ -586,6 +586,189 @@ git -C "$REPO" worktree remove --force "$SCR/wt"
 git -C "$REPO" worktree prune
 rm -rf "$SCR" "$REPO/docs/spikes/probe"
 
+echo "== field shapes 2026-10-01 (guards) =="
+# Each false ask below stopped an unattended run in the coordinated batch of
+# 2026-09-29 to 2026-10-01. Each shape is replayed from its transcript, and
+# each one has a near shape beside it that must still ask.
+GS=$(mktemp -d)
+GS=$(cd "$GS" && pwd -P)
+mkdir -p "$GS/x"
+# D2: `bun install --cwd <worktree>` read the directory as a package name.
+passes "$(bgj "bun install --frozen-lockfile --cwd $WT >/dev/null 2>&1; echo install=\$?")" \
+    "D2: an install with --cwd <worktree> from the primary tree passes"
+passes "$(bgj "bun install --frozen-lockfile --cwd $WT 2>&1 | tail -2" "$WT")" \
+    "D2: an install with --cwd <worktree> from the worktree passes"
+passes "$(bgj "bun install --frozen-lockfile --cwd=$WT" "$WT")" "D2: the --cwd=<dir> form passes"
+passes "$(bgj "SP=$GS; git -C $REPO worktree add -q --detach \$SP/wt HEAD && bun install --frozen-lockfile --cwd \$SP/wt 2>&1 | tail -2 && bash -c \"cd \$SP/wt && echo ok\"")" \
+    "D2: an install with --cwd into a scratch worktree the chain adds passes"
+git -C "$REPO" worktree remove --force "$GS/wt" 2>/dev/null
+asks "$(bgj "bun install --frozen-lockfile --cwd $REPO" "$WT")" "D2: an install with --cwd <primary tree> still asks"
+asks "$(bgj "bun add left-pad --cwd=$REPO" "$WT")" "D2: an add with --cwd=<primary tree> still asks"
+asks "$(bgj "bun install left-pad --cwd $WT/../.." "$WT")" "D2: a --cwd with .. still asks"
+asks "$(bgj "bun install left-pad --cwd $WT --cwd $REPO" "$WT")" "D2: a second --cwd still asks"
+asks "$(bgj 'bun install left-pad --cwd "$X"' "$WT")" "D2: a --cwd the hook cannot read still asks"
+asks "$(bgj "bun add left-pad --cwd $WT && bun add left-pad")" "D2: an add in the primary tree after a --cwd install still asks"
+# D7: a redirection after a bare install read as a package name. The command
+# then failed on a later cd into a directory it makes.
+passes "$(bgj "S=$GS/probe; rm -rf \$S; mkdir -p \$S && git archive HEAD | tar -x -C \$S && cd \$S && bun install --frozen-lockfile >/dev/null 2>&1; echo install=\$?"$'\n'"cd \$S && git diff --no-index /dev/null /dev/null; timeout 590 bun test src 2>&1 | head -40")" \
+    "D7: a sync install with a redirection in a scratch copy passes"
+passes "$(bgj "cd $GS/x && bun install >/dev/null")" "D7: cd <scratch> && bun install >/dev/null passes"
+passes "$(bgj "cd $REPO && bun install >/dev/null")" "D7: a bare sync install with a redirection in the primary tree passes, as without one"
+asks "$(bgj "cd $REPO && bun install left-pad >/dev/null")" "D7: an install of a package with a redirection still asks"
+asks "$(bgj 'bun install >/dev/null left-pad')" "D7: a package after a redirection still asks"
+asks "$(bgj 'npm install 2>&1 left-pad')" "D7: a package after 2>&1 still asks"
+asks "$(bgj 'npm install &>/dev/null left-pad')" "D7: a package after &> still asks"
+asks "$(bgj 'npm install 7zip-bin')" "D7: a package whose name starts with a digit still asks"
+# D3: text in a Python heredoc is data, unless Python can run a command.
+D3CMD=$(cat <<'FIELD'
+python3 - <<'EOF'
+p='.plans/deploy/no-sticky-workspace-dirs.md'
+s=open(p).read()
+old="3. The first-deploy runbook step"
+new="""3. `deploy_tail` also runs on `--rollback`, after `git reset --keep` to the target. A target from before this change has neither script. So `deploy_tail` runs each of the two steps only when its script is executable in the tree. Otherwise it prints a notice that names the missing script and goes on. The diversion stays on the box after such a rollback, because only `dpkg-divert --remove` undoes it.
+4. The first-deploy runbook step"""
+assert old in s; s=s.replace(old,new,1)
+old="- `deploy/scripts/agent-app-deploy.test.ts`: `POST_PULL_STEPS` gains the ensure step with its stub line and the report step, in the order above. A second case shows that a report with findings prints a warning and the deploy still completes."
+new=old+" A third case: `--rollback` to a target tree without `ensure-gnu-mkdir` and `workspace-dir-modes` prints the two notices, restarts the service, and exits 0."
+assert old in s; s=s.replace(old,new,1)
+old="- Order: start this Plan only after"
+new="- Order: do not run this Plan in a parallel batch. Start it only after"
+assert old in s; s=s.replace(old,new,1)
+open(p,'w').write(s)
+EOF
+FIELD
+)
+out=$(bgj "$D3CMD")
+passes "$out" "D3: a Python heredoc whose text names git reset --keep passes"
+for c in $'bash <<\'EOF\'\ngit reset --keep HEAD~1\nEOF' \
+         $'sh -s <<\'EOF\'\ngit reset --keep HEAD~1\nEOF' \
+         $'python3 - <<\'EOF\'\nimport os\nos.system("git reset --keep HEAD~1")\nEOF' \
+         $'python3 - <<\'EOF\'\nexec("git reset --keep HEAD~1")\nEOF' \
+         $'python3 - <<\'EOF\'\n().__class__.__base__\n"git reset --keep HEAD~1"\nEOF' \
+         $'python3 script.py <<\'EOF\'\ngit reset --keep HEAD~1\nEOF' \
+         $'python3 -c \'import sys\' <<\'EOF\'\ngit reset --keep HEAD~1\nEOF' \
+         $'PYTHONSTARTUP=x python3 - <<\'EOF\'\nprint("git reset --keep HEAD~1")\nEOF' \
+         $'python3 - <<\'EOF\' | bash\nprint("git reset --keep HEAD~1")\nEOF' \
+         $'python3 - <<\'EOF\' > /tmp/x.sh\nprint("git reset --keep HEAD~1")\nEOF' \
+         $'bash -c "$(python3 - <<\'EOF\'\nprint("git reset --keep HEAD~1")\nEOF\n)"' \
+         $'(python3 - <<\'EOF\'\nprint("git reset --keep HEAD~1")\nEOF\n)' \
+         $'eval "$(cat <<\'EOF\'\ngit reset --keep HEAD~1\nEOF\n)"'; do
+    asks "$(bgj "$c")" "D3: a heredoc that can run its text still asks: ${c%%$'\n'*}"
+done
+# D4: a read-only command whose pattern names a write verb.
+passes "$(bgj 'grep "chmod" scripts/proof.sh')" "D4: grep for chmod in an adapter passes"
+passes "$(bgj 'grep -rn "WORKSPACE_ROOT\|mktemp\|chmod\|install -d" scripts/proof.sh | head -30')" \
+    "D4: the field grep with a quoted alternation passes"
+passes "$(bgj "sed -n '/chmod/p' scripts/proof.sh")" "D4: sed -n /chmod/p on an adapter passes"
+passes "$(bgj 'cat scripts/proof.sh | grep -c "sed -i"')" "D4: cat and grep for sed -i pass"
+for c in 'chmod +x scripts/proof.sh' 'grep x y && chmod +x scripts/proof.sh' 'grep x $(chmod +x scripts/proof.sh)' \
+         'grep chmod scripts/proof.sh > scripts/lint.sh' 'rg --pre "chmod +x" x scripts/proof.sh' \
+         'PATH=/tmp grep chmod scripts/proof.sh' "sed -n '/chmod/w scripts/proof.sh' x" \
+         "sed -n 's/x/y/w scripts/proof.sh' x" 'cat scripts/proof.sh | tee scripts/lint.sh' \
+         'grep() { chmod +x "$@"; }; grep chmod scripts/proof.sh' './grep chmod scripts/proof.sh' \
+         $'cat <<\'EOF\'\nchmod +x scripts/proof.sh\nEOF'; do
+    asks "$(bgj "$c")" "D4: a write to an adapter still asks: $c"
+done
+# D5: a sed -i on a Plan whose script names a check config.
+passes "$(bgj "cd $REPO; sed -i 's#^stryker.conf.json:6 src/server/permissions\\.\$#stryker.conf.json:6 src/server/permissions.test.ts#' .plans/importers.txt; grep stryker .plans/importers.txt")" \
+    "D5: a sed -i on a Plan whose expression names a check config passes"
+passes "$(bgj "sed -i -e 's/biome.json/x/' -e 's/tsconfig.json/y/' .plans/a.md")" "D5: two -e scripts that name configs pass"
+for c in "sed -i 's/x/y/' stryker.conf.json" "sed -i -e 's/a/b/' stryker.conf.json" "sed 's/a/b/' -i stryker.conf.json" \
+         "sed -i 's/a/b/w stryker.conf.json' .plans/a.md" "sed -i 's/a/b/;w stryker.conf.json' .plans/a.md" \
+         "sed -i -f x.sed biome.json" "sed --in-place=.bak 's/x/y/' tsconfig.json" "sed -ni 's/x/y/p' biome.json" \
+         "sed -i -- 's/x/y/' biome.json" "sed -i 's/x/y/e' biome.json" "sed -i --weird 's/x/y/' .plans/a.md biome.json"; do
+    asks "$(bgj "$c")" "D5: a sed that writes a check config still asks: $c"
+done
+# D1: a formatter on a variable the hook cannot read. The ask is right: the
+# hook does not run a substitution, and a variable from an earlier Bash call
+# is empty in this one. The message says so, and it does not claim the
+# primary tree when the tree is unknown.
+D1CMD=$(cat <<'FIELD'
+python3 - <<'EOF'
+p='deploy/scripts/run-agent'
+s=open(p).read()
+s=s.replace('''	# `mirror/uploads` is the workspace's own converted-uploads link, a direct
+	# child of mirror/, so the */* glob never reaches it. A missing link is not
+	# a symlink and falls out at the -L test below. The */* glob does descend
+	# through that link, so entries inside the uploads folder are skipped: they
+	# are converter output, not mirror links.''','''	# `mirror/uploads` is the workspace's own converted-uploads link, a direct
+	# child of mirror/, so the */* glob does not name it and it is added here.
+	# A missing link is not a symlink and falls out at the -L test below. The
+	# */* glob does descend through that link, so entries inside the uploads
+	# folder are skipped: they are converter output, not mirror links.''')
+open(p,'w').write(s)
+EOF
+F=$(git status --porcelain | awk '{print $2}' | grep -E '\.(ts)$'); bunx biome check --write $F 2>&1 | tail -5
+scripts/run-tests.sh 2>&1 | tail -6; scripts/run-tests.sh tests/integration/bwrap-mirror-mounts.test.ts 2>&1 | tail -6; scripts/typecheck.sh 2>&1 | tail -5; scripts/lint.sh 2>&1 | tail -5
+FIELD
+)
+out=$(bgj "$D1CMD" "$WT")
+asks "$out" "D1: a formatter on \$F set from a substitution still asks"
+echo "$out" | grep -q 'durable file in the primary tree\|own files in the primary tree' && bad "D1: the ask should not claim the primary tree" || ok "D1: the ask does not claim the primary tree"
+echo "$out" | grep -q 'cannot read the value of \$F' && ok "D1: the ask names \$F as the value it cannot read" || bad "D1: the ask should name \$F"
+out=$(bgj 'bunx biome check --write $F' "$WT")
+asks "$out" "D1: a formatter on an unset \$F still asks"
+echo "$out" | grep -q 'command does not set \$F' && ok "D1: the ask says this command does not set \$F" || bad "D1: the ask should say this command does not set \$F"
+echo "$out" | grep -q 'same command' && ok "D1: the ask says to set it in the same command" || bad "D1: the ask should say to set it in the same command"
+echo "$out" | grep -q 'durable file in the primary tree\|own files in the primary tree' && bad "D1: the unset ask should not claim the primary tree" || ok "D1: the unset ask does not claim the primary tree"
+out=$(bgj "sort -u $GS/changed.txt | xargs bunx biome check --write" "$WT")
+asks "$out" "D1: a formatter behind xargs still asks"
+echo "$out" | grep -q 'cannot tell which tree' && ok "D1: the xargs ask says the tree is unknown" || bad "D1: the xargs ask should say the tree is unknown"
+asks "$(bgj "bunx biome check --write $REPO/src" "$WT")" "D1: a formatter on a path in the primary tree still asks"
+out=$(bgj 'bunx biome check --write $F')
+echo "$out" | grep -q 'formatter run can write a durable file in the primary tree' && ok "D1: in the primary tree the formatter ask stands" || bad "D1: the primary-tree formatter ask should stand"
+# Routes the changes above could open, and two older ones beside them.
+mkdir -p "$GS/sx"; ln -s "$GS/sx" "$GS/l"
+asks "$(bgj "ln -sfn $REPO $GS/l && bun add left-pad --cwd $GS/l" "$WT")" "a --cwd through a symlink the command repoints still asks"
+asks "$(bgj "ln -sfn $REPO $GS/l && cd $GS/l && bun add left-pad" "$WT")" "a cd through a symlink the command repoints still asks"
+asks "$(bgj 'npm i>/dev/null left-pad')" "a redirection that touches the verb still reads the package"
+asks "$(bgj 'echo x >| scripts/proof.sh')" "a clobber redirection into an adapter asks"
+asks "$(bgj 'echo {} >| biome.json')" "a clobber redirection into a check config asks"
+asks "$(bgj 'rg --hostname-bin "chmod +x" x scripts/proof.sh')" "rg with a --hostname-bin program still asks"
+asks "$(bgj 'bun --cwd=. add left-pad')" "an option before the verb does not hide an add in the primary tree"
+asks "$(bgj "bun --cwd=$REPO add left-pad" "$WT")" "--cwd=<primary tree> before the verb still asks"
+passes "$(bgj "bun --cwd $WT add left-pad")" "--cwd <worktree> before the verb passes"
+# A value with a dash, as most real paths have, hid the option from the rule.
+ln -s "$REPO" "$GS/prim-tree"
+for c in "bun --cwd $GS/prim-tree add left-pad" "bun --cwd $GS/prim-tree install left-pad" \
+         "yarn --cwd $GS/prim-tree add left-pad" "bun --cwd $REPO add left-pad"; do
+    asks "$(bgj "$c")" "an option with a value before the verb still asks, from the primary tree: $c"
+    asks "$(bgj "$c" "$WT")" "an option with a value before the verb still asks, from a worktree: $c"
+done
+# diff writes the file its --output names.
+for c in 'diff --output=scripts/proof.sh a b' 'diff a b --output scripts/proof.sh' 'diff --outp=scripts/proof.sh a b' \
+         'diff --output=biome.json a b' 'diff a b --output tsconfig.json'; do
+    asks "$(bgj "$c")" "diff --output into a protected file asks: $c"
+done
+passes "$(bgj 'diff scripts/proof.sh biome.json')" "a diff that only reads an adapter and a config passes"
+passes "$(bgj "diff --output=$GS/d.txt scripts/proof.sh x")" "a diff --output outside the repository passes"
+for c in "sed -n 'p' scripts/proof.sh -i" "sed -n 'w scripts/proof.sh' x" \
+         "sed -i -e 's/x/y/' -e 'w biome.json' .plans/a.md" "sed -i \"s/x/y/\$(echo w) biome.json\" .plans/a.md" \
+         $'python3 - <<\'X\' 3<x.py 0<&3\nprint("git reset --keep x")\nX' \
+         $'python3 - <<X\nprint("git reset --keep ${y:=$(id)}")\nX'; do
+    asks "$(bgj "$c")" "a write or a run the parse must still see asks: ${c%%$'\n'*}"
+done
+rm -rf "$GS"
+git -C "$REPO" worktree prune
+
+echo "== field shapes 2026-10-01 (guards): a check config the Plan names =="
+# D6: rule 1b asked on a stryker.conf.json repoint that the Plan required,
+# and the run stood still for 20 minutes. The ask stays, because a config edit
+# is the cheapest route from red to green, and the run helped write the Plan.
+# The ask now says whether the change's Plan names the file.
+printf '# auth-login\n\nRepoint `stryker.conf.json` at src/auth/.\n' > "$REPO/.plans/auth-login.md"
+out=$(guard_write "stryker.conf.json" "$WT")
+asked "$out" && ok "D6: a config the Plan names still asks" || bad "D6: a config the Plan names should still ask"
+echo "$out" | grep -q 'the Plan .plans/auth-login.md names it' && ok "D6: the ask names the Plan that names the file" || bad "D6: the ask should name the Plan"
+out=$(guard_write "biome.json" "$WT")
+asked "$out" && ok "D6: a config the Plan does not name asks" || bad "D6: a config the Plan does not name should ask"
+echo "$out" | grep -q 'the Plan .plans/auth-login.md does not name it' && ok "D6: the ask says the Plan does not name the file" || bad "D6: the ask should say the Plan is silent"
+rm -f "$REPO/.plans/auth-login.md"
+out=$(guard_write "stryker.conf.json" "$WT")
+asked "$out" && ok "D6: a config with no Plan asks" || bad "D6: a config with no Plan should ask"
+out=$(guard_write "biome.json" "$REPO")
+asked "$out" && ok "D6: a config in the primary tree asks" || bad "D6: a config in the primary tree should ask"
+
 echo "== dirty-guard: what a shell command changes in the primary tree =="
 # One event of the hook, as the harness sends it. $1 = tree, $2 = event,
 # $3 = tool-use id, $4 = session id (default $DG_SESSION). A write made
@@ -1619,6 +1802,81 @@ while IFS= read -r rule; do
     grep -qF "\"$rule\"" "$PLUGIN_ROOT/README.md" || { readme_ok=0; bad "README install block lacks $rule"; }
 done < <(grep -vE '^[[:space:]]*(#|$)' "$DENY_CANON")
 [ "$readme_ok" -eq 1 ] && ok "README install block carries every canonical rule"
+
+echo "== field shapes 2026-10-01 (gate) =="
+# Each shape below came from the coordinated batch of 2026-09-29 to
+# 2026-10-01. The section builds its own repository, so no earlier state
+# leaks in.
+FG=$(mktemp -d); FG=$(cd "$FG" && pwd -P)
+git -C "$FG" init -q && git -C "$FG" symbolic-ref HEAD refs/heads/main
+git -C "$FG" config user.email t@t.t; git -C "$FG" config user.name t
+mkdir -p "$FG/scripts" "$FG/src"
+printf '.worktrees/\n' > "$FG/.gitignore"
+FG_RUNS="$FG/.git/fg-runs"
+cat > "$FG/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+echo "\${1:-}" >> "$FG_RUNS"
+[ -f "\$(git rev-parse --show-toplevel)/src/RED" ] && echo "FAIL cart total is off by one"
+for i in \$(seq 1 30); do echo "ok \$i - passing test \$i"; done
+[ ! -f "\$(git rev-parse --show-toplevel)/src/RED" ]
+EOF
+echo "// seed" > "$FG/src/a.js"
+git -C "$FG" add -A && git -C "$FG" commit -qm seed
+git -C "$FG" worktree add -q -b hone/fresh "$FG/.worktrees/fresh" HEAD
+FG_WT="$FG/.worktrees/fresh"
+FG_RECEIPT="$(git -C "$FG_WT" rev-parse --absolute-git-dir)/hone-gate-green"
+: > "$FG_RUNS"
+
+# B4: a fresh hone/* branch with no commit of its own. The gate ran --all on
+# the trunk's tree, and its receipt then read "already passed" before the
+# change existed.
+out=$(cd "$FG_WT" && echo '{}' | bash "$GATE")
+[ ! -s "$FG_RUNS" ] && ok "B4: a fresh change branch with a clean tree runs no suite" \
+    || bad "B4: a fresh change branch should run no suite (ran: $(tr '\n' ' ' < "$FG_RUNS"))"
+[ -e "$FG_RECEIPT" ] && bad "B4: a fresh change branch should write no receipt" || ok "B4: a fresh change branch writes no receipt"
+echo "$out" | grep -q 'already passed' && bad "B4: a fresh branch must not read as passed" || ok "B4: a fresh branch does not read as passed"
+# The first commit makes it a change, and the full tier runs.
+echo "// b" > "$FG_WT/src/b.js"
+(cd "$FG_WT" && git add -A && git commit -qm "feat: b")
+out=$(cd "$FG_WT" && echo '{}' | bash "$GATE")
+[ "$(tr '\n' ' ' < "$FG_RUNS")" = "--all " ] && ok "B4: the first commit runs the full tier" || bad "B4: the first commit should run --all (ran: $(tr '\n' ' ' < "$FG_RUNS"))"
+# A later commit skips, and the skip says the tree moved.
+echo "// c" > "$FG_WT/src/c.js"
+(cd "$FG_WT" && git add -A && git commit -qm "feat: c")
+out=$(cd "$FG_WT" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$FG_RUNS")" -eq 1 ] && ok "B4: a later commit on the branch skips the full tier" || bad "B4: a later commit should skip"
+echo "$out" | grep -q 'already passed on this branch at an earlier tree' \
+    && ok "B4: the skip says the receipt is for an earlier tree" || bad "B4: the skip should say the tree moved: $out"
+
+# B8: the block's tail. The runner printed its failure first and thirty
+# passing lines after it, and a plain tail showed only passing lines.
+touch "$FG_WT/src/RED"
+out=$(cd "$FG_WT" && echo '{"session_id":"fg"}' | bash "$GATE")
+echo "$out" | grep -q '"decision":"block"' && ok "B8: a red unit run blocks" || bad "B8: a red unit run should block: $out"
+echo "$out" | grep -q 'FAIL cart total is off by one' && ok "B8: the block shows the failing line" \
+    || bad "B8: the block should show the failing line, not only passing ones: $out"
+rm -f "$FG_WT/src/RED" "$(git -C "$FG_WT" rev-parse --absolute-git-dir)/hone-gate-blocks"
+
+# B5: a nested `claude -p "/code-review ..."` session runs hone's Stop hooks.
+# The gate there ran the full suite and held the suite lock, and the nag told
+# the reviewer to start a run. A stand-in named claude runs the hook as its
+# child, the way Claude Code does.
+FG_BIN="$FG/.git/bin"; mkdir -p "$FG_BIN"
+printf '#!/bin/bash\nbash "$HOOK"\n' > "$FG_BIN/claude"; chmod +x "$FG_BIN/claude"
+touch "$FG_WT/src/RED"
+out=$(cd "$FG_WT" && echo '{}' | HOOK="$GATE" "$FG_BIN/claude" -p "/code-review high the brief")
+[ -z "$out" ] && ok "B5: the gate stays silent in a nested review session" || bad "B5: the gate should exit at once in a nested review: $out"
+out=$(cd "$FG_WT" && echo '{}' | HOOK="$GATE" "$FG_BIN/claude" -p "/hone:run the change")
+echo "$out" | grep -q '"decision":"block"' && ok "B5: a print-mode run that is no review still gets the gate" \
+    || bad "B5: only a /code-review session may skip the gate: $out"
+rm -f "$FG_WT/src/RED" "$(git -C "$FG_WT" rev-parse --absolute-git-dir)/hone-gate-blocks"
+mkdir -p "$FG/.plans" && echo "# Plan" > "$FG/.plans/ghost.md"
+out=$(cd "$FG" && echo '{}' | bash "$NAG" 2>&1)
+[ -n "$out" ] || bad "B5: the nag should report the pending Plan outside a review"
+out=$(cd "$FG" && echo '{}' | HOOK="$NAG" "$FG_BIN/claude" -p "/code-review high the brief" 2>&1)
+[ -z "$out" ] && ok "B5: the nag stays silent in a nested review session" || bad "B5: the nag should exit at once in a nested review: $out"
+git -C "$FG" worktree remove --force "$FG_WT" 2>/dev/null
+rm -rf "$FG"
 
 echo
 echo "-------------------------------------"

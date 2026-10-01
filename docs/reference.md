@@ -27,11 +27,11 @@ Slash commands, in the order a change flows:
   in a background tab (`run:<change>`, `plan:<idea>`; `opus` unless
   `--model` says otherwise), watches it, and prints a board. A plan tab
   closes once its Plan is committed. `/hone:run --all` inside herdr hands over
-  to it. `scripts/coordinate.sh` does the mechanics: its
-  ticker notifies you when a session needs you, and its `admit` checks a
-  change against every change in flight, other developers' claims included,
-  and keeps garden apart. A dependent Plan starts, and a run's tab closes,
-  only after `worktree.sh landed`.
+  to it. Its ticker (`scripts/coordinate.sh`) notifies you when a session
+  needs you. Its `admit` checks a change against every change in flight,
+  colleagues' claims included. It holds garden apart, and a Plan until its
+  predecessor lands. On an `updated` event, restart the
+  coordinator for the newer hone.
 - `/hone:garden` scans the repo for stale docs, dead code, and redundant tests
   between changes, and lands the safe deletions. It also repoints a `docs/`
   reference whose target moved, and escalates the rest as one proposed Plan per
@@ -65,7 +65,8 @@ work. The loop calls it, and you can too:
   the project ships `scripts/setup-tree.sh`, `add` then runs it inside the
   new worktree (see *Adapters*).
 - `worktree.sh verify` runs the full test suite, serialized against other
-  sessions. The only sanctioned way to run `--all` by hand.
+  sessions. The only sanctioned way to run `--all` by hand. A green run
+  writes the gate's receipt.
 - `worktree.sh review-scope <change>` prints how deep the change's review must
   go: `full`, or `docs-only` when the diff touches nothing outside `docs/` and
   `.plans/`. The loop skips `/code-review` only on `docs-only`, where a code
@@ -183,7 +184,9 @@ file:
 
 Three environment variables tune the cross-session mechanics.
 `HONE_LAND_LOCK_TIMEOUT` sets the seconds a land or full-suite run waits for
-the lock (default 600). `HONE_SUITE_LOCK_TIMEOUT` sets the seconds the
+the lock (default 600). Takers queue, and a land goes first. A
+land's wait pauses while a run holds the lock.
+`HONE_SUITE_LOCK_TIMEOUT` sets the seconds the
 gate's pre-land full run waits (default 30). `HONE_LAND_RETRIES` sets how
 many times land redoes merge and suite after the primary branch moved, or
 the remote rejected its push (default 3).
@@ -216,7 +219,8 @@ neither. When you want that record, route the edit through the loop.
     merge.
   - In any tree, it asks before an edit to a check config. The gate's runs
     are only as strict as their config, so an edit there is the cheapest
-    route from red to green.
+    route from red to green. The ask says whether the change's Plan names
+    the file.
 
   A check config is the dedicated config file of one of three tools:
   - a test runner (`bunfig.toml`, `vitest.config.*`, `jest.config.*`,
@@ -237,23 +241,21 @@ neither. When you want that record, route the edit through the loop.
     the `worktree.sh` helpers, and it denies the loop the helpers too.
   - It asks before a command that modifies a protected artifact: an
     adapter, a hook, settings, a policy file, or a check config. The ask
-    names the file. A config outside the repository, or a copy that only
-    reads, passes.
+    names the file. A config outside the repository, a copy that only
+    reads, a `grep` or a sed `s` pattern that names it passes.
   - It asks before a command that moves HEAD in the primary tree.
-    `git checkout -- <paths>` and `git checkout <ref> -- <paths>` restore
-    files and move no HEAD, so both pass.
+    `git checkout -- <paths>` restores files, so it passes.
   - It asks before a command that moves the primary branch itself there.
     The list is `git merge`, `cherry-pick`, `rebase`, `branch -f`,
     `update-ref` on `refs/heads/`. A push into this repository counts from
     any tree, and so does every `git reset` but a bare one, a `--`
     restore, and one whose operands are paths. `worktree.sh land` is the
-    route, and it passes, as do reads of history and a push of the change
-    branch to the team's remote.
+    route, and it passes, as does a push of the change branch to the
+    team's remote.
   - It asks before a package manager, a formatter, or a migration tool
-    runs in the primary tree. Such a tool writes its own files, which no
-    command text spells out. A bare sync install (`bun install`, `npm ci`,
-    with flags only) passes, because it installs what the lockfile already
-    says. An install that names a package still asks.
+    runs in the primary tree. A bare sync install (`bun install`, `npm ci`,
+    with flags only) passes. An install that names a package still asks.
+    `bun` and `yarn` are judged where `--cwd` points.
 
   It reads the command without its prose: a git `-m` value, and the text
   after `worktree.sh grant` or `attest`.
@@ -261,13 +263,14 @@ neither. When you want that record, route the edit through the loop.
   Every primary-tree rule reads each tree the command names, and the
   shell's directory. Before a rule asks, an analysis replays the command.
   It follows `cd`, `git -C`, a variable set to a literal path,
-  `$TMPDIR`, `$(mktemp -d)`, or the one directory an `ls -d <glob>` finds,
-  and a directory the command makes.
+  `$TMPDIR`, `$(mktemp -d)`, an `ls -d <glob>`, and a directory the
+  command makes.
   If it models the whole command and nothing moves or writes the primary
   tree, it passes. Otherwise it asks. A move or a push that no rule
   caught gets the same test. Where the
   analysis cannot model a part, such as a loop body, it judges each
   command there in every directory it may reach, and asks on the rest.
+  A heredoc fed to `python3 -` is data if Python cannot start a process.
 - *dirty-guard* (PreToolUse, and PostToolUse or PostToolUseFailure on Bash)
   reads the effect instead of the command. In the primary tree it records the dirty protected paths
   before the command, with a hash of each, and blocks on those that the
@@ -283,10 +286,11 @@ neither. When you want that record, route the edit through the loop.
     than `src/`, and it breaks the suite just as easily. So the gate reads
     the whole durable perimeter, not `src/` and `tests/` alone.
   - On a clean `hone/<change>` branch it runs the full suite, once per
-    change branch. This is the pre-land check. A green run records the
-    branch and the tree it verified in `<git-dir>/hone-gate-green`. Every
-    later Stop on that branch skips the run and says so, and a plugin
-    upgrade invalidates the record. When a land or a verify holds the land
+    change branch. This is the pre-land check. A green run, or a green
+    `worktree.sh verify`, records the branch and the tree in
+    `<git-dir>/hone-gate-green`. Every later Stop on that branch skips the
+    run and says so, and a plugin upgrade invalidates the record. A branch
+    with no commit of its own runs nothing. When a land or a verify holds the land
     lock, often this session's own, the gate blocks under the cap below.
 
   - A Stop hook runs where the agent's shell stands, and the agent moves it.
@@ -306,6 +310,7 @@ neither. When you want that record, route the edit through the loop.
   `land` re-runs the full suite after the merge, so it still catches a
   regression that a later commit introduces. The cap is the turn's and
   never the trunk's: a red change still cannot land.
+  - In a nested `/code-review` session it exits at once, and so does the nag.
 - *nag* (Stop, advisory) reports hygiene findings as a visible message,
   never a block. The findings:
   - a Plan that survived its landing
@@ -456,7 +461,7 @@ helper command with its full path for you to run.
 | 5 | lock timeout: another land or full-suite run held the lock. Also: the primary branch, or in shared mode the remote, moved on every attempt; nothing published |
 | 6 | suite, type-check, lint, or setup-tree red on the merge, or a git hook refused the merge commit; primary branch unmoved, worktree kept, output in the land log |
 | 7 | proof gate: real-environment proof missing |
-| 8 | authority gate: irreversible change without a grant |
+| 8 | authority gate: irreversible change without a grant. Names an open proof gate too |
 | 9 | merge conflict; aborted, tree restored, branch kept, conflicting paths named |
 
 What to do at each code, in detail:
@@ -466,13 +471,12 @@ Inside herdr, exits 6 to 9 also notify you and name the repository and the
 tab.
 
 After a green suite, land also runs `scripts/typecheck.sh` and
-`scripts/lint.sh` where they exist, the same optional adapters the gate runs.
-A red adapter fails the land with the same exit 6, and the message names the
-adapter.
+`scripts/lint.sh` where they exist. A red one fails the land with exit 6.
 
-The merge and its suite write `<git-common-dir>/hone-land.log`,
-replaced on every land, and the adapter runs append to it. Exit 6 prints its
-tail.
+The merge and its suite write `<git-common-dir>/hone-land.<change>.log`,
+and the adapter runs append to it. Exit 6 prints its failing lines, else
+its tail. land checks its gates before it queues for the lock, and again
+under it. `scripts/proof.sh` runs only under the lock.
 
 After a green run on the merge, land warns about every tier whose summary
 line in that log reported `ran=0`. The warning never blocks: the merge
@@ -481,14 +485,10 @@ stands. An adapter that prints no summary lines draws no warning.
 Other subcommands:
 
 - `add` exits 4 when another run has already claimed the change (0 created, 2
-  error). The refusal says what the claim holds, and it names one action. A file
-  in the worktree that changed in the last 30 minutes means a run at work, and
-  the action is to wait. An older worktree with commits or uncommitted files is
-  work for a person to read. An older worktree with neither is safe to remove,
-  and the refusal prints the `remove` command. In shared mode that run may be on
-  another machine, and a refused claim leaves nothing local behind. A failed
-  `setup-tree.sh` run is exit 2 with the worktree kept: the claim stands, and
-  the message carries the adapter's output tail.
+  error). The refusal says what the claim holds (a run at work, work left
+  behind, or nothing), and it names one action. In shared mode a refused
+  claim leaves nothing local behind. A failed `setup-tree.sh` run is exit 2
+  with the worktree kept.
 - `remove` exits 3 when the path is not one hone created (0 removed,
   2 error).
 - `verify` passes through the adapter's exit (2 setup error, 5 lock

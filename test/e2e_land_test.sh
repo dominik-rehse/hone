@@ -224,7 +224,7 @@ out=$(bash "$WSH" land lint-red 2>&1); rc=$?
 [ "$rc" -eq 6 ] || die "land should exit 6 on lint red on the merge (got $rc)"
 [ "$(git rev-parse HEAD)" = "$PRE" ] || die "a lint-red merge must not move the primary branch"
 echo "$out" | grep -q "lint failed on the merge" || die "the refusal should name the failing adapter"
-echo "$out" | grep -q "hone-land.log" || die "the refusal should name the land log"
+echo "$out" | grep -q "hone-land.lint-red.log" || die "the refusal should name the change's own land log"
 [ -d "$WT_LR" ] || die "worktree should survive a lint-red land as evidence"
 git show-ref --verify --quiet refs/heads/hone/lint-red || die "branch should survive a lint-red land as evidence"
 bash scripts/lint.sh >/dev/null 2>&1 || die "trunk left lint-red after a refused land"
@@ -473,17 +473,116 @@ step "remove accepts a change name and a relative path, and still refuses a fore
 echo "== 5c. land serializes: a held lock makes a concurrent land wait =="
 if command -v flock >/dev/null 2>&1; then
   LOCK="$(git rev-parse --git-common-dir)/hone-land.lock"
+  WT_LW=$(bash "$WSH" add lock-wait) || die "worktree add lock-wait"
+  (cd "$WT_LW" && echo "// wait" > src/mathx/wait.js && git add -A && git commit -qm "feat(mathx): wait" -m "Cut: nothing, a test change")
   ( flock 8; sleep 3; ) 8>"$LOCK" &   # hold the land lock ~3s
   HOLDER=$!
   sleep 0.3                            # let the holder acquire it first
   # A land with a 1s wait must give up (exit 5) while the lock is held, instead
   # of interleaving its merge with the holder's critical section.
-  HONE_LAND_LOCK_TIMEOUT=1 bash "$WSH" land whatever >/dev/null 2>&1; rc=$?
+  HONE_LAND_LOCK_TIMEOUT=1 bash "$WSH" land lock-wait >/dev/null 2>&1; rc=$?
   [ "$rc" -eq 5 ] || die "land under a held lock should time out with exit 5 (got $rc)"
   wait "$HOLDER" 2>/dev/null
-  step "concurrent land waited on the lock, then timed out (exit 5)"
+  [ -n "$(ls "$LOCK.queue" 2>/dev/null | grep -vx 'next\|holder')" ] && die "a land that timed out should leave no ticket: $(ls "$LOCK.queue")"
+  bash "$WSH" remove "$WT_LW" >/dev/null 2>&1; git branch -q -D hone/lock-wait 2>/dev/null
+  step "concurrent land waited on the lock, then timed out (exit 5), and left no ticket"
 else
   step "SKIP lock test: flock not available"
+fi
+
+echo "== 5c1. the suite lock is a queue: arrival order, and a land goes first =="
+# Field shape of 2026-10-01: under parallel runs, new verifies kept taking the
+# lock ahead of a land that waited, and one land hit exit 5 seven times. flock
+# alone wakes every waiter at once, so the order was a race.
+if command -v flock >/dev/null 2>&1; then
+  QLOCK="$REPO/.git/q-test.lock"; ORDER="$REPO/.git/q-order"; : > "$ORDER"
+  taker() {  # $1 name, $2 class, $3 hold seconds, $4 wait seconds
+    bash -c '. "$1/hooks/common.sh"; hone_suite_lock "$2" "$6" "$3" || { echo "$4-timeout" >> "$5"; exit 5; }
+             echo "$4" >> "$5"; sleep "$7"' _ "$PLUGIN_ROOT" "$QLOCK" "$2" "$1" "$ORDER" "${4:-30}" "$3" &
+  }
+  taker holder suite 1.5; sleep 0.3
+  taker verify-a suite 0.2; sleep 0.3
+  taker verify-b suite 0.2; sleep 0.3
+  taker land-c land 0.2; sleep 0.3
+  taker verify-d suite 0.2
+  wait
+  got=$(tr '\n' ' ' < "$ORDER")
+  [ "$got" = "holder land-c verify-a verify-b verify-d " ] \
+      || die "the lock should go to the land first, then the suites in arrival order (got: $got)"
+  step "a waiting land goes first, and suites follow in arrival order"
+  # A waiter that died leaves its ticket. A dead pid must not hold the queue.
+  bash -c 'exit 0' & DEAD=$!; wait "$DEAD"
+  mkdir -p "$QLOCK.queue" && echo stale > "$QLOCK.queue/0.000000000000.$DEAD"
+  : > "$ORDER"
+  taker after-dead suite 0 2; wait
+  [ "$(cat "$ORDER")" = "after-dead" ] || die "a dead waiter's ticket should be skipped (got: $(cat "$ORDER"))"
+  [ -e "$QLOCK.queue/0.000000000000.$DEAD" ] && die "a dead waiter's ticket should be deleted"
+  step "a dead waiter's ticket is skipped and deleted"
+  # A suite in front can run longer than a land's timeout. The land keeps its
+  # place while a live taker holds the lock, and a suite behind it does not.
+  : > "$ORDER"
+  taker long-suite suite 3; sleep 0.3
+  taker patient-land land 0 1
+  taker short-suite suite 0 1
+  wait
+  got=$(tr '\n' ' ' < "$ORDER")
+  [ "$got" = "long-suite short-suite-timeout patient-land " ] \
+      || die "a land should outwait a long suite, and a suite should still time out (got: $got)"
+  step "a land keeps its place behind a suite longer than its timeout"
+  rm -rf "$QLOCK" "$QLOCK.queue" "$ORDER"
+else
+  step "SKIP queue test: flock not available"
+fi
+
+echo "== 5c2. land checks its gates before it waits for the lock =="
+# Field shape of 2026-10-01: land queued for the lock first, and three runs
+# waited 9, 9, and 36 minutes only to read exit 7 or 8. And a land named the
+# person's gates one at a time: exit 8, a grant, then exit 7.
+if command -v flock >/dev/null 2>&1; then
+  LOCK="$(git rev-parse --git-common-dir)/hone-land.lock"
+  WT_EG=$(bash "$WSH" add early-gates) || die "worktree add early-gates"
+  mkdir -p "$WT_EG/db/migrations"
+  echo "DROP TABLE old_carts;" > "$WT_EG/db/migrations/0009_drop.sql"
+  (cd "$WT_EG" && git add -A && git commit -qm "feat(db): drop old_carts" -m "Cut: the old_carts table" -m "Proof: real-environment - open the cart page on staging")
+  ( flock 8; sleep 6; ) 8>"$LOCK" &
+  HOLDER=$!
+  sleep 0.3
+  t0=$SECONDS
+  out=$(HONE_LAND_LOCK_TIMEOUT=30 bash "$WSH" land early-gates 2>&1); rc=$?
+  [ "$rc" -eq 8 ] || die "an ungranted irreversible land should exit 8 while the lock is held (got $rc): $out"
+  [ $((SECONDS - t0)) -lt 4 ] || die "land should refuse on the authority gate without waiting for the lock ($((SECONDS - t0))s)"
+  echo "$out" | grep -q "irreversible change and nobody granted it" || die "the refusal should name the authority gate: $out"
+  echo "$out" | grep -q "the proof gate is open for hone/early-gates too" || die "the refusal should name the proof gate in the same stop: $out"
+  echo "$out" | grep -q "declares real-environment proof" || die "the refusal should carry the proof gate's own message: $out"
+  echo "$out" | grep -qE 'worktree\.sh attest early-gates' || die "the refusal should offer the attest command: $out"
+  step "an ungranted, unproven land names both gates at once, without waiting for the lock (exit 8)"
+  bash "$WSH" grant early-gates "old_carts is unused" >/dev/null || die "grant helper failed"
+  t0=$SECONDS
+  out=$(HONE_LAND_LOCK_TIMEOUT=30 bash "$WSH" land early-gates 2>&1); rc=$?
+  [ "$rc" -eq 7 ] || die "a granted land without proof should exit 7 (got $rc): $out"
+  [ $((SECONDS - t0)) -lt 4 ] || die "land should refuse on the proof gate without waiting for the lock ($((SECONDS - t0))s)"
+  step "a land with no proof refuses at once (exit 7), without waiting for the lock"
+  wait "$HOLDER" 2>/dev/null
+  # The proof adapter runs only under the lock. A field proof.sh ships the
+  # branch to a shared server, and two runs at once collide there.
+  PROOF_MARK="$REPO/.git/proof-ran"
+  printf '#!/bin/bash\ntouch "%s"\nexit 1\n' "$PROOF_MARK" > scripts/proof.sh
+  ( flock 8; sleep 3; ) 8>"$LOCK" &
+  HOLDER=$!
+  sleep 0.3
+  HONE_LAND_LOCK_TIMEOUT=1 bash "$WSH" land early-gates >/dev/null 2>&1; rc=$?
+  [ "$rc" -eq 5 ] || die "a land whose proof needs the adapter should wait for the lock (got $rc)"
+  [ -e "$PROOF_MARK" ] && die "proof.sh must not run before land holds the lock"
+  wait "$HOLDER" 2>/dev/null
+  out=$(bash "$WSH" land early-gates 2>&1); rc=$?
+  [ "$rc" -eq 7 ] || die "a red proof.sh under the lock should exit 7 (got $rc): $out"
+  [ -e "$PROOF_MARK" ] || die "proof.sh should run once land holds the lock"
+  rm -f scripts/proof.sh "$PROOF_MARK"
+  step "proof.sh runs only under the lock"
+  rm -f "$REPO/.hone-grant/early-gates"
+  bash "$WSH" remove "$WT_EG" >/dev/null 2>&1; git branch -q -D hone/early-gates 2>/dev/null
+else
+  step "SKIP early-gates test: flock not available"
 fi
 
 echo "== 5d. verify + gate --all share the suite lock =="
@@ -1524,7 +1623,7 @@ out=$(bash "$WSH" land st-lock 2>/dev/null); rc=$?
 echo "$out" | grep -q "setup-tree reinstalled" || die "the receipt should report the setup-tree run"
 echo "$out" | grep -q "reinstall dependencies" && die "the reinstall ask should give way to the adapter"
 echo "$out" | grep -qx "  bun.lock" || die "the receipt should still name the lockfile"
-grep -q "setup-tree ran in $REPO" "$(git rev-parse --git-common-dir)/hone-land.log" \
+grep -q "setup-tree ran in $REPO" "$(git rev-parse --git-common-dir)/hone-land.st-lock.log" \
     || die "the land log should show setup-tree ran in the primary tree"
 step "land ran setup-tree in the primary tree and said so"
 
@@ -1691,6 +1790,101 @@ rm -f "$QDIR"; mv "$QDIR.bak" "$QDIR"
 [ "$(drain p1 "$REPO")" = "" ] || die "a broken queue shows nothing"
 bash "$WSH" remove "$WT_P" >/dev/null 2>&1; git branch -q -D hone/prog-broken 2>/dev/null
 step "no session id queues nothing, and a broken queue fails nothing"
+
+echo "== 10. field shapes 2026-10-01: land log, failure tail, verify receipt, progress =="
+# An adapter in the shape of a TAP runner: the failure comes first, and thirty
+# passing lines follow it. A file named RED fails the run and names the change.
+cat > scripts/run-tests.sh <<'EOF'
+#!/bin/bash
+[ -n "${SLOW_SUITE:-}" ] && sleep "$SLOW_SUITE"
+[ -f RED ] && echo "not ok 1 - $(cat RED) breaks the cart total"
+for i in $(seq 1 30); do echo "ok $((i + 1)) - passing test $i"; done
+[ ! -f RED ]
+EOF
+git add scripts/run-tests.sh && git commit -qm "test: a TAP-shaped adapter"
+COMMON="$(cd "$(git rev-parse --git-common-dir)" && pwd)"
+WT_A=$(bash "$WSH" add b10/log-a) || die "worktree add b10/log-a"
+(cd "$WT_A" && echo change-a > RED && git add -A && git commit -qm "feat: a" -m "Cut: nothing, a test change")
+out=$(bash "$WSH" land b10/log-a 2>&1); rc=$?
+[ "$rc" -eq 6 ] || die "a red land should exit 6 (got $rc): $out"
+# The failing line sits 31 lines from the end, so a plain tail -n 20 missed it.
+echo "$out" | grep -q "not ok 1 - change-a breaks the cart total" || die "the refusal should show the failing line, not only passing ones: $out"
+step "a red land shows the failing line of a long run"
+LOG_A="$COMMON/hone-land.b10+log-a.log"
+[ -f "$LOG_A" ] || die "the land log should be per change, with the slash made safe: $(ls "$COMMON" | grep hone-land)"
+echo "$out" | grep -qF "$LOG_A" || die "the refusal should name the change's own log: $out"
+WT_B=$(bash "$WSH" add b10/log-b) || die "worktree add b10/log-b"
+(cd "$WT_B" && echo change-b > RED && git add -A && git commit -qm "feat: b" -m "Cut: nothing, a test change")
+bash "$WSH" land b10/log-b >/dev/null 2>&1
+grep -q "change-a breaks" "$LOG_A" || die "another change's land must not empty this change's log"
+step "a second land keeps the first land's log (one log per change)"
+
+# A green verify writes the receipt that the Stop gate reads. The gate then
+# skips the full suite. Field: the gate ran --all again for 30 minutes while
+# the run only waited for a person.
+RUNS10="$COMMON/b10-runs"
+cat > scripts/run-tests.sh <<EOF
+#!/bin/bash
+[ -n "\${SLOW_SUITE:-}" ] && sleep "\$SLOW_SUITE"
+echo "\${1:-}" >> "$RUNS10"
+[ ! -f RED ]
+EOF
+git add scripts/run-tests.sh && git commit -qm "test: a counting adapter"
+WT_V=$(bash "$WSH" add b10/verify) || die "worktree add b10/verify"
+(cd "$WT_V" && echo "// v" > src/mathx/v.js && git add -A && git commit -qm "feat: v" -m "Cut: nothing, a test change")
+: > "$RUNS10"
+(cd "$WT_V" && bash "$WSH" verify >/dev/null 2>&1) || die "verify should be green"
+out=$(cd "$WT_V" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS10")" -eq 1 ] || die "the gate should not run the full suite again after a green verify (runs: $(tr '\n' ' ' < "$RUNS10"))"
+echo "$out" | grep -q "already passed on this branch at this exact tree" || die "the skip should say the tree matches: $out"
+echo "$out" | grep -q "run by worktree.sh verify" || die "the skip should name verify as the writer: $out"
+step "a green verify spares the gate a second full suite"
+# A red verify writes nothing, so the gate still runs the suite.
+(cd "$WT_V" && echo red > RED && git add -A && git commit -qm "feat: red" -m "Cut: nothing, a test change")
+rm -f "$(git -C "$WT_V" rev-parse --git-dir)/hone-gate-green"
+(cd "$WT_V" && bash "$WSH" verify >/dev/null 2>&1) && die "verify should be red"
+[ -f "$(git -C "$WT_V" rev-parse --git-dir)/hone-gate-green" ] && die "a red verify must not write a receipt"
+step "a red verify writes no receipt"
+bash "$WSH" remove "$WT_V" >/dev/null 2>&1; git branch -q -D hone/b10/verify 2>/dev/null
+
+# Field shape: a land hit exit 5 seven times, because each suite in front of
+# it ran longer than its timeout, and each retry rejoined at the back.
+WT_LS=$(bash "$WSH" add b10/long-suite) || die "worktree add b10/long-suite"
+WT_PL=$(bash "$WSH" add b10/patient) || die "worktree add b10/patient"
+(cd "$WT_PL" && echo "// p" > src/mathx/p.js && git add -A && git commit -qm "feat: p" -m "Cut: nothing, a test change")
+(cd "$WT_LS" && SLOW_SUITE=4 bash "$WSH" verify >/dev/null 2>&1) & BG=$!
+sleep 0.5
+out=$(HONE_LAND_LOCK_TIMEOUT=2 bash "$WSH" land b10/patient 2>&1); rc=$?
+wait "$BG"
+[ "$rc" -eq 0 ] || die "a land should outwait a verify longer than its timeout (got $rc): $out"
+step "a land outwaits a verify that runs longer than its timeout"
+bash "$WSH" remove "$WT_LS" >/dev/null 2>&1; git branch -q -D hone/b10/long-suite 2>/dev/null
+
+# The progress line after a red verify. Field: the line showed verify ✓
+# after verify went red, because every step before the current one read ✓.
+export CLAUDE_CODE_SESSION_ID=p10
+WT_P=$(bash "$WSH" add b10-prog) || die "worktree add b10-prog"
+(cd "$WT_P" && echo red > RED && git add -A && git commit -qm "feat: red" -m "Cut: nothing, a test change")
+(cd "$WT_P" && bash "$WSH" verify >/dev/null 2>&1) && die "verify in b10-prog should be red"
+bash "$WSH" governed b10-prog >/dev/null 2>&1
+bash "$WSH" review-scope b10-prog >/dev/null 2>&1
+out=$(drain p10 "$REPO")
+case "$out" in *"verify ✗ > consolidate ✓ > review ... > land\"}") ;;
+    *) die "a red verify should stay ✗ on the lines of later steps: $out" ;; esac
+step "a red verify stays ✗ on later lines"
+# A verify still running in the background shows as running, not as ✓.
+(cd "$WT_P" && git rm -q RED && git commit -qm "fix: green" -m "Cut: nothing, a test change")
+(cd "$WT_P" && SLOW_SUITE=2 bash "$WSH" verify >/dev/null 2>&1) & BG=$!
+sleep 1
+bash "$WSH" governed b10-prog >/dev/null 2>&1
+wait "$BG" || die "the background verify should be green"
+bash "$WSH" review-scope b10-prog >/dev/null 2>&1
+out=$(drain p10 "$REPO")
+case "$out" in *"verify ... > consolidate ... > review > land\\n"*"verify ✓ > consolidate ✓ > review ... > land\"}") ;;
+    *) die "a running verify should show ..., and a green one ✓: $out" ;; esac
+step "a running verify shows ..., and turns ✓ once green"
+unset CLAUDE_CODE_SESSION_ID
+bash "$WSH" remove "$WT_P" >/dev/null 2>&1; git branch -q -D hone/b10-prog 2>/dev/null
 
 echo
 echo "e2e land path: PASS"

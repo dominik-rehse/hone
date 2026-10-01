@@ -300,4 +300,4 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/coordinate.sh" planned <slug>
 
 In a plan tab that `/hone:coordinate` opened, it tells the coordinator that
 the Plan is committed, and the tab closes when your turn ends. Anywhere else it
-does nothing.
+says so, and its `Do:` line tells you what to report.

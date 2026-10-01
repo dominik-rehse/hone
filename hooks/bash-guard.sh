@@ -108,9 +108,11 @@ SHELL_CWD=$(hone_extract_top_field "$INPUT" cwd)
 # says why its pattern reads the way it does.
 PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common|messages)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths|\.hone-proof-always|\.hone-review-always|\.hone-shared|\.hone-grant-auto'
 CFG="${HONE_CHECK_CONFIG_RE}([^A-Za-z0-9_.-]|$)"
-REDIR_PRE=">>?[[:space:]]*\"?'?[^[:space:]|;&]*"
+REDIR_PRE=">>?\\|?[[:space:]]*\"?'?[^[:space:]|;&]*"
 VERB_PRE='(tee|sed -i|cp |mv |install |ln -s|chmod|chattr|rm |truncate|dd of=)[^|;&]*'
 RE_CFG_REDIR="${REDIR_PRE}(${CFG})"
+# `diff --output FILE` writes FILE. GNU diff takes `--ou` for it, too.
+DIFF_OUT_PRE='(^|[^A-Za-z0-9_.-])diff[[:space:]][^|;&]*--ou[a-z]*(=|[[:space:]]+)"?'"'"'?[^[:space:]|;&]*'
 RE_CFG_VERB="${VERB_PRE}(${CFG})"
 GIT_PRE='git([[:space:]]+(-C[[:space:]]+[^[:space:];&|]+|-c[[:space:]]+[^[:space:];&|]+'
 GIT_PRE="$GIT_PRE"'|--git-dir[=[:space:]][^[:space:];&|]+|--work-tree[=[:space:]][^[:space:];&|]+'
@@ -130,9 +132,16 @@ RE_PUSH="${RE_GIT}"'push([[:space:]]|$)'
 RE_RESET="${RE_GIT}"'reset([[:space:]]|$)'
 RE_RESET_BARE="${RE_GIT}"'reset[[:space:]]*$'
 RE_REF_MOVER="${RE_GIT}"'(branch[[:space:]]+[^|;&]*(-f|--force|-M|-m|--move|-D|-d|--delete)([[:space:]]|$)|update-ref)'
-NAMED_ARG='([[:space:]]+-[^[:space:];&|]*)*[[:space:]]+[^-[:space:];&|]'
-SELF_WRITERS='(npm|pnpm|yarn|bun|deno)[[:space:]]+(add|remove|rm|uninstall|update|upgrade|up|link|pkg)([[:space:]]|$)'
-SELF_WRITERS="$SELF_WRITERS"'|(npm|pnpm|yarn|bun|deno)[[:space:]]+(install|i|ci)'"$NAMED_ARG"
+# A word after the verb that names a package. Flags and redirections come
+# before it and do not count: `bun install >/dev/null` and `npm ci 2>&1` are
+# sync installs. A redirection may touch the verb (`npm i>/dev/null x`). A
+# word that starts with digits counts unless a redirection operator follows.
+NAMED_ARG='([[:space:]]+(-[^[:space:];&|]*|&?[0-9]*[<>][<>&|]?[[:space:]]*[^[:space:];&|<>]+)|&?[<>][<>&|]?[[:space:]]*[^[:space:];&|<>]+)*[[:space:]]+([^-[:space:];&|<>0-9]|[0-9]+([^0-9<>]|$))'
+# Options before the verb, such as `bun --cwd <dir> add x`, each with at most
+# one value.
+JS_PRE='(npm|pnpm|yarn|bun|deno)([[:space:]]+-[^[:space:];&|]*([[:space:]]+[^-[:space:];&|<>][^[:space:];&|<>]*)?)*'
+SELF_WRITERS="$JS_PRE"'[[:space:]]+(add|remove|rm|uninstall|update|upgrade|up|link|pkg)([[:space:]]|$)'
+SELF_WRITERS="$SELF_WRITERS"'|'"$JS_PRE"'[[:space:]]+(install|i|ci)'"$NAMED_ARG"
 SELF_WRITERS="$SELF_WRITERS"'|(pip|pip3|uv|poetry|cargo|bundle|gem|mix|composer)[[:space:]]+(add|remove|uninstall|lock|update|upgrade|require|fmt)([[:space:]]|$)'
 SELF_WRITERS="$SELF_WRITERS"'|(pip|pip3|uv|poetry|cargo|bundle|gem|mix|composer)[[:space:]]+(install|sync|deps\.get)'"$NAMED_ARG"
 SELF_WRITERS="$SELF_WRITERS"'|go[[:space:]]+(get|mod)([[:space:]]|$)'
@@ -296,7 +305,8 @@ hone_copy_written() (
 #     another repository or program
 #   - a git, package-manager, or formatter command named inside another
 #     command (`bash -c`, `env -C`, `xargs`, `sudo`, an echo), or in a heredoc
-#     body that is not a commit message
+#     body that is not a commit message or text that Python reads as data
+#     (hone_an_py_data)
 #   - a symlink the command creates, and a word that names a `.git` path
 #
 # A cd after an uncertain command in an `&&` chain counts as maybe-run: the
@@ -475,6 +485,8 @@ WRAP=0             # a guarded command the hook cannot place: in a runner, or a 
 RUNNERS=' sudo doas command exec builtin eval env nice nohup timeout xargs stdbuf time watch flock setsid chroot bash sh zsh dash ksh '
 CFG_NAME=""
 SIGNOFF_LINES=()
+SED_PROT=""         # a protected path a sed writes, by -i or by a script
+PROT_LINES=()       # rule 2 reads these: each simple command, a read-only one by its redirections
 VN=(); VV=()       # the command's own variables; \001 marks an unknown value
 ADDED_P=(); ADDED_OK=()
 MKTEMP_DIRS=(); MK_N=0
@@ -497,6 +509,7 @@ POINT=-1; TOP_START=0; WALK_DEPTH=0; SNAP_CURSET=""; SNAP_VN=(); SNAP_VV=()
 declare -A ALLV=()
 ALLV_ALL=0         # a builtin that may set any variable ran after the point
 REACH_WHY=""       # the first part the reach cannot place
+REACH_WORD=""      # the word it could not read there, if one
 
 an_fail() { [ -n "$AN_WHY" ] || AN_WHY=$1; AN_OK=0; [ "$POINT" -ge 0 ] || POINT=$TOP_START; }
 
@@ -661,6 +674,9 @@ hone_an_in() { local x k=$1; shift; for x in "$@"; do [ "$x" = "$k" ] && return 
 # not the primary branch), or other. Fails when it cannot tell.
 hone_an_kind() {
     local p=$1 a k out g c head i
+    # A symlink the command creates or moves can point anywhere when the
+    # command runs, whatever it points to now.
+    [ "$LN_SEEN" -eq 0 ] || return 1
     if [ -e "$p" ] || [ -L "$p" ]; then
         if [ -L "$p" ] || [ ! -d "$p" ]; then
             a=$(readlink -f -- "$p" 2>/dev/null) || return 1
@@ -856,7 +872,7 @@ hone_an_cd() {
 hone_an_git() {
     local a=$1 j w d t p ts c nts
     local -a cpaths=()
-    GSUB=""; GSUBI=-1; GTD=""; GFAIL=""
+    GSUB=""; GSUBI=-1; GTD=""; GFAIL=""; GFAIL_WORD=""
     for ((j = a + 1; j < ${#W[@]}; j++)); do
         w=${W[$j]}
         case $w in
@@ -873,7 +889,7 @@ hone_an_git() {
             if hone_an_setref "$p"; then
                 c=$AN_SET
             else
-                hone_an_expand "$p" && [ -n "$AN_E" ] || { GFAIL="a git -C path the hook cannot resolve"; return; }
+                hone_an_expand "$p" && [ -n "$AN_E" ] || { GFAIL="a git -C path the hook cannot resolve"; GFAIL_WORD=$p; return; }
                 c=$AN_E
             fi
             if [[ $ts$c != *$'\n'* ]]; then
@@ -1137,6 +1153,123 @@ hone_an_forvar() {
     [ -n "$vals" ] && hone_an_record "$name" $'\002'"$vals"
 }
 
+# The sed at word $1 of W (its words end at $2): its scripts in SED_S, the
+# indexes of its file operands in SED_F, and SED_I=1 when it edits them in
+# place. GNU sed reads options after operands too, and a script from -e or
+# -f makes every operand a file. Fails on an option it does not know.
+hone_sed_parse() {
+    local a=$1 n=$2 j w c rest opts=1 have=0
+    local -a ops=()
+    SED_S=(); SED_F=(); SED_I=0
+    for ((j = a + 1; j < n; j++)); do
+        w=${W[$j]}
+        if [ "$opts" -eq 0 ] || [[ $w != -?* ]]; then ops+=("$j"); continue; fi
+        case $w in
+            --) opts=0 ;;
+            --in-place|--in-place=*) SED_I=1 ;;
+            --expression=*) SED_S+=("${w#*=}"); have=1 ;;
+            --expression) j=$((j + 1)); SED_S+=("${W[$j]-}"); have=1 ;;
+            --file=*) SED_S+=($'\001'); have=1 ;;
+            --file) j=$((j + 1)); SED_S+=($'\001'); have=1 ;;
+            --line-length=*|--quiet|--silent|--regexp-extended|--separate|--null-data|--zero-terminated|--unbuffered|--posix|--debug|--sandbox) ;;
+            --*) return 1 ;;
+            *)
+                rest=${w#-}
+                while [ -n "$rest" ]; do
+                    c=${rest:0:1}; rest=${rest:1}
+                    case $c in
+                        n|r|E|s|u|z) ;;
+                        i) SED_I=1; rest="" ;;
+                        e) if [ -z "$rest" ]; then j=$((j + 1)); rest=${W[$j]-}; fi
+                           SED_S+=("$rest"); have=1; rest="" ;;
+                        f) [ -n "$rest" ] || j=$((j + 1))
+                           SED_S+=($'\001'); have=1; rest="" ;;
+                        l) [ -n "$rest" ] || j=$((j + 1)); rest="" ;;
+                        *) return 1 ;;
+                    esac
+                done ;;
+        esac
+    done
+    if [ "$have" -eq 0 ]; then
+        [ "${#ops[@]}" -ge 1 ] || return 1
+        SED_S+=("${W[${ops[0]}]}"); ops=("${ops[@]:1}")
+    fi
+    SED_F=("${ops[@]+"${ops[@]}"}")
+}
+
+# True when sed script word $1 writes no file and runs nothing: one optional
+# address, then `p`, `d`, `=`, `q`, or one `s` command whose flags are
+# among g, p, i, I, m, M, and digits. The delimiter scan follows GNU sed: a
+# backslash escapes the next character, also inside a bracket.
+# shellcheck disable=SC1003  # a literal backslash is matched
+hone_sed_inert() {
+    local s d i c k=0 addr='([0-9]+|\$|/[^/\\]*/)'
+    hone_an_expand "$1" || return 1
+    s=$AN_E
+    [[ $s =~ ^($addr(,$addr)?!?)?(.*)$ ]] && s=${BASH_REMATCH[5]}
+    case $s in p|d|=|q|'') return 0 ;; s?*) ;; *) return 1 ;; esac
+    d=${s:1:1}
+    case $d in '\'|' '|$'\n') return 1 ;; esac
+    for ((i = 2; i < ${#s}; i++)); do
+        c=${s:i:1}
+        if [ "$c" = '\' ]; then i=$((i + 1)); continue; fi
+        [ "$c" = "$d" ] || continue
+        k=$((k + 1))
+        [ "$k" -lt 2 ] || break
+    done
+    [ "$k" -eq 2 ] || return 1
+    [[ ${s:i+1} =~ ^[gpiImM0-9]*$ ]]
+}
+
+# True when the command at word $1 of W (its words end at $2) only reads
+# files: rule 2 then reads its redirections and not its words, so a pattern
+# that names a write verb is not a write (`grep "chmod" scripts/proof.sh`).
+# The command word must be a bare name with no prefix, and no word may hold a
+# substitution. rg runs no `--pre` or `--hostname-bin` program, and diff
+# writes no `--output` file. sed passes only with inert
+# scripts and no -i. Everything else counts as a writer.
+# shellcheck disable=SC2016  # a literal $( and backtick are matched
+hone_an_readonly() {
+    local a=$1 n=$2 j
+    [ "$a" -eq 0 ] && [ "$n" -gt 0 ] || return 1
+    for ((j = 0; j < n; j++)); do
+        case ${W[$j]} in *'$('*|*'`'*|*'<('*|*'>('*) return 1 ;; esac
+    done
+    case ${W[0]} in
+        grep|egrep|fgrep|cat|head|tail|wc|ls|stat|cmp|nl|cut) return 0 ;;
+        diff) for ((j = 1; j < n; j++)); do case ${W[$j]} in --ou*) return 1 ;; esac; done; return 0 ;;
+        rg) for ((j = 1; j < n; j++)); do case ${W[$j]} in --pre|--pre=*|--hostname-bin*) return 1 ;; esac; done; return 0 ;;
+        sed)
+            hone_sed_parse 0 "$n" && [ "$SED_I" -eq 0 ] || return 1
+            for j in "${SED_S[@]}"; do hone_sed_inert "$j" || return 1; done ;;
+        *) return 1 ;;
+    esac
+}
+
+# True when the current command is `python3 -` (or `python3`) reading its one
+# heredoc as the program, and Python cannot run a command from it. Then the
+# body's text is data: a Plan edit that quotes `git reset --keep` asked as a
+# move of HEAD. Python with no import, no dunder, and none of the builtins
+# below starts no process. The command must also hand its output to no one:
+# no pipe, no substitution or group, no redirection to a file. A shell
+# heredoc (`bash <<EOF`) is code, and it never gets here. The rest is the
+# write-a-script-then-run-it route of the header. $1 and $2 are the operators
+# before and after the command.
+hone_an_py_data() {
+    local j
+    [[ $base =~ ^python[0-9.]*$ ]] && [ "$a" -eq 0 ] && [ "${#HB[@]}" -eq 1 ] || return 1
+    [ "$WALK_DEPTH" -eq 1 ] || return 1
+    case $1$2 in *'|'*) return 1 ;; esac
+    for ((j = 1; j < n; j++)); do
+        case ${W[$j]} in -|-u|-B|-I|-E|-s|-S|-q|-O|-OO) ;; *) return 1 ;; esac
+    done
+    for j in "${!RD[@]}"; do
+        case ${RDOP[$j]} in *'>'*) [ "${RD[$j]}" = /dev/null ] || return 1 ;; *) return 1 ;; esac
+    done
+    ! [[ ${HB[0]} =~ (^|[^A-Za-z0-9_])(import|exec|eval|compile|getattr|setattr|delattr|globals|locals|vars|breakpoint|input|help|license)([^A-Za-z0-9_]|$) ]] \
+        && [[ ${HB[0]} != *__* ]]
+}
+
 # One simple command: W and WM (its words), RDOP/RD (its redirections), HB/HQ
 # (its heredoc bodies). $1 and $2 are the operators before and after it.
 hone_an_simple() {
@@ -1202,6 +1335,13 @@ hone_an_simple() {
         [[ ${RD[$k]} =~ $RE_DOTGIT ]] && an_fail "a redirection into a .git path"
     done
     SIGNOFF_LINES+=("$line")
+    if hone_an_readonly "$a" "$n"; then
+        w=""
+        for k in "${!RD[@]}"; do case ${RDOP[$k]} in *'>'*) w+=" ${RDOP[$k]}${RD[$k]}" ;; esac; done
+        PROT_LINES+=("$w")
+    else
+        PROT_LINES+=("$line")
+    fi
     tt=${tt# }
 
     # Heredoc bodies. Their lines count as sign-off text. A commit message
@@ -1215,8 +1355,9 @@ hone_an_simple() {
                 done ;;
             esac
         fi
+        hone_an_py_data "$prev" "$nx" && dataok=1
         for k in "${!HB[@]}"; do
-            while IFS= read -r w; do SIGNOFF_LINES+=("$w"); done <<<"${HB[$k]}"
+            while IFS= read -r w; do SIGNOFF_LINES+=("$w"); PROT_LINES+=("$w"); done <<<"${HB[$k]}"
             # shellcheck disable=SC2016  # a literal $( in the body
             if [ "${HQ[$k]}" != 1 ] && [[ ${HB[$k]} == *'$('* || ${HB[$k]} == *'`'* ]]; then
                 an_fail "a heredoc body with a substitution"
@@ -1301,10 +1442,26 @@ hone_an_simple() {
                 hone_an_is_cfg "${W[$j]}" && hone_an_cfg_judge "${W[$j]}"
             done ;;
         sed)
-            if [[ " ${W[*]:a} " =~ [[:space:]](-i|--in-place)[^[:space:]]*[[:space:]] ]] \
+            # sed -i writes its file operands, and a script writes the file
+            # its `w` names. A script that only substitutes writes nothing, so
+            # a config name in it is a pattern, not a target.
+            if hone_sed_parse "$a" "$n"; then
+                for d in "${SED_S[@]+"${SED_S[@]}"}"; do
+                    hone_sed_inert "$d" && continue
+                    hone_an_is_cfg "$d" && hone_an_cfg_judge "$d"
+                    [[ $d =~ $PROT ]] && SED_PROT=${SED_PROT:-${BASH_REMATCH[0]}}
+                done
+                if [ "$SED_I" -eq 1 ]; then
+                    for j in "${SED_F[@]+"${SED_F[@]}"}"; do
+                        hone_an_is_cfg "${W[$j]}" && hone_an_cfg_judge "${W[$j]}"
+                        [[ ${W[$j]} =~ $PROT ]] && SED_PROT=${SED_PROT:-${BASH_REMATCH[0]}}
+                    done
+                fi
+            elif [[ " ${W[*]:a} " =~ [[:space:]](-i|--in-place)[^[:space:]]*[[:space:]] ]] \
                || [[ " ${W[*]:a} " =~ [[:space:]]-[A-Za-z]*i[A-Za-z]*[[:space:]] ]]; then
                 for ((j = a + 1; j < n; j++)); do
                     hone_an_is_cfg "${W[$j]}" && hone_an_cfg_judge "${W[$j]}"
+                    [[ ${W[$j]} =~ $PROT ]] && SED_PROT=${SED_PROT:-${BASH_REMATCH[0]}}
                 done
             fi ;;
         cp|mv|install|ln)
@@ -1316,6 +1473,15 @@ hone_an_simple() {
                 [ "$base" = mv ] && hone_an_is_cfg "${W[$j]}" && hone_an_cfg_judge "${W[$j]}"
             done
             [ "$t" -eq 1 ] && hone_an_cfg_judge "${W[$n-1]}" ;;
+        diff)
+            for ((j = a + 1; j < n; j++)); do
+                case ${W[$j]} in
+                    --ou*=*) d=${W[$j]#*=} ;;
+                    --ou*) d=${W[$j+1]:-} ;;
+                    *) continue ;;
+                esac
+                hone_an_is_cfg "$d" && hone_an_cfg_judge "$d"
+            done ;;
         dd)
             for ((j = a + 1; j < n; j++)); do
                 [[ ${W[$j]} == of=* ]] && hone_an_is_cfg "${W[$j]#of=}" && hone_an_cfg_judge "${W[$j]}"
@@ -1348,26 +1514,56 @@ hone_an_simple() {
                 esac
             done <<<"$GTD" ;;
         npm|pnpm|yarn|bun|bunx|npx|pnpx|deno|pip|pip3|uv|uvx|poetry|cargo|bundle|gem|mix|composer|go|biome|eslint|prettier|dprint|ruff|black|isort|rustfmt|gofmt|jscodeshift|codemod)
-            while IFS= read -r d; do
-                hone_an_kind "$d" || { an_fail "a tree the hook cannot tell"; return 0; }
-                if [ "$KIND" = primary ]; then
-                    hone_an_primary_unsafe "$tt" "$d" && hone_an_unsafe
-                    continue
-                fi
-                # Outside the primary tree, the tool must not reach back in.
-                for ((j = a + 1; j < n; j++)); do
-                    w=${W[$j]}
-                    case $w in
-                        -C|-t|--cwd*|--prefix*|--dir|--dir=*|--directory*|--manifest-path*|--project*|--root*|--target*|--global-dir*|--modules-folder*)
-                            an_fail "a tool option that names a directory"; return 0 ;;
-                    esac
-                    if hone_an_expand "$w"; then w=$AN_E; elif [[ $w == *'$'* ]]; then an_fail "a tool argument the hook cannot read"; return 0; fi
-                    case $w in /*|'~'*|*..*) an_fail "a tool argument outside its directory"; return 0 ;; esac
-                done
-            done <<<"$CURSET" ;;
+            hone_an_tool "$a" "$n" "$tt" "$base" || an_fail "$TOOL_WHY" ;;
         *) an_fail "a guarded command named inside $base"
            [[ $RUNNERS == *" $base "* ]] && WRAP=1 ;;
     esac
+}
+
+# A package manager or a formatter at word $1 of W (its words end at $2, its
+# text is $3, its name $4), judged in each directory of CURSET. In the
+# primary tree the rules decide. Elsewhere the tool must not reach back in.
+# bun and yarn read `--cwd DIR` as the directory they run in, so the tool is
+# judged there. In the primary tree its text keeps the option, so an install
+# there with `--cwd <dir>` still asks as an install of a package. Fails with
+# TOOL_WHY, and TOOL_WORD names a word the hook cannot read.
+hone_an_tool() {
+    local a=$1 n=$2 tt=$3 tool=$4 j w d td cv="" c1=-1 c2=-1
+    TOOL_WHY=""; TOOL_WORD=""
+    if [ "$tool" = bun ] || [ "$tool" = yarn ]; then
+        for ((j = a + 1; j < n; j++)); do
+            case ${W[$j]} in
+                --cwd|--cwd=*)
+                    [ "$c1" -lt 0 ] || { TOOL_WHY="a second --cwd"; return 1; }
+                    c1=$j; c2=$j; w=${W[$j]#--cwd=}
+                    if [ "${W[$j]}" = --cwd ]; then c2=$((j + 1)); w=${W[$c2]:-}; fi
+                    hone_an_expand "$w" && [ -n "$AN_E" ] || { TOOL_WHY="a --cwd the hook cannot read"; TOOL_WORD=$w; return 1; }
+                    cv=$AN_E ;;
+            esac
+        done
+    fi
+    while IFS= read -r d; do
+        td=$d
+        if [ -n "$cv" ]; then
+            hone_an_resolve "$cv" "$d" || { TOOL_WHY="a --cwd path with .."; return 1; }
+            td=$AN_P
+        fi
+        hone_an_kind "$td" || { TOOL_WHY="a tree the hook cannot tell"; return 1; }
+        if [ "$KIND" = primary ]; then
+            hone_an_primary_unsafe "$tt" "$td" && hone_an_unsafe
+            continue
+        fi
+        for ((j = a + 1; j < n; j++)); do
+            [ "$j" -eq "$c1" ] || [ "$j" -eq "$c2" ] && continue
+            w=${W[$j]}
+            case $w in
+                -C|-t|--cwd*|--prefix*|--dir|--dir=*|--directory*|--manifest-path*|--project*|--root*|--target*|--global-dir*|--modules-folder*)
+                    TOOL_WHY="a tool option that names a directory"; return 1 ;;
+            esac
+            if hone_an_expand "$w"; then w=$AN_E; elif [[ $w == *'$'* ]]; then TOOL_WHY="a tool argument the hook cannot read"; TOOL_WORD=$w; return 1; fi
+            case $w in /*|'~'*|*..*) TOOL_WHY="a tool argument outside its directory"; return 1 ;; esac
+        done
+    done <<<"$CURSET"
 }
 
 # True when text $1 names a command one of the primary-tree rules reads.
@@ -1387,7 +1583,7 @@ hone_an_end_cmd() {
         [ "${#W[@]}" -eq 0 ] || an_fail "words after a group"
         local line="" k
         for k in "${!RD[@]}"; do line+=" ${RDOP[$k]}${RD[$k]}"; done
-        SIGNOFF_LINES+=("$line")
+        SIGNOFF_LINES+=("$line"); PROT_LINES+=("$line")
         hone_an_redirs
         [ "${#RD[@]}" -eq 0 ] || AN_WROTE=1
     else
@@ -1501,7 +1697,9 @@ hone_analyze() {
 # push by where it writes from each. REACH_WHY names the first part it cannot
 # place, and rule 5 then asks.
 
-hone_an_reach_fail() { [ -n "$REACH_WHY" ] || REACH_WHY=$1; }
+# $1 says why. $2, when given, is the word the hook could not read, and the
+# ask names it.
+hone_an_reach_fail() { [ -n "$REACH_WHY" ] || { REACH_WHY=$1; REACH_WORD=${2-}; }; }
 
 # Absolute path $1 with `.` and `..` read lexically, in AN_P.
 hone_an_lex() {
@@ -1592,7 +1790,7 @@ hone_an_reach_cd() {
     elif hone_an_expand_all "$tgt"; then
         vals=$AN_ES
     else
-        hone_an_reach_fail "a cd target the hook cannot resolve"; return
+        hone_an_reach_fail "a cd target the hook cannot resolve" "$tgt"; return
     fi
     while IFS= read -r v; do
         [ -n "$v" ] || continue
@@ -1636,7 +1834,7 @@ hone_an_reach_judge() {
     hone_an_env_ok "$a" || { hone_an_reach_fail "an environment prefix on a guarded command"; return; }
     case $RBASE in
         git)
-            [ -z "$GFAIL" ] || { hone_an_reach_fail "$GFAIL"; return; }
+            [ -z "$GFAIL" ] || { hone_an_reach_fail "$GFAIL" "$GFAIL_WORD"; return; }
             case $GSUB in bisect|submodule|filter-branch|filter-repo) hone_an_reach_fail "git $GSUB"; return ;; esac
             for ((j = GSUBI + 1; j < n; j++)); do
                 case ${R[$j]} in --exec|--exec=*|-x|--ignore-other-worktrees) hone_an_reach_fail "git ${R[$j]}"; return ;; esac
@@ -1649,22 +1847,7 @@ hone_an_reach_judge() {
                 esac
             done <<<"$GTD" ;;
         npm|pnpm|yarn|bun|bunx|npx|pnpx|deno|pip|pip3|uv|uvx|poetry|cargo|bundle|gem|mix|composer|go|biome|eslint|prettier|dprint|ruff|black|isort|rustfmt|gofmt|jscodeshift|codemod)
-            while IFS= read -r d; do
-                hone_an_kind "$d" || { hone_an_reach_fail "a tree the hook cannot tell"; return; }
-                if [ "$KIND" = primary ]; then
-                    hone_an_primary_unsafe "$tt" "$d" && hone_an_unsafe
-                    continue
-                fi
-                for ((j = a + 1; j < n; j++)); do
-                    w=${R[$j]}
-                    case $w in
-                        -C|-t|--cwd*|--prefix*|--dir|--dir=*|--directory*|--manifest-path*|--project*|--root*|--target*|--global-dir*|--modules-folder*)
-                            hone_an_reach_fail "a tool option that names a directory"; return ;;
-                    esac
-                    if hone_an_expand "$w"; then w=$AN_E; elif [[ $w == *'$'* ]]; then hone_an_reach_fail "a tool argument the hook cannot read"; return; fi
-                    case $w in /*|'~'*|*..*) hone_an_reach_fail "a tool argument outside its directory"; return ;; esac
-                done
-            done <<<"$CURSET" ;;
+            hone_an_tool "$a" "$n" "$tt" "$RBASE" || hone_an_reach_fail "$TOOL_WHY" "$TOOL_WORD" ;;
         *)
             while IFS= read -r d; do
                 hone_an_kind "$d" || { hone_an_reach_fail "a tree the hook cannot tell"; return; }
@@ -1843,20 +2026,42 @@ fi
 # after the verb, and a copy of an adapter out to a scratch file asked. A copy
 # into a protected path by its directory (`cp x.sh scripts/`) passed.
 # hone_copy_written reads the direction per segment.
-hit=$(printf '%s\n' "$CMD" | grep -Eo -e "${REDIR_PRE}(${PROT})" -e "${VERB_PRE}(${PROT})" | head -n 1)
-if [ -n "$hit" ] || [[ $CMD =~ (^|[^A-Za-z0-9_.-])(cp|install|dd)[[:space:]] ]]; then
-    hit=""
+# The first protected path that a line on stdin writes, by a redirection, a
+# verb, or a copy. Each line is split at | ; and & first.
+hone_prot_hit() {
+    local seg h r rc
     while IFS= read -r seg; do
-        if [[ $seg =~ ${REDIR_PRE}(${PROT}) ]]; then hit=${BASH_REMATCH[0]}; break; fi
+        if [[ $seg =~ ${REDIR_PRE}(${PROT}) ]]; then printf '%s\n' "${BASH_REMATCH[0]}"; return; fi
         h=""
         [[ $seg =~ ${VERB_PRE}(${PROT}) ]] && h=${BASH_REMATCH[0]}
+        [[ -z $h && $seg =~ ${DIFF_OUT_PRE}(${PROT}) ]] && h=${BASH_REMATCH[0]}
         if [[ $seg =~ (^|[^A-Za-z0-9_.-])(cp|install|dd)[[:space:]] ]] \
            && [[ -z $h || $h == 'cp '* || $h == 'install '* || $h == 'dd of='* ]]; then
             r=$(hone_copy_written "$seg"); rc=$?
             case $rc in 0) h=$r ;; 1) h="" ;; esac
         fi
-        [ -z "$h" ] || { hit=$h; break; }
-    done < <(printf '%s\n' "$CMD" | tr '|;&' '\n\n\n')
+        [ -z "$h" ] || { printf '%s\n' "$h"; return; }
+    done < <(sed 's/>|/>/g' | tr '|;&' '\n\n\n')
+}
+
+# A read-only command whose pattern names a write verb is not a write:
+# `grep "chmod" scripts/proof.sh` asked, and so did a quoted alternation that
+# the split at | broke into fake commands. So where the line rule hits, the
+# analysis reads the command again, one simple command at a time, with
+# hone_an_readonly. The ask drops only when the analysis understands the
+# whole command, because a function or a PATH change can make `grep`
+# anything. A sed that writes a protected file by its script or after its
+# operands (`sed 's/x/y/' -i f`) asks too, which the line rule missed.
+hit=$(printf '%s\n' "$CMD" | grep -Eo -e "${REDIR_PRE}(${PROT})" -e "${VERB_PRE}(${PROT})" -e "${DIFF_OUT_PRE}(${PROT})" | head -n 1)
+if [ -n "$hit" ] || [[ $CMD =~ (^|[^A-Za-z0-9_.-])(cp|install|dd)[[:space:]] ]]; then
+    hit=$(printf '%s\n' "$CMD" | hone_prot_hit)
+fi
+if [ -n "$hit" ] || [[ $CMD =~ (^|[^A-Za-z0-9_])sed[[:space:]].*(${PROT}) ]]; then
+    hone_analyze
+    if [ -n "$hit" ] && [ "$LEX_OK" -eq 1 ] && [ "$AN_OK" -eq 1 ]; then
+        hit=$(printf '%s\n' "${PROT_LINES[@]+"${PROT_LINES[@]}"}" | hone_prot_hit)
+    fi
+    [ -n "$hit" ] || hit=$SED_PROT
 fi
 if [ -n "$hit" ]; then
     decision ask "$(msg_bashguard_protected "$(printf '%s\n' "$hit" | grep -Eo "(${PROT})" | tail -n 1)")"
@@ -1868,10 +2073,14 @@ fi
 # config wherever it went, and unattended runs stalled on it for hours. The
 # analysis resolves each written config path in the directory its command
 # runs in, $TMPDIR and a `$(mktemp -d)` directory included.
-hit=$(printf '%s\n' "$CMD" | grep -Eo -e "$RE_CFG_REDIR" -e "$RE_CFG_VERB" | head -n 1)
-if [ -n "$hit" ]; then
+#
+# A sed that names a config anywhere gets the analysis too, which reads its
+# scripts and its operands apart. That ask stands only on a write it finds:
+# `sed 's/x/y/' -i biome.json` and a script that writes with `w`.
+hit=$(printf '%s\n' "$CMD" | grep -Eo -e "$RE_CFG_REDIR" -e "$RE_CFG_VERB" -e "${DIFF_OUT_PRE}(${CFG})" | head -n 1)
+if [ -n "$hit" ] || [[ $CMD =~ (^|[^A-Za-z0-9_])sed[[:space:]].*${CFG} ]]; then
     hone_analyze
-    if [ "$AN_OK" -eq 0 ] || [ "$CFG_OK" -eq 0 ]; then
+    if { [ -n "$hit" ] && [ "$AN_OK" -eq 0 ]; } || [ "$CFG_OK" -eq 0 ]; then
         name=$CFG_NAME
         [ -n "$name" ] || name=$(printf '%s\n' "$hit" | grep -Eo "$HONE_CHECK_CONFIG_RE" | tail -n 1)
         decision ask "$(msg_bashguard_check_config "$name")"
@@ -2082,8 +2291,8 @@ fi
 # such a command changes. That check catches any write to a durable path,
 # so a preventive ask here gains nothing.
 #
-# The verb's argument separates the two cases. End of command or flag tokens
-# only means sync. A non-flag argument names a package, which mutates the
+# The verb's argument separates the two cases. End of command, flag tokens,
+# or redirections only means sync. A non-flag argument names a package, which mutates the
 # manifest. So `npm install lodash`, `bun add x`, and `poetry add y` still
 # escalate, as does every add/remove/update/upgrade/link verb below.
 # (NAMED_ARG and SELF_WRITERS are defined above.)
@@ -2150,15 +2359,16 @@ if hone_an_triggers "$CMD" || [[ $CMD =~ $RE_PUSH ]]; then
     hone_analyze
     [ "$AN_OK" -eq 1 ] || hone_an_reach
     if [ "$WRAP" -eq 1 ] || [ "$TREE_OK" -eq 0 ] || [ -n "$REACH_WHY" ]; then
-        msg=$TREE_MSG
-        if [ -z "$msg" ]; then
-            if [[ $CMD =~ $RE_HEAD || $CMD =~ $RE_STASH || $CMD =~ $RE_CHECKOUT ]]; then msg=msg_bashguard_head_move
-            elif [[ $CMD =~ $RE_MOVER || $CMD =~ $RE_RESET || $CMD =~ $RE_PUSH ]]; then msg=msg_bashguard_branch_move
-            elif [[ $CMD =~ $RE_SELF ]]; then msg=msg_bashguard_self_writer
-            else msg=msg_bashguard_formatter
-            fi
+        # A move the analysis found names its rule. Otherwise the hook could
+        # not place the command, and it does not know the tree: the ask says
+        # so, and it names a variable it could not read.
+        [ -z "$TREE_MSG" ] || decision ask "$($TREE_MSG)"
+        if [[ $REACH_WORD =~ \$\{?([A-Za-z_][A-Za-z0-9_]*) ]]; then
+            v=${BASH_REMATCH[1]}; vset=0
+            [[ $ORIG_CMD =~ (^|[^A-Za-z0-9_])$v\+?= || $ORIG_CMD =~ (for|read|mapfile|readarray)[^\;\&\|]*[[:space:]]$v([[:space:]\;]|$) ]] && vset=1
+            decision ask "$(msg_bashguard_unread_var "$v" "$vset")"
         fi
-        decision ask "$($msg)"
+        decision ask "$(msg_bashguard_unplaced "${REACH_WHY:-$AN_WHY}")"
     fi
 fi
 

@@ -68,7 +68,9 @@ bash "${CLAUDE_PLUGIN_ROOT}/scripts/coordinate.sh" admit <change>
 ```
 
 Exit 4 is a mechanical refusal with its reason: the change is in flight
-already, or garden and a run would meet. Queue the Plan. Exit 0 prints the Plan
+already, garden and a run would meet, or the Plan orders a change first that
+has not landed. Queue the Plan. Pass `--after-ok <name>` to `admit` and
+`start` only when the person says that order does not bind. Exit 0 prints the Plan
 of each change in flight, with its owner. Compare them with this Plan by the
 checklist in `${CLAUDE_PLUGIN_ROOT}/skills/run/references/parallel.md`, and
 with the Plans you admit in the same request. Disjoint: it starts now.
@@ -133,6 +135,11 @@ notification itself. The events:
   its own left. They land under names of their own, so no `landed` event
   ends them. Read its report, put what it landed on the board, close its
   tab, and admit whatever waited on garden.
+- `updated`: a session runs a newer hone than you do. Your scripts and hooks
+  are the old ones until this session restarts. Tell the person to quit
+  this session and run the `claude --resume <id>` that the event names, in
+  this tab. Your watches belong to this session's id, and a resume keeps
+  it. A fresh session owns no watch.
 
 When you relay a session's progress line, mark it as the session's claim
 ("run:csv-export reports verify ..."), never as your own knowledge. A session

@@ -58,9 +58,11 @@ serially and flag it for a Decision-level look. Do not force the merge.
 
 ## 5: lock timeout, or the primary branch kept moving
 
-A land or a full-suite run held the land lock past the timeout. It can be
-this session's own run in the background. Nothing happened to the trunk. Wait for that run to finish, then
-re-run land. Never work around the lock.
+A land waits in a queue for the land lock, and it keeps its place while a
+run holds the lock. So this exit means that nothing moved for the whole
+timeout: a holder outside the queue, or a hung run. It can be this
+session's own run in the background. Nothing happened to the trunk. Wait
+for that run to finish, then re-run land. Never work around the lock.
 
 The same exit has a second cause, and the message names it. The primary
 branch moved during each of land's attempts: another session committed onto
@@ -175,6 +177,9 @@ signal with the reason it needs a grant, quotes each destructive statement
 with its file, and prints a diffstat and the command that shows the whole
 diff. Read that diff, then **stop**. The grant is the human's act. You never
 run `worktree.sh grant`, and the `bash-guard` denies it to you.
+
+When the proof gate is open too, the same stop names it, and land exits 8.
+The person then gives both the grant and the sign-off before the next land.
 
 Give the human a briefing they can decide on without opening the diff. Keep
 it short, in plain words, in this shape:

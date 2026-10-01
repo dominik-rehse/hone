@@ -284,8 +284,12 @@ out=$(HERDR_TAB_ID=$ptab bash "$COORD" planned invoice-export 2>&1); rc=$?
 [ "$rc" -eq 2 ] && echo "$out" | grep -q 'not committed' && ! events | grep -qP '\tplanned\t' \
     && ok "planned refuses a Plan that is not committed" || bad "planned uncommitted (rc $rc): $out"
 mkdir -p .plans && echo '# Plan' > .plans/invoice-export.md && git add .plans && git commit -qm 'chore(plan): invoice-export'
-out=$(HERDR_TAB_ID=w:t99 bash "$COORD" planned invoice-export 2>&1); rc=$?
-[ "$rc" -eq 0 ] && ! events | grep -qP '\tplanned\t' && ok "planned in a tab no watch names does nothing" || bad "planned elsewhere (rc $rc): $out"
+# The field shape of 2026-10-01: a coordinator on an older hone registered no
+# watch for its plan tabs, and planned returned 0 in silence 30 times.
+out=$(HERDR_TAB_ID=w:t99 bash "$COORD" planned invoice-export 2>&1 >/dev/null); rc=$?
+[ "$rc" -eq 0 ] && echo "$out" | grep -q 'no watch names this tab' \
+    && events | grep -qP '\tplan:invoice-export\tplanned\tinvoice-export$' \
+    && ok "planned in a tab no watch names says so on stderr and still writes the event" || bad "planned elsewhere (rc $rc): $out / $(events)"
 out=$(HERDR_TAB_ID=$ptab bash "$COORD" planned invoice-export 2>&1); rc=$?
 [ "$rc" -eq 0 ] && events | grep -qP '\tplan:an-invoice-export-for-q3\tplanned\tinvoice-export$' \
     && grep -qx "tab rename $ptab plan:invoice-export" "$FAKE/log" \
@@ -373,6 +377,87 @@ out=$(bash "$COORD" board billing)
 echo "$out" | head -1 | grep -q '· 0 running · 1 need you ·' && echo "$out" | grep -q '^billing .*NEEDS YOU: land stopped, exit 8, authority gate' \
     && ok "the board shows a stopped land as a need before the quiet threshold" || bad "stopped on board: $out"
 rm -f "$STATE"/sessions/*
+exec 7>&-
+
+echo "== field shapes 2026-10-01 (coordinate) =="
+exec 7>"$STATE/ticker.lock"; flock -n 7
+ver=$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "$PLUGIN_ROOT/.claude-plugin/plugin.json" | head -1)
+updated() { events | grep -cP '\thone\tupdated\t'; }
+# A1: the coordinator ran 0.70.1 all batch while its sessions ran 0.71.1.
+agent run-mail working 1
+CLAUDE_CODE_SESSION_ID=main-7 bash "$COORD" watch mail run-mail w:t1 >/dev/null
+grep -qx "version=$ver" "$STATE/sessions/run-mail" && ok "a watch record carries the hone version of the watch" \
+    || bad "watch version: $(cat "$STATE/sessions/run-mail")"
+tick run-mail
+grep -qx "version=$ver" "$STATE/sessions/run-mail" && ok "a tick keeps the version of the watch" || bad "tick dropped the version"
+( . "$PLUGIN_ROOT/hooks/common.sh"; hone_coord_event "$STATE" mail stopped "exit 7, proof gate" )
+[ "$(updated)" -eq 0 ] && ok "an event of the coordinator's own version warns of nothing" || bad "same version warned: $(events | tail -2)"
+sed -i 's/^version=.*/version=0.70.1/' "$STATE/sessions/run-mail"
+n=$(events | wc -l)
+( . "$PLUGIN_ROOT/hooks/common.sh"; hone_coord_event "$STATE" mail landed abc1234; hone_coord_event "$STATE" mail gone x )
+[ "$(updated)" -eq 1 ] && events | grep -P '\thone\tupdated\t' | grep -q "hone $ver wrote .*runs 0.70.1.*Restart the coordinator session" \
+    && ok "a newer hone that writes to an older coordinator's events warns once" || bad "skew warning: $(events | tail -4)"
+# A fresh session has a new id and owns no watch. A resume keeps the id.
+events | grep -P '\thone\tupdated\t' | grep -q 'claude --resume main-7' \
+    && ok "the warning names the resume that keeps the coordinator's watches" || bad "resume hint: $(events | tail -2)"
+out=$(timeout 10 bash "$COORD" wait --since "$n")
+echo "$out" | grep -q 'hone .*updated .*Restart the coordinator session' && ok "the coordinator's wait prints the warning" \
+    || bad "wait should print the warning: $out"
+# A record from before the version field counts as older.
+sed -i '/^version=/d' "$STATE/sessions/run-mail"; rm -f "$STATE"/updated.*
+( . "$PLUGIN_ROOT/hooks/common.sh"; hone_coord_event "$STATE" mail landed abc1234 )
+[ "$(updated)" -eq 2 ] && events | tail -2 | grep -q 'runs a hone from before' \
+    && ok "a watch record with no version counts as an older coordinator" || bad "no version: $(events | tail -2)"
+rm -f "$STATE"/sessions/*
+out=$(bash "$COORD" planned no-such-plan 2>&1); rc=$?
+[ "$rc" -eq 2 ] && echo "$out" | grep -q 'not committed' && ok "planned with no watch still refuses an uncommitted Plan" \
+    || bad "planned uncommitted, no watch (rc $rc): $out"
+
+# A5: the landed event named the caller's HEAD, not the merge land made.
+git worktree add -q -b hone/mail .worktrees/mail
+( cd .worktrees/mail && echo m > mail.txt && git add -A && git commit -qm mail )
+git worktree add -q -b side .worktrees/side main
+( cd .worktrees/side && echo s > side.txt && git add -A && git commit -qm side
+  # shellcheck source=scripts/worktree.sh
+  . "$PLUGIN_ROOT/scripts/worktree.sh"
+  # The stub records its merge as cmd_land does. Then another land moves
+  # the primary branch before progress_step reads anything.
+  cmd_land() { git -C "$REPO" merge -q --no-ff hone/mail -m "Merge branch 'hone/mail'"
+               LAND_MERGED_SHA=$(git -C "$REPO" rev-parse --short HEAD)
+               git -C "$REPO" commit -q --allow-empty -m "Merge branch 'hone/other'"; }
+  progress_step land mail >/dev/null 2>&1 )
+merged=$(git -C "$REPO" rev-parse --short HEAD~1)
+events | tail -1 | grep -qP "\tmail\tlanded\t$merged$" && [ "$merged" != "$(git -C .worktrees/side rev-parse --short HEAD)" ] \
+    && ok "the landed event names the merge land made, not the caller's HEAD or a later land's merge" || bad "landed sha: $(events | tail -1) vs $merged"
+git worktree remove --force .worktrees/side; git worktree remove --force .worktrees/mail
+
+# A10: two runs started before the change their Plan named as first.
+printf '# Plan: base-a\n\nFiles: src/a.ts\n' > .plans/base-a.md
+printf '# Plan: base-b\n\nFiles: src/b.ts\n' > .plans/base-b.md
+printf '# Plan: needs-ab\n\n- Order: Start it only after `base-a` and `base-b` have landed.\n' > .plans/needs-ab.md
+printf '# Plan: needs-a\n\n- Order against the other open Plans:\n  - `base-a` (step 3): run it first. It defines the contract.\n  - `base-b`: both edit `src/c.ts`. Either order works.\n' > .plans/needs-a.md
+git add .plans && git commit -qm 'plans with an order'
+out=$(bash "$COORD" admit needs-ab); rc=$?
+[ "$rc" -eq 4 ] && echo "$out" | grep -q 'needs-ab waits for base-a, base-b' \
+    && ok "admit holds a Plan that starts only after open changes land" || bad "after-landed hold (rc $rc): $out"
+out=$(bash "$COORD" admit needs-a); rc=$?
+[ "$rc" -eq 4 ] && echo "$out" | grep -q 'needs-a waits for base-a' && ! echo "$out" | grep -q 'base-b' \
+    && ok "admit holds on 'run it first' and ignores 'either order'" || bad "run-it-first hold (rc $rc): $out"
+echo "$out" | grep -q -- '--after-ok base-a' && ok "the hold names its override" || bad "override hint: $out"
+out=$(bash "$COORD" admit needs-ab --after-ok base-a); rc=$?
+[ "$rc" -eq 4 ] && echo "$out" | grep -q 'needs-ab waits for base-b' && ! echo "$out" | grep -q 'for base-a' \
+    && ok "--after-ok lifts the hold for the named change only" || bad "after-ok one (rc $rc): $out"
+out=$(bash "$COORD" admit needs-ab --after-ok base-a --after-ok base-b); rc=$?
+[ "$rc" -eq 0 ] && ok "--after-ok on every predecessor admits the Plan" || bad "after-ok all (rc $rc): $out"
+out=$(HERDR_ENV=1 HERDR_WORKSPACE_ID=w bash "$COORD" start run needs-a 2>&1); rc=$?
+[ "$rc" -eq 4 ] && echo "$out" | grep -q 'needs-a waits for base-a' && ok "start keeps the hold" || bad "start hold (rc $rc): $out"
+out=$(HERDR_ENV=1 HERDR_WORKSPACE_ID=w bash "$COORD" start run needs-a --after-ok base-a --model sonnet 2>&1); rc=$?
+[ "$rc" -eq 0 ] && echo "$out" | grep -q 'model sonnet' && ok "start passes --after-ok to admit" || bad "start after-ok (rc $rc): $out"
+rm -f "$STATE"/sessions/*
+git rm -q .plans/base-a.md && git commit -qm 'land base-a'
+out=$(bash "$COORD" admit needs-a); rc=$?
+[ "$rc" -eq 0 ] && ok "admit lets the Plan start once its predecessor's Plan left main" || bad "after land (rc $rc): $out"
+git rm -q .plans/base-b.md .plans/needs-a.md .plans/needs-ab.md && git commit -qm 'clean'
 exec 7>&-
 
 echo
