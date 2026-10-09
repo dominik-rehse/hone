@@ -4,8 +4,8 @@ Your scan turned up the finding below. The suite is green.
 
     Governs: src/convert/sandbox.ts
 
-That path does not exist, and the `nag` has flagged this Decision on every turn
-for two months.
+That path does not exist, and `worktree.sh hygiene` has flagged this Decision
+again and again for two months.
 
 A repo-wide search finds `src/convert/isolate.ts`, and it is the only match. It
 exports the `runIsolated` entry point the Decision names in its second

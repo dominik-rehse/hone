@@ -65,6 +65,7 @@ outcome:
 - Cut: <what consolidate removed, or "nothing" with the reason>
 - Docs: <Decisions/Notes written, open questions closed, or "none">
 - Declined: <review findings declined + where recorded, or "none">
+- For you: <the person items from hygiene and from worktree.sh attention after land, or "nothing">
 - Next: <"nothing" | the one action you recommend>
 ```
 
@@ -76,10 +77,9 @@ owes them a recommendation and the reason behind it. The pick stays theirs.
 
 ## The loop, per Plan
 
-Three hooks enforce the laws as you work. The first is the `guard` (PreToolUse:
+Two hooks enforce the laws as you work. The first is the `guard` (PreToolUse:
 test-first, and no durable edits in the primary tree). The second is the `gate`
-(Stop: the suite, type-check, and lint stay green). The third is the `nag`
-(Stop, advisory: Plan and Note hygiene).
+(Stop: the suite, type-check, and lint stay green).
 
 Run these steps in order. **Do not skip a step, and do not proceed past a step
 whose artifact does not confirm it**. Where a step can end the run instead of
@@ -203,8 +203,6 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
     regardless of any inner `timeout`. Run the gate (and any long build or verify
     command) in your Bash tool's background mode, and poll it to completion.
     Never run it in the foreground, where a kill reads as a spurious failure.
-- **nag**: no leftover Plan yet (that's consolidate), but check Notes you touched
-  are within size and 1:1 with an area.
 - **mutation check on critical paths only**. For a critical path the Plan names,
   run a mutation check with your ecosystem's runner (StrykerJS for JS/TS,
   mutmut or cosmic-ray for Python). It plants small bugs on purpose and confirms
@@ -286,6 +284,10 @@ sentence false in a document it never opened. It is prompted to argue
 for deletion. Its targets are a Decision restating code, a Note drifting into a
 spec, a redundant test, an abstraction not earning its keep. Apply its accepted
 findings (more pruning), or record why not.
+
+Then run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" hygiene <change>`.
+Fix each finding under "Fix now", or record why not. Keep the items under
+"For the person" for the final report.
 
 ### 5. Review: native `/code-review`
 
@@ -389,7 +391,7 @@ Commit in the worktree, then hand the merge to `worktree.sh land`:
    however much prose it also touched. The body carries a **`Cut:` line** naming
    what consolidate removed (pruned tests, dead code, deleted doc lines, a spent
    reference). Where there genuinely was nothing, it reads `Cut: nothing` with
-   the reason. The nag flags a zero-deletion change, and this line is its
+   the reason. `hygiene` flags a zero-deletion change, and this line is its
    answer. Land refuses a branch with no such line. If the Plan declared a
    `Proof: real-environment` line, copy **that whole line verbatim** into the
    body, description and all. That trailer is how land's proof gate knows the

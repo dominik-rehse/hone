@@ -60,8 +60,9 @@ exit "$rc"
   into `scripts/typecheck.sh`: `tsc --noEmit` with `strict`, basedpyright,
   or pyrefly. The `strictTypeChecked` preset of typescript-eslint and
   type-coverage go into `scripts/lint.sh`.
-- *Links in the docs resolve.* hone's nag checks relative links in Notes and
-  Decisions. lychee checks the rest, and it has an offline mode.
+- *Links in the docs resolve.* `worktree.sh hygiene` and `/hone:garden`
+  check relative links in Notes and Decisions. lychee checks the rest, and
+  it has an offline mode.
 
 ## What no tool decides
 
@@ -76,8 +77,9 @@ hone narrows the first one mechanically. `worktree.sh governed <change>`
 lists the Notes and Decisions about the code that a change touched, and the
 loop hands them to the critic.
 
-hone's nag checks one more goal without any tool. It names a `src/<area>/`
-that a change touched and that holds more lines than `HONE_AREA_MAX_LINES`.
+`worktree.sh hygiene` checks one more goal without any tool. It names a
+`src/<area>/` that a change touched and that holds more lines than
+`HONE_AREA_MAX_LINES`.
 
 The run's verify step checks small functions itself, when cccc and `jq`
 are installed. `worktree.sh complexity <change>` names each function that

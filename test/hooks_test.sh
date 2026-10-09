@@ -9,7 +9,6 @@ unset HERDR_ENV
 PLUGIN_ROOT=$(cd "$(dirname "$0")/.." && pwd)
 GUARD="$PLUGIN_ROOT/hooks/guard.sh"
 GATE="$PLUGIN_ROOT/hooks/gate.sh"
-NAG="$PLUGIN_ROOT/hooks/nag.sh"
 BASH_GUARD="$PLUGIN_ROOT/hooks/bash-guard.sh"
 DIRTY_GUARD="$PLUGIN_ROOT/hooks/dirty-guard.sh"
 
@@ -319,6 +318,7 @@ echo "$(bg 'git commit -m ran with PROOF_ROOT=<worktree> and then scripts/lint.s
 # A real redirect into the same file still escalates, whatever precedes it.
 echo "$(bg 'echo x > scripts/lint.sh')" | grep -q '"ask"' && ok "a redirect into an adapter escalated" || bad "a redirect into scripts/lint.sh should ask"
 echo "$(bg 'cat template >> hooks/gate.sh')" | grep -q '"ask"' && ok "an append into a hook escalated" || bad "an append into hooks/gate.sh should ask"
+echo "$(bg 'echo x > hooks/hygiene.sh')" | grep -q '"ask"' && ok "a redirect into the hygiene library escalated" || bad "a redirect into hooks/hygiene.sh should ask"
 echo "$(bg 'cat x > /home/u/repo/scripts/proof.sh')" | grep -q '"ask"' && ok "a pathful redirect into an adapter escalated" || bad "a pathful redirect should ask"
 # A HEAD-move in the primary tree races other sessions → ask; the same op inside
 # a linked worktree is isolated → silent.
@@ -1617,161 +1617,6 @@ if command -v flock >/dev/null 2>&1; then
     rm -f "$BLOCKS"
 fi
 
-echo "== nag: leftover Plan (landed evidence only), oversized Note, orphan Note =="
-# No worktree and no landed evidence = the normal plan→run gap: pending, not
-# stale. No per-Plan finding; one aggregate advisory line instead.
-echo "# Plan" > "$REPO/.plans/ghost.md"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "ghost.md" && bad "pending Plan should not be flagged by name" || ok "pending Plan (no landed evidence) not flagged"
-echo "$out" | grep -q "1 Plan(s) pending run" && ok "pending Plans surface as one aggregate advisory" || bad "should emit an aggregate pending-Plans advisory"
-
-# Evidence 1: land's merge commit in HEAD's history → the finding fires.
-git -C "$REPO" commit -q --allow-empty -m "Merge branch 'hone/ghost'"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q ".plans/ghost.md survived its landing" && ok "Plan with landing merge commit flagged" || bad "should flag Plan whose merge commit is in history"
-
-# Evidence 2: a surviving hone/<change> branch that carried a commit of its
-# own into the primary branch. The fold-in message is not land's, so evidence
-# 1 cannot fire and this case tests evidence 2 alone.
-echo "# Plan" > "$REPO/.plans/ghost2.md"
-git -C "$REPO" checkout -q -b hone/ghost2
-git -C "$REPO" commit -q --allow-empty -m "feat(ghost2): a commit of its own"
-git -C "$REPO" checkout -q -
-git -C "$REPO" merge -q --no-ff -m "chore: fold ghost2 in" hone/ghost2
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q ".plans/ghost2.md survived its landing" && ok "Plan with a merged branch of its own flagged" || bad "should flag Plan whose merged branch survives"
-git -C "$REPO" branch -D hone/ghost2 >/dev/null 2>&1
-rm -f "$REPO/.plans/ghost2.md"
-
-# A hone/<change> branch that carried no commit of its own is no evidence of
-# a landing. git calls it merged, because it points at a commit the primary
-# branch already has, and a branch is always merged into itself. The nag read
-# that as a landing and told a run to delete the Plan it was still executing
-# (2026-09-19 probe). The worktree is where it hit, so test there first.
-# This fixture predates setup.sh's current .gitignore and still ignores
-# .plans/, so force the Plan into the commit. A linked worktree checks out
-# what is tracked, and the run reads its Plan there.
-echo "# Plan" > "$REPO/.plans/ghost3.md"
-(cd "$REPO" && git add -f .plans/ghost3.md && git commit -qm "chore(plan): ghost3")
-WT_G=$(cd "$REPO" && bash "$PLUGIN_ROOT/scripts/worktree.sh" add ghost3 2>&1 | tail -1)
-if [ -n "$WT_G" ] && [ -d "$WT_G" ]; then
-    out=$(cd "$WT_G" && echo '{}' | bash "$NAG" 2>&1)
-    echo "$out" | grep -q "ghost3.md survived its landing" && bad "a run's own branch is not evidence of its landing" || ok "the run's own branch is no evidence inside its worktree"
-    # Once the run commits, its branch carries work and is merged into
-    # itself. A Stop in the worktree read that as a landing (9f02dfd8).
-    (cd "$WT_G" && git commit -q --allow-empty -m "feat(ghost3): work in flight")
-    out=$(cd "$WT_G" && echo '{}' | bash "$NAG" 2>&1)
-    echo "$out" | grep -q "ghost3.md survived its landing" && bad "a branch with work in its own worktree is active, not landed" || ok "a committed run is no evidence inside its worktree"
-    (cd "$REPO" && bash "$PLUGIN_ROOT/scripts/worktree.sh" remove "$WT_G" >/dev/null 2>&1)
-else
-    bad "could not make a worktree for the nag's branch-evidence test: $WT_G"
-fi
-(cd "$REPO" && git rm -q --cached .plans/ghost3.md && git commit -qm "chore: untrack ghost3 plan")
-rm -f "$REPO/.plans/ghost3.md"
-
-# The same branch with no worktree, seen from the primary tree. `remove`
-# retires a merged branch, so make this one directly.
-echo "# Plan" > "$REPO/.plans/ghost4.md"
-git -C "$REPO" branch hone/ghost4 HEAD
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q ".plans/ghost4.md survived its landing" && bad "a branch with no commit of its own is not a landing" || ok "a fresh branch is no evidence of a landing"
-echo "$out" | grep -q "Plan(s) pending run" && ok "such a Plan counts as pending" || bad "a Plan with no landing should count as pending"
-git -C "$REPO" branch -D hone/ghost4 >/dev/null 2>&1
-rm -f "$REPO/.plans/ghost4.md"
-
-# Nested slug (the plan skill derives <area>/<change> mirroring src/): the
-# recursive scan still finds it, evidence rules unchanged.
-mkdir -p "$REPO/.plans/auth"
-echo "# Plan" > "$REPO/.plans/auth/ghost-nested.md"
-git -C "$REPO" commit -q --allow-empty -m "Merge branch 'hone/auth/ghost-nested'"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q ".plans/auth/ghost-nested.md survived its landing" && ok "nested landed Plan flagged" || bad "should flag nested landed Plan"
-
-# A nested Plan whose worktree exists is active work, not flagged even with
-# landed evidence in history.
-mkdir -p "$REPO/.worktrees/auth/ghost-nested"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "ghost-nested" && bad "nested Plan with live worktree should not be flagged" || ok "nested Plan with live worktree not flagged"
-rm -rf "$REPO/.worktrees/auth" "$REPO/.plans/auth"
-
-printf 'line\n%.0s' $(seq 1 60) > "$REPO/docs/notes/auth.md"   # 60 lines > cap; src/auth exists
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "docs/notes/auth.md is 60 lines" && ok "oversized Note flagged" || bad "should flag oversized Note"
-# Findings ride a systemMessage (visible), not bare stderr (invisible on exit 0).
-echo "$out" | grep -q '"systemMessage"' && ok "nag findings ride a systemMessage" || bad "nag findings should be a systemMessage"
-
-echo "# orphan" > "$REPO/docs/notes/ghostarea.md"   # no src/ghostarea/
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "docs/notes/ghostarea.md has no src/ghostarea/" && ok "orphan Note flagged" || bad "should flag orphan Note"
-rm -f "$REPO/docs/notes/ghostarea.md"
-
-# Governs link: a Decision pinned to a live path is clean; a dangling path is
-# flagged. src/auth exists in the seed; src/ghost/gone.ts does not.
-printf '# Auth tokens\nGoverns: `src/auth`\n\nWhy rotation is 15m.\n' > "$REPO/docs/decisions/auth.md"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "docs/decisions/auth.md declares Governs" && bad "a live Governs path should not be flagged" || ok "Decision with a live Governs path not flagged"
-printf '# Export format\nGoverns: src/ghost/gone.ts\n\nWhy CSV.\n' > "$REPO/docs/decisions/export.md"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "docs/decisions/export.md declares Governs: src/ghost/gone.ts, which no longer exists" && ok "Decision with a dangling Governs path flagged" || bad "should flag a dangling Governs path"
-rm -f "$REPO/docs/decisions/auth.md" "$REPO/docs/decisions/export.md"
-
-# Relative markdown link: a resolving target is clean, and a dangling one is
-# flagged. URLs and #anchors are not files, so they never flag. The
-# docs/notes/auth.md fixture from above still exists and anchors the clean case.
-printf '# Auth tokens\nSee [the note](../notes/auth.md), [the spec](https://example.org/x), [above](#why).\n' > "$REPO/docs/decisions/auth.md"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "docs/decisions/auth.md links to" && bad "a resolving link should not be flagged" || ok "Decision with resolving/URL/anchor links not flagged"
-printf '# Export format\nSee [the old spike](../spikes/2024-01-01-gone.md).\n' > "$REPO/docs/decisions/export.md"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "docs/decisions/export.md links to ../spikes/2024-01-01-gone.md, which does not resolve" && ok "Decision with a dangling relative link flagged" || bad "should flag a dangling relative link"
-# A link shown as code is an example, and a target with any URI scheme is no
-# file. The field shape: a Decision quoting `[x](javascript:…)` and
-# `![](data:…)` in inline code printed a finding on every stop.
-cat > "$REPO/docs/decisions/render.md" <<'MD'
-# Rendering
-Dangerous URLs (`[x](javascript:…)`, `![](data:…)`) and a ``[y](gone-too.md)`` span.
-Call [the desk](tel:+4912345) or run [the probe](javascript:void(0)).
-```md
-[an example](not-a-file.md)
-```
-~~~
-[another](also-not-a-file.md)
-~~~
-See [the gone one](../spikes/2024-02-02-gone.md).
-MD
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -qE 'links to (javascript|data|tel):' && bad "a target with a URI scheme is no file" || ok "javascript:, data:, and tel: targets are skipped"
-echo "$out" | grep -qE 'links to (gone-too|not-a-file|also-not-a-file)\.md' && bad "a link inside code is an example" || ok "links inside inline code and fenced blocks are skipped"
-echo "$out" | grep -q "docs/decisions/render.md links to ../spikes/2024-02-02-gone.md" && ok "a real broken link beside them still flags" || bad "a broken link outside code should still flag"
-rm -f "$REPO/docs/decisions/auth.md" "$REPO/docs/decisions/export.md" "$REPO/docs/decisions/render.md"
-
-# The same unacted findings on every stop ran to hundreds of lines a session.
-# With a session id the full list goes out once, and again when it changes.
-# An unchanged stop prints one line. Another session, and a stop with no id,
-# still see the full list.
-nagstop() { (cd "$REPO" && printf '{"session_id":"%s"}' "$1" | bash "$NAG" 2>&1); }
-rm -f "$REPO/.git/hone-nag-seen"
-echo "# Plan" > "$REPO/.plans/seen-a.md"
-out=$(nagstop n1)
-echo "$out" | grep -q 'Plan(s) pending run' && ok "the first stop of a session prints the full list" || bad "the first stop should print the findings"
-out=$(nagstop n1)
-echo "$out" | grep -q 'Plan(s) pending run' && bad "an unchanged list should not repeat" || ok "an unchanged list does not repeat"
-echo "$out" | grep -qE 'hone nag \(advisory\): [0-9]+ finding\(s\), unchanged since the last stop' && ok "an unchanged list prints one line with its count" || bad "an unchanged stop should print the one-line count"
-echo "# Plan" > "$REPO/.plans/seen-b.md"
-out=$(nagstop n1)
-echo "$out" | grep -q 'Plan(s) pending run' && ok "a changed list prints in full again" || bad "a changed list should print in full"
-out=$(nagstop n2)
-echo "$out" | grep -q 'Plan(s) pending run' && ok "another session sees the full list" || bad "another session should see the full list"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q 'Plan(s) pending run' && ok "a stop with no session id stays stateless" || bad "a stop with no session id should print in full"
-echo "$out" | grep -q '"decision":"block"' && bad "the nag must stay advisory" || ok "the repeat memory keeps the nag advisory"
-git -C "$REPO" status --porcelain | grep -q 'hone-nag-seen' && bad "the repeat memory must not dirty the tree" || ok "the repeat memory lives in the git dir"
-rm -f "$REPO/.plans/seen-a.md" "$REPO/.plans/seen-b.md" "$REPO/.git/hone-nag-seen"
-
-# The nag never blocks: even with findings present, no block decision is emitted.
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>/dev/null)
-echo "$out" | grep -q '"decision":"block"' && bad "nag must never block" || ok "nag stays advisory (never blocks)"
-
 echo
 echo "== worktree.sh add/landable/remove =="
 WSH="$PLUGIN_ROOT/scripts/worktree.sh"
@@ -1849,128 +1694,6 @@ out=$(guard_write ".hone-shared" "$REPO")
 denied "$out" && ok "shared marker denied in primary tree" || bad ".hone-shared should be guard-protected"
 out=$(guard_write ".hone-grant-auto" "$REPO")
 denied "$out" && ok "auto-grant marker denied in primary tree" || bad ".hone-grant-auto should be guard-protected"
-
-echo
-echo "== nag: zero-deletion change (advisory, pre-land) =="
-# The auth-login worktree: commit everything so the tree is clean on hone/auth-login,
-# with a purely additive diff vs the primary branch.
-(cd "$WT" && echo "new behaviour" > added.txt && git add -A && git commit -qm "feat: additive only")
-out=$(cd "$WT" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "deletes nothing" && ok "purely additive pre-land change flagged" || bad "should flag a zero-deletion change on a clean hone/* branch"
-# A change that deletes something is not flagged.
-(cd "$WT" && sed -i '1d' README.md && git add -A && git commit -qm "chore: cut a line")
-out=$(cd "$WT" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "deletes nothing" && bad "change with deletions should not be flagged" || ok "change with deletions passes"
-
-echo
-echo "== nag: oversized area (advisory, pre-land, only for an area the change touched) =="
-(cd "$WT" && mkdir -p src/big && seq 1 40 > src/big/table.js && git add -A && git commit -qm "feat: a big area")
-out=$(cd "$WT" && echo '{}' | HONE_AREA_MAX_LINES=30 bash "$NAG" 2>&1)
-echo "$out" | grep -q "src/big/ holds 40 lines, over the 30-line cap" && ok "an area over the cap that the change touched is flagged" || bad "should flag src/big/ over HONE_AREA_MAX_LINES"
-out=$(cd "$WT" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "holds 40 lines" && bad "an area under the default cap should not be flagged" || ok "an area under the default cap passes"
-# A binary file has no lines to read, so it adds nothing to the count.
-(cd "$WT" && head -c 4000 /dev/urandom > src/big/blob.bin && git add -A && git commit -qm "chore: a binary asset")
-out=$(cd "$WT" && echo '{}' | HONE_AREA_MAX_LINES=30 bash "$NAG" 2>&1)
-echo "$out" | grep -q "src/big/ holds 40 lines" && ok "a binary file does not count toward the cap" || bad "a binary file should not change the line count: $out"
-# An old large area that this change never touched stays quiet.
-(cd "$REPO" && mkdir -p src/old && seq 1 40 > src/old/table.js && git add -A && git commit -qm "chore: an old large area")
-WT_AQ="$REPO/.worktrees/area-quiet"
-git -C "$REPO" worktree add -q -b hone/area-quiet "$WT_AQ"
-(cd "$WT_AQ" && mkdir -p src/calm && seq 1 41 > src/calm/table.js && git add -A && git commit -qm "feat: touch the calm area only")
-out=$(cd "$WT_AQ" && echo '{}' | HONE_AREA_MAX_LINES=30 bash "$NAG" 2>&1)
-echo "$out" | grep -q "src/calm/ holds 41 lines" && ok "the touched area is flagged" || bad "should flag src/calm/"
-echo "$out" | grep -q "src/old/" && bad "an area the change did not touch should stay quiet" || ok "an untouched large area stays quiet"
-git -C "$REPO" worktree remove --force "$WT_AQ" && git -C "$REPO" branch -q -D hone/area-quiet
-
-echo
-echo "== nag: merged hone/* branch left behind =="
-git -C "$REPO" branch hone/landed-ghost HEAD
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "hone/landed-ghost is fully merged and has no worktree" && ok "leftover merged branch flagged" || bad "should flag a merged hone/* branch with no worktree"
-git -C "$REPO" branch -d hone/landed-ghost >/dev/null 2>&1
-# A branch attached to a live worktree (hone/auth-login) is active work. Check
-# it was NOT flagged in the run above.
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "hone/auth-login is fully merged" && bad "branch with live worktree should not be flagged" || ok "branch with live worktree not flagged"
-
-echo
-echo "== nag: a claim this clone holds with no worktree (shared mode) =="
-# A local refs/hone/claim/<change> is this clone's own claim on the remote.
-# With no .worktrees/<change> it outlived its run. The nag reads only local
-# refs, so the check needs no remote and never touches the network.
-git -C "$REPO" update-ref refs/hone/claim/ghost-claim "$(git -C "$REPO" commit-tree "$(git -C "$REPO" hash-object -t tree /dev/null)" -m 'hone claim: ghost-claim by t <t@t.t> on box at now')"
-git -C "$REPO" update-ref refs/hone/claim/auth-login "$(git -C "$REPO" commit-tree "$(git -C "$REPO" hash-object -t tree /dev/null)" -m 'hone claim: auth-login by t <t@t.t> on box at now')"
-git -C "$REPO" update-ref refs/hone/remote-claim/other-dev "$(git -C "$REPO" commit-tree "$(git -C "$REPO" hash-object -t tree /dev/null)" -m 'hone claim: other-dev by u <u@t.t> on box2 at now')"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "claim on ghost-claim" && ok "stale claim flagged" || bad "should flag a claim with no worktree"
-echo "$out" | grep -q "worktree.sh\\\" release ghost-claim\|release ghost-claim" && ok "the finding names the release command" || bad "the stale-claim finding should name worktree.sh release"
-echo "$out" | grep -q "claim on auth-login" && bad "a claim with a live worktree should not be flagged" || ok "claim with live worktree not flagged"
-echo "$out" | grep -q "other-dev" && bad "another developer's fetched claim is not this clone's leftover" || ok "the team's fetched claims are not flagged"
-git -C "$REPO" update-ref -d refs/hone/claim/ghost-claim; git -C "$REPO" update-ref -d refs/hone/claim/auth-login; git -C "$REPO" update-ref -d refs/hone/remote-claim/other-dev
-
-echo
-echo "== nag: a Plan reference is not a Plan =="
-# .plans/<slug>/ holds the Plan's references. A markdown one must not be counted
-# as a pending Plan of its own (the sibling <slug>.md is the giveaway).
-mkdir -p "$REPO/.plans/withrefs"
-printf '# Plan: withrefs\n' > "$REPO/.plans/withrefs.md"
-printf '| in | out |\n' > "$REPO/.plans/withrefs/cases.md"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "withrefs/cases" && bad "a reference must not be read as a Plan" || ok "markdown reference not counted as a Plan"
-rm -rf "$REPO/.plans/withrefs" "$REPO/.plans/withrefs.md"
-
-echo
-echo "== nag: undated spike entry, of any type =="
-# The date at the front is the whole signal that a spike is frozen history.
-# Without it the entry reads as a live document, and garden would be right to
-# treat it as one. Every top-level entry is checked, not only the markdown.
-mkdir -p "$REPO/docs/spikes"
-printf '# Spike\n' > "$REPO/docs/spikes/sse-backpressure.md"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "sse-backpressure.md carries no date" && ok "undated spike note flagged" || bad "should flag a spike note with no date"
-mv "$REPO/docs/spikes/sse-backpressure.md" "$REPO/docs/spikes/2026-08-19-sse-backpressure.md"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "carries no date" && bad "a dated spike note must not be flagged" || ok "dated spike note not flagged"
-# A probe is not markdown, and it is checked the same way.
-printf 'echo probe\n' > "$REPO/docs/spikes/probe.sh"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "probe.sh carries no date" && ok "undated spike probe flagged" || bad "should flag a non-markdown spike entry with no date"
-rm -f "$REPO/docs/spikes/probe.sh"
-# A spike of several files uses a dated directory, checked by its own name. The
-# nag never looks inside: what a probe names its files is the probe's business.
-mkdir -p "$REPO/docs/spikes/2026-08-19-multi/src"
-printf 'echo probe\n' > "$REPO/docs/spikes/2026-08-19-multi/src/run.sh"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "carries no date" && bad "a dated spike directory must not be flagged" || ok "dated spike directory not flagged, contents not checked"
-mv "$REPO/docs/spikes/2026-08-19-multi" "$REPO/docs/spikes/multi"
-out=$(cd "$REPO" && echo '{}' | bash "$NAG" 2>&1)
-echo "$out" | grep -q "spikes/multi carries no date" && ok "undated spike directory flagged" || bad "should flag an undated spike directory"
-rm -rf "$REPO/docs/spikes"
-
-echo
-echo "== nag: durable truth stranded in harness memory =="
-# A pristine repo, so the memory finding is the ONLY finding: otherwise the
-# leftover Plans and orphan Notes above would block under .hone-nag-enforce and
-# the advisory-never-blocks assertion would pass for the wrong reason.
-MEMREPO=$(mktemp -d)
-git -C "$MEMREPO" init -q && git -C "$MEMREPO" symbolic-ref HEAD refs/heads/main
-git -C "$MEMREPO" config user.email t@t.t; git -C "$MEMREPO" config user.name t
-echo seed > "$MEMREPO/README.md"
-git -C "$MEMREPO" add -A && git -C "$MEMREPO" commit -qm seed
-# The harness keys its memory dir by the project's absolute path, "/" → "-".
-MEMCFG="$MEMREPO/.memcfg"
-MEMDIR="$MEMCFG/projects/$(cd "$MEMREPO" && pwd -P | tr '/' '-')/memory"
-mkdir -p "$MEMDIR"
-printf -- '---\nname: goal\nmetadata:\n  type: project\n---\n\nship it\n' > "$MEMDIR/goal.md"
-printf -- '---\nname: pref\nmetadata:\n  type: user\n---\n\nplain english\n' > "$MEMDIR/pref.md"
-out=$(cd "$MEMREPO" && CLAUDE_CONFIG_DIR="$MEMCFG" bash "$NAG" </dev/null 2>&1)
-echo "$out" | grep -q "goal.md is a 'type: project' harness memory" && ok "project-typed memory flagged" || bad "should flag a type: project memory"
-echo "$out" | grep -q "pref.md" && bad "user-typed memory should not be flagged" || ok "user-typed memory not flagged"
-# Fails open: an absent memory dir yields nothing, never a false finding.
-out=$(cd "$MEMREPO" && CLAUDE_CONFIG_DIR="$MEMREPO/.nonexistent" bash "$NAG" </dev/null 2>&1)
-echo "$out" | grep -q "harness memory" && bad "absent memory dir should yield nothing" || ok "absent memory dir fails open"
-rm -rf "$MEMREPO"
 
 echo
 echo "== worktree.sh remove: branch and empty-dir hygiene =="
@@ -2099,7 +1822,9 @@ done
 # A full set of deny rules: the rule alone, and no person's message.
 canon_settings ''
 out=$(ss_raw)
-printf '%s' "$out" | jq -e 'has("systemMessage") | not' >/dev/null && ok "no warning, no person's message" || bad "a quiet start should carry no systemMessage: $out"
+# The person may still see attention items (test/hygiene_test.sh), never a warning.
+printf '%s' "$out" | jq -r '.systemMessage // ""' | grep -qE 'deny rules|run-tests|src/ directory' \
+    && bad "a quiet start should carry no warning: $out" || ok "no warning reaches the person"
 printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' | grep -q '^# hone workflow' \
     && ok "a quiet start still injects the rule" || bad "a quiet start should inject the rule"
 # A legacy vendored copy loads natively and is not injected again. In a
@@ -2172,7 +1897,7 @@ echo "$out" | grep -q 'FAIL cart total is off by one' && ok "B8: the block shows
 rm -f "$FG_WT/src/RED" "$(git -C "$FG_WT" rev-parse --absolute-git-dir)/hone-gate-blocks"
 
 # B5: a nested `claude -p "/code-review ..."` session runs hone's Stop hooks.
-# The gate there ran the full suite and held the suite lock, and the nag told
+# The gate there ran the full suite and held the suite lock, and the retired nag told
 # the reviewer to start a run. A stand-in named claude runs the hook as its
 # child, the way Claude Code does.
 FG_BIN="$FG/.git/bin"; mkdir -p "$FG_BIN"
@@ -2184,86 +1909,11 @@ out=$(cd "$FG_WT" && echo '{}' | HOOK="$GATE" "$FG_BIN/claude" -p "/hone:run the
 echo "$out" | grep -q '"decision":"block"' && ok "B5: a print-mode run that is no review still gets the gate" \
     || bad "B5: only a /code-review session may skip the gate: $out"
 rm -f "$FG_WT/src/RED" "$(git -C "$FG_WT" rev-parse --absolute-git-dir)/hone-gate-blocks"
-mkdir -p "$FG/.plans" && echo "# Plan" > "$FG/.plans/ghost.md"
-out=$(cd "$FG" && echo '{}' | bash "$NAG" 2>&1)
-[ -n "$out" ] || bad "B5: the nag should report the pending Plan outside a review"
-out=$(cd "$FG" && echo '{}' | HOOK="$NAG" "$FG_BIN/claude" -p "/code-review high the brief" 2>&1)
-[ -z "$out" ] && ok "B5: the nag stays silent in a nested review session" || bad "B5: the nag should exit at once in a nested review: $out"
 git -C "$FG" worktree remove --force "$FG_WT" 2>/dev/null
 rm -rf "$FG"
-
-echo "== field shapes 2026-10-01 (nag) =="
-# F1: the nag told the coordinator "N Plan(s) pending ... run /hone:run" on
-# 149 stops, and the same line reached run and plan sessions. In a run's
-# worktree it counted the Plans of the worktree's old snapshot: "3 pending"
-# when only one was. The pending advisory is for a person in the primary
-# tree with no coordinator, and nobody else.
-NF=$(mktemp -d)
-(cd "$NF" && git init -q && git symbolic-ref HEAD refs/heads/main \
-    && git config user.email t@t.t && git config user.name t \
-    && mkdir -p .plans src && printf '.worktrees/\n' > .gitignore \
-    && echo "# seed" > README.md && git add -A && git commit -qm seed)
-for p in a b c; do echo "# Plan" > "$NF/.plans/$p.md"; done
-(cd "$NF" && git add -A && git commit -qm "chore(plan): a b c")
-NF_WT="$NF/.worktrees/a"
-git -C "$NF" worktree add -q -b hone/a "$NF_WT"
-# b and c land on main after the run branched, so main holds only a.
-(cd "$NF" && git rm -q .plans/b.md .plans/c.md && git commit -qm "Merge branch 'hone/b'")
-nfstop() { (cd "$1" && printf '{"session_id":"%s"}' "$2" | bash "$NAG" 2>&1); }
-out=$(nfstop "$NF" p0)
-echo "$out" | grep -q 'Plan(s) pending' && bad "F1: a Plan with a worktree is in flight, not pending: $out" \
-    || ok "F1: a Plan with a worktree is in flight, not pending"
-echo "# Plan" > "$NF/.plans/d.md"
-out=$(nfstop "$NF" p1)
-echo "$out" | grep -q '1 Plan(s) pending' && ok "F1: the primary tree with no coordinator still hears of a pending Plan" \
-    || bad "F1: the primary tree should hear of one pending Plan: $out"
-out=$(nfstop "$NF_WT" r1)
-echo "$out" | grep -q 'Plan(s) pending' && bad "F1: a run session must not hear of pending Plans: $out" \
-    || ok "F1: a run session in its worktree hears of no pending Plans"
-# A coordinator watches a session: no session in the repository hears it.
-NF_ST="$NF/.git/hone-coordinate"
-mkdir -p "$NF_ST/sessions"
-printf 'change=a\nagent=run-a\ntab=t1\nowner=main1\n' > "$NF_ST/sessions/run-a"
-out=$(nfstop "$NF" main1)
-echo "$out" | grep -q 'Plan(s) pending' && bad "F1: the coordinator must not hear 'run /hone:run': $out" \
-    || ok "F1: the coordinator hears of no pending Plans while it watches"
-out=$(nfstop "$NF" plan1)
-echo "$out" | grep -q 'Plan(s) pending' && bad "F1: a plan session beside a coordinator must not hear it: $out" \
-    || ok "F1: another session in the primary tree is silent while a coordinator watches"
-# Between batches the coordinator watches nothing, but its wait cursor stays.
-rm -f "$NF_ST/sessions/run-a"
-echo 7 > "$NF_ST/cursor.main2"
-out=$(nfstop "$NF" main2)
-echo "$out" | grep -q 'Plan(s) pending' && bad "F1: a coordinator with no watch must not hear it: $out" \
-    || ok "F1: a coordinator with nothing watched hears of no pending Plans"
-echo 999999 > "$NF_ST/wait.other.pid"
-out=$(nfstop "$NF" p2)
-echo "$out" | grep -q '1 Plan(s) pending' && ok "F1: another session with no live coordinator still hears it" \
-    || bad "F1: a dead wait and a stale cursor are no coordinator: $out"
-git -C "$NF" worktree remove --force "$NF_WT"
-
-# F2: the area-size count read a generated output.css as 11,699 of 17,764
-# lines. A file that .gitattributes marks linguist-generated, or that opens
-# with a generated header, is no part of an area an agent reads.
-NF_WT="$NF/.worktrees/gen"
-git -C "$NF" worktree add -q -b hone/gen "$NF_WT"
-(cd "$NF_WT" && mkdir -p src/styles \
-    && seq 1 20 > src/styles/input.css \
-    && { echo '/* @generated by the styles build */'; seq 1 50; } > src/styles/bundle.css \
-    && seq 1 50 > src/styles/output.css \
-    && seq 1 50 > src/styles/vendor.css \
-    && printf 'src/styles/output.css linguist-generated\nsrc/styles/vendor.css linguist-generated=true\n' > .gitattributes \
-    && git add -A && git commit -qm "feat: styles")
-out=$(cd "$NF_WT" && printf '{"session_id":"g1"}' | HONE_AREA_MAX_LINES=100 bash "$NAG" 2>&1)
-echo "$out" | grep -q 'src/styles/ holds' && bad "F2: generated files must not count toward the area cap: $out" \
-    || ok "F2: linguist-generated files and a generated header do not count"
-out=$(cd "$NF_WT" && printf '{"session_id":"g2"}' | HONE_AREA_MAX_LINES=10 bash "$NAG" 2>&1)
-echo "$out" | grep -q 'src/styles/ holds 20 lines' && ok "F2: the hand-written file still counts" \
-    || bad "F2: the count should be the 20 hand-written lines: $out"
-git -C "$NF" worktree remove --force "$NF_WT"
-rm -rf "$NF"
 
 echo
 echo "-------------------------------------"
 printf 'PASS: %d   FAIL: %d\n' "$pass" "$fail"
 [ "$fail" -eq 0 ]
+

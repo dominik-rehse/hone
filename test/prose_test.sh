@@ -117,7 +117,7 @@ while IFS= read -r var; do
 done < <(grep -ohE '\$\{HONE_[A-Z_]+:-' hooks/*.sh scripts/*.sh 2>/dev/null | sed 's/[${:-]//g' | sort -u)
 for hook in hooks/*.sh; do
     name=$(basename "$hook" .sh)
-    case "$name" in common|messages) continue ;; esac
+    case "$name" in common|messages|hygiene) continue ;; esac
     grep -qF -- "$name" "$REF" || { bad "$REF never names the $name hook"; gaps=$((gaps+1)); }
 done
 [ "$gaps" -eq 0 ] && ok "every subcommand, marker, tunable, and hook has a reference entry"

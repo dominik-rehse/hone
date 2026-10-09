@@ -5,8 +5,8 @@ files, and the suite is green.
 
     Governs: src/db/read-scope.ts
 
-That path does not exist. The `nag` has reported this Decision on every turn
-for three weeks.
+That path does not exist. `worktree.sh hygiene` has reported this Decision
+again and again for three weeks.
 
 The Decision's body is four paragraphs. They say why every read runs through
 one narrowed entry point. They also say why the author rejected two

@@ -97,7 +97,7 @@ in git.
   grant state. `wait` ends by itself after 9 minutes with exit 3.
   `coordinate.sh send` is the one path from MAIN to a session, and it
   refuses a `!` command. `admit` caps the runs in flight at 4.
-- Still open: a Stop hook that blocks the stop (the gate, the nag) does
+- Still open: a Stop hook that blocks the stop (the gate) does
   not hold back `turn-ended`, so MAIN can wake on a turn that goes on. On
   2026-10-01 the maintainer chose no lab run for the redesign. Next step:
   read the next coordinated batch, and count the pollers MAIN still
@@ -228,6 +228,17 @@ in git.
   named, and never answers a prompt in another tab. A field batch must
   show whether this holds.
 
+#### Nobody read the nag's findings in an unattended run
+
+- What happened: the Stop-hook nag sent its findings as a message that
+  the person sees and the model never gets. In an unattended run nobody
+  read them ([the 2026-10-09 note](spikes/2026-10-09-hook-channels-and-gate-cost.md)).
+- Done in 0.78.0: the nag is gone. The run fixes what `worktree.sh
+  hygiene` finds in its change. `worktree.sh attention` lists the
+  person's items at session start, in the run's report, and at batch end.
+- Next step: read the field after the release. Does a run fix the hygiene
+  findings, and does the person act on the attention list?
+
 #### Smaller defects from the coordinated batch
 
 Each comes from [the 2026-10-01 note](spikes/2026-10-01-field-data-coordinated-batch.md).
@@ -280,7 +291,7 @@ fix itself. hone only reports them.
 
 - An old flaky e2e test failed three lands with exit 6. The re-lands
   waited up to 1.5 hours for its fix.
-- A generated `output.css` counts toward the nag's area-size cap until
+- A generated `output.css` counts toward the area-size cap until
   the repository marks it `linguist-generated` in `.gitattributes`. The
   repository has an open Plan for that.
 

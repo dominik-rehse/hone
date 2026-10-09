@@ -230,9 +230,9 @@ grep -q '/guard\.sh' "$W"/out/*/toy/plugin/hooks/hooks.json && bad "the sandboxe
 grep -q 'bash-guard\.sh' "$W"/out/*/toy/plugin/hooks/hooks.json && ok "the other hooks stay wired" || bad "bash-guard.sh should stay wired"
 grep -q '/guard\.sh' "$PLUGIN_ROOT/hooks/hooks.json" && ok "the repo's own hooks.json is untouched" || bad "the repo's hooks.json must not change"
 [ "$(result toy .without)" = "guard" ] && ok "the result records the switch" || bad "the result should record --without"
-fresh; MODE=idle lab toy --without deny-rules,nag >/dev/null
+fresh; MODE=idle lab toy --without deny-rules,progress >/dev/null
 [ "$(jq -c '.permissions.deny' "$W"/out/*/toy/repo/.claude/settings.json)" = "[]" ] && ok "--without deny-rules seeds the fixture with no deny rule" || bad "the fixture should have no deny rule"
-grep -q '/nag\.sh' "$W"/out/*/toy/plugin/hooks/hooks.json && bad "nag.sh should be off beside deny-rules" || ok "a hook and the deny rules switch off together"
+grep -q '/progress\.sh' "$W"/out/*/toy/plugin/hooks/hooks.json && bad "progress.sh should be off beside deny-rules" || ok "a hook and the deny rules switch off together"
 fresh; MODE=idle lab toy >/dev/null
 [ "$(jq '.permissions.deny | length' "$W"/out/*/toy/repo/.claude/settings.json)" -gt 5 ] && ok "the full fixture carries the canonical deny rules" || bad "the fixture should carry the deny rules"
 
@@ -556,7 +556,7 @@ plugin_copy "$PLUGIN_ROOT" "$VW/base"
 # What must be gone from the built copy, per part: a file, then a literal string.
 part_gone() {
     case "$1" in
-        guard|bash-guard|dirty-guard|gate|nag|session-start)
+        guard|bash-guard|dirty-guard|gate|progress|session-start)
                              printf '%s\n' "hooks/hooks.json|/$1.sh" ;;
         plan-critic)         printf '%s\n' "skills/plan/SKILL.md|subagent_type: plan-critic" ;;
         consolidate-critic)  printf '%s\n' "skills/run/SKILL.md|subagent_type: consolidate-critic" ;;

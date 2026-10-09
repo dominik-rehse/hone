@@ -44,7 +44,7 @@ Edit(./.claude/settings.json)
 Edit(./.claude/settings.local.json)
 
 # The gate wiring outside the adapters: the repo's own git hooks, and the
-# plugin's hook code (guard, bash-guard, gate, nag).
+# plugin's hook code (guard, bash-guard, gate).
 Edit(./.git/hooks/**)
 Edit(~/.claude/plugins/**)
 

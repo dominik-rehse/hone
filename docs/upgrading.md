@@ -66,9 +66,6 @@ mechanical steps.
      changes without the marker. Turn it on with no worktree in flight and
      the primary branch pushed. Then no branch was cut from a commit that a
      later rebase moves. The remote must accept pushes to `refs/hone/*`.
-   - *The critics run on opus since 0.54*: a Plan review costs more, and
-     the `plan-critic` sends more Plans back. Each bounce names a concrete
-     gap. Nothing to install.
    - *The review names its level since 0.53.1*: the loop's nested
      `/code-review` runs at `high`, which may cost more than your last
      level. Nothing to install.
@@ -81,9 +78,9 @@ mechanical steps.
      already. A worktree that was in flight during the upgrade may lack it.
      Amend its commit as the refusal says, and land again. A script of yours
      that lands a branch must write the line too.
-   - *Two more things since 0.55 need nothing from you*: the nag names a
+   - *Two more things since 0.55 need nothing from you*: hone names a
      `src/<area>/` over `HONE_AREA_MAX_LINES` (default 3000) when a change
-     about to land touched it. Since 0.56 `/hone:garden` names such an area
+     touched it. Since 0.56 `/hone:garden` names such an area
      across the whole repo, and puts it into a proposed Plan. And the loop
      hands the `consolidate-critic` every Note and Decision about the changed
      code, which `worktree.sh governed` lists. A `Governs:` line on a Decision
@@ -123,6 +120,9 @@ mechanical steps.
    - *The gate runs no full suite since 0.77*: it asks for `worktree.sh
      verify` instead, which also runs type-check and lint. Restart running
      sessions. `HONE_SUITE_LOCK_TIMEOUT` is gone.
+   - *The nag is gone since 0.78*: restart running sessions. Setup deletes
+     the leftover `hone-nag-seen`. A run now fixes the hygiene findings of
+     its change, and session start shows you what needs you.
    - *The complexity check since 0.76*: install
      [cccc](https://github.com/moznion/cccc) and `jq` to turn it on. Mark
      vendored code `linguist-vendored` in `.gitattributes`.
@@ -138,7 +138,7 @@ settings.json without the deny rules.
 Two capabilities cost nothing until used, so enable them at any time:
 
 - *`Governs:` links.* Add a `Governs:` line to a Decision or Note naming
-  the `src/` path it explains. The nag then flags the doc when that path
+  the `src/` path it explains. hone then flags the doc when that path
   disappears. Add the lines as you next touch each doc. You need no
   upfront pass.
 - *The garden loop.* Run `/hone:garden` between changes to trim stale

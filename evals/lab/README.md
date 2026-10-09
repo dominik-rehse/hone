@@ -203,7 +203,7 @@ from a bug in a check.
 ## Switching a component off
 
 A *part* is a hook, a critic, a step of the loop, or a gate inside `land`.
-`--without guard,nag` switches parts off in the sandboxed plugin copy, and the
+`--without guard,gate` switches parts off in the sandboxed plugin copy, and the
 repo's own files never change. `--variant NAME` reads
 `evals/lab/variants/NAME.json`, which names parts and settings together.
 `--set review.level=medium` moves one setting. `result.json` records the whole

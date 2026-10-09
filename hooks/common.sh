@@ -1,6 +1,6 @@
 #!/bin/bash
 # Shared helpers for hone's hooks. The hooks (guard.sh, bash-guard.sh, gate.sh,
-# nag.sh, session-start.sh, progress.sh, watch.sh) and the scripts that share their checks (setup.sh,
+# session-start.sh, progress.sh, watch.sh) and the scripts that share their checks (setup.sh,
 # worktree.sh, coordinate.sh) SOURCE this file, and nothing executes it directly. It defines
 # functions only, and it has no side effects at source time. Keeping the JSON
 # emit/escape, the stdin-field parse, and the deny-rule comparison in one place
@@ -437,11 +437,11 @@ hone_fail_excerpt() {
 
 # Exit 0 when this hook runs inside a nested `claude -p "/code-review ..."`
 # session, the review that the run skill starts. Such a session reviews a
-# diff. It owns no change, so the Stop gate and the nag have nothing to say
-# to it. In the field the gate there ran the full suite and held the suite
-# lock, and the nag told the reviewer to start a run. The sign is an
-# ancestor process whose command line runs claude in print mode on
-# /code-review. A hook is a child of its claude process, so the walk is
+# diff. It owns no change, so the Stop gate and the session-start list have
+# nothing to say to it. In the field the gate there ran the full suite and
+# held the suite lock, and the retired nag told the reviewer to start a run.
+# The sign is an ancestor process whose command line runs claude in print
+# mode on /code-review. A hook is a child of its claude process, so the walk is
 # short.
 hone_nested_review() {
     local pid="$PPID" n=0 ppid args

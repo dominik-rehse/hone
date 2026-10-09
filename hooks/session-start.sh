@@ -11,6 +11,10 @@
 # 2. Tell a project that looks like it wants hone but has no test adapter to
 #    run setup, so the gate has something to run.
 #
+# 3. In the primary tree, show what needs the person: the lines of
+#    `worktree.sh attention` (hooks/hygiene.sh has the checks). Not in a
+#    linked worktree, where a run works, and not in a nested review session.
+#
 # The same .hone-off marker that disables the rest of hone disables this hook.
 # Mechanism: the hook prints one JSON object, or nothing. Its
 # hookSpecificOutput.additionalContext reaches the model only, and carries the
@@ -83,7 +87,7 @@ if [ "$looks_like_hone" = true ] && [ ! -f "$PROJECT_DIR/scripts/run-tests.sh" ]
 fi
 
 # hone keys its enforcement off a src/<area>/ layout. A hone project with no src/
-# means the guard, gate, and nag silently do nothing. Report that instead of
+# means the guard and the gate silently do nothing. Report that instead of
 # leaving it a silent gap.
 if [ "$looks_like_hone" = true ] && [ ! -d "$PROJECT_DIR/src" ]; then
     add warnings "$(msg_session_no_src)"
@@ -104,9 +108,38 @@ if [ "$looks_like_hone" = true ]; then
 fi
 
 [ -n "$warnings" ] && add context "$warnings"
+
+# What needs the person, in the primary tree only (its git dir is the common
+# dir). The person reads it. The model gets it too, marked as the person's, so
+# it can answer a question about it. A timeout keeps the hook inside its own.
+person="$warnings"
+if git -C "$PROJECT_DIR" rev-parse --git-dir >/dev/null 2>&1 && ! hone_nested_review; then
+    git_dir=$(git -C "$PROJECT_DIR" rev-parse --absolute-git-dir 2>/dev/null)
+    common_dir=$(cd "$PROJECT_DIR" && cd "$(git rev-parse --git-common-dir 2>/dev/null)" 2>/dev/null && pwd -P)
+    if [ -n "$git_dir" ] && [ "$(cd "$git_dir" && pwd -P)" = "$common_dir" ]; then
+        # The payload carries the session id. A terminal on stdin carries none.
+        t=()
+        command -v timeout >/dev/null 2>&1 && t=(timeout 3)
+        payload=""
+        if [ ! -t 0 ]; then
+            if command -v timeout >/dev/null 2>&1; then payload=$(timeout 1 cat 2>/dev/null)
+            else payload=$(cat 2>/dev/null); fi
+        fi
+        session=$(hone_extract_top_field "$payload" session_id 2>/dev/null)
+        attention=$(cd "$PROJECT_DIR" && ${t[@]+"${t[@]}"} bash "$SCRIPT_DIR/../scripts/worktree.sh" attention \
+            ${session:+--session "$session"} 2>/dev/null)
+        if [ -n "$attention" ]; then
+            add person "$(msg_session_attention_heading)
+$attention"
+            add context "$(msg_session_attention_context)
+$attention"
+        fi
+    fi
+fi
+
 [ -n "$context" ] || exit 0
 
 printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}' "$(hone_json_escape "$context")"
-[ -n "$warnings" ] && printf ',"systemMessage":"%s"' "$(hone_json_escape "$warnings")"
+[ -n "$person" ] && printf ',"systemMessage":"%s"' "$(hone_json_escape "$person")"
 printf '}\n'
 exit 0

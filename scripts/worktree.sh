@@ -171,6 +171,28 @@
 #       on PATH it says so and passes. Exit: 0 nothing over · 1 printed · 2
 #       usage/not-a-repo/no such branch.
 #
+#   worktree.sh hygiene <change>
+#       Run the hygiene checks (hooks/hygiene.sh) on what this change touched,
+#       read as governed reads it. Fix now: the change deletes nothing; a
+#       Note it touched is over the size cap or has no src/<area>/ (also when
+#       the change deleted the area); a docs/spikes/ entry it added has no
+#       date; a broken Governs: path or relative link in a Decision or Note
+#       that it touched, or that governs code it touched. For the person: a
+#       src/<area>/ it touched holds more than HONE_AREA_MAX_LINES lines
+#       (default 3000), because the fix is a Plan of its own. Each finding is
+#       a three-line message under the heading of its group. Exit: 0 nothing
+#       to fix now (person items may still print) · 1 a fix-now finding ·
+#       2 usage/not-a-repo/no such branch.
+#
+#   worktree.sh attention [--session <id>]
+#       Print what the person should know about the primary tree, one short
+#       line per item, and nothing when nothing is there: a `type: project`
+#       harness memory file, a merged hone/* branch with no worktree, a stale
+#       claim, the Plan of a landed change, and the count of pending Plans
+#       (left out while a coordinator is active, or while session <id> once
+#       waited as one). The SessionStart hook shows it in the primary tree.
+#       Exit: 0 nothing · 1 printed · 2 not-a-repo.
+#
 #   worktree.sh verify
 #       Run the full suite (scripts/run-tests.sh --all), then
 #       scripts/typecheck.sh and scripts/lint.sh where present, in the current
@@ -306,6 +328,8 @@ HONE_PLUGIN_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 . "$HONE_PLUGIN_ROOT/hooks/common.sh"
 # shellcheck source=hooks/messages.sh
 . "$HONE_PLUGIN_ROOT/hooks/messages.sh"
+# shellcheck source=hooks/hygiene.sh
+. "$HONE_PLUGIN_ROOT/hooks/hygiene.sh"
 
 cmd_add() {
     local change="${1:-}"
@@ -596,7 +620,7 @@ cmd_governed() {
         while IFS= read -r path; do
             [ -n "$path" ] && governed_touched "$path" && { hit=yes; break; }
         done < <(hone_governs_paths "$tree/$doc" "$tree")
-        # A Note is flat, docs/notes/<area>.md, as the nag reads it.
+        # A Note is flat, docs/notes/<area>.md, as the hygiene checks read it.
         if [ -z "$hit" ] && [ "$(dirname "$doc")" = docs/notes ]; then
             governed_touched "src/$(basename "$doc" .md)" && hit=yes
         fi
@@ -685,6 +709,155 @@ cmd_complexity() {
     [ -n "$found" ] || return 0
     printf '%s\n' "$found"
     msg_wt_complexity_found "$limit"
+    return 1
+}
+
+# Scope the hygiene checks to one change (header: `worktree.sh hygiene`). The
+# tree is the worktree with its uncommitted and untracked files, as governed
+# reads it, else the branch.
+cmd_hygiene() {
+    local change="${1:-}"
+    [ -n "$change" ] || { msg_wt_needs_change hygiene >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
+
+    local common_dir main_root branch wt base changed primary stat ins dels
+    common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+    main_root=$(git -C "$common_dir/.." rev-parse --show-toplevel 2>/dev/null)
+    branch="hone/$change"
+    wt="$main_root/.worktrees/$change"
+    git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch" || {
+        msg_hygiene_no_branch "$branch" >&2; return 2; }
+    base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
+    [ -n "$base" ] || return 0
+    primary=$(git -C "$main_root" rev-parse --abbrev-ref HEAD 2>/dev/null)
+    if [ -d "$wt" ]; then
+        HY_DIR="$wt"; HY_REV=""
+        changed=$( { git -C "$wt" diff --no-renames --name-only "$base"
+                     git -C "$wt" ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
+        stat=$(git -C "$wt" diff --shortstat "$base" 2>/dev/null)
+        # An untracked file is all insertions.
+        local new_lines
+        new_lines=$(git -C "$wt" ls-files -z --others --exclude-standard 2>/dev/null \
+            | (cd "$wt" && xargs -0 -r cat -- 2>/dev/null) | wc -l | tr -d '[:space:]')
+    else
+        HY_DIR="$main_root"; HY_REV="$branch"
+        changed=$(git -C "$main_root" diff --no-renames --name-only "$base" "$branch" 2>/dev/null)
+        stat=$(git -C "$main_root" diff --shortstat "$base" "$branch" 2>/dev/null)
+        local new_lines=0
+    fi
+    [ -n "$changed" ] || return 0
+
+    local fix="" person=""
+    # One finding is a three-line message. Render it as a list item: a dash on
+    # the first line, the rest indented under it.
+    hy_item() { printf '%s\n' "$1" | sed '1s/^/- /; 2,$s/^/  /'; }
+    hy_fix() { fix+=$(hy_item "$1")$'\n'; }
+
+    # 4. Change that cuts nothing, over the whole change.
+    dels=$(printf '%s' "$stat" | grep -o '[0-9]* deletion' | grep -o '[0-9]*' || echo 0)
+    ins=$(printf '%s' "$stat" | grep -o '[0-9]* insertion' | grep -o '[0-9]*' || echo 0)
+    ins=$(( ${ins:-0} + ${new_lines:-0} ))
+    if [ "$ins" -gt 0 ] && [ "${dels:-0}" -eq 0 ]; then
+        hy_fix "$(msg_hygiene_no_deletions "$ins" "${primary:-the merge base}")"
+    fi
+
+    # The change's paths under src/<area>/, for checks 3 and 11.
+    local areas f note area lines entry docs doc tok
+    areas=$(printf '%s\n' "$changed" | sed -n 's|^src/\([^/]*\)/.*|\1|p' | sort -u)
+
+    # 2 and 3. A Note the change touched, or whose area it deleted.
+    local notes
+    notes=$( { printf '%s\n' "$changed" | grep -E '^docs/notes/[^/]+\.md$'
+               while IFS= read -r area; do
+                   [ -n "$area" ] && printf 'docs/notes/%s.md\n' "$area"
+               done <<<"$areas"; } | sort -u)
+    while IFS= read -r note; do
+        [ -n "$note" ] && hy_exists "$note" || continue
+        area=$(basename "$note" .md)
+        if grep -qxF "$note" <<<"$changed"; then
+            lines=$(hy_note_oversized "$note")
+            [ -n "$lines" ] && hy_fix "$(msg_hygiene_note_oversized "$note" "$lines" "$HY_NOTE_MAX_LINES")"
+        fi
+        hy_is_dir "src/$area" || hy_fix "$(msg_hygiene_note_orphan "$note" "$area")"
+    done <<<"$notes"
+
+    # 8. A spike entry the change added.
+    while IFS= read -r entry; do
+        [ -n "$entry" ] || continue
+        hy_exists "docs/spikes/$entry" || continue
+        git -C "$main_root" cat-file -e "$base:docs/spikes/$entry" 2>/dev/null && continue
+        hy_spike_dated "$entry" || hy_fix "$(msg_hygiene_spike_undated "docs/spikes/$entry")"
+    done < <(printf '%s\n' "$changed" | sed -n 's|^docs/spikes/\([^/]*\).*|\1|p' | sort -u)
+
+    # 6 and 9. A Decision or Note the change touched, or one that governs
+    # code it touched (cmd_governed decides which).
+    docs=$( { printf '%s\n' "$changed" | grep -E '^docs/(decisions|notes)/.*\.md$'
+              cmd_governed "$change" 2>/dev/null; } | sort -u)
+    while IFS= read -r doc; do
+        [ -n "$doc" ] && hy_exists "$doc" || continue
+        while IFS= read -r tok; do
+            [ -n "$tok" ] && hy_fix "$(msg_hygiene_governs_broken "$doc" "$tok")"
+        done < <(hy_governs_broken "$doc" "$HY_DIR")
+        while IFS= read -r tok; do
+            [ -n "$tok" ] && hy_fix "$(msg_hygiene_link_broken "$doc" "$tok")"
+        done < <(hy_links_broken "$doc")
+    done <<<"$docs"
+
+    # 11. An area the change touched, over the cap. Its fix is a Plan.
+    local cap="${HONE_AREA_MAX_LINES:-3000}"
+    case "$cap" in ''|*[!0-9]*) cap=3000 ;; esac
+    while IFS= read -r area; do
+        [ -n "$area" ] && hy_is_dir "src/$area" || continue
+        lines=$(hy_area_lines "src/$area")
+        if [ "${lines:-0}" -gt "$cap" ]; then
+            person+=$(hy_item "$(msg_hygiene_area_oversized "src/$area/" "$lines" "$cap")")$'\n'
+        fi
+    done <<<"$areas"
+
+    if [ -n "$fix" ]; then
+        msg_hygiene_fix_heading
+        printf '%s' "$fix"
+    fi
+    if [ -n "$person" ]; then
+        [ -n "$fix" ] && printf '\n'
+        msg_hygiene_person_heading
+        printf '%s' "$person"
+    fi
+    [ -z "$fix" ]
+}
+
+# The person's list for the primary tree (header: `worktree.sh attention`).
+# It runs at every session start, so it stays cheap: no diff, no network.
+cmd_attention() {
+    local session=""
+    case "${1:-}" in
+        --session) session="${2:-}" ;;
+    esac
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
+    local main_root out
+    main_root=$(main_root_of)
+    [ -n "$main_root" ] || { msg_wt_not_a_repo >&2; return 2; }
+    out=$(
+        cd "$main_root" || exit 0
+        local kind a b
+        while IFS=$'\t' read -r a b; do
+            [ -n "$a" ] && msg_attention_memory_project "$a" "$b"
+        done < <(hy_memory_files "$main_root")
+        while IFS= read -r a; do
+            [ -n "$a" ] && msg_attention_merged_branch "$a"
+        done < <(hy_merged_branches)
+        while IFS= read -r a; do
+            [ -n "$a" ] && msg_attention_stale_claim "$a"
+        done < <(hy_stale_claims)
+        while IFS=$'\t' read -r kind a b; do
+            case "$kind" in
+                landed) msg_attention_plan_survived "$a" "$b" ;;
+                pending) hy_pending_quiet "$session" || msg_attention_plans_pending "$a" ;;
+            esac
+        done < <(hy_plans)
+    )
+    [ -n "$out" ] || return 0
+    printf '%s\n' "$out" | sed 's/^/- /'
     return 1
 }
 
@@ -1283,7 +1456,7 @@ cmd_land() {
     local -a merge_args=(merge --no-ff "$branch" -m "Merge branch '$branch'")
     # The grant's text becomes a second commit paragraph. The authorization is
     # then in git history. The first line stays "Merge branch 'hone/<change>'" so
-    # the nag's landed-Plan grep still matches.
+    # the landed-Plan grep of attention still matches.
     [ -n "$grant_note" ] && merge_args+=(-m "Authorized (irreversible change):"$'\n'"$grant_note")
     # The sign-off that discharged the proof gate gets the same treatment.
     [ -n "$signoff_note" ] && merge_args+=(-m "Proven (real-environment):"$'\n'"$signoff_note")
@@ -2298,7 +2471,7 @@ cmd_status() {
     if [ -n "$remote" ]; then
         local cref
         # Into refs/hone/remote-claim/, never refs/hone/claim/: that prefix
-        # holds this clone's OWN claims, and the nag reads it as such.
+        # holds this clone's OWN claims, and attention reads it as such.
         git fetch -q --prune "$remote" '+refs/hone/claim/*:refs/hone/remote-claim/*' >/dev/null 2>&1
         while IFS= read -r cref; do
             [ -n "$cref" ] || continue
@@ -2695,6 +2868,8 @@ main() {
         review-scope) progress_step review-scope "$@" ;;
         governed) progress_step governed "$@" ;;
         complexity) cmd_complexity "$@" ;;
+        hygiene)  cmd_hygiene "$@" ;;
+        attention) cmd_attention "$@" ;;
         land)     progress_step land "$@" ;;
         remove)   cmd_remove "$@" ;;
         landed)   cmd_landed "$@" ;;

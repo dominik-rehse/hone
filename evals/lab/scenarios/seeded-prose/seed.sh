@@ -4,7 +4,7 @@
 # the Note's map and invariant, and the Decision's reason. The Plan changes the
 # one number that both repeats name, and it says nothing about the docs. So
 # after the change each repeat is cut, updated by hand, or stale. The Note
-# stays under the nag's size cap, so that consolidate and its critic are what
+# stays under the hygiene check's size cap, so that consolidate and its critic are what
 # the scenario measures.
 mkdir -p src/shipping docs/notes docs/decisions .plans/shipping
 cat > src/shipping/rates.js <<'JS'

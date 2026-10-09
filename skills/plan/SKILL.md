@@ -35,9 +35,10 @@ Derive a short, domain-named slug from `$ARGUMENTS` (`auth/refresh-token`,
 exists, ask whether to resume or overwrite it.
 
 One naming rule guards the layout's one ambiguity. A Plan's references live in
-`.plans/<slug>/`. So the nag and `worktree.sh status` read a markdown file whose
-parent directory has a sibling `<dir>.md` as a *reference*, not a Plan. A slug
-therefore may not double as a Plan directory:
+`.plans/<slug>/`. So `worktree.sh attention` and `worktree.sh status` read a
+markdown file whose parent directory has a sibling `<dir>.md` as a
+*reference*, not a Plan. A slug therefore may not double as a Plan
+directory:
 
 - If the slug is nested (`a/b`) and `.plans/a.md` exists, refuse the name. The
   new Plan at `.plans/a/b.md` would look like a reference of Plan `a` and drop

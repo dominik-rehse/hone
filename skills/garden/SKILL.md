@@ -42,9 +42,10 @@ Setup check: if `scripts/run-tests.sh` is missing, stop and tell the user to run
 
 ## 1. Scan: find the drift, repo-wide
 
-The Stop-hook `nag` already names most of it, in full once per session and
-again when it changes, and as a count otherwise. `garden` runs the same questions across the whole tree
-at once, and adds the ones a diff-scoped hook can't see. In shared mode (a committed `.hone-shared`) the tree you scan may be
+A run's `worktree.sh hygiene` asks some of these questions about its own
+change, and `worktree.sh attention` lists the person's items. `garden` asks
+them across the whole tree at once, and adds the ones a diff-scoped check
+can't see. In shared mode (a committed `.hone-shared`) the tree you scan may be
 behind the team's, so first run
 `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" sync`. Collect, don't act yet:
 
@@ -55,8 +56,8 @@ behind the team's, so first run
 - **Orphan or oversized Note**: a `docs/notes/<area>.md` with no `src/<area>/`, or
   one past the size cap that has drifted toward a spec.
 - **Oversized area**: a `src/<area>/` whose tracked text files, generated ones
-  aside, hold more lines than `HONE_AREA_MAX_LINES` (default 3000). The `nag`
-  names one only when a change touched it.
+  aside, hold more lines than `HONE_AREA_MAX_LINES` (default 3000). A run
+  names one only when its change touched it.
 - **Redundant test**: two tests pinning the same behaviour through the same
   surface, or a test the codebase made dead.
 - **Dead code**: a `src/` symbol or file with no remaining caller (confirm with a
@@ -76,15 +77,20 @@ behind the team's, so first run
   dies by design when the Plan lands, so it is no reason to cut. Treat a note
   that drifted into a second spec as judgment. The live sentence belongs in a
   Note or a Decision, and the spike then goes.
-  An undated entry under `docs/spikes/` is the `nag`'s finding, and it is a
-  rename, not a cut.
+  An undated entry under `docs/spikes/` is a rename, not a cut.
 - **Prompt-layer drift**: the project's own instructions to the agent
   (`CLAUDE.md`, `.claude/rules/`, project skills). They describe a gotcha the code
   no longer has, a command that no longer exists, or a rule the model now follows
   without being told. This layer accretes exactly like `docs/` and nothing else
   looks at it. Never cut it mechanically (see step 2).
-- **Stranded harness memory**: a `type: project` memory the `nag` has been
-  flagging. It is not the repo's to delete, so `garden` never touches the file.
+- **Broken relative link**: a link in a Decision or Note, outside code, whose
+  target does not resolve. A moved target is a repair, and a deleted one is a
+  cut of the sentence.
+- **Stale claim** (shared mode): a claim this clone holds on the remote with no
+  worktree. It blocks the change name for the team. Name it for the person,
+  who releases it with `worktree.sh release <change>`.
+- **Stranded harness memory**: a `type: project` memory that
+  `worktree.sh attention` lists. It is not the repo's to delete, so `garden` never touches the file.
   `garden` reports what belongs in `docs/` so a `run` change can land it there.
 
 State the full list before acting. This scan is the artifact that says what the
@@ -166,8 +172,12 @@ WT=$(bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" add garden/<slug>)
 
 - Run the full suite through the serialized wrapper:
   `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" verify` (background it and poll,
-  since a full suite outlasts the foreground timeout). Green means the cut was safe.
-- **Red means the cut is wrong**: the "dead" thing was load-bearing. Discard the
+  since a full suite outlasts the foreground timeout). It runs type-check and
+  lint too. Green means the cut was safe.
+- A red type-check or lint that names what the cut left behind, such as an
+  unused import, is part of the cut. Fix it in the same worktree and verify
+  again. A type error that names a caller of what you cut is the next case.
+- **Red tests mean the cut is wrong**: the "dead" thing was load-bearing. Discard the
   worktree (`worktree.sh remove`), and record the finding as a judgment item:
   something depends on it that the scan didn't see. Never weaken a test to make a
   cut land.

@@ -74,10 +74,20 @@ for stale in ".plans/" ".hone-test-globs" ".hone-gate-enforce" ".hone-nag-enforc
 done
 msg_setup_gitignore_ok
 
+# Files an earlier hone version kept in the git dir and nothing reads now:
+# hone-nag-seen, the retired nag's repeat memory (one per worktree).
+COMMON_DIR=$(git rev-parse --git-common-dir 2>/dev/null) && COMMON_DIR=$(cd "$COMMON_DIR" && pwd -P)
+if [ -n "${COMMON_DIR:-}" ]; then
+    for retired in "$COMMON_DIR/hone-nag-seen" "$COMMON_DIR"/worktrees/*/hone-nag-seen; do
+        [ -f "$retired" ] || continue
+        rm -f -- "$retired" && msg_setup_retired_removed "$retired"
+    done
+fi
+
 # 3. Durable docs skeleton (empty dirs are fine, and the loop fills them), plus
 # the src/ root. hone's enforcement keys off a src/<area>/ layout. The guard
-# requires a test before code under src/, and the nag maps each Note to a
-# src/<area>/. The gate watches src/ and tests/ for work in flight. Code must
+# requires a test before code under src/, and the hygiene checks map each
+# Note to a src/<area>/. The gate watches src/ and tests/ for work in flight. Code must
 # live under src/ for these to apply, Python packages included (src/<pkg>/ is a
 # supported layout).
 mkdir -p docs/decisions docs/notes .plans src

@@ -146,7 +146,7 @@ SHELL_CWD=$(hone_extract_top_field "$INPUT" cwd)
 
 # The patterns the rules below and the analysis share. Each rule's comment
 # says why its pattern reads the way it does.
-PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|nag|bash-guard|session-start|common|messages)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths|\.hone-proof-always|\.hone-review-always|\.hone-shared|\.hone-grant-auto'
+PROT='scripts/run-tests\.sh|scripts/typecheck\.sh|scripts/lint\.sh|scripts/proof\.sh|hooks/(guard|gate|hygiene|bash-guard|session-start|common|messages)\.sh|\.claude/settings(\.local)?\.json|\.hone-durable-paths|\.hone-(irreversible|consequential)-paths|\.hone-proof-always|\.hone-review-always|\.hone-shared|\.hone-grant-auto'
 CFG="${HONE_CHECK_CONFIG_RE}([^A-Za-z0-9_.-]|$)"
 REDIR_PRE=">>?\\|?[[:space:]]*\"?'?[^[:space:]|;&]*"
 VERB_PRE='(tee|sed -i|cp |mv |install |ln -s|chmod|chattr|rm |truncate|dd of=)[^|;&]*'

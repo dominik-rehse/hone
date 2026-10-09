@@ -108,8 +108,8 @@ flowchart TD
   not a decision. It stays in the open question below, and consolidate
   writes nothing that predicts its answer. One file per topic, edited in
   place, landing with the code it governs. An optional `Governs:` line
-  names the `src/` paths the decision explains. The nag flags the file
-  when a named path stops existing. And when a change touches a named
+  names the `src/` paths the decision explains. `worktree.sh hygiene`
+  flags the file when a named path stops existing. And when a change touches a named
   path, `worktree.sh governed` puts the file in front of the
   `consolidate-critic`. That is how the hooks catch stale prose
   mechanically.
@@ -153,8 +153,8 @@ keeps per-project memory outside the repo, one file per fact. For facts
 about the human, that store is fine and none of hone's business. A
 project decision saved there fails every requirement this model sets for
 permanent docs. It is per-user, uncommitted, unreviewed, and invisible to
-the hooks, the critics, and `garden`, so nothing ever corrects it. The
-nag flags such entries. The fix is to land the content in `docs/` through
+the hooks, the critics, and `garden`, so nothing ever corrects it.
+Session start names such entries. The fix is to land the content in `docs/` through
 consolidate, where review and later cuts can reach it.
 
 *Outside the routing: forward-looking planning.* Everything above sorts
@@ -167,11 +167,13 @@ because the code and the tests carry behavior. And it shrinks as the work
 lands: whatever a landed change settles moves into a Decision at
 consolidate, and the entry goes.
 
-*Enforcement:* the guard, gate, nag, bash-guard, and dirty-guard hooks,
+*Enforcement:* the guard, gate, bash-guard, and dirty-guard hooks,
 described in [`reference.md`](reference.md). In short: no production code
 without a failing test, and no direct edits to protected paths in the
 primary tree. Tests, type-check, and lint must be green before a turn
-ends, and the hooks report hygiene findings visibly. After three identical
+ends. A hook's visible message never reaches the model. So the run gets
+the hygiene findings of its change and fixes them, and you read the rest.
+After three identical
 failures the gate asks for a final report and then lets the turn end. So a
 run that cannot reach green still hands you the reason, and nothing red
 lands either way. The progress hook shows where a run stands. The step
@@ -185,8 +187,6 @@ handed back to you. The diagram below colors each node by actor, with the
 Plan as the dashed parallelogram. A *user command* is amber. A
 *mechanical step* is teal: a scripted step with the same result every
 time. A *model step* is violet: a judgment call whose outcome can vary.
-The Plan's whole life is on the diagram: created at `/hone:plan`, deleted
-at consolidate.
 
 ```mermaid
 flowchart TD
@@ -196,8 +196,8 @@ flowchart TD
     admit{"plan-critic asks:<br/>is the Plan clear, scoped,<br/>and free of collisions?<br/>(runs once, still inside /hone:plan)"}
     wt["A fresh worktree is spawned:<br/>an isolated copy of the repo<br/>where all the work happens"]
     build["Build: run a red-green cycle,<br/>once per behavior<br/>(the cycle is shown below)"]
-    verify["Verify: run every check<br/>(tests, types, lint,<br/>hygiene, mutation)"]
-    cons["Consolidate, in this order:<br/>1 · save what must survive as docs or types<br/>2 · prune redundant tests<br/>3 · delete the Plan<br/>4 · consolidate-critic reviews (runs once)"]
+    verify["Verify: run every check<br/>(complexity, tests, types,<br/>lint, mutation)"]
+    cons["Consolidate, in this order:<br/>1 · save what must survive as docs or types<br/>2 · prune redundant tests<br/>3 · delete the Plan<br/>4 · consolidate-critic reviews (runs once)<br/>5 · fix the hygiene findings"]
     rev["Review: /code-review reads the<br/>whole change for bugs and cleanups<br/>(runs once)"]
     fix["Auto-fix: run the same red-green cycle,<br/>once per review finding<br/>(re-gated by verify, not re-reviewed)"]
     land["Land, in this order:<br/>1 · commit in the worktree<br/>2 · merge main's tip there<br/>3 · re-run the full suite on the merge<br/>4 · fast-forward main, remove the worktree"]
@@ -386,7 +386,6 @@ sign-off the run writes for its own change is the record the gate exists
 to prevent. A sign-off naming a check nobody ran is evidence of nothing. land reads that line in the Plan and the landing commit, so a
 run that drops it meets the gate. A sign-off
 lapses when the change or its probes change.
-Mechanics are in [`reference.md`](reference.md).
 
 ### Property-based tests (build-time)
 

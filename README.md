@@ -27,14 +27,17 @@ repeated passes.
 
 ## Enforcement
 
-Three hooks apply the rules mechanically:
+Two hooks apply the rules mechanically:
 
 - The *guard* allows no production code without a failing test. It also
   keeps the primary tree a merge target, edited only by landing merges.
 - The *gate* requires tests, type-check, and lint to be green before a
   turn may end.
-- The *nag* reports hygiene findings visibly, and never blocks. One
-  finding is an area of `src/` that has grown too large.
+
+A script checks the hygiene of each change, such as a Note that has grown
+too large, and the run fixes what it finds. The run's final report and
+session start name what needs you, such as an area of `src/` that has
+grown too large.
 
 Two critic agents check the plan and the consolidated result. Their
 prompts tell them to find fault rather than approve. The second critic

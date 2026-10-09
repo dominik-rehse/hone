@@ -85,6 +85,11 @@ work. The loop calls it, and you can too:
   or made worse, and exits 1. Verify runs it first. It needs
   [cccc](https://github.com/moznion/cccc) and `jq`, and skips without them.
   Vendored and generated files do not count.
+- `worktree.sh hygiene <change>` prints the hygiene findings of what the
+  change touched, and exits 1 on one to fix now. Consolidate runs it. Items
+  under "For the person" go to the final report.
+- `worktree.sh attention` prints what needs the person in the primary tree.
+  Session start shows it there, and the coordinator prints it at batch end.
 - `worktree.sh land <change>` builds the merge in the change's worktree,
   re-runs the suite there, fast-forwards the primary branch onto the tested
   merge commit, and cleans up. Runs the land gates first. When the primary
@@ -194,10 +199,10 @@ land's wait pauses while a run holds the lock. `HONE_LAND_RETRIES` sets how
 many times land redoes merge and suite after the primary branch moved, or
 the remote rejected its push (default 3).
 
-Two more variables tune a hook. `HONE_AREA_MAX_LINES` sets the size above
-which the nag names a `src/<area>/` (default 3000). `HONE_GATE_BLOCK_CAP`
-sets how many identical failures the gate blocks a turn end for before it
-lets the turn end (default 3). `HONE_COORD_TICK` (15), `HONE_COORD_QUIET`
+`HONE_AREA_MAX_LINES` sets the size above which `worktree.sh hygiene`
+names a `src/<area>/` (default 3000). `HONE_GATE_BLOCK_CAP` sets how many
+identical failures the gate blocks a turn end for before it lets the turn
+end (default 3). `HONE_COORD_TICK` (15), `HONE_COORD_QUIET`
 (600), and `HONE_COORD_WAIT` (540, then exit 3) set the coordinate seconds.
 `HONE_COORD_TYPE_TRIES` (10) sets how long `start` and `send` check
 their text.
@@ -206,7 +211,8 @@ their text.
 
 `.hone-off` disables all of them at once. A project with no
 `scripts/run-tests.sh` is never gated, and enforcement assumes code lives
-under `src/<area>/`.
+under `src/<area>/`. No hook checks hygiene. The run calls `worktree.sh
+hygiene`, and session start shows `worktree.sh attention`.
 
 The hooks run inside the agent's session, and nowhere else. An edit you make
 in your own editor or terminal never meets them. hone writes a grant and a
@@ -313,24 +319,7 @@ neither. When you want that record, route the edit through the loop.
   `land` re-runs the full suite after the merge, so it still catches a
   regression that a later commit introduces. The cap is the turn's and
   never the trunk's: a red change still cannot land.
-  - In a nested `/code-review` session it exits at once, and so does the nag.
-- *nag* (Stop, advisory) reports hygiene findings as a visible message,
-  never a block. The findings:
-  - a Plan that survived its landing
-  - an oversized or orphan Note
-  - a broken `Governs:` link
-  - a broken relative link in a Decision or Note, outside code
-  - a merged `hone/*` branch
-  - a claim this clone holds on the remote with no worktree (shared mode)
-  - a change about to land that deletes nothing
-  - a `src/<area>/` that a change about to land touched, with more
-    tracked lines than `HONE_AREA_MAX_LINES` (default 3000), generated
-    files aside (`nag_area_files`)
-  - pending Plans, in the primary tree with no coordinator
-  - a `type: project` entry in the harness's own memory store
-
-  It prints the full list once per session and tree, and again on a
-  change. Otherwise it prints the count.
+  - In a nested `/code-review` session it exits at once.
 - *progress* (after each Bash call, and Stop) shows the loop's progress
   line: `◆ [csv-export] worktree ✓ > build ... > verify > …`. A garden
   change gets `worktree > cut > verify > land`. It never blocks.
@@ -341,7 +330,8 @@ neither. When you want that record, route the edit through the loop.
   the test adapter or the `src/` layout is missing. It also warns, naming
   the missing rules, when the settings lack any rule from the canonical deny
   list (`templates/settings/deny-rules.txt`). You see the warnings, and the
-  model gets them with the rule.
+  model gets them with the rule. In the primary tree it shows you
+  `worktree.sh attention`, and the model gets the list marked as yours.
 
 ## Land gates
 
@@ -433,8 +423,8 @@ git push origin --delete refs/hone/claim/<change>
 
 `worktree.sh status` lists the claims other developers hold. `worktree.sh
 remove` releases the claim with the worktree, and `worktree.sh release
-<change>` releases one whose worktree is already gone. The nag reports a
-claim this clone still holds with no worktree.
+<change>` releases one whose worktree is already gone. `worktree.sh
+attention` names a claim this clone still holds with no worktree.
 
 Shared mode pushes straight to the primary branch. A host that protects that
 branch refuses the push. land then exits 2 with the host's reason, undoes its
@@ -564,7 +554,7 @@ The plugin itself:
 hone/
 ├── rules/workflow.md            # injected at session start
 ├── skills/{setup,plan,run,garden,coordinate}/ # the five commands; run/references/ loads on demand
-├── hooks/                       # guard, bash-guard, dirty-guard, gate, nag, progress, watch, session-start
+├── hooks/                       # guard, bash-guard, dirty-guard, gate, progress, watch, session-start
 │   └── messages.sh              # every message hone prints, one template each
 ├── scripts/{worktree,setup,coordinate}.sh
 ├── agents/                      # plan-critic, consolidate-critic
@@ -622,9 +612,9 @@ ends would save a future reader from running it again.
 
 The note at `<YYYY-MM-DD>-<slug>.md` is the way in. It is write-once, past
 tense, and it always points forward to the Decision, Note, or open question
-that carries the finding. The date is what says so: the `nag` reports any entry
-under `docs/spikes/` without one, `garden` never cuts a spike for being old,
-and nobody updates one. A note that starts describing what the system does
+that carries the finding. The date is what says so: `worktree.sh hygiene`
+reports a new entry under `docs/spikes/` without one, `garden` never cuts a
+spike for being old, and nobody updates one. A note that starts describing what the system does
 today has become a second spec, and the `consolidate-critic` argues for that
 cut. `garden` cuts a spike whole, stem and all, because the stem is the unit.
 Copy the shape from [`templates/spike-note.md`](../templates/spike-note.md).

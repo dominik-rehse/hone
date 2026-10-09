@@ -1,6 +1,6 @@
 #!/bin/bash
 # Every message hone prints, in one place. The hooks (guard.sh, bash-guard.sh,
-# gate.sh, nag.sh, session-start.sh) and the scripts that print to a human
+# gate.sh, session-start.sh) and the scripts that print to a human
 # (scripts/worktree.sh, scripts/setup.sh) SOURCE this file. It defines
 # functions only, and it has no side effects at source time.
 #
@@ -435,37 +435,39 @@ msg_gate_green_memo() {
     printf 'hone gate: the checks passed on this exact tree at an earlier stop (%s), so the gate ran nothing.\n' "$1"
 }
 
-# ------------------------------------------------------------------ nag
+# ------------------------------------------------------------- hygiene
+#
+# worktree.sh hygiene prints two groups. The first is for the agent to fix in
+# this change. The second is for the person, because its fix is a Plan of its
+# own.
 
-msg_nag_header() {
-    printf 'hone nag (advisory):\n'
+msg_hygiene_fix_heading() {
+    printf 'Fix now:\n'
 }
 
-# The whole report on a stop whose findings match the last stop's in this
-# session. The full list went out once, so a repeat only says it still holds.
-msg_nag_unchanged() {
-    printf 'hone nag (advisory): %s finding(s), unchanged since the last stop.\n' "$1"
+msg_hygiene_person_heading() {
+    printf 'For the person:\n'
 }
 
-msg_nag_plan_survived() {
-    local plan="$1" evidence="$2"
+msg_hygiene_no_branch() {
+    local branch="$1"
     cat <<EOF
-$plan survived its landing ($evidence).
-Do: delete the Plan.
-Why: consolidate deletes a landed Plan, and git keeps it.
+hone worktree: branch $branch does not exist, so no change is there to check.
+Do: run hygiene from the change's own run, after 'worktree.sh add <change>'.
+Why: the checks read what the change touched.
 EOF
 }
 
-msg_nag_plans_pending() {
-    local n="$1"
+msg_hygiene_no_deletions() {
+    local ins="$1" target="$2"
     cat <<EOF
-$n Plan(s) pending run in .plans/.
-Do: run /hone:run to pick them up.
-Why: a queued Plan is normal, not a problem.
+This change deletes nothing (+$ins/-0 against $target).
+Do: cut what the change made redundant, such as a test, dead code, or a stale doc line. If nothing can go, say why in the commit's Cut: line.
+Why: every cycle removes something. A deletion that removes nothing of use is no cut.
 EOF
 }
 
-msg_nag_note_oversized() {
+msg_hygiene_note_oversized() {
     local note="$1" lines="$2" cap="$3"
     cat <<EOF
 $note is $lines lines, over the $cap-line cap.
@@ -474,25 +476,7 @@ Why: a Note is a map plus one invariant.
 EOF
 }
 
-msg_nag_area_oversized() {
-    local area="$1" lines="$2" cap="$3"
-    cat <<EOF
-$area holds $lines lines, over the $cap-line cap, and this change touched it.
-Do: land this change, then write a Plan that splits the area along a seam its Note can name.
-Why: an agent must hold one area in context.
-EOF
-}
-
-msg_nag_spike_undated() {
-    local note="$1"
-    cat <<EOF
-$note carries no date at the front of its name.
-Do: rename it to docs/spikes/YYYY-MM-DD-<slug>, taking the date of the spike.
-Why: the date marks a spike as frozen history.
-EOF
-}
-
-msg_nag_note_orphan() {
+msg_hygiene_note_orphan() {
     local note="$1" area="$2"
     cat <<EOF
 $note has no src/$area/ directory beside it.
@@ -501,7 +485,16 @@ Why: a Note is 1:1 with an existing area.
 EOF
 }
 
-msg_nag_governs_broken() {
+msg_hygiene_spike_undated() {
+    local note="$1"
+    cat <<EOF
+$note carries no date at the front of its name.
+Do: rename it to docs/spikes/YYYY-MM-DD-<slug>, taking the date of the spike.
+Why: the date marks a spike as frozen history.
+EOF
+}
+
+msg_hygiene_governs_broken() {
     local doc="$1" path="$2"
     cat <<EOF
 $doc declares Governs: $path, which no longer exists.
@@ -510,7 +503,7 @@ Why: this durable doc has drifted from its code.
 EOF
 }
 
-msg_nag_link_broken() {
+msg_hygiene_link_broken() {
     local doc="$1" target="$2"
     cat <<EOF
 $doc links to $target, which does not resolve.
@@ -519,39 +512,38 @@ Why: a broken link proves the doc drifted.
 EOF
 }
 
-msg_nag_no_deletions() {
-    local ins="$1" target="$2"
+msg_hygiene_area_oversized() {
+    local area="$1" lines="$2" cap="$3"
     cat <<EOF
-This change deletes nothing (+$ins/-0 against $target).
-Do: cut a redundant test, dead code, or a stale doc line.
-Why: every cycle removes something.
+$area holds $lines lines, over the $cap-line cap, and this change touched it.
+Do: land this change, then write a Plan that splits the area along a seam its Note can name.
+Why: an agent must hold one area in context.
 EOF
 }
 
-msg_nag_stale_claim() {
-    local change="$1"
-    cat <<EOF
-This clone still holds a claim on $change (refs/hone/claim/$change), and the change has no worktree here.
-Do: release it with 'bash "$(hone_msg_plugin_root)/scripts/worktree.sh" release $change'.
-Why: a leftover claim blocks the change for the team.
-EOF
-}
-msg_nag_merged_branch() {
-    local branch="$1"
-    cat <<EOF
-Branch $branch is fully merged and has no worktree.
-Do: delete it with 'git branch -d $branch'.
-Why: land retires a branch with its worktree.
-EOF
+# ----------------------------------------------------------- attention
+#
+# worktree.sh attention prints one short line per item, for the person.
+
+msg_attention_plan_survived() {
+    printf '%s survived its landing (%s). Delete the Plan.\n' "$1" "$2"
 }
 
-msg_nag_memory_project() {
-    local file="$1" dir="$2"
-    cat <<EOF
-$file is a 'type: project' harness memory in $dir.
-Do: land it as a Decision or a Note through consolidate.
-Why: that store is per-user, uncommitted, and invisible to garden.
-EOF
+msg_attention_plans_pending() {
+    printf '%s Plan(s) wait in .plans/. Start them with /hone:run.\n' "$1"
+}
+
+msg_attention_merged_branch() {
+    printf "Branch %s is merged and has no worktree. Delete it with 'git branch -d %s'.\n" "$1" "$1"
+}
+
+msg_attention_stale_claim() {
+    printf "This clone holds a claim on %s with no worktree. Release it with 'bash \"%s/scripts/worktree.sh\" release %s'.\n" \
+        "$1" "$(hone_msg_plugin_root)" "$1"
+}
+
+msg_attention_memory_project() {
+    printf "%s in %s is a 'type: project' harness memory. Land it as a Decision or a Note.\n" "$1" "$2"
 }
 
 # --------------------------------------------------------- session-start
@@ -566,10 +558,20 @@ EOF
 
 msg_session_no_src() {
     cat <<'EOF'
-hone: this project has no src/ directory, so the guard, gate, and nag do nothing.
+hone: this project has no src/ directory, so the guard and the gate do nothing.
 Do: put code under src/<area>/, or run scripts/setup.sh to create it.
 Why: hone keys its enforcement off that layout.
 EOF
+}
+
+# The heading over the lines of worktree.sh attention, for the person.
+msg_session_attention_heading() {
+    printf 'hone: these items in this repository need you:\n'
+}
+
+# The same lines reach the model under this sentence. They are the person's.
+msg_session_attention_context() {
+    printf 'hone showed the person these items at session start. They belong to the person. Act on one only when the person asks.\n'
 }
 
 msg_session_missing_deny() {
@@ -625,6 +627,10 @@ msg_setup_gitignore_pruned() {
     printf 'hone setup: removed %s from .gitignore (tracked or retired in this hone version).\n' "$1"
 }
 
+msg_setup_retired_removed() {
+    printf 'hone setup: removed %s, a file that an earlier hone version kept.\n' "$1"
+}
+
 msg_setup_gitignore_ok() {
     printf 'hone setup: gitignored the per-developer artifacts.\n'
 }
@@ -648,7 +654,7 @@ msg_setup_deny_complete() {
 }
 
 msg_setup_layout() {
-    printf 'hone setup: code lives under src/<area>/, where the guard, gate, and nag apply.\n'
+    printf 'hone setup: code lives under src/<area>/, where the guard and the gate apply.\n'
 }
 
 msg_setup_proof_hint() {
@@ -701,7 +707,7 @@ hone_msg_attest_placeholders() {
 }
 
 msg_wt_usage() {
-    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|governed <change>|complexity <change>|land <change>|landed <change>|sync|release <change>|remove <worktree-path | change>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
+    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|governed <change>|complexity <change>|hygiene <change>|attention|land <change>|landed <change>|sync|release <change>|remove <worktree-path | change>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
 }
 
 msg_wt_grant_usage() {
@@ -1624,7 +1630,7 @@ msg_status_hooks_off() {
 }
 
 msg_status_hooks_on() {
-    printf -- '- hooks: on (guard, gate, nag, plus the land gates)\n'
+    printf -- '- hooks: on (guard and gate, plus the land gates)\n'
 }
 
 msg_status_adapters() {
@@ -1988,29 +1994,33 @@ gate|plain|msg_gate_green|<checks that ran>
 gate|plain|msg_gate_green_cached|<tree-hash>
 gate|plain|msg_gate_green_since_verify|<tree-hash>|tests (--unit), lint
 gate|plain|msg_gate_green_memo|<tree-hash>
-nag|plain|msg_nag_header
-nag|plain|msg_nag_unchanged|<count>
-nag|human|msg_nag_plan_survived|.plans/<change>.md|<evidence>
-nag|human|msg_nag_plans_pending|<count>
-nag|human|msg_nag_note_oversized|docs/notes/<area>.md|<count>|<cap>
-nag|human|msg_nag_area_oversized|src/<area>/|<count>|<cap>
-nag|human|msg_nag_note_orphan|docs/notes/<area>.md|<area>
-nag|human|msg_nag_spike_undated|docs/spikes/<entry>
-nag|human|msg_nag_governs_broken|docs/decisions/<topic>.md|<path>
-nag|human|msg_nag_link_broken|docs/decisions/<topic>.md|<target>
-nag|human|msg_nag_no_deletions|<count>|<branch>
-nag|human|msg_nag_merged_branch|hone/<change>
-nag|human|msg_nag_stale_claim|<change>
-nag|human|msg_nag_memory_project|<file>.md|<memory-dir>
+hygiene|plain|msg_hygiene_fix_heading
+hygiene|plain|msg_hygiene_person_heading
+hygiene|human|msg_hygiene_no_branch|hone/<change>
+hygiene|agent|msg_hygiene_no_deletions|<count>|<branch>
+hygiene|agent|msg_hygiene_note_oversized|docs/notes/<area>.md|<count>|<cap>
+hygiene|agent|msg_hygiene_note_orphan|docs/notes/<area>.md|<area>
+hygiene|agent|msg_hygiene_spike_undated|docs/spikes/<entry>
+hygiene|agent|msg_hygiene_governs_broken|docs/decisions/<topic>.md|<path>
+hygiene|agent|msg_hygiene_link_broken|docs/decisions/<topic>.md|<target>
+hygiene|human|msg_hygiene_area_oversized|src/<area>/|<count>|<cap>
+attention|plain|msg_attention_plan_survived|.plans/<change>.md|<evidence>
+attention|plain|msg_attention_plans_pending|<count>
+attention|plain|msg_attention_merged_branch|hone/<change>
+attention|plain|msg_attention_stale_claim|<change>
+attention|plain|msg_attention_memory_project|<file>.md|<memory-dir>
 session-start|human|msg_session_no_adapter
 session-start|human|msg_session_no_src
 session-start|human|msg_session_missing_deny|<missing deny rule>
+session-start|plain|msg_session_attention_heading
+session-start|plain|msg_session_attention_context
 setup|human|msg_setup_cannot_enter|<project-dir>
 setup|plain|msg_setup_header|<project-dir>
 setup|human|msg_setup_no_ecosystem|<plugin-root>/templates/run-tests/README.md
 setup|human|msg_setup_adapter_exists|<plugin-root>/templates/run-tests/<template>
 setup|plain|msg_setup_adapter_installed|<template>
 setup|plain|msg_setup_gitignore_pruned|<entry>
+setup|plain|msg_setup_retired_removed|<git-dir>/hone-nag-seen
 setup|plain|msg_setup_gitignore_ok
 setup|plain|msg_setup_docs_created
 setup|human|msg_setup_missing_deny|<missing deny rule>

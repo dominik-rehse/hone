@@ -93,12 +93,6 @@
       "means": "No suite runs at the end of a turn. The verify step still runs one.",
       "hook": "gate"
     },
-    "nag": {
-      "kind": "hook",
-      "what": "Stop, advisory: a leftover Plan, an oversized Note, an orphan Note.",
-      "means": "The hook never runs.",
-      "hook": "nag"
-    },
     "deny-rules": {
       "kind": "fixture",
       "what": "The canonical deny rules of .claude/settings.json, hone's other mechanical defense.",

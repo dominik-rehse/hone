@@ -1,5 +1,6 @@
 #!/bin/bash
-# Run hone's mechanical test suite: the hook unit tests, the end-to-end land
+# Run hone's mechanical test suite: the hook unit tests, the hygiene checks,
+# the end-to-end land
 # path (solo and shared mode), the coordinate helper and its watch hook, the table-rewrite reader, the shipped test
 # adapters, the plumbing of the eval harness and of the scenario lab, the
 # prose integrity checks, and the
@@ -11,6 +12,9 @@ DIR=$(cd "$(dirname "$0")" && pwd)
 rc=0
 echo "### hooks_test.sh"
 bash "$DIR/hooks_test.sh" || rc=1
+echo
+echo "### hygiene_test.sh"
+bash "$DIR/hygiene_test.sh" || rc=1
 echo
 echo "### e2e_land_test.sh"
 bash "$DIR/e2e_land_test.sh" || rc=1

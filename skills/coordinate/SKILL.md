@@ -237,6 +237,8 @@ its tab on its `finished` event, which waits until no cut holds a worktree.
 Then print the board as the report:
 per change, landed (with the merge commit) or stopped (with the blocker and the
 tab kept).
+Then run `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" attention` once.
+Print its lines after the board, under "For you:".
 
 ## What the coordinator never does
 
