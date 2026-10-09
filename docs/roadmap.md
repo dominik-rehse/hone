@@ -379,13 +379,16 @@ fix itself. hone only reports them.
   mentioned the size. A reviewer who read the landed code would send it
   back. In the same runs the rule of three worked: the duplicated block was
   gone in 3 of 3.
-- What limits the finding: it is one fixture, in Python. The first design
-  of the fixture punished reasonable code, and the note says how the second
-  design avoids that.
-- Next step: the likely fix is one sentence in the refactor step of the
-  run skill. It owes the `loop` unit suite. The measure `cc_pile` can show
-  a gain. An exact check would need a complexity tool per language, which
-  is a new tool, so rule 4 in `development.md` does not cover it.
+- The field shows it too. In all four consumer repositories, functions
+  grew past a cognitive complexity of 15 only through hone runs after hone
+  came in. One run took a function from 3 to 35 on 2026-09-28
+  ([`function-complexity-in-the-field`](spikes/2026-10-09-function-complexity-in-the-field.md)).
+- Next step: the cheapest fix is one sentence in the refactor step of the
+  run skill. It owes the `loop` unit suite, and the measure `cc_pile` can
+  show a gain. The exact check is a ratchet in the nag. It scores the
+  changed files with cccc on the base and on the branch, and it names a
+  function that crossed 15. cccc is a new optional tool, so it needs the
+  maintainer's word. The note above has what cccc does and lacks.
 
 #### `setup-misfit` failed once in nine runs
 

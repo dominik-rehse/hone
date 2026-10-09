@@ -13,11 +13,16 @@ scenario, a probe, or an eval case, its line names it. A case path is below
 The counts and the method are in
 [the 2026-09-20 field-data note](spikes/2026-09-20-field-data-from-real-sessions.md),
 [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md),
-and [the 2026-10-01 note on a coordinated batch](spikes/2026-10-01-field-data-coordinated-batch.md).
+[the 2026-10-01 note on a coordinated batch](spikes/2026-10-01-field-data-coordinated-batch.md),
+and [the 2026-10-09 note on function complexity](spikes/2026-10-09-function-complexity-in-the-field.md).
 "Not recorded" in the version field means the source did not record it.
 The MAIN incidents up to 2026-09-28 are counted in
 [the 2026-09-28 note](spikes/2026-09-28-main-tracking-of-subs.md).
 
+- 2026-07-10 to 2026-10-02 · 0.2.0 to 0.75.0 · `run` · in all four
+  repositories, runs grew existing functions past a cognitive complexity
+  of 15 in 15 steps, and wrote 16 more that started over it. One run took a
+  function from 3 to 35. Lab: `python-structure`.
 - 2026-10-01 · 0.71.1 · `coordinate` · MAIN asked whether to plan two
   items. On "yes" it also started two runs. The person wanted only Plans,
   and one run's edits were thrown away.
