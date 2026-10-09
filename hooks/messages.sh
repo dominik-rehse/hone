@@ -64,6 +64,15 @@ Why: the helper stamps the signer, binds a sign-off to the commit it proves, and
 EOF
 }
 
+msg_guard_gate_state() {
+    local rel="$1"
+    cat <<EOF
+hone guard: $rel holds the hone gate's state, and only hone's hooks and scripts write it.
+Do: leave the file alone. Run the check that the gate asks for instead.
+Why: the gate reads it to decide whether a turn may end. A written record can end a turn with nothing checked.
+EOF
+}
+
 msg_guard_primary_tree() {
     local rel="$1"
     cat <<EOF
@@ -119,6 +128,17 @@ msg_bashguard_sabotage() {
 hone bash-guard: this command would disable the hone gate.
 Do: leave the gate on and finish the work with it.
 Why: --no-verify, core.hooksPath, and creating .hone-off all switch enforcement off. If you intend this change, make it yourself outside the agent.
+EOF
+}
+
+# The gate's own state: the suite lock and the records the gate reads. A
+# held lock lets a turn end with no check, and a forged record skips one. The
+# Do line names the check itself and nothing that touches the files.
+msg_bashguard_gate_state() {
+    cat <<'EOF'
+hone bash-guard: this command names a file that holds the hone gate's state: the suite lock or a gate record.
+Do: leave those files to hone's hooks and scripts. Run the check that the gate asks for instead.
+Why: the gate reads them to decide whether a turn may end. A command that takes the lock or edits a record can end a turn with nothing checked.
 EOF
 }
 
@@ -332,14 +352,20 @@ $(hone_msg_block "$tail")
 EOF
 }
 
-# The holder is often the session's own background land or verify, so the
-# message names no other session. It names the lock, and the wait.
-msg_gate_suite_lock() {
-    cat <<'EOF'
-hone gate: a land or a full-suite run holds the suite lock, so the gate did not run the full suite.
-Do: wait until the run that holds the lock ends, such as your own background land or verify, then end the turn again.
-Why: two full suites at once poison each other's signal. The holder can be a land or a verify that this session started in the background.
+# The full tier's reminder: a committed change branch with no green verify.
+# It names the one command that writes the receipt, and no other route.
+msg_gate_verify_missing() {
+    cat <<EOF
+hone gate: this change branch has no full-suite result, so the gate did not let the turn end.
+Do: run 'bash "$(hone_msg_plugin_root)/scripts/worktree.sh" verify' in the background, as the run skill says, and fix what it reports.
+Why: land runs the suite again on the merge, and a red result there costs a full cycle.
 EOF
+}
+
+# The person's note when a verify or a land holds the suite lock at a stop.
+# The run's own background job is the usual holder, and its result follows.
+msg_gate_verify_running() {
+    printf 'hone gate: a verify or land holds the suite lock, so this branch has no full-suite result yet. The gate let the turn end.\n'
 }
 
 # The last block of a streak, and the only message that tells the agent what
@@ -370,23 +396,23 @@ Why: the suite stays red, and no change landed.
 EOF
 }
 
-# The two cap messages for a stop that waited on the suite lock. No suite ran
-# on those stops, so neither message may say the suite is red or name a
-# failing check. The reader learns what did not run.
-msg_gate_lock_report_now() {
+# The two cap messages for the full tier's reminder. No suite ran on those
+# stops, so neither message may say the suite is red or name a failing check.
+# The reader learns what did not run.
+msg_gate_verify_report_now() {
     local n="$1"
     cat <<EOF
-hone gate: a land or a full-suite run held the suite lock on $n stops in a row, so the gate ran no full suite.
+hone gate: this change branch had no full-suite result on $n stops in a row.
 Do: write your final report in this turn. Say that the full suite has not run on this state, what state the work is in, and the one action you recommend.
 Why: the gate lets the next turn end, and the person reads only that report. No check has failed.
 EOF
 }
 
-msg_gate_lock_cap_reached() {
+msg_gate_verify_cap_reached() {
     local n="$1"
     cat <<EOF
-hone gate: a land or a full-suite run held the suite lock on $n stops in a row. The gate let this turn end without a full suite.
-Do: let the land or verify that holds the lock finish, then run the full suite.
+hone gate: this change branch had no full-suite result on $n stops in a row, so the gate let this turn end.
+Do: run worktree.sh verify on the branch before you land it.
 Why: no suite ran, so no check has failed yet.
 EOF
 }
@@ -395,16 +421,18 @@ msg_gate_green() {
     printf 'hone gate: green (%s)\n' "$1"
 }
 
-# $2 = same when the receipt's tree is the tree now, else earlier. $3 = the
-# writer of the receipt, gate or verify. $4 = the checks the gate ran on a
-# skip, when verify wrote the receipt.
 msg_gate_green_cached() {
-    local tree="$1" at="$2" by="$3" ran="${4:-}" where="at this exact tree" who="the gate"
-    [ "$at" = same ] || where="at an earlier tree"
-    [ "$by" = verify ] && who="worktree.sh verify"
-    printf 'hone gate: the full suite already passed on this branch %s (%s, run by %s), so the gate skipped it.' "$where" "$tree" "$who"
-    [ -n "$ran" ] && printf ' It ran %s.' "$ran"
-    printf ' land re-runs --all on the merge.\n'
+    printf 'hone gate: worktree.sh verify already passed on this branch at this exact tree (%s), so the gate ran nothing. land re-runs every check on the merge.\n' "$1"
+}
+
+# $1 = the tree verify passed, $2 = the unit-tier checks that ran since.
+msg_gate_green_since_verify() {
+    printf 'hone gate: worktree.sh verify passed on this branch at an earlier tree (%s). For the commits since, the gate ran %s, all green. land re-runs every check on the merge.\n' "$1" "$2"
+}
+
+# The unit tier's memo: every step passed on this exact tree at an earlier stop.
+msg_gate_green_memo() {
+    printf 'hone gate: the checks passed on this exact tree at an earlier stop (%s), so the gate ran nothing.\n' "$1"
 }
 
 # ------------------------------------------------------------------ nag
@@ -830,6 +858,27 @@ msg_wt_lock_timeout() {
 hone worktree: other land or full-suite runs held the lock, or waited ahead in its queue, for more than $timeout seconds.
 Do: wait for those runs to finish, then retry. One can be this session's own background run.
 Why: one queue serializes every land and full-suite run.
+EOF
+}
+
+# verify runs every step, so one pass shows every problem. $1 = the steps
+# that failed, each with its exit code.
+# Every step was green, but the tree changed while they ran, so no receipt
+# could name the tree they checked.
+msg_wt_verify_tree_moved() {
+    cat <<'EOF'
+hone worktree: verify was green, but the tree changed while it ran, so it wrote no receipt.
+Do: let the change finish, then run verify again.
+Why: a receipt must name the tree that verify checked.
+EOF
+}
+
+msg_wt_verify_failed() {
+    local failed="$1"
+    cat <<EOF
+hone worktree: verify failed: $failed.
+Do: fix each failure above, then run verify again.
+Why: verify writes no receipt until every check is green.
 EOF
 }
 
@@ -1903,6 +1952,7 @@ hone_msg_catalog() {
     cat <<'CATALOG'
 guard|agent|msg_guard_no_file_path
 guard|agent|msg_guard_signoff|.hone-grant/<change>
+guard|agent|msg_guard_gate_state|.git/hone-gate-green
 guard|agent|msg_guard_primary_tree|src/<area>/<file>
 guard|agent|msg_guard_check_config|biome.json
 guard|agent|msg_guard_check_config|biome.json|.plans/<change>.md|1
@@ -1910,6 +1960,7 @@ guard|agent|msg_guard_check_config|biome.json|.plans/<change>.md|0
 guard|agent|msg_guard_no_test|src/<area>/<file>.<ext>|src/<area>/<file>|<area>/<file>
 bash-guard|agent|msg_bashguard_unparsed
 bash-guard|agent|msg_bashguard_sabotage
+bash-guard|agent|msg_bashguard_gate_state
 bash-guard|agent|msg_bashguard_signoff
 bash-guard|agent|msg_bashguard_attest
 bash-guard|agent|msg_bashguard_grant
@@ -1927,13 +1978,16 @@ dirty-guard|agent|msg_dirtyguard_primary_tree|src/<area>/<file>|git checkout HEA
 dirty-guard|agent|msg_dirtyguard_outside|src/<area>/<file>
 dirty-guard|agent|msg_dirtyguard_no_snapshot|src/<area>/<file>
 gate|agent|msg_gate_step_failed|<check>|<code>|<output-tail>
-gate|agent|msg_gate_suite_lock
+gate|agent|msg_gate_verify_missing
+gate|plain|msg_gate_verify_running
 gate|agent|msg_gate_report_now|<check>|<count>
 gate|human|msg_gate_cap_reached|<check>|<count>
-gate|agent|msg_gate_lock_report_now|<count>
-gate|human|msg_gate_lock_cap_reached|<count>
+gate|agent|msg_gate_verify_report_now|<count>
+gate|human|msg_gate_verify_cap_reached|<count>
 gate|plain|msg_gate_green|<checks that ran>
-gate|plain|msg_gate_green_cached|<tree-hash>|earlier|verify|type-check, lint
+gate|plain|msg_gate_green_cached|<tree-hash>
+gate|plain|msg_gate_green_since_verify|<tree-hash>|tests (--unit), lint
+gate|plain|msg_gate_green_memo|<tree-hash>
 nag|plain|msg_nag_header
 nag|plain|msg_nag_unchanged|<count>
 nag|human|msg_nag_plan_survived|.plans/<change>.md|<evidence>
@@ -1981,6 +2035,8 @@ worktree|human|msg_wt_no_adapter
 worktree|human|msg_wt_no_flock|<land or full suite>
 worktree|human|msg_wt_lock_unopenable|<git-common-dir>/hone-land.lock
 worktree|human|msg_wt_lock_timeout|<seconds>
+worktree|human|msg_wt_verify_failed|tests (exit 1), lint (exit 2)
+worktree|human|msg_wt_verify_tree_moved
 worktree|human|msg_wt_review_scope_no_branch|hone/<change>
 worktree|human|msg_wt_governed_no_branch|hone/<change>
 worktree|human|msg_wt_complexity_no_branch|hone/<change>

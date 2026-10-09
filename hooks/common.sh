@@ -292,7 +292,9 @@ hone_queue_holder_live() {
 
 # Take the suite lock on fd 9, in arrival order. $1 = the lock file, $2 = the
 # wait in seconds, $3 = `land` for a step that moves the primary tree, else
-# `suite`. Exit 0 held · 2 lock file unopenable · 5 timeout.
+# `suite`. Exit 0 held · 2 lock file unopenable · 5 timeout. The caller runs
+# each child step with `9>&-`, so a process that a step leaves behind (a test
+# server) never holds the lock after the caller exits.
 #
 # flock alone is no queue. When the holder lets go, every waiter races, and
 # a verify that came later can win. Under parallel runs new verifies kept
@@ -367,7 +369,7 @@ hone_tree_state() {
     printf '%s' "$tree"
 }
 
-# The plugin version, which keys the gate receipt. A gate with new steps
+# The plugin version, which keys the gate receipt and the unit memo. A gate with new steps
 # must not trust a receipt that an older gate wrote.
 hone_plugin_version() {
     sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
@@ -386,14 +388,16 @@ hone_branch_fresh() {
 }
 
 # Write the green receipt of the full suite for the tree in $PWD. $1 = who
-# ran it: `gate` (tests, type-check, lint) or `verify` (tests only). The
-# line is "<version> <branch> <tree> <who>". A detached HEAD or a fresh
-# branch gets no receipt, because no change is there to vouch for.
+# ran it. Only `verify` writes one, after the full suite, type-check, and
+# lint all went green. $2 = the tree the checks ran on, measured before
+# them (default: the tree now). The line is "<version> <branch> <tree>
+# <who>". A detached HEAD or a fresh branch gets no receipt, because no
+# change is there to vouch for.
 hone_gate_receipt_write() {
     local branch tree
     branch=$(git symbolic-ref -q --short HEAD 2>/dev/null) || return 0
     hone_branch_fresh && [ -z "$(git status --porcelain 2>/dev/null)" ] && return 0
-    tree=$(hone_tree_state)
+    tree="${2:-$(hone_tree_state)}"
     [ -n "$tree" ] || return 0
     printf '%s %s %s %s\n' "$(hone_plugin_version)" "$branch" "$tree" "$1" \
         > "$(git rev-parse --git-dir 2>/dev/null)/hone-gate-green" 2>/dev/null || true

@@ -1,13 +1,15 @@
 # Code-quality checks through the lint and type-check adapters
 
 hone ships no analyzer. It runs two optional adapters of the project,
-`scripts/lint.sh` and `scripts/typecheck.sh`, in the gate and again after
-the merge at land. Any check that a program can decide belongs in one of
-them. Then every change meets the check, and no prompt has to ask for it.
+`scripts/lint.sh` and `scripts/typecheck.sh`, in the gate, in
+`worktree.sh verify`, and again after the merge at land. Any check that a
+program can decide belongs in one of them. Then every change meets the
+check, and no prompt has to ask for it.
 
 This page maps hone's goals for a codebase to the kinds of tool that check
 them. The tool names are leads from searches on 2026-09-18 and
-2026-10-09, and hone depends on none of them. Read the documentation of a tool before you adopt it.
+2026-10-09, and hone depends on none of them. Read the documentation of a
+tool before you adopt it.
 
 ## Contract
 

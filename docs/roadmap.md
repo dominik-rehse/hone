@@ -154,6 +154,11 @@ in git.
   is per change, and a failure tail shows the failing lines. A nested
   `/code-review` runs no gate and no nag. The progress line keeps a red
   verify red. 0.73.0 adds a cap of 4 runs in flight.
+- Done in 0.77.0, after [the 2026-10-09 note](spikes/2026-10-09-hook-channels-and-gate-cost.md):
+  the Stop gate runs no full suite any more. On a committed change branch
+  without a verify receipt it asks for `worktree.sh verify`, and while a
+  verify or land holds the lock it lets the turn end. `verify` runs the
+  suite, type-check, and lint. The unit tier skips a tree it already passed.
 - Still open: the Stop gate blocks a run while a background subagent is
   in the red half of a red-green cycle (12 blocks in one run, 4 in
   another). Next step: decide what the gate should do while a subagent

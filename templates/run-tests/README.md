@@ -31,8 +31,8 @@ reported `ran=0`. The warning never blocks a land. An older adapter prints no
 such lines, and `land` then says nothing.
 
 `land` is the only reader, and it runs the adapter with `--all`, so print the
-lines under `--all` alone. The gate runs the unit tier on every turn, and it
-reads nothing here.
+lines under `--all` alone. The gate runs the unit tier on every turn that
+changed the tree, and it reads nothing here.
 
 Print the count the runner itself reported, and nothing else. An adapter that
 cannot parse that total must stay silent rather than guess. The tempting guess
@@ -46,8 +46,8 @@ it does not know.
 
 ## Type-check and lint (optional)
 
-The gate also runs `scripts/typecheck.sh` and `scripts/lint.sh` *if they exist*
-(exit `0` = clean). Add them where the language has them, for example a
+The gate and `worktree.sh verify` also run `scripts/typecheck.sh` and
+`scripts/lint.sh` *if they exist* (exit `0` = clean). Add them where the language has them, for example a
 `typecheck.sh` running `tsc --noEmit` or `mypy`/`pyright`, and a `lint.sh`
 running `eslint` or `ruff`. There is no template: they are one line each and
 project-specific. [`../quality/README.md`](../quality/README.md) says which

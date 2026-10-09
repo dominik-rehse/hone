@@ -592,7 +592,7 @@ else
   step "SKIP early-gates test: flock not available"
 fi
 
-echo "== 5d. verify + gate --all share the suite lock =="
+echo "== 5d. verify takes the suite lock, and the gate reads it =="
 if command -v flock >/dev/null 2>&1; then
   LOCK="$(git rev-parse --git-common-dir)/hone-land.lock"
   # verify is the sanctioned manual full-suite run: green here, serialized below.
@@ -605,22 +605,32 @@ if command -v flock >/dev/null 2>&1; then
   [ "$rc" -eq 5 ] || die "verify under a held lock should time out with exit 5 (got $rc)"
   wait "$HOLDER" 2>/dev/null
   step "concurrent verify waited on the lock, then timed out (exit 5)"
-  # The gate's --all tier (clean hone/* branch, the pre-land moment) takes the
-  # same lock: while another suite is live it blocks the stop instead of
-  # running red under contention.
+  # The gate's full tier (clean hone/* branch, the pre-land moment) runs no
+  # suite. While a verify or land holds the lock it lets the turn end, and
+  # with the lock free and no receipt it asks for verify.
   WT_G=$(bash "$WSH" add gate-lock) || die "worktree add gate-lock"
   ( cd "$WT_G" && git commit -q --allow-empty -m "wip: pre-land" -m "Cut: nothing, a test change" ) || die "commit in gate-lock"
   ( flock 8; sleep 3; ) 8>"$LOCK" &
   HOLDER=$!
   sleep 0.3
-  out=$(cd "$WT_G" && echo '{}' | HONE_SUITE_LOCK_TIMEOUT=1 bash "$GATE")
-  echo "$out" | grep -q '"decision":"block"' || die "gate --all under a held suite lock should block the stop"
-  echo "$out" | grep -q "holds the suite lock" || die "gate block should name the held lock as the reason"
-  wait "$HOLDER" 2>/dev/null
-  # Lock free again → the gate runs --all and passes green.
+  # A bare flock is no verify, so the gate still asks for one. A holder that
+  # the queue recorded, as hone_suite_lock writes it, lets the turn end.
   out=$(cd "$WT_G" && echo '{}' | bash "$GATE")
-  echo "$out" | grep -q '"decision":"block"' && die "gate should pass once the suite lock is free"
-  step "gate --all blocks while a suite is live, passes when the lock frees"
+  echo "$out" | grep -q '"decision":"block"' || die "a bare flock with no recorded holder should not open the gate: $out"
+  rm -f "$(git -C "$WT_G" rev-parse --git-dir)/hone-gate-blocks"
+  mkdir -p "$LOCK.queue"
+  printf '%s %s\n' "$HOLDER" "$(bash -c ". '$PLUGIN_ROOT/hooks/common.sh'; hone_pid_start $HOLDER")" > "$LOCK.queue/holder"
+  out=$(cd "$WT_G" && echo '{}' | bash "$GATE")
+  echo "$out" | grep -q '"decision":"block"' && die "gate under a held suite lock should let the turn end: $out"
+  echo "$out" | grep -q "holds the suite lock" || die "the gate's note should name the held lock: $out"
+  wait "$HOLDER" 2>/dev/null
+  out=$(cd "$WT_G" && echo '{}' | bash "$GATE")
+  echo "$out" | grep -q '"decision":"block"' || die "with the lock free and no receipt the gate should block: $out"
+  echo "$out" | grep -q 'worktree.sh\\" verify' || die "the block should ask for verify: $out"
+  ( cd "$WT_G" && bash "$WSH" verify >/dev/null 2>&1 ) || die "verify in gate-lock should be green"
+  out=$(cd "$WT_G" && echo '{}' | bash "$GATE")
+  echo "$out" | grep -q '"decision":"block"' && die "gate should pass after a green verify: $out"
+  step "gate lets the turn end while a suite is live, asks for verify, passes after it"
   bash "$WSH" remove "$WT_G" >/dev/null 2>&1; git branch -D hone/gate-lock >/dev/null 2>&1
 else
   step "SKIP suite-lock tests: flock not available"
@@ -2248,7 +2258,7 @@ step "a garden repair names repair in place of cut"
 
 WT_P=$(bash "$WSH" add garden/g-red) || die "worktree add garden/g-red"
 (cd "$WT_P" && git rm -q src/mathx/add.js && bash "$WSH" verify >/dev/null 2>&1) && die "a cut of add.js should be red"
-case "$(drain p1 "$REPO")" in *"[garden/g-red] worktree ✓ > cut ✓ > verify ✗ (suite exit "*) ;; *) die "a red garden verify should show verify ✗" ;; esac
+case "$(drain p1 "$REPO")" in *"[garden/g-red] worktree ✓ > cut ✓ > verify ✗ (tests (exit "*) ;; *) die "a red garden verify should show verify ✗" ;; esac
 bash "$WSH" remove "$WT_P" >/dev/null 2>&1; git branch -q -D hone/garden/g-red 2>/dev/null
 step "a red garden cut shows verify ✗"
 
@@ -2308,10 +2318,9 @@ WT_V=$(bash "$WSH" add b10/verify) || die "worktree add b10/verify"
 (cd "$WT_V" && bash "$WSH" verify >/dev/null 2>&1) || die "verify should be green"
 out=$(cd "$WT_V" && echo '{}' | bash "$GATE")
 [ "$(wc -l < "$RUNS10")" -eq 1 ] || die "the gate should not run the full suite again after a green verify (runs: $(tr '\n' ' ' < "$RUNS10"))"
-echo "$out" | grep -q "already passed on this branch at this exact tree" || die "the skip should say the tree matches: $out"
-echo "$out" | grep -q "run by worktree.sh verify" || die "the skip should name verify as the writer: $out"
+echo "$out" | grep -q "worktree.sh verify already passed on this branch at this exact tree" || die "the skip should name verify and say the tree matches: $out"
 step "a green verify spares the gate a second full suite"
-# A red verify writes nothing, so the gate still runs the suite.
+# A red verify writes nothing, so the gate still asks for verify.
 (cd "$WT_V" && echo red > RED && git add -A && git commit -qm "feat: red" -m "Cut: nothing, a test change")
 rm -f "$(git -C "$WT_V" rev-parse --git-dir)/hone-gate-green"
 (cd "$WT_V" && bash "$WSH" verify >/dev/null 2>&1) && die "verify should be red"

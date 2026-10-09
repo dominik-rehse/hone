@@ -65,8 +65,9 @@ work. The loop calls it, and you can too:
   claim lives on the remote, so a second `add` from any clone fails. When
   the project ships `scripts/setup-tree.sh`, `add` then runs it inside the
   new worktree (see *Adapters*).
-- `worktree.sh verify` runs the full test suite, serialized against other
-  sessions. The only sanctioned way to run `--all` by hand. A green run
+- `worktree.sh verify` runs the full test suite, then type-check and lint,
+  serialized against other sessions. It runs every step, even after a red
+  one. The only sanctioned way to run `--all` by hand. Only an all-green run
   writes the gate's receipt.
 - `worktree.sh review-scope <change>` prints how deep the change's review must
   go: `full`, or `docs-only` when the diff touches nothing outside `docs/` and
@@ -186,12 +187,10 @@ file:
   the proof gate lands in the merge commit body like a grant, and a green
   land deletes the spent file.
 
-Three environment variables tune the cross-session mechanics.
+Two environment variables tune the cross-session mechanics.
 `HONE_LAND_LOCK_TIMEOUT` sets the seconds a land or full-suite run waits for
 the lock (default 600). Takers queue, and a land goes first. A
-land's wait pauses while a run holds the lock.
-`HONE_SUITE_LOCK_TIMEOUT` sets the seconds the
-gate's pre-land full run waits (default 30). `HONE_LAND_RETRIES` sets how
+land's wait pauses while a run holds the lock. `HONE_LAND_RETRIES` sets how
 many times land redoes merge and suite after the primary branch moved, or
 the remote rejected its push (default 3).
 
@@ -214,35 +213,31 @@ in your own editor or terminal never meets them. hone writes a grant and a
 sign-off only for a change that lands through the loop, so a hand edit leaves
 neither. When you want that record, route the edit through the loop.
 
-- *guard* (PreToolUse on Write/Edit) enforces three rules and asks in one
+- *guard* (PreToolUse on Write/Edit) enforces four rules and asks in one
   case:
   - Anywhere, no writes into `.hone-grant/` or `.hone-proof/`. The helpers
     write those.
+  - Anywhere, no writes to the gate's state: `hone-land.lock` and the
+    `hone-gate-*` records.
   - Anywhere, no new file under `src/` unless a test for it exists. Test
     files and fixtures stay writable.
   - In the primary tree, no edits to the protected paths at all, including
     the two policy files. That work belongs in a worktree, landed by a
     merge.
-  - In any tree, it asks before an edit to a check config. The gate's runs
-    are only as strict as their config, so an edit there is the cheapest
-    route from red to green. The ask says whether the change's Plan names
-    the file.
+  - In any tree, it asks before an edit to a check config. The ask says
+    whether the change's Plan names the file.
 
-  A check config is the dedicated config file of one of three tools:
-  - a test runner (`bunfig.toml`, `vitest.config.*`, `jest.config.*`,
-    `pytest.ini`)
-  - a linter or formatter (eslint, prettier, biome, dprint, ruff,
-    shellcheck)
-  - a type-checker (`tsconfig*.json`, mypy, pyright)
-
-  A manifest that also carries tool settings (`package.json`,
-  `pyproject.toml`) is not in the set. `HONE_CHECK_CONFIG_RE` in
-  `hooks/common.sh` is the full list.
+  A check config is the dedicated config file of a test runner, a linter,
+  a formatter, or a type-checker, for example `tsconfig.json` or
+  `biome.json`. A manifest such as `package.json` is not one.
+  `HONE_CHECK_CONFIG_RE` in `hooks/common.sh` is the full list.
 - *bash-guard* (PreToolUse on Bash) is a deterrent, not a sandbox. It
   closes the obvious shell routes, and the deny rules in settings.json
   close the file-tool routes.
   - It denies a command that would disable the gate: `--no-verify`,
-    `core.hooksPath` in any case, or creating `.hone-off`.
+    `core.hooksPath` in any case, or creating `.hone-off`. It also denies
+    any command that names the suite lock, a gate record, or a `hone-`
+    glob.
   - It denies a command that hand-writes a grant or a proof sign-off past
     the `worktree.sh` helpers, and it denies the loop the helpers too.
   - It asks before a command that modifies a protected artifact: an
@@ -285,19 +280,21 @@ neither. When you want that record, route the edit through the loop.
   a writer the bash-guard's name list misses. It reports after the write, so
   it stops the run before the commit. A change between two commands, such as a
   background job's, blocks the next check once. Older work never blocks.
-- *gate* (Stop) runs `scripts/run-tests.sh`, plus `scripts/typecheck.sh`
-  and `scripts/lint.sh` when they exist, and blocks the turn on any failure.
+- *gate* (Stop) blocks the turn until the checks are green.
   - With an uncommitted change to any durable path it runs the fast unit
-    tier. A dependency refresh dirties the manifest and the lockfile rather
-    than `src/`, and it breaks the suite just as easily. So the gate reads
-    the whole durable perimeter, not `src/` and `tests/` alone.
-  - On a clean `hone/<change>` branch it runs the full suite, once per
-    change branch. This is the pre-land check. A green run, or a green
-    `worktree.sh verify`, records the branch and the tree in
-    `<git-dir>/hone-gate-green`. Every later Stop on that branch skips the
-    run and says so, and a plugin upgrade invalidates the record. A branch
-    with no commit of its own runs nothing. When a land or a verify holds the land
-    lock, often this session's own, the gate blocks under the cap below.
+    tier of `scripts/run-tests.sh`, plus `scripts/typecheck.sh` and
+    `scripts/lint.sh` when they exist. A dependency refresh dirties the
+    manifest and the lockfile rather than `src/`, and it breaks the suite
+    just as easily. So the gate reads the whole durable perimeter, not
+    `src/` and `tests/` alone. A green run records the version and the
+    tree in `<git-dir>/hone-gate-unit`, and a later Stop on the same tree
+    runs nothing. Files that git ignores are not part of the tree.
+  - On a clean `hone/<change>` branch it runs no suite. It reads the
+    receipt that a green `worktree.sh verify` writes in
+    `<git-dir>/hone-gate-green`. Without one it blocks under the cap below
+    and asks for verify. A receipt from an earlier tree runs the unit tier.
+    While hone's queue records a live verify or land holding the lock, it
+    lets the turn end with a note.
 
   - A Stop hook runs where the agent's shell stands, and the agent moves it.
     So when this session was already blocked in a linked worktree of the
@@ -343,8 +340,8 @@ neither. When you want that record, route the edit through the loop.
 - *session-start* injects the workflow rule from the plugin. It warns when
   the test adapter or the `src/` layout is missing. It also warns, naming
   the missing rules, when the settings lack any rule from the canonical deny
-  list (`templates/settings/deny-rules.txt`). `Edit(./x)` and `Edit(x)`
-  match, either settings file counts, and extra denies are fine.
+  list (`templates/settings/deny-rules.txt`). You see the warnings, and the
+  model gets them with the rule.
 
 ## Land gates
 

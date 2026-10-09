@@ -77,4 +77,6 @@ that skips git hooks, the config key that redirects them, and a write to
 the off marker. To test such a command, write it to a script in the
 scratchpad and run the script. Keep
 commit messages free of the literal tokens too. Write "the no-verify flag"
-and "the hooks-path key" instead.
+and "the hooks-path key" instead. Since 0.77.0 the bash-guard also denies any
+command that names the suite lock or a gate record, a grep included. Use a
+script in the scratchpad for that too.

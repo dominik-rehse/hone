@@ -5,57 +5,70 @@
 # (scripts/typecheck.sh, scripts/lint.sh). Any failure BLOCKS the stop so the
 # model fixes it before finishing the turn. It never disables a gate to proceed.
 #
-# Which tier runs depends on where the work sits:
-#   - An uncommitted change to any durable path → the fast UNIT tier. src/ and
-#     tests/ are the red-green inner loop, and the gate must stay cheap on every
-#     turn or someone disables it. A dependency sweep dirties other durable paths
-#     instead (the manifest, the lockfile, a tool config, wherever the project
-#     lists them). It breaks the suite just as easily, so the same tier runs.
+# What it does depends on where the work sits:
+#   - An uncommitted change to any durable path → the fast UNIT tier: tests
+#     with --unit, then type-check and lint. src/ and tests/ are the red-green
+#     inner loop. A dependency sweep dirties other durable paths instead (the
+#     manifest, the lockfile, a tool config, wherever the project lists them).
+#     It breaks the suite just as easily, so the same tier runs.
 #   - Clean tree on a hone/<change> worktree branch (work committed, about to
-#     land) → the full --ALL tier, including integration/e2e. This is the moment
-#     a change is about to merge. So this tier catches an integration regression
-#     that a green unit tier would miss, rather than trusting the run skill's
-#     prose --all step. This is a BACKSTOP, not the authoritative pre-merge
-#     check. The hooks.json timeout (600s) bounds a Stop hook. The harness kills
-#     a suite that outruns the timeout, which then reads as a non-block, so the
-#     gate fails OPEN. The authoritative --all runs inside `worktree.sh land`,
-#     under the land lock, on the merge: that one gates the trunk and
-#     publishes nothing on red. Keep the suite within the hook timeout to keep this backstop
-#     meaningful.
+#     land) → the FULL TIER. The gate runs no check here. It asks for the
+#     result of `worktree.sh verify`. See THE FULL TIER below.
 #     A hone/<change> branch with no commit of its own (add just cut it) has
 #     no change on it yet, so it counts as the next case.
 #   - Clean tree on any other branch → nothing in flight, no-op. With one
 #     exception: when this session was already blocked in a linked worktree of
 #     this repository, the gate evaluates THAT worktree instead, with the same
-#     tier rules. A Stop hook runs where the agent's shell sits, and the agent
+#     rules. A Stop hook runs where the agent's shell sits, and the agent
 #     moves that shell, so standing in the primary tree was a way out of a red
 #     suite. See THE WORKING-DIRECTORY HOLE below.
 #   - No git → the unit tier (the gate cannot tell what is in flight, and
 #     adapter presence already scopes this to hone projects).
 #
-# The --ALL tier runs once per change BRANCH, not once per commit. A green run
-# records the branch, and every later Stop on that branch skips the suite. A
-# green `worktree.sh verify` records it the same way. The
-# backstop's value is one early warning per change. It tells the model that this
-# change breaks an integration test, while the change is still open. A re-run
-# after each new commit re-verifies almost the same code, and it adds little.
-# The repeats also cost the most. They hold the land lock, so they collide with
-# each other and with lands. `worktree.sh land` re-runs --all on the merge
-# and publishes nothing on red. So a regression that a later commit
-# introduces still never reaches the trunk.
+# THE UNIT MEMO. A green unit tier records "<plugin version> <tree>" in
+# <git-dir>/hone-gate-unit, where the tree is hone_tree_state: HEAD plus every
+# uncommitted and untracked file. A later Stop with the same version and the
+# same tree runs no step. Any change to the tree runs every step. A red step
+# leaves no record. The unit tier is not cheap everywhere: in one project 358
+# of 613 runs, at 51s each, followed a turn that changed no file.
+# The key misses two kinds of input. A file that git ignores (node_modules,
+# .env, generated code) can change a result without changing the tree, and
+# the gate accepts that gap, as the full receipt does: land re-verifies on
+# the merge. An edit inside a submodule changes no key either, so while any
+# submodule holds uncommitted work the gate neither skips nor writes a memo.
+#
+# THE FULL TIER. `worktree.sh verify` runs the full suite, type-check, and lint
+# under the suite lock that land shares. A green verify writes the receipt
+# "<plugin version> <branch> <tree> verify" in <git-dir>/hone-gate-green
+# (hone_gate_receipt_write). The gate reads it:
+#   - A receipt for this version, branch, and the tree as it stands → the
+#     turn ends, and no check runs.
+#   - A receipt for this version and branch at an earlier tree → the unit
+#     tier runs, with its memo, for the commits since verify. The receipt
+#     covers the full suite once per branch, not each commit.
+#   A verify removes the receipt before its first step, so a red verify
+#   leaves none behind.
+#   - No receipt, and the suite lock is held → a verify or land is running,
+#     often this run's own, in the background. The turn ends with a note.
+#   - No receipt, and the lock is free → the gate blocks with a reminder to
+#     run verify. The reminder counts toward THE BLOCK CAP.
+# The gate used to run --all here itself. In the hook's 600s it waited on the
+# lock that the run's own background verify held, or the harness killed it,
+# and a killed hook checks nothing. The receipt is not the merge check:
+# `worktree.sh land` re-runs every check on the merge and publishes nothing
+# on red. So a later commit that breaks the suite still reaches no trunk.
 # (An adapter that expresses tier selection elsewhere, e.g. the Node template
-# runs the project's own "test" script, treats --unit and --all alike. The
-# escalation only matters where the adapter distinguishes tiers.)
+# runs the project's own "test" script, treats --unit and --all alike.)
 #
 # Without the adapter the gate is a no-op, so it never gates a project that has
 # not adopted hone. .hone-off disables it entirely. Type-check and lint are
 # opt-in by their script existing. Tests are the minimum.
 #
 # Mechanism: a Stop hook may return {"decision":"block","reason":...} to keep
-# the turn going, and the harness feeds the reason back to the model. On green
-# it returns {"systemMessage":...} naming the checks that ran, so the
-# transcript records that the gate fired (silence would be indistinguishable
-# from a skip).
+# the turn going, and the harness feeds the reason back to the model. When the
+# turn may end it returns {"systemMessage":...} naming the checks that ran, or
+# the record that let it run none. So the transcript records that the gate
+# fired (silence would be indistinguishable from a skip).
 #
 # THE BLOCK CAP. Some suites cannot go green: a test can contradict the spec it
 # claims to check, and the right answer is then to stop and report, not to edit
@@ -77,7 +90,7 @@
 # where it blocked, which closes the way out that a `cd` used to offer. On the
 # clean-tree, non-change-branch branch alone, the gate looks for a linked
 # worktree whose counter carries this session's id. Where it finds one, it
-# changes directory there first, so the suite, the receipt, and the lock all
+# changes directory there first, so the suite, the receipt, and the memo all
 # follow the tree under test. A session that was never blocked finds no
 # counter and takes the old path, and a shell with work in flight where it
 # stands never reaches the lookup.
@@ -163,7 +176,7 @@ gate_pick_tier() {
             # change exists yet. A full suite there verified the trunk and
             # wrote a receipt that later read "already passed".
             hone_branch_fresh && return 1
-            TIER="--all"; return 0 ;;       # committed on a change branch → full pre-land check
+            TIER="--all"; return 0 ;;       # committed on a change branch → the full tier
     esac
     return 1                                # clean, not a change branch
 }
@@ -256,8 +269,8 @@ gate_signature() {
 # block it earns, and giving up sooner buys a run nothing.
 #
 # $4, when given, is the ordinary block's message in place of
-# msg_gate_step_failed. The suite-lock wait passes its own, so a run that
-# waits on its own background land meets the same cap as a red check.
+# msg_gate_step_failed. The full tier's reminder passes its own, so a run that
+# never runs verify meets the same cap as a red check.
 gate_block_or_cap() {
     local label="$1" rc="$2" tail="$3" first="${4:-}" file sig n=1 recorded msg
     file=$(gate_blocks_file)
@@ -266,17 +279,17 @@ gate_block_or_cap() {
     case "$recorded" in
         "$SESSION $sig "*) n=$(( ${recorded##* } + 1 )) ;;
     esac
-    # A lock wait ran no suite, so its cap messages must not call it red.
+    # The reminder ran no suite, so its cap messages must not call it red.
     if [ "$n" -gt "$GATE_BLOCK_CAP" ]; then
         rm -f "$file" 2>/dev/null
-        if [ "$rc" = lock ]; then msg=$(msg_gate_lock_cap_reached "$n")
+        if [ "$rc" = unverified ]; then msg=$(msg_gate_verify_cap_reached "$n")
         else msg=$(msg_gate_cap_reached "$label" "$n"); fi
         printf '{"systemMessage":"%s"}\n' "$(hone_json_escape "$msg")"
         exit 0
     fi
     printf '%s %s %s\n' "$SESSION" "$sig" "$n" > "$file" 2>/dev/null || true
     if [ "$n" -eq "$GATE_BLOCK_CAP" ]; then
-        [ "$rc" = lock ] && block "$(msg_gate_lock_report_now "$n")"
+        [ "$rc" = unverified ] && block "$(msg_gate_verify_report_now "$n")"
         block "$(msg_gate_report_now "$label" "$n")"
     fi
     [ -n "$first" ] && block "$first"
@@ -286,63 +299,89 @@ gate_block_or_cap() {
 # A green turn ends the streak. The next red failure starts at one.
 gate_clear_blocks() { rm -f "$(gate_blocks_file)" 2>/dev/null || true; }
 
-# The green receipt for the full tier: one line,
-# "<plugin version> <branch> <tree> <who>", in <git-dir>/hone-gate-green.
-# `hone_gate_receipt_write` in common.sh writes it. The tree is the state of
-# the whole working tree, uncommitted files included (hone_tree_state). The
-# writer is `gate`, or `verify` when `worktree.sh verify` ran the suite green.
-# A green verify counts, so a run that verified and then waits on a person
-# does not pay for a second full suite at its next Stop.
-#
-# The SKIP key is the version and the branch. The full tier runs once per
-# change branch, as the header says. The tree decides what the skip may
-# claim: "on this tree" when it matches, "at an earlier tree" when a later
-# commit moved it. --git-dir resolves to .git/worktrees/<name> in a linked
-# worktree, so each worktree keeps its own receipt. The version makes a
-# plugin upgrade a miss. A line that an older gate wrote has too few fields,
-# so it misses too, and the suite runs one more time.
-#
-# No receipt comes from a fresh branch. Its tree is the trunk's, and a
-# receipt there said "already passed" before the change existed.
-#
-# A receipt from verify covers the test suite alone. So on such a skip the
-# gate still runs the optional type-check and lint adapters. They are not
-# load-sensitive, so they need no lock.
+# Exit 0 when a verify or a land holds the suite lock right now
+# (<git-common-dir>/hone-land.lock, taken through hone_suite_lock). Two
+# signs must agree: the lock is taken, and the queue's holder record names a
+# live process (hone_queue_holder_live). A bare flock by anything else, such
+# as a server that a suite left running or a lock taken by hand, is not a
+# verify, so it does not let the turn end. The probe takes the lock for an
+# instant on a read-only fd, so it never creates the file and never waits.
+# Without flock, or without the file, the lock reads as free.
+gate_suite_busy() {
+    local lock
+    command -v flock >/dev/null 2>&1 || return 1
+    lock="$(git rev-parse --git-common-dir 2>/dev/null)/hone-land.lock"
+    [ -r "$lock" ] || return 1
+    { flock -n 8; } 8<"$lock" 2>/dev/null && return 1
+    hone_queue_holder_live "$lock.queue"
+}
+
+# Exit 0 when a submodule holds uncommitted work: modified or untracked
+# files inside it. `git add -A` records only a submodule's HEAD, so such an
+# edit leaves hone_tree_state as it was. One status call, and none at all
+# without .gitmodules.
+gate_submodule_dirty() {
+    [ -f .gitmodules ] || return 1
+    git status --porcelain=v2 --ignore-submodules=none 2>/dev/null | awk '
+        ($1 == "1" || $1 == "2") && substr($3, 1, 1) == "S" \
+            && (substr($3, 3, 1) != "." || substr($3, 4, 1) != ".") { f = 1 }
+        END { exit !f }'
+}
+
+GATE_TREE=""; VERIFIED_AT=""
+
+# THE FULL TIER (see the header). The receipt's key is the version and the
+# branch, and its tree decides whether a check runs. --git-dir resolves
+# to .git/worktrees/<name> in a linked worktree, so each worktree keeps its
+# own receipt. A line with another version or too few fields misses.
 #
 # An untracked input that git ignores (a dependency install) can change the
-# result without changing the tree. The gate accepts that gap, the same way
-# it accepts the 600s hook timeout: land re-verifies authoritatively.
-#
-# The unit tier stays unmemoized. It runs on a dirty tree, and it is cheap
-# by design.
-GATE_RECEIPT=""
-if [ "$TIER" = "--all" ] && [ -n "$BRANCH" ]; then
-    GATE_RECEIPT="$(git rev-parse --git-dir 2>/dev/null)/hone-gate-green"
-    read -r r_version r_branch r_tree r_by _ 2>/dev/null <"$GATE_RECEIPT"
-    if [ -n "${r_by:-}" ] && [ "$r_version" = "$(hone_plugin_version)" ] \
+# result without changing the tree. The gate accepts that gap: land
+# re-verifies on the merge.
+if [ "$TIER" = "--all" ]; then
+    read -r r_version r_branch r_tree r_by _ 2>/dev/null \
+        <"$(git rev-parse --git-dir 2>/dev/null)/hone-gate-green"
+    if [ "${r_by:-}" = verify ] && [ "$r_version" = "$(hone_plugin_version)" ] \
        && [ "$r_branch" = "$BRANCH" ]; then
-        if [ "$r_tree" = "$(hone_tree_state)" ]; then cached_at=same; else cached_at=earlier; fi
-        cached_ran=""
-        if [ "$r_by" = verify ]; then
-            for step in typecheck lint; do
-                [ -f "scripts/$step.sh" ] || continue
-                out=$(bash "scripts/$step.sh" 2>&1); rc=$?
-                label=$step; [ "$step" = typecheck ] && label=type-check
-                if [ "$rc" -ne 0 ]; then
-                    gate_block_or_cap "$label" "$rc" "$(printf '%s\n' "$out" | hone_fail_excerpt 15)"
-                fi
-                cached_ran+="${cached_ran:+, }$label"
-            done
+        GATE_TREE=$(hone_tree_state)
+        if [ -n "$GATE_TREE" ] && [ "$r_tree" = "$GATE_TREE" ]; then
+            gate_clear_blocks
+            printf '{"systemMessage":"%s"}\n' \
+                "$(hone_json_escape "$(msg_gate_green_cached "$r_tree")")"
+            exit 0
         fi
-        gate_clear_blocks
-        printf '{"systemMessage":"%s"}\n' \
-            "$(hone_json_escape "$(msg_gate_green_cached "$r_tree" "$cached_at" "$r_by" "$cached_ran")")"
+        # Commits since verify: the unit tier checks them below.
+        TIER="--unit"; VERIFIED_AT="$r_tree"
+    # A verify or land runs now, so its own result will follow. Blocking here
+    # only made the run wait in empty turns on its own background job.
+    elif gate_suite_busy; then
+        printf '{"systemMessage":"%s"}\n' "$(hone_json_escape "$(msg_gate_verify_running)")"
         exit 0
+    else
+        gate_block_or_cap "verify" unverified "$BRANCH" "$(msg_gate_verify_missing)"
     fi
 fi
 
+# THE UNIT MEMO (see the header). Without git there is no tree to key on,
+# and a submodule with uncommitted work hides it from the key. In both cases
+# every step runs and no memo is written. A stale record goes before the run,
+# so a red step leaves none.
+GATE_MEMO=""
+if git rev-parse --git-dir >/dev/null 2>&1; then
+    GATE_MEMO="$(git rev-parse --git-dir)/hone-gate-unit"
+    [ -n "$GATE_TREE" ] || GATE_TREE=$(hone_tree_state)
+    gate_submodule_dirty && GATE_TREE=""
+fi
+if [ -n "$GATE_TREE" ]; then
+    if [ "$(cat "$GATE_MEMO" 2>/dev/null)" = "$(hone_plugin_version) $GATE_TREE" ]; then
+        gate_clear_blocks
+        printf '{"systemMessage":"%s"}\n' "$(hone_json_escape "$(msg_gate_green_memo "$GATE_TREE")")"
+        exit 0
+    fi
+    rm -f "$GATE_MEMO" 2>/dev/null
+fi
+
 # Run an adapter, capturing a short tail of its output for the block reason.
-# On success, append the label to the green receipt.
 ran=""
 run_step() {
     local label="$1"; shift
@@ -357,41 +396,22 @@ run_step() {
     ran+="${ran:+, }$label"
 }
 
-# The full tier shares land's lock (<git-common-dir>/hone-land.lock). e2e tiers
-# are load-sensitive, so a --all racing another suite or a land's re-verify
-# poisons both signals (phantom flakes, spurious land reds). Short wait
-# only: if a suite is live, blocking the stop with "retry" beats running red
-# under contention. The unit tier stays lock-free: it is the per-Stop inner
-# loop and must stay cheap. Without flock, degrade to running unserialized
-# rather than not at all.
-#
-# The holder is often this session's own land or verify, run in the
-# background as the run skill asks. So the block names no other session, and
-# it counts toward the cap like a red check. It used to call block directly:
-# about twenty field blocks said "another session" of the run's own land, and
-# runs waiting on it looped on empty turns with no cap to end them.
-#
-# The gate queues for the lock like every other taker (hone_suite_lock), so
-# it never overtakes a land that waits. A lock file it cannot open leaves
-# the suite unserialized, as without flock.
-if [ "$TIER" = "--all" ] && command -v flock >/dev/null 2>&1; then
-    SUITE_LOCK="$(git rev-parse --git-common-dir 2>/dev/null)/hone-land.lock"
-    hone_suite_lock "$SUITE_LOCK" "${HONE_SUITE_LOCK_TIMEOUT:-30}" suite
-    [ $? -eq 5 ] && gate_block_or_cap "the wait for the suite lock" lock "" "$(msg_gate_suite_lock)"
-fi
-
 run_step "tests ($TIER)" bash "$ADAPTER" "$TIER"
 [ -f "scripts/typecheck.sh" ] && run_step "type-check" bash "scripts/typecheck.sh"
 [ -f "scripts/lint.sh" ] && run_step "lint" bash "scripts/lint.sh"
 
-# Record the branch and the verified tree, so every later Stop on this branch
-# skips the suite. Only after every step went green, and only for the full tier.
-[ "$TIER" = "--all" ] && hone_gate_receipt_write gate
+# Every step went green. The tree measured before the run is the one they
+# checked. A step that changed the tree moves it, so the next Stop runs again.
+[ -n "$GATE_TREE" ] && printf '%s %s\n' "$(hone_plugin_version)" "$GATE_TREE" > "$GATE_MEMO" 2>/dev/null
 
 # Every step went green, so no failure is repeating. The cap starts over.
 gate_clear_blocks
 
 # Green receipt: one visible line saying what actually ran, so a transcript can
 # confirm the gate fired rather than inferring it from silence.
-printf '{"systemMessage":"%s"}\n' "$(hone_json_escape "$(msg_gate_green "$ran")")"
+if [ -n "$VERIFIED_AT" ]; then
+    printf '{"systemMessage":"%s"}\n' "$(hone_json_escape "$(msg_gate_green_since_verify "$VERIFIED_AT" "$ran")")"
+else
+    printf '{"systemMessage":"%s"}\n' "$(hone_json_escape "$(msg_gate_green "$ran")")"
+fi
 exit 0

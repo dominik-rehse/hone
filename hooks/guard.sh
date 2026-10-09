@@ -8,6 +8,9 @@
 #      to the commit it proves, and refuse an empty text. A raw file write
 #      produces a record no reader can trust.
 #
+#   0a. Only hone's hooks and scripts write the gate's state: the records in
+#      the git dir (hone-gate-*) and the suite lock (hone-land.lock).
+#
 #   1. The primary tree is a merge target, never a workspace. The guard denies
 #      a Write/Edit to a durable committed artifact (src/, tests/, docs/, db/,
 #      scripts/, plus any paths the project lists in .hone-durable-paths) in
@@ -84,6 +87,14 @@ case "$FILE_PATH" in
     *)  TARGET_PATH=$(realpath -m -s -- "$PROJECT_DIR/$FILE_PATH") ;;
 esac
 
+# Rule 0a: the gate's own state, wherever it sits. The records and the
+# suite lock live in a git dir, which for a linked worktree lies outside the
+# project, so this runs before the outside-project exit. A written record
+# skips a check or resets the block cap. bash-guard denies the shell route.
+case "$TARGET_PATH" in
+    */hone-gate-*|*/hone-land.lock|*/hone-land.lock.*)
+        deny "$(msg_guard_gate_state "$FILE_PATH")" ;;
+esac
 case "$TARGET_PATH" in
     "$PROJECT_DIR"/*) REL="${TARGET_PATH#"$PROJECT_DIR"/}" ;;
     *) exit 0 ;;  # outside the project, not ours to guard

@@ -85,8 +85,8 @@ well-formed Plan.
 
 ## Verify time: three checks the gate cannot make
 
-Run the normal gate first: the suite through `worktree.sh verify`, then
-type-check and lint. Compare the suite's counts against the Plan's. Then add
+Run the normal gate first: the suite, type-check, and lint through
+`worktree.sh verify`. Compare the suite's counts against the Plan's. Then add
 these three, and state each one's outcome in the verify receipt.
 
 **1. The lockfile is a fixed point.** A reinstall over a warm install reports "no

@@ -12,8 +12,11 @@
 #    run setup, so the gate has something to run.
 #
 # The same .hone-off marker that disables the rest of hone disables this hook.
-# Mechanism: the harness injects SessionStart hook stdout into the session
-# context.
+# Mechanism: the hook prints one JSON object, or nothing. Its
+# hookSpecificOutput.additionalContext reaches the model only, and carries the
+# rule and the warnings. Its systemMessage reaches the person only, and carries
+# the warnings, because they ask the person to act. Plain stdout would reach
+# the model only.
 
 set -uo pipefail
 
@@ -43,6 +46,16 @@ emit_rule() {
     ' "$1"
 }
 
+context=""
+warnings=""
+# Append text $2 to the variable named $1, a blank line between parts.
+add() {
+    local cur="${!1}"
+    printf -v "$1" '%s' "${cur:+$cur
+
+}$2"
+}
+
 emitted=0
 for f in "$SOURCE_DIR"/*.md; do
     [ -f "$f" ] || continue
@@ -50,32 +63,30 @@ for f in "$SOURCE_DIR"/*.md; do
     # Honour a legacy tracked vendored copy: it loads natively, so do not re-inject it.
     [ -f "$FLAT_DIR/$name" ] && continue
     if [ "$emitted" -eq 0 ]; then
-        printf '<!-- hone workflow rule (injected live from the plugin; edit upstream, not here) -->\n\n'
+        add context '<!-- hone workflow rule (injected live from the plugin; edit upstream, not here) -->'
         emitted=1
     fi
-    emit_rule "$f"
-    printf '\n\n'
+    add context "$(emit_rule "$f")"
 done
 
 # A hone project carries durable artifacts (docs/decisions, docs/notes) or the
 # temporary .plans/ but no test adapter → the gate cannot run. Point at setup.
-# These warnings go to STDOUT: the harness injects a SessionStart hook's stdout
-# into the session context, so the model actually sees them. Stderr on exit 0
-# is effectively invisible.
+# Each warning goes to both readers (see the header). Stderr on exit 0 reaches
+# neither.
 looks_like_hone=false
 if [ -d "$PROJECT_DIR/docs/decisions" ] || [ -d "$PROJECT_DIR/docs/notes" ] || [ -d "$PROJECT_DIR/.plans" ]; then
     looks_like_hone=true
 fi
 
 if [ "$looks_like_hone" = true ] && [ ! -f "$PROJECT_DIR/scripts/run-tests.sh" ]; then
-    msg_session_no_adapter
+    add warnings "$(msg_session_no_adapter)"
 fi
 
 # hone keys its enforcement off a src/<area>/ layout. A hone project with no src/
 # means the guard, gate, and nag silently do nothing. Report that instead of
 # leaving it a silent gap.
 if [ "$looks_like_hone" = true ] && [ ! -d "$PROJECT_DIR/src" ]; then
-    msg_session_no_src
+    add warnings "$(msg_session_no_src)"
 fi
 
 # The settings deny rules are the file-tool half of hone's tamper resistance
@@ -88,8 +99,14 @@ fi
 if [ "$looks_like_hone" = true ]; then
     missing=$(hone_missing_deny_rules "$PROJECT_DIR" "$SCRIPT_DIR/../templates/settings/deny-rules.txt")
     if [ -n "$missing" ]; then
-        msg_session_missing_deny "$missing"
+        add warnings "$(msg_session_missing_deny "$missing")"
     fi
 fi
 
+[ -n "$warnings" ] && add context "$warnings"
+[ -n "$context" ] || exit 0
+
+printf '{"hookSpecificOutput":{"hookEventName":"SessionStart","additionalContext":"%s"}' "$(hone_json_escape "$context")"
+[ -n "$warnings" ] && printf ',"systemMessage":"%s"' "$(hone_json_escape "$warnings")"
+printf '}\n'
 exit 0

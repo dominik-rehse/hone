@@ -184,20 +184,21 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
   it again. A function grows one case per change, so no single change looks
   too big, and this check is the only step that sees the growth.
 - **gate**: the full suite, plus type-check and lint, all green:
-  - Run the full suite through the serialized wrapper:
+  - Run the full suite, type-check, and lint through the serialized wrapper:
     `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" verify`. Never run the
     adapter bare with `--all`. Full-suite runs share one cross-session lock with
     land, because e2e tiers are load-sensitive. A suite racing another
     session's suite or land produces phantom flakes and spurious red lands. The
     wrapper waits its turn. (Per-file and unit-tier runs during build need no
     wrapper.)
-  - Then run `scripts/typecheck.sh` and `scripts/lint.sh` if present. All must be
-    green.
+  - It runs `scripts/typecheck.sh` and `scripts/lint.sh` too, if present. All
+    must be green.
   - Run the gate here so you can confirm each check from its output, not from
-    having intended to run it. The Stop-hook gate enforces the same suite
-    independently. On a clean, committed `hone/<change>` branch it escalates to
-    `--all` under the same lock (so an integration regression can't merge on a
-    green unit tier alone). While the tree is dirty it runs the fast unit tier.
+    having intended to run it. The Stop-hook gate enforces the same checks
+    independently. On a clean, committed `hone/<change>` branch it blocks
+    until verify has passed on that branch (so an integration regression can't
+    merge on a green unit tier alone). While the tree is dirty it runs the fast
+    unit tier.
   - A full suite can outlast the ~2m foreground Bash timeout, which kills it
     regardless of any inner `timeout`. Run the gate (and any long build or verify
     command) in your Bash tool's background mode, and poll it to completion.

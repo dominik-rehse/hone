@@ -9,7 +9,8 @@
 # base64) can still evade string matching. It deters and makes tampering
 # attributable.
 #
-#   deny: unambiguous attempts to disable the gate or its markers
+#   deny: unambiguous attempts to disable the gate or its markers, and any
+#         command that names the gate's state files or the suite lock
 #   ask:  a mutating op aimed at a protected artifact, at the primary tree, or
 #         at the primary branch itself (escalate to the human)
 #
@@ -39,6 +40,43 @@ decision() { hone_pretool_decision "$1" "$2"; exit 0; }
 # never auto-denies.
 HARD_TOKENS='--no-verify|core\.hooksPath'
 MARKER_TOKENS='\.hone-off|\.hone-(grant|proof)/'
+# The gate's own state: the suite lock that verify and land take, and the
+# records the Stop gate reads (hone-gate-green, hone-gate-unit,
+# hone-gate-blocks). A lock the agent holds lets every turn end with no check
+# and no cap, and a written or removed record skips a check or resets the cap.
+# No agent command has a reason to name them, so any mention denies, a read
+# included. hone's scripts name them internally, and this hook reads only
+# the agent's command text.
+#
+# A glob names them as well as the full name does (`hone-land.loc?`,
+# `.git/hone-*`, `hone-{gate-blocks,gate-unit}`). So GATE_GLOB denies any
+# word that starts with `hone-` and holds a glob or brace character. A word
+# with a dot before `hone-` is one of the dot-files (.hone-grant/,
+# .hone-off), which keep their own rules. The land log stays readable, glob
+# or not, because a refused land names it and reading it is the next step:
+# gate_state_named drops every `${...}` expansion and every
+# hone-land.<anything>.log word before the glob test. hone-land.lock in
+# any spelled-out form still denies.
+#
+# The gaps, accepted. String matching cannot close a glob over file names:
+# one that does not start with `hone-` reaches the records and the lock
+# (`.git/*gate-b*`, `.git/ho?e-gate-blocks`, `find .git -name '*gate*'`),
+# and so does a quote split or a variable. A process that holds the lock
+# and forges the queue's holder record lets turns end while it lives. Each
+# takes deliberate tampering, as a quote split beats the older tokens, and
+# the counter and the receipt were as forgeable before 0.77.0. land re-runs
+# every check on the merge, so nothing red reaches the trunk.
+GATE_STATE_TOKENS='hone-land\.lock|hone-gate'
+GATE_GLOB='(^|[^A-Za-z0-9_.])hone-[^[:space:]|;&]*[][*?{]'
+
+# Exit 0 when the text $1 names the gate's state (see above).
+gate_state_named() {
+    printf '%s' "$1" | grep -Eiq "$GATE_STATE_TOKENS" && return 0
+    printf '%s' "$1" | sed -E \
+        -e 's/\$\{[^}]*\}/V/g' \
+        -e 's/hone-land\.[^[:space:]|;&]*\.log([^A-Za-z0-9_.]|$)/LOG\1/Ig' \
+        | grep -Eiq "$GATE_GLOB"
+}
 
 INPUT=$(cat)
 CMD=$(hone_extract_field "$INPUT" command)
@@ -50,7 +88,7 @@ CMD=$(hone_extract_field "$INPUT" command)
 if [ -z "$CMD" ]; then
     # Parsing failed. Fail closed: if the raw payload carries any gate-sabotage
     # token, escalate. Otherwise nothing is actionable, so allow.
-    if echo "$INPUT" | grep -Eiq "$HARD_TOKENS|$MARKER_TOKENS"; then
+    if echo "$INPUT" | grep -Eiq "$HARD_TOKENS|$MARKER_TOKENS" || gate_state_named "$INPUT"; then
         decision ask "$(msg_bashguard_unparsed)"
     fi
     exit 0
@@ -99,6 +137,8 @@ if echo "$CMD" | grep -Eiq \
         -e '>[[:space:]]*[^|;&[:space:]]*\.hone-off'; then
     decision deny "$(msg_bashguard_sabotage)"
 fi
+# 1a. The gate's own state → deny on any mention (see gate_state_named).
+gate_state_named "$CMD" && decision deny "$(msg_bashguard_gate_state)"
 
 # The directory the SHELL stands in (rules 3 and 4 below say why).
 SHELL_CWD=$(hone_extract_top_field "$INPUT" cwd)

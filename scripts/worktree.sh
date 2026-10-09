@@ -172,16 +172,21 @@
 #       usage/not-a-repo/no such branch.
 #
 #   worktree.sh verify
-#       Run the full suite (scripts/run-tests.sh --all) in the current tree,
-#       serialized under the SAME lock and queue as land. e2e tiers are
+#       Run the full suite (scripts/run-tests.sh --all), then
+#       scripts/typecheck.sh and scripts/lint.sh where present, in the current
+#       tree, serialized under the SAME lock and queue as land. e2e tiers are
 #       load-sensitive: two concurrent full suites poison each other's signal
 #       (phantom flakes), and a suite racing a land's re-verify produces
-#       spurious reds. So every full-suite run shares the one lock. This is the sanctioned way to
-#       run --all by hand. Never invoke the adapter bare for a full run. The
-#       fast unit tier needs no lock and no wrapper. A green run writes the
-#       receipt that the Stop gate reads (hooks/gate.sh), so the gate does not
-#       run the full suite again on that branch. Exit: the adapter's exit ·
-#       2 usage/not-a-repo/no-adapter · 5 lock timeout.
+#       spurious reds. So every full-suite run shares the one lock. This is the
+#       sanctioned way to run --all by hand. Never invoke the adapter bare for a
+#       full run. The fast unit tier needs no lock and no wrapper. Every step
+#       runs even after a red one, and a red run names each step that failed.
+#       It removes the old receipt first. Only an all-green run on a tree
+#       that did not change while it ran writes the receipt that the Stop
+#       gate reads (hooks/gate.sh), which lets a clean change branch end its
+#       turns.
+#       Exit: the first nonzero step's exit · 2 usage/not-a-repo/no-adapter ·
+#       5 lock timeout.
 #
 #   worktree.sh landable
 #       Print "<worktree-path>\t<branch>" for every linked worktree on a branch
@@ -453,12 +458,40 @@ cmd_verify() {
     hone_suite_lock "$lock" "$timeout" suite || lrc=$?
     [ "$lrc" -eq 2 ] && { msg_wt_lock_unopenable "$lock" >&2; return 2; }
     [ "$lrc" -eq 0 ] || { msg_wt_lock_timeout "$timeout" >&2; return 5; }
-    local rc=0
-    bash scripts/run-tests.sh --all || rc=$?
-    # A green full suite is the receipt the Stop gate reads, so the gate does
-    # not run the same suite again at the run's next stop.
-    [ "$rc" -eq 0 ] && hone_gate_receipt_write verify
-    return "$rc"
+    # An older receipt goes first, so a red verify leaves none behind. The
+    # tree is measured before the first step, because the receipt must name
+    # the tree that the steps checked.
+    local rc=0 step src failed="" tree
+    rm -f "$(git rev-parse --git-dir 2>/dev/null)/hone-gate-green" 2>/dev/null
+    tree=$(hone_tree_state)
+    # Every present step runs, even after a red one, so one pass shows every
+    # problem. The exit is the first nonzero one. Each step runs with the lock
+    # fd closed: a server that a suite leaves running must not hold the lock.
+    VERIFY_FAILED=""
+    for step in tests typecheck lint; do
+        case "$step" in
+            tests) bash scripts/run-tests.sh --all 9>&-; src=$? ;;
+            *) [ -f "scripts/$step.sh" ] || continue
+               bash "scripts/$step.sh" 9>&-; src=$? ;;
+        esac
+        [ "$src" -eq 0 ] && continue
+        [ "$rc" -eq 0 ] && rc=$src
+        [ "$step" = typecheck ] && step=type-check
+        failed+="${failed:+, }$step (exit $src)"
+    done
+    if [ "$rc" -ne 0 ]; then
+        VERIFY_FAILED="$failed"
+        msg_wt_verify_failed "$failed" >&2
+        return "$rc"
+    fi
+    # The receipt the Stop gate reads, so its full tier lets the run's next
+    # stop end without a check of its own. A tree that moved during the steps
+    # is not the tree they checked, so it gets no receipt.
+    if [ -z "$tree" ] || [ "$(hone_tree_state)" != "$tree" ]; then
+        msg_wt_verify_tree_moved >&2
+        return 0
+    fi
+    hone_gate_receipt_write verify "$tree"
 }
 
 # Classify how deep a change's judgment review must go, printing one word:
@@ -1289,7 +1322,7 @@ cmd_land() {
         fi
         if [ -f "$wt/scripts/setup-tree.sh" ]; then
             local setup_out
-            if ! setup_out=$( (cd "$wt" && bash scripts/setup-tree.sh) 2>&1 ); then
+            if ! setup_out=$( (cd "$wt" && bash scripts/setup-tree.sh) 2>&1 9>&- ); then
                 msg_wt_add_setup_tree_failed "$wt" "$(printf '%s\n' "$setup_out" | hone_fail_excerpt 20)" >&2
                 return 2
             fi
@@ -1380,13 +1413,13 @@ cmd_land() {
     if [ -n "$tree_lockfiles" ] && [ -f "$wt/scripts/setup-tree.sh" ]; then
         setup_tree_ran=yes
         LAND_PENDING_REINSTALL=yes
-        if ! ( cd "$wt" && bash scripts/setup-tree.sh ) >>"$land_log" 2>&1; then
+        if ! ( cd "$wt" && bash scripts/setup-tree.sh ) >>"$land_log" 2>&1 9>&-; then
             land_restore_tree "$wt" "$branch" "$setup_tree_ran"
             msg_wt_land_setup_tree_red "$branch" "$land_log" "$(hone_fail_excerpt 20 <"$land_log" 2>/dev/null)" >&2
             return 6
         fi
     fi
-    if ! ( cd "$wt" && bash scripts/run-tests.sh --all ) >>"$land_log" 2>&1; then
+    if ! ( cd "$wt" && bash scripts/run-tests.sh --all ) >>"$land_log" 2>&1 9>&-; then
         # Red means the merge regresses the trunk. The primary branch never
         # moved. The worktree goes back to its branch for investigation.
         land_restore_tree "$wt" "$branch" "$setup_tree_ran"
@@ -1399,7 +1432,7 @@ cmd_land() {
     # adapters the gate runs, into the same log.
     for adapter in typecheck lint; do
         [ -f "$wt/scripts/$adapter.sh" ] || continue
-        if ! ( cd "$wt" && bash "scripts/$adapter.sh" ) >>"$land_log" 2>&1; then
+        if ! ( cd "$wt" && bash "scripts/$adapter.sh" ) >>"$land_log" 2>&1 9>&-; then
             land_restore_tree "$wt" "$branch" "$setup_tree_ran"
             msg_wt_land_adapter_red "$adapter" "$branch" "$land_log" "$(hone_fail_excerpt 20 <"$land_log" 2>/dev/null)" >&2
             return 6
@@ -1489,7 +1522,7 @@ cmd_land() {
     # merge already stands, so a red install is a warning, not a failure.
     local primary_setup=""
     if [ -n "$lockfiles" ] && [ -f "$main_root/scripts/setup-tree.sh" ]; then
-        if ( cd "$main_root" && bash scripts/setup-tree.sh ) >>"$land_log" 2>&1; then
+        if ( cd "$main_root" && bash scripts/setup-tree.sh ) >>"$land_log" 2>&1 9>&-; then
             primary_setup=ran
         else
             primary_setup=failed
@@ -1746,7 +1779,7 @@ land_proof_gate() {
                     if ! ( cd "$proof_root" \
                            && HONE_CHANGE="$change" HONE_BRANCH="$branch" \
                               HONE_WORKTREE="$proof_wt" HONE_MAIN_ROOT="$main_root" \
-                              bash "$main_root/scripts/proof.sh" "$name" ); then
+                              bash "$main_root/scripts/proof.sh" "$name" 9>&- ); then
                         check=$(land_proof_trailer "$main_root" "$base" "$branch" "$change")
                         msg_wt_land_proof_adapter_failed "$branch" "$check" "$attest_cmd" \
                             "$why" "$(printf '%q' "$name")" "$(land_proof_added_files "$main_root" "$base" "$branch")" >&2
@@ -1834,7 +1867,7 @@ land_restore_tree() {
     LAND_PENDING_WT=""
     git -C "$wt" checkout -q -f "$branch" >/dev/null 2>&1
     if [ -n "$reinstall" ] && [ -f "$wt/scripts/setup-tree.sh" ]; then
-        ( cd "$wt" && bash scripts/setup-tree.sh ) >/dev/null 2>&1
+        ( cd "$wt" && bash scripts/setup-tree.sh ) >/dev/null 2>&1 9>&-
     fi
     return 0
 }
@@ -2611,7 +2644,7 @@ progress_step() {
             progress_state "$change" verify ...
             cmd_verify "$@" || rc=$?
             if [ "$rc" -eq 0 ]; then progress_state "$change" verify ""
-            else progress_emit "$chain" "$change" verify ✗ "suite exit $rc"; fi ;;
+            else progress_emit "$chain" "$change" verify ✗ "${VERIFY_FAILED:-exit $rc}"; fi ;;
         governed)
             progress_emit "$(progress_chain "$change")" "$change" consolidate ...
             cmd_governed "$@" || rc=$? ;;

@@ -124,6 +124,17 @@ denied "$out" && ok ".hone-grant/ write denied in primary tree" || bad "should d
 out=$(guard_write ".hone-proof/ui-flow" "$WT")
 denied "$out" && ok ".hone-proof/ write denied in a worktree" || bad "should deny .hone-proof/ writes in a worktree"
 
+echo "== guard: the gate's state files are denied, inside or outside the tree =="
+# A written record skips a check or resets the block cap. A linked
+# worktree's git dir lies outside the worktree, which the guard used to
+# treat as not its business.
+for f in .git/hone-gate-green .git/hone-gate-unit .git/hone-gate-blocks .git/hone-land.lock; do
+    out=$(guard_write "$f" "$REPO")
+    denied "$out" && ok "$f write denied" || bad "a write to $f should be denied"
+done
+out=$(guard_write "$REPO/.git/worktrees/auth-login/hone-gate-green" "$WT")
+denied "$out" && ok "a worktree's receipt is denied from inside the worktree" || bad "the worktree's git dir is outside it, and the write should still deny"
+
 echo "== guard: docs/spikes/ is writable in the primary tree, whatever the type =="
 # A spike is dated, frozen history written outside the loop, and it usually
 # precedes any Plan. Everything one spike leaves behind lives here, of any
@@ -183,6 +194,42 @@ echo "$(bg 'git commit --message=\"see core.hooksPath\"')" | grep -q 'permission
 echo "$(bg 'git commit -am \"chore: bun add dprint, then sed -i on scripts/lint.sh\"')" | grep -q 'permissionDecision' && bad "a message naming a writer and an adapter is prose" || ok "a writer and an adapter inside a message pass"
 echo "$(bg 'git commit -m \"$(cat <<'"'"'EOF'"'"'\nfix: x\n\nthe guard denies core.hooksPath and git reset --hard\nEOF\n)\"')" | grep -q 'permissionDecision' && bad "a heredoc message body is prose" || ok "a heredoc message body passes"
 echo "$(bg 'bash scripts/worktree.sh grant db-drop drops the table, git reset --hard cannot undo it')" | grep -q '"ask"' && bad "a grant reason is prose" || ok "a HEAD-move named in a grant reason is not read as one"
+# The gate's own state. A lock the agent holds let every turn end with no
+# check, and a written or removed record skipped a check or reset the cap
+# (review of 2026-10-09). Any mention denies, a read included.
+gs_denied() { echo "$1" | grep -q '"deny"' && echo "$1" | grep -q 'holds the hone gate'"'"'s state'; }
+for c in 'flock \"$(git rev-parse --git-common-dir)/hone-land.lock\" sleep 99999' \
+         'printf x > .git/hone-gate-unit' \
+         '> \"$(git rev-parse --git-dir)/hone-gate-green\"' \
+         'rm -f .git/worktrees/auth-login/hone-gate-blocks' \
+         'rm -f .git/HONE-GATE-*' \
+         'cat .git/hone-gate-green' \
+         'flock .git/hone-land.loc? sleep 20 &' \
+         'flock .git/hone-land.loc[k] sleep 20 &' \
+         "sed -i 's/ [0-9]*$/ 99/' .git/hone-gate-b*" \
+         'rm -f .git/hone-*' \
+         "find .git -name 'hone-gate*' -delete" \
+         'cat .git/hone-gat?-blocks' \
+         'rm .git/hone-{gate-blocks,gate-unit}' \
+         'cp forged .git/worktrees/x/hone-gate-g*' \
+         'cat .git/hone-land.*' \
+         'cat .git/hone-land.lock.log'; do
+    gs_denied "$(bg "$c")" && ok "gate state denied: $c" || bad "a command naming the gate's state should deny: $c"
+done
+# Ordinary work names hone- too, and none of it may deny: the helpers, the
+# dot-file globs, and the land log that a refused land names.
+for c in 'bash \"${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh\" verify' \
+         'bash /home/u/.claude/plugins/cache/hone/hone/0.77.0/scripts/worktree.sh land my-change' \
+         'ls .hone-grant/*' 'cat .hone-proof/{a,b}' \
+         'tail -50 \"$(git rev-parse --git-common-dir)/hone-land.b10+log-a.log\"' \
+         'mktemp -d /tmp/hone-XXXX' \
+         'tail \"$(git rev-parse --git-common-dir)/hone-land.${change}.log\"' \
+         'cat .git/hone-land.*.log'; do
+    echo "$(bg "$c")" | grep -q 'gate.s state' && bad "ordinary work must not hit the gate-state deny: $c" || ok "no gate-state deny: $c"
+done
+out=$(bg 'flock .git/hone-land.lock true')
+echo "$out" | grep -qE 'hone-off|--no-verify|hooksPath|flock|rm ' && bad "the gate-state deny must name no route" || ok "the gate-state deny names no route"
+echo "$(bg 'git commit -m \"fix: verify removes hone-gate-green first\"')" | grep -q 'permissionDecision' && bad "a commit message naming a gate record is prose" || ok "a gate record named in a commit message passes"
 echo "$(bg 'git commit -m x && touch .hone-off')" | grep -q '"deny"' && ok "the act after a message still denies" || bad "stripping the message must not hide the act"
 # The strip never blanks a quoted string elsewhere: a quoted path is a target.
 echo "$(bg 'sed -i s/x/y/ \"scripts/lint.sh\"')" | grep -q '"ask"' && ok "a quoted adapter target still asks" || bad "a quoted path is a real target"
@@ -1103,20 +1150,26 @@ cat > "$REPO/scripts/run-tests.sh" <<'EOF'
 case "${1:-}" in --all) exit 1 ;; *) exit 0 ;; esac
 EOF
 (cd "$REPO" && git add -A && git commit -qm "tier adapter")
-# Clean tree on a hone/* branch (committed, about to land) → --all runs → block.
+# Clean tree on a hone/* branch (committed, about to land) → the full tier,
+# which runs no suite and asks for verify.
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
-echo "$out" | grep -q '"decision":"block"' && ok "clean hone/* branch runs --all (pre-land full check)" || bad "clean hone/* branch should escalate to --all and block"
+echo "$out" | grep -q '"decision":"block"' && ok "clean hone/* branch without a verify receipt blocks" || bad "clean hone/* branch without a receipt should block"
 # Dirty src → the fast unit tier runs (green), so the red-green loop stays cheap.
 echo "// edit" >> "$REPO/src/auth/login.ts"
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
 echo "$out" | grep -q '"decision":"block"' && bad "dirty tree should run the unit tier (pass), not --all" || ok "dirty tree runs the unit tier (loop stays fast)"
 git -C "$REPO" checkout -q -- src/auth/login.ts
 
-echo "== gate: the full tier runs once per change branch =="
-# An adapter that records every invocation, so a run the gate skipped is
-# countable. The record lives inside .git, so it never dirties the tree.
+echo "== gate: the full tier reads verify's receipt and runs no suite =="
+# The gate used to run --all itself at a clean stop. In the field it waited
+# on the run's own background verify, and the hook timeout killed it. Now
+# worktree.sh verify is the one full run, and the gate reads its receipt.
+# An adapter that records every invocation, so any run is countable. The
+# record lives inside .git, so it never dirties the tree.
 RUNS="$REPO/.git/adapter-runs"
 RECEIPT="$REPO/.git/hone-gate-green"
+BLOCKS="$REPO/.git/hone-gate-blocks"
+WSH="$PLUGIN_ROOT/scripts/worktree.sh"
 : > "$RUNS"
 cat > "$REPO/scripts/run-tests.sh" <<EOF
 #!/bin/bash
@@ -1125,47 +1178,220 @@ exit 0
 EOF
 (cd "$REPO" && git add -A && git commit -qm "counting adapter")
 TREE=$(git -C "$REPO" rev-parse 'HEAD^{tree}')
-out=$(cd "$REPO" && echo '{}' | bash "$GATE")
-[ "$(wc -l < "$RUNS")" -eq 1 ] && ok "the first Stop on a change branch runs the full suite" || bad "the first Stop should run the full suite"
-echo "$out" | grep -q '"systemMessage":"hone gate: green (tests (--all))"' && ok "the full run emits the green receipt" || bad "the full run should emit the green receipt"
-grep -q "hone/verify-tier" "$RECEIPT" && ok "a green full run records the branch" || bad "a green full run should record the branch"
-grep -q "$TREE" "$RECEIPT" && ok "a green full run records the verified tree" || bad "a green full run should record the tree"
+reminded() { echo "$1" | grep -q 'has no full-suite result, so the gate did not let the turn end'; }
+out=$(cd "$REPO" && printf '{"session_id":"r0"}' | bash "$GATE")
+[ ! -s "$RUNS" ] && ok "the gate runs no suite on a clean change branch" || bad "the gate must not run a suite on the full tier (ran: $(tr '\n' ' ' < "$RUNS"))"
+blocked "$out" && reminded "$out" && ok "no receipt blocks with the verify reminder" || bad "no receipt should block with the reminder: $out"
+echo "$out" | grep -q 'worktree.sh\\" verify' && ok "the reminder names worktree.sh verify" || bad "the reminder should name worktree.sh verify: $out"
+echo "$out" | grep -qE 'hone-off|--no-verify|hooksPath|run-tests.sh|HONE_' && bad "the reminder must name no route around a gate" || ok "the reminder names no other route"
+rm -f "$BLOCKS"
 
-# Same tree again: the answer cannot differ, so the suite must not run.
-out=$(cd "$REPO" && echo '{}' | bash "$GATE")
-[ "$(wc -l < "$RUNS")" -eq 1 ] && ok "an unchanged tree skips the full suite" || bad "an unchanged tree should skip the full suite"
-echo "$out" | grep -q 'already passed on this branch' && ok "the skip prints its own receipt" || bad "the skip should print a receipt, not stay silent"
-echo "$out" | grep -q '"decision":"block"' && bad "a skip must not block the stop" || ok "the skip does not block the stop"
+(cd "$REPO" && bash "$WSH" verify >/dev/null 2>&1) || bad "verify should be green"
+[ "$(tr '\n' ' ' < "$RUNS")" = "--all " ] && ok "verify runs the full suite" || bad "verify should run --all once (ran: $(tr '\n' ' ' < "$RUNS"))"
+grep -q "hone/verify-tier $TREE verify" "$RECEIPT" && ok "a green verify records the branch and the tree" || bad "a green verify should record branch and tree: $(cat "$RECEIPT")"
 
-# A later commit on the SAME branch skips too. One early warning per change is
-# the whole value of the backstop, and land re-runs --all after the merge.
+# Same tree: the turn ends, and no suite runs.
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 1 ] && ok "a receipt for this tree runs nothing" || bad "a receipt should spare every run"
+echo "$out" | grep -q 'verify already passed on this branch at this exact tree' && ok "the pass prints its own receipt" || bad "the pass should print a receipt: $out"
+blocked "$out" && bad "a receipt must not block the stop" || ok "a receipt does not block the stop"
+
+# A later commit on the SAME branch runs the unit tier, not the full suite.
+# The receipt covered the full suite once per branch, and the commits since
+# it get the unit tier. It used to skip everything (review of 2026-10-09).
 echo "// more" >> "$REPO/src/auth/login.ts"
 (cd "$REPO" && git add -A && git commit -qm "durable change")
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
-[ "$(wc -l < "$RUNS")" -eq 1 ] && ok "a later commit on the same branch skips the full suite" || bad "a later commit on the same branch should skip"
-grep -q "$TREE" "$RECEIPT" && ok "the receipt keeps the tree its run verified" || bad "a skip should leave the receipt alone"
+[ "$(tr '\n' ' ' < "$RUNS")" = "--all --unit " ] && ok "a later commit after verify runs the unit tier" || bad "a later commit should run --unit once (ran: $(tr '\n' ' ' < "$RUNS"))"
+echo "$out" | grep -q 'at an earlier tree (.*). For the commits since, the gate ran tests (--unit), all green' && ok "the pass names the earlier tree and the unit run" || bad "the pass should say what ran since verify: $out"
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 2 ] && ok "the unit memo applies after an earlier receipt" || bad "an identical tree should not run again"
+# A red unit tier after an earlier receipt blocks.
+cat > "$REPO/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+echo "\${1:-}" >> "$RUNS"
+[ "\${1:-}" = --unit ] && exit 1
+exit 0
+EOF
+(cd "$REPO" && git add -A && git commit -qm "red on unit")
+out=$(cd "$REPO" && printf '{"session_id":"e1"}' | bash "$GATE")
+blocked "$out" && echo "$out" | grep -q 'tests (--unit) failed' && ok "a red commit after verify blocks" || bad "a red unit run after an earlier receipt should block: $out"
+rm -f "$BLOCKS"
+cat > "$REPO/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+echo "\${1:-}" >> "$RUNS"
+exit 0
+EOF
+(cd "$REPO" && git add -A && git commit -qm "counting adapter again")
 
-# Another change branch is another change, so it earns its own run.
+# Another change branch is another change, so it needs its own verify.
 git -C "$REPO" checkout -q -b hone/second-change
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
-[ "$(wc -l < "$RUNS")" -eq 2 ] && ok "another change branch runs the full suite" || bad "another change branch should run the full suite"
-grep -q "hone/second-change" "$RECEIPT" && ok "the receipt follows the new branch" || bad "the receipt should hold the new branch"
+reminded "$out" && ok "another change branch is reminded again" || bad "another change branch should need its own verify: $out"
+rm -f "$BLOCKS"
 git -C "$REPO" checkout -q hone/verify-tier
 
 # Uncommitted durable dirt runs the unit tier, which no receipt covers.
 echo "// dirt" >> "$REPO/src/auth/login.ts"
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
-[ "$(tail -n 1 "$RUNS")" = "--unit" ] && ok "the skip never applies to the unit tier" || bad "the unit tier should run on a dirty tree"
-grep -q "hone/second-change" "$RECEIPT" && ok "the unit tier leaves the receipt alone" || bad "the unit tier should not write a receipt"
+[ "$(tail -n 1 "$RUNS")" = "--unit" ] && ok "the receipt never applies to the unit tier" || bad "the unit tier should run on a dirty tree"
+grep -q "hone/verify-tier" "$RECEIPT" && ok "the unit tier leaves the receipt alone" || bad "the unit tier should not write a receipt"
 git -C "$REPO" checkout -q -- src/auth/login.ts
+rm -f "$REPO/.git/hone-gate-unit"
 
-# A receipt an older plugin version wrote is a miss: a gate with new steps must
-# not trust what an older gate verified. The gate before this one recorded no
-# branch, so its two-field line misses as well.
-RUNS_BEFORE=$(wc -l < "$RUNS")
-printf '0.0.0-old %s\n' "$TREE" > "$RECEIPT"
+# A receipt from another plugin version is a miss, and so is one the gate
+# itself wrote before it stopped running the full suite.
+RUNS_MISS=$(wc -l < "$RUNS")
+for line in "0.0.0-old hone/verify-tier $TREE verify" "$(bash -c ". '$PLUGIN_ROOT/hooks/common.sh'; hone_plugin_version") hone/verify-tier $TREE gate" "0.0.0-old $TREE"; do
+    printf '%s\n' "$line" > "$RECEIPT"
+    out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+    reminded "$out" && ok "a receipt '${line%% *} ... ${line##* }' is a miss" || bad "the receipt '$line' should miss: $out"
+    rm -f "$BLOCKS"
+done
+[ "$(wc -l < "$RUNS")" -eq "$RUNS_MISS" ] && ok "a missed receipt runs no suite either" || bad "the gate ran a suite: $(tr '\n' ' ' < "$RUNS")"
+rm -f "$RECEIPT"
+
+echo "== verify: tests, type-check, and lint, every step, one receipt =="
+# Each adapter records its run. Tests exit 3 and lint exits 4, so the exit
+# shows which red came first, and the run list shows that no step was skipped.
+cat > "$REPO/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+echo "tests" >> "$RUNS"
+[ -f "$REPO/.git/tests-red" ] && exit 3
+exit 0
+EOF
+printf '#!/bin/bash\necho typecheck >> "%s"\nexit 0\n' "$RUNS" > "$REPO/scripts/typecheck.sh"
+printf '#!/bin/bash\necho lint >> "%s"\n[ -f "%s/.git/lint-red" ] && exit 4\nexit 0\n' "$RUNS" "$REPO" > "$REPO/scripts/lint.sh"
+(cd "$REPO" && git add -A && git commit -qm "three adapters")
+: > "$RUNS"; touch "$REPO/.git/tests-red" "$REPO/.git/lint-red"
+out=$(cd "$REPO" && bash "$WSH" verify 2>&1); rc=$?
+[ "$rc" -eq 3 ] && ok "a red verify exits with the first red step's code" || bad "verify should exit 3, the tests' code (got $rc)"
+[ "$(tr '\n' ' ' < "$RUNS")" = "tests typecheck lint " ] && ok "a red step does not stop the steps after it" || bad "every step should run (ran: $(tr '\n' ' ' < "$RUNS"))"
+echo "$out" | grep -q 'verify failed: tests (exit 3), lint (exit 4)' && ok "a red verify names each failed step" || bad "verify should name the failed steps: $out"
+[ -f "$RECEIPT" ] && bad "a red verify must write no receipt" || ok "a red verify writes no receipt"
+rm -f "$REPO/.git/tests-red"
+: > "$RUNS"
+out=$(cd "$REPO" && bash "$WSH" verify 2>&1); rc=$?
+[ "$rc" -eq 4 ] && ok "a lint failure alone makes verify red" || bad "a red lint should make verify exit 4 (got $rc)"
+[ -f "$RECEIPT" ] && bad "a red lint must write no receipt" || ok "a red lint writes no receipt"
+rm -f "$REPO/.git/lint-red"
+(cd "$REPO" && bash "$WSH" verify >/dev/null 2>&1) || bad "a green verify should exit 0"
+[ -s "$RECEIPT" ] || bad "a green verify should write a receipt"
+# A red verify removes the receipt that an earlier green one wrote.
+touch "$REPO/.git/lint-red"
+(cd "$REPO" && bash "$WSH" verify >/dev/null 2>&1) && bad "a red lint should make verify red"
+[ -e "$RECEIPT" ] && bad "a red verify must remove the older receipt" || ok "a red verify removes the older receipt"
+out=$(cd "$REPO" && printf '{"session_id":"e2"}' | bash "$GATE")
+reminded "$out" && ok "after a red verify the gate asks for verify again" || bad "a red verify should leave the branch unverified: $out"
+rm -f "$REPO/.git/lint-red" "$BLOCKS"
+(cd "$REPO" && bash "$WSH" verify >/dev/null 2>&1) || bad "a green verify should exit 0"
+: > "$RUNS"
 out=$(cd "$REPO" && echo '{}' | bash "$GATE")
-[ "$(wc -l < "$RUNS")" -eq $((RUNS_BEFORE + 1)) ] && ok "a receipt from another version runs the suite again" || bad "a version mismatch should re-run the suite"
+[ ! -s "$RUNS" ] && ok "after a green verify the next Stop runs no step" || bad "the gate re-ran a step after verify: $(tr '\n' ' ' < "$RUNS")"
+blocked "$out" && bad "a green verify should let the turn end" || ok "a green verify lets the turn end"
+# The receipt names the tree that the steps checked. A step that changes
+# the tree leaves a tree no step checked, so verify writes no receipt.
+printf '#!/bin/bash\necho lint >> "%s"\necho x > "%s/src/auth/generated.ts"\n' "$RUNS" "$REPO" > "$REPO/scripts/lint.sh"
+(cd "$REPO" && git add -A && git commit -qm "a lint that writes")
+rm -f "$RECEIPT"
+out=$(cd "$REPO" && bash "$WSH" verify 2>&1); rc=$?
+[ "$rc" -eq 0 ] && [ ! -e "$RECEIPT" ] && ok "a tree that moved during verify gets no receipt" || bad "verify should write no receipt for a tree that moved (rc $rc)"
+echo "$out" | grep -q 'the tree changed while it ran, so it wrote no receipt' && ok "verify says the tree moved" || bad "verify should say why it wrote no receipt: $out"
+rm -f "$REPO/src/auth/generated.ts"
+rm -f "$REPO/scripts/typecheck.sh" "$REPO/scripts/lint.sh" "$RECEIPT"
+cat > "$REPO/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+echo "\${1:-}" >> "$RUNS"
+exit 0
+EOF
+(cd "$REPO" && git add -A && git commit -qm "one adapter again")
+
+echo "== gate: the unit tier runs once per tree =="
+# Field, 2026-10-09: 358 of 613 unit runs followed a turn that changed no
+# file, at 51 s each. A green unit tier records the version and the tree.
+MEMO="$REPO/.git/hone-gate-unit"
+rm -f "$MEMO"; : > "$RUNS"
+echo "// memo" >> "$REPO/src/auth/login.ts"
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 1 ] && ok "the first unit stop runs the suite" || bad "the first unit stop should run"
+[ -s "$MEMO" ] && ok "a green unit run writes the memo" || bad "a green unit run should write the memo"
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 1 ] && ok "an identical tree skips every step" || bad "an identical tree should run nothing (runs: $(wc -l < "$RUNS"))"
+echo "$out" | grep -q 'the checks passed on this exact tree at an earlier stop' && ok "the skip prints its own line" || bad "the skip should say why it ran nothing: $out"
+blocked "$out" && bad "a memo skip must not block" || ok "a memo skip does not block"
+# One byte more is another tree.
+printf 'x' >> "$REPO/src/auth/login.ts"
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 2 ] && ok "a one-byte change runs the suite again" || bad "a one-byte change should run again"
+# An untracked file is part of the tree too.
+echo "// new" > "$REPO/src/auth/new.ts"
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 3 ] && ok "a new untracked file runs the suite again" || bad "an untracked file should run again"
+# Another plugin version is a miss.
+read -r _ memo_tree < "$MEMO"
+printf '0.0.0-old %s\n' "$memo_tree" > "$MEMO"
+out=$(cd "$REPO" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 4 ] && ok "a memo from another version runs the suite again" || bad "a version change should run again"
+# A red step writes no record and removes the one before it.
+cat > "$REPO/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+echo "\${1:-}" >> "$RUNS"
+exit 1
+EOF
+out=$(cd "$REPO" && printf '{"session_id":"m1"}' | bash "$GATE")
+blocked "$out" || bad "a red unit run should block"
+[ -e "$MEMO" ] && bad "a red unit run must leave no memo" || ok "a red unit run removes the memo"
+out=$(cd "$REPO" && printf '{"session_id":"m1"}' | bash "$GATE")
+[ "$(wc -l < "$RUNS")" -eq 6 ] && ok "a red tree runs again at the next stop" || bad "a red tree should run again (runs: $(wc -l < "$RUNS"))"
+rm -f "$REPO/src/auth/new.ts" "$MEMO" "$REPO/.git/hone-gate-blocks"
+git -C "$REPO" checkout -q -- src/auth/login.ts scripts/run-tests.sh
+
+# An edit inside a submodule leaves the parent's tree key as it was, because
+# git records only the submodule's HEAD. While a submodule holds uncommitted
+# work, the gate neither skips on the memo nor writes one.
+SM=$(mktemp -d); SM=$(cd "$SM" && pwd -P)
+git -C "$SM" init -q lib && git -C "$SM/lib" config user.email t@t.t && git -C "$SM/lib" config user.name t
+echo "v1" > "$SM/lib/a.txt"; git -C "$SM/lib" add -A; git -C "$SM/lib" commit -qm lib
+git -C "$SM" init -q app && git -C "$SM/app" config user.email t@t.t && git -C "$SM/app" config user.name t
+mkdir -p "$SM/app/scripts" "$SM/app/src"
+SM_RUNS="$SM/runs"
+printf '#!/bin/bash\necho run >> "%s"\n' "$SM_RUNS" > "$SM/app/scripts/run-tests.sh"
+echo "// a" > "$SM/app/src/a.js"
+git -C "$SM/app" -c protocol.file.allow=always submodule add -q "$SM/lib" vendor/lib >/dev/null 2>&1
+git -C "$SM/app" add -A; git -C "$SM/app" commit -qm app
+echo "// dirt" >> "$SM/app/src/a.js"
+(cd "$SM/app" && echo '{}' | bash "$GATE") >/dev/null
+[ -s "$SM/app/.git/hone-gate-unit" ] && ok "a clean submodule keeps the memo" || bad "the memo should work with clean submodules"
+echo "v2" > "$SM/app/vendor/lib/a.txt"
+out=$(cd "$SM/app" && echo '{}' | bash "$GATE")
+[ "$(wc -l < "$SM_RUNS")" -eq 2 ] && ok "an edit inside a submodule runs the suite again" || bad "a submodule edit should defeat the memo (runs: $(wc -l < "$SM_RUNS"))"
+(cd "$SM/app" && echo '{}' | bash "$GATE") >/dev/null
+[ "$(wc -l < "$SM_RUNS")" -eq 3 ] && ok "a dirty submodule writes no memo" || bad "a dirty submodule should write no memo"
+rm -rf "$SM"
+
+# A suite that leaves a process behind (a server, here a sleep) must not keep
+# the suite lock after verify exits. The steps used to inherit the lock's fd.
+LK=$(mktemp -d); LK=$(cd "$LK" && pwd -P)
+git -C "$LK" init -q && git -C "$LK" symbolic-ref HEAD refs/heads/main
+git -C "$LK" config user.email t@t.t; git -C "$LK" config user.name t
+mkdir -p "$LK/scripts" "$LK/src"; echo "// a" > "$LK/src/a.js"
+cat > "$LK/scripts/run-tests.sh" <<EOF
+#!/bin/bash
+if [ "\${1:-}" = --all ]; then sleep 30 >/dev/null 2>&1 & echo \$! > "$LK/leaked"; exit 1; fi
+exit 0
+EOF
+git -C "$LK" add -A; git -C "$LK" commit -qm seed
+git -C "$LK" checkout -q -b hone/leak; echo "// b" > "$LK/src/b.js"; git -C "$LK" add -A; git -C "$LK" commit -qm b
+(cd "$LK" && bash "$PLUGIN_ROOT/scripts/worktree.sh" verify >/dev/null 2>&1) && bad "the leaking verify should be red"
+if command -v flock >/dev/null 2>&1; then
+    flock -n "$LK/.git/hone-land.lock" true && ok "a process a suite leaves behind does not hold the lock" \
+        || bad "a leaked child of the suite still holds the suite lock"
+fi
+out=$(cd "$LK" && echo '{}' | bash "$GATE")
+blocked "$out" && echo "$out" | grep -q 'has no full-suite result' && ok "after a red verify with a leaked child the gate still asks for verify" \
+    || bad "a leaked child must not open the gate: $out"
+kill "$(cat "$LK/leaked" 2>/dev/null)" 2>/dev/null
+rm -rf "$LK"
 
 echo "== gate: the block cap lets a turn end after N identical failures =="
 # A suite that cannot go green (a test that contradicts its spec) used to block
@@ -1347,32 +1573,47 @@ git -C "$REPO" checkout -q hone/verify-tier
 rm -f "$WT_BLOCKS" "$BLOCKS" "$CAPTAIL"
 git -C "$REPO" checkout -q -- src/auth/login.ts
 
-echo "== gate: a held suite lock blocks under the same cap, and names no other session =="
-# The holder is often the session's own background land or verify. About
-# twenty field blocks said "another session" of it, and the block bypassed
-# the cap, so a run waiting on its own land looped on empty turns.
+echo "== gate: a held suite lock lets the turn end, and the reminder meets the cap =="
+# The gate used to wait on the lock for its own --all, and about twenty field
+# blocks waited on the run's own background verify or land. Now a held lock
+# means that a verify or land is running, and the turn ends with a note.
 if command -v flock >/dev/null 2>&1; then
-    rm -f "$RECEIPT" "$BLOCKS"
+    rm -f "$RECEIPT" "$BLOCKS"; : > "$RUNS"
     LOCKF="$(git -C "$REPO" rev-parse --git-common-dir)/hone-land.lock"
     case "$LOCKF" in /*) ;; *) LOCKF="$REPO/$LOCKF" ;; esac
     ( flock 8; sleep 20; ) 8>"$LOCKF" &
     LOCK_HOLDER=$!
     sleep 0.3
-    lockstop() { (cd "$REPO" && printf '{"session_id":"lk"}' | HONE_SUITE_LOCK_TIMEOUT=0 bash "$GATE"); }
-    out=$(lockstop)
-    blocked "$out" && ok "a held suite lock blocks the stop" || bad "a held suite lock should block"
-    echo "$out" | grep -q 'holds the suite lock' && ok "the lock block names the lock" || bad "the lock block should name the lock"
-    echo "$out" | grep -q 'another session' && bad "the lock block must not claim another session" || ok "the lock block claims no other session"
-    echo "$out" | grep -q 'your own background land' && ok "the lock block names the session's own background run" || bad "the lock block should name the session's own run"
-    out=$(lockstop); blocked "$out" || bad "the second lock wait should block"
-    out=$(lockstop)
-    asked "$out" && ok "the third lock wait asks for the final report" || bad "the lock wait should reach the report request"
-    echo "$out" | grep -Eqi 'what is red|failing check' && bad "the lock report request must not call the suite red" || ok "the lock report request does not call the suite red"
-    out=$(lockstop)
-    echo "$out" | grep -q 'without a full suite' && ok "the fourth lock wait lets the turn end" || bad "the lock wait should meet the cap"
-    echo "$out" | grep -Eqi 'stays red|failing check|what is red' && bad "a lock wait ran no suite, so its cap must not call it red" || ok "the lock cap does not call the suite red"
-    blocked "$out" && bad "a capped lock wait must not block" || ok "a capped lock wait does not block"
+    lkstop() { (cd "$REPO" && printf '{"session_id":"lk"}' | bash "$GATE"); }
+    # A bare flock is no verify: a server that a suite left running, or a
+    # lock taken by hand (review of 2026-10-09). Only a live holder that the
+    # queue recorded lets the turn end.
+    out=$(lkstop)
+    blocked "$out" && echo "$out" | grep -q 'has no full-suite result' \
+        && ok "a lock with no recorded holder does not open the gate" || bad "a bare flock should not let the turn end: $out"
+    rm -f "$BLOCKS"
+    mkdir -p "$LOCKF.queue"
+    printf '%s %s\n' "$LOCK_HOLDER" "$(bash -c ". '$PLUGIN_ROOT/hooks/common.sh'; hone_pid_start $LOCK_HOLDER")" > "$LOCKF.queue/holder"
+    out=$(lkstop)
+    blocked "$out" && bad "a held suite lock must not block the stop" || ok "a held suite lock lets the turn end"
+    echo "$out" | grep -q 'a verify or land holds the suite lock' && ok "the note names the held lock" || bad "the note should name the lock: $out"
+    [ -e "$BLOCKS" ] && bad "a held lock should not count toward the cap" || ok "a held lock counts nothing toward the cap"
+    [ ! -s "$RUNS" ] && ok "a held lock runs no suite" || bad "a held lock should run no suite"
     kill "$LOCK_HOLDER" 2>/dev/null; wait "$LOCK_HOLDER" 2>/dev/null
+    rm -rf "$LOCKF.queue"
+    # The lock is free and no receipt exists: the reminder blocks, and the
+    # cap ends the loop as it ends a red check.
+    out=$(lkstop); blocked "$out" && echo "$out" | grep -q 'has no full-suite result' \
+        && ok "a free lock and no receipt block with the reminder" || bad "the reminder should block once the lock frees: $out"
+    out=$(lkstop); blocked "$out" || bad "the second reminder should block"
+    out=$(lkstop)
+    asked "$out" && ok "the third reminder asks for the final report" || bad "the reminder should reach the report request: $out"
+    echo "$out" | grep -Eqi 'what is red|failing check' && bad "the reminder's report request must not call the suite red" || ok "the reminder's report request does not call the suite red"
+    out=$(lkstop)
+    blocked "$out" && bad "the cap should let the reminder loop end" || ok "the fourth reminder lets the turn end"
+    echo "$out" | grep -q 'no full-suite result on 4 stops in a row' && ok "the cap line says what did not run" || bad "the cap line should name the missing result: $out"
+    echo "$out" | grep -Eqi 'stays red|failing check|what is red' && bad "the reminder's cap must not call the suite red" || ok "the reminder's cap does not call the suite red"
+    [ ! -s "$RUNS" ] && ok "the reminder loop ran no suite" || bad "the reminder loop should run no suite"
     rm -f "$BLOCKS"
 fi
 
@@ -1780,7 +2021,11 @@ SESSION_START="$PLUGIN_ROOT/hooks/session-start.sh"
 DENY_CANON="$PLUGIN_ROOT/templates/settings/deny-rules.txt"
 SETTINGS="$REPO/.claude/settings.json"
 mkdir -p "$REPO/.claude"
-ss() { (cd "$REPO" && CLAUDE_PROJECT_DIR="$REPO" bash "$SESSION_START"); }
+# The hook prints one JSON object: additionalContext for the model, and
+# systemMessage for the person. A warning asks the person to act, so these
+# cases read systemMessage.
+ss_raw() { (cd "${1:-$REPO}" && CLAUDE_PROJECT_DIR="${1:-$REPO}" bash "$SESSION_START"); }
+ss() { ss_raw | jq -r '.systemMessage // empty'; }
 # Write $SETTINGS carrying every canonical rule, piped through filter $1 (a
 # sed program; '' = verbatim). The output only has to satisfy the grep-based
 # comparison, not a JSON parser, so a filtered-out last element's dangling
@@ -1827,6 +2072,48 @@ while IFS= read -r rule; do
 done < <(grep -vE '^[[:space:]]*(#|$)' "$DENY_CANON")
 [ "$readme_ok" -eq 1 ] && ok "README install block carries every canonical rule"
 
+echo "== session-start: one JSON object, two readers =="
+# Field shape 2026-10-09: the hook printed its warnings as plain stdout, which
+# reaches the model only. The person, who must paste the rules or run setup,
+# never saw them.
+canon_settings '\|scripts/proof\.sh|d'
+out=$(ss_raw)
+printf '%s' "$out" | jq -e . >/dev/null 2>&1 && ok "the output is one valid JSON object" || bad "the output should be valid JSON: $out"
+[ "$(printf '%s' "$out" | jq -r '.hookSpecificOutput.hookEventName')" = SessionStart ] \
+    && ok "the context names its event" || bad "hookEventName should be SessionStart"
+ctx=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext')
+msg=$(printf '%s' "$out" | jq -r '.systemMessage')
+echo "$ctx" | grep -q '^# hone workflow' && ok "the rule reaches the model" || bad "additionalContext should carry the rule"
+echo "$msg" | grep -q 'hone workflow' && bad "the rule must not reach the person: $msg" || ok "the rule stays out of the person's message"
+echo "$ctx" | grep -qF 'Edit(./scripts/proof.sh)' && ok "the deny warning reaches the model" || bad "additionalContext should carry the deny warning"
+echo "$msg" | grep -qF 'Edit(./scripts/proof.sh)' && ok "the deny warning reaches the person" || bad "systemMessage should carry the deny warning"
+# The adapter and src/ warnings, in a project that has neither.
+SS_BARE=$(mktemp -d); mkdir -p "$SS_BARE/docs/notes"
+out=$(ss_raw "$SS_BARE")
+ctx=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext')
+msg=$(printf '%s' "$out" | jq -r '.systemMessage')
+for w in 'no scripts/run-tests.sh' 'no src/ directory' 'missing these deny rules'; do
+    echo "$ctx" | grep -qF "$w" && echo "$msg" | grep -qF "$w" \
+        && ok "warning '$w' reaches both readers" || bad "warning '$w' should be in both fields: $out"
+done
+# A full set of deny rules: the rule alone, and no person's message.
+canon_settings ''
+out=$(ss_raw)
+printf '%s' "$out" | jq -e 'has("systemMessage") | not' >/dev/null && ok "no warning, no person's message" || bad "a quiet start should carry no systemMessage: $out"
+printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext' | grep -q '^# hone workflow' \
+    && ok "a quiet start still injects the rule" || bad "a quiet start should inject the rule"
+# A legacy vendored copy loads natively and is not injected again. In a
+# project that does not look like hone, nothing is left to say.
+SS_VEND=$(mktemp -d); mkdir -p "$SS_VEND/.claude/rules"
+cp "$PLUGIN_ROOT"/rules/*.md "$SS_VEND/.claude/rules/"
+out=$(ss_raw "$SS_VEND")
+[ -z "$out" ] && ok "no rule to inject and no warning: no output" || bad "the hook should print nothing: $out"
+# Off means silent.
+: > "$SS_BARE/.hone-off"
+out=$(ss_raw "$SS_BARE")
+[ -z "$out" ] && ok "a .hone-off project gets no output" || bad "the off marker should silence the hook: $out"
+rm -rf "$SS_BARE" "$SS_VEND"
+
 echo "== field shapes 2026-10-01 (gate) =="
 # Each shape below came from the coordinated batch of 2026-09-29 to
 # 2026-10-01. The section builds its own repository, so no earlier state
@@ -1859,17 +2146,20 @@ out=$(cd "$FG_WT" && echo '{}' | bash "$GATE")
     || bad "B4: a fresh change branch should run no suite (ran: $(tr '\n' ' ' < "$FG_RUNS"))"
 [ -e "$FG_RECEIPT" ] && bad "B4: a fresh change branch should write no receipt" || ok "B4: a fresh change branch writes no receipt"
 echo "$out" | grep -q 'already passed' && bad "B4: a fresh branch must not read as passed" || ok "B4: a fresh branch does not read as passed"
-# The first commit makes it a change, and the full tier runs.
+# The first commit makes it a change, and the full tier asks for verify.
 echo "// b" > "$FG_WT/src/b.js"
 (cd "$FG_WT" && git add -A && git commit -qm "feat: b")
 out=$(cd "$FG_WT" && echo '{}' | bash "$GATE")
-[ "$(tr '\n' ' ' < "$FG_RUNS")" = "--all " ] && ok "B4: the first commit runs the full tier" || bad "B4: the first commit should run --all (ran: $(tr '\n' ' ' < "$FG_RUNS"))"
+echo "$out" | grep -q 'has no full-suite result' && ok "B4: the first commit asks for verify" || bad "B4: the first commit should block with the reminder: $out"
+rm -f "$(git -C "$FG_WT" rev-parse --absolute-git-dir)/hone-gate-blocks"
+(cd "$FG_WT" && bash "$PLUGIN_ROOT/scripts/worktree.sh" verify >/dev/null 2>&1) || bad "B4: verify should be green"
+[ "$(tr '\n' ' ' < "$FG_RUNS")" = "--all " ] && ok "B4: verify runs the full tier" || bad "B4: verify should run --all (ran: $(tr '\n' ' ' < "$FG_RUNS"))"
 # A later commit skips, and the skip says the tree moved.
 echo "// c" > "$FG_WT/src/c.js"
 (cd "$FG_WT" && git add -A && git commit -qm "feat: c")
 out=$(cd "$FG_WT" && echo '{}' | bash "$GATE")
-[ "$(wc -l < "$FG_RUNS")" -eq 1 ] && ok "B4: a later commit on the branch skips the full tier" || bad "B4: a later commit should skip"
-echo "$out" | grep -q 'already passed on this branch at an earlier tree' \
+[ "$(tr '\n' ' ' < "$FG_RUNS")" = "--all --unit " ] && ok "B4: a later commit on the branch runs the unit tier, not the full one" || bad "B4: a later commit should run --unit (ran: $(tr '\n' ' ' < "$FG_RUNS"))"
+echo "$out" | grep -q 'verify passed on this branch at an earlier tree' \
     && ok "B4: the skip says the receipt is for an earlier tree" || bad "B4: the skip should say the tree moved: $out"
 
 # B8: the block's tail. The runner printed its failure first and thirty

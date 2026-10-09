@@ -70,10 +70,8 @@ mechanical steps.
      the `plan-critic` sends more Plans back. Each bounce names a concrete
      gap. Nothing to install.
    - *The review names its level since 0.53.1*: the loop's nested
-     `/code-review` now runs at `high`. Before, it ran at whichever level
-     you typed last in any session, because the prompt named none. A review
-     costs more than before if that level was lower. Nothing to install
-     and nothing to configure.
+     `/code-review` runs at `high`, which may cost more than your last
+     level. Nothing to install.
 
    - *Land demands the `Cut:` line since 0.55*: `worktree.sh land` refuses a
      branch on which no commit body carries `Cut: <what>` (or `Repair: <what>`
@@ -122,6 +120,9 @@ mechanical steps.
      after a `!` in Claude Code, and the run lands the change. Since 0.66
      the grant placeholder is `your reason`. A script of yours that pastes
      `who/why` must pass a real reason.
+   - *The gate runs no full suite since 0.77*: it asks for `worktree.sh
+     verify` instead, which also runs type-check and lint. Restart running
+     sessions. `HONE_SUITE_LOCK_TIMEOUT` is gone.
    - *The complexity check since 0.76*: install
      [cccc](https://github.com/moznion/cccc) and `jq` to turn it on. Mark
      vendored code `linguist-vendored` in `.gitattributes`.
