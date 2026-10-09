@@ -66,11 +66,9 @@ mechanical steps.
      changes without the marker. Turn it on with no worktree in flight and
      the primary branch pushed. Then no branch was cut from a commit that a
      later rebase moves. The remote must accept pushes to `refs/hone/*`.
-   - *The critics run on opus since 0.54*: `plan-critic` and
-     `consolidate-critic` pin claude-opus-5 where they pinned
-     claude-sonnet-5. A Plan review costs more, and the `plan-critic`
-     sends more Plans back at plan time. Each bounce names a concrete gap,
-     often a fork that the Plan left to the loop. Nothing to install.
+   - *The critics run on opus since 0.54*: a Plan review costs more, and
+     the `plan-critic` sends more Plans back. Each bounce names a concrete
+     gap. Nothing to install.
    - *The review names its level since 0.53.1*: the loop's nested
      `/code-review` now runs at `high`. Before, it ran at whichever level
      you typed last in any session, because the prompt named none. A review
@@ -124,6 +122,9 @@ mechanical steps.
      after a `!` in Claude Code, and the run lands the change. Since 0.66
      the grant placeholder is `your reason`. A script of yours that pastes
      `who/why` must pass a real reason.
+   - *The complexity check since 0.76*: install
+     [cccc](https://github.com/moznion/cccc) and `jq` to turn it on. Mark
+     vendored code `linguist-vendored` in `.gitattributes`.
    - *Automatic grants since 0.66*: to let every irreversible change land
      without you, commit an empty `.hone-grant-auto` at the repo root. A
      `#` line in it can say who decided and why. Nothing changes without

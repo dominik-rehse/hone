@@ -383,12 +383,15 @@ fix itself. hone only reports them.
   grew past a cognitive complexity of 15 only through hone runs after hone
   came in. One run took a function from 3 to 35 on 2026-09-28
   ([`function-complexity-in-the-field`](spikes/2026-10-09-function-complexity-in-the-field.md)).
-- Next step: the cheapest fix is one sentence in the refactor step of the
-  run skill. It owes the `loop` unit suite, and the measure `cc_pile` can
-  show a gain. The exact check is a ratchet in the nag. It scores the
-  changed files with cccc on the base and on the branch, and it names a
-  function that crossed 15. cccc is a new optional tool, so it needs the
-  maintainer's word. The note above has what cccc does and lacks.
+- What changed in 0.76.0: the verify step runs `worktree.sh complexity`.
+  It compares each function before and after the change with cccc, and it
+  names a function that crossed 15 or grew while over. Replayed on the
+  field history, it named the three largest jumps, and it fired on 13 to
+  26 percent of the hone merges in each repository.
+- Next step: read the field after the release. The question is whether a
+  run splits the function that the check names, or keeps it whole with a
+  reason. Without cccc installed the check skips, so the consumer
+  repositories need cccc first.
 
 #### `setup-misfit` failed once in nine runs
 

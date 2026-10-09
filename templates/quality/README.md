@@ -76,3 +76,8 @@ loop hands them to the critic.
 
 hone's nag checks one more goal without any tool. It names a `src/<area>/`
 that a change touched and that holds more lines than `HONE_AREA_MAX_LINES`.
+
+The run's verify step checks small functions itself, when cccc and `jq`
+are installed. `worktree.sh complexity <change>` names each function that
+the change pushed over a cognitive complexity of 15, or made worse. Old
+functions that the change left alone pass, so it needs no scope.

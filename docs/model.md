@@ -327,10 +327,10 @@ Decisions about the code that a change touched, and the loop hands them to the
 `consolidate-critic`. A change can make a sentence false in a document that it
 never opened. A critic reads only what somebody puts in front of it. The
 scoping is mechanical because "is this change small enough to skip its review?"
-is exactly the judgment an unattended loop must not make about itself. Size is
-not a signal there, and neither is "tests only". A five-line change to a
-critical path gets the full review. A weakened test is one of the things review
-exists to catch.
+is exactly the judgment an unattended loop must not make about itself. Last,
+`worktree.sh complexity` compares each function before and after a change.
+A function grows one case per change, and no review of one change sees the
+sum.
 
 A judgment check gets a *constructed* brief (the diff, the Plan, the
 relevant Decisions and Notes), never the writer's transcript. A reviewer

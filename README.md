@@ -48,6 +48,8 @@ real-environment change until a person signs it off in writing
 
 hone ships no code analyzer. A project enforces code quality through its
 own `scripts/lint.sh` and `scripts/typecheck.sh`, and the gate runs both.
+One check is hone's own: when [cccc](https://github.com/moznion/cccc) is
+installed, the loop names each function that a change made too complex.
 [`templates/quality/README.md`](templates/quality/README.md) says which
 kind of existing tool fits which goal.
 

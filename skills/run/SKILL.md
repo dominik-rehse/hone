@@ -176,6 +176,13 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
 
 ### 3. Verify
 
+- **complexity**, first, so the gate runs on the result:
+  `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" complexity <change>`. It
+  names each function that this change pushed over a cognitive complexity of
+  15, or made worse while it was over. Split each one now: move a case or a
+  nested block into a function of its own, with the unit tier green. Then run
+  it again. A function grows one case per change, so no single change looks
+  too big, and this check is the only step that sees the growth.
 - **gate**: the full suite, plus type-check and lint, all green:
   - Run the full suite through the serialized wrapper:
     `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" verify`. Never run the
@@ -211,7 +218,8 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
   changes. Never gate a trivial change on it.
 
 Close verify with one line, its receipt, that names each check's outcome
-(tests, type-check, lint, mutation) as its output shows it. Include any skip
+(complexity, tests, type-check, lint, mutation) as its output shows it. A
+function you kept whole goes in the receipt with its reason. Include any skip
 **with its reason** ("mutation: skipped, no critical path named in the Plan").
 An unstated skip is indistinguishable from a forgotten check, and this receipt
 is what a later audit of the transcript reads.

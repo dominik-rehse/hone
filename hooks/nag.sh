@@ -158,7 +158,7 @@ nag_area_files() {
     git ls-files -z -- ":(literal)$1" ":(exclude,literal,attr:linguist-generated)$1" \
         ":(exclude,literal,attr:linguist-generated=true)$1" 2>/dev/null \
         | while IFS= read -r -d '' f; do
-              head -n 5 -- "$f" 2>/dev/null | grep -Eiq '@generated|do not edit|auto-?generated' && continue
+              hone_generated_header "$f" && continue
               printf '%s\0' "$f"
           done
 }

@@ -77,9 +77,13 @@ work. The loop calls it, and you can too:
   a path on its `Governs:` line is a changed file or a directory above one.
   A path may be a glob, and it expands in the change's tree. A Note also
   counts by its name, because `docs/notes/<area>.md` is about
-  `src/<area>/`. With no worktree left, the command reads the primary
-  tree's documents. The loop hands these documents to the `consolidate-critic`,
+  `src/<area>/`. The loop hands these documents to the `consolidate-critic`,
   whether the change opened them or not.
+- `worktree.sh complexity <change>` prints each function that the change
+  pushed over a cognitive complexity of `HONE_COMPLEXITY_MAX` (default 15),
+  or made worse, and exits 1. Verify runs it first. It needs
+  [cccc](https://github.com/moznion/cccc) and `jq`, and skips without them.
+  Vendored and generated files do not count.
 - `worktree.sh land <change>` builds the merge in the change's worktree,
   re-runs the suite there, fast-forwards the primary branch onto the tested
   merge commit, and cleans up. Runs the land gates first. When the primary
@@ -90,13 +94,12 @@ work. The loop calls it, and you can too:
 - `worktree.sh landed <change>` answers "has this change fully landed?" from
   repo artifacts, printing `landed` (exit 0) or `pending` (exit 1). Landed
   means the merge commit is on the primary branch and the branch, worktree,
-  and Plan are gone. An orchestrator polls this instead of trusting a
-  subagent's report. In shared mode it reads the remote primary branch, so
+  and Plan are gone. In shared mode it reads the remote primary branch, so
   the answer holds from any clone.
 - `worktree.sh sync` levels the primary tree with the remote primary branch
   in both directions: fetch, fast-forward or rebase local-only commits on
   top, then push them. Shared mode only. The plan skill, `run --all`, and
-  `garden` run it, and you run it to catch up.
+  `garden` run it.
 - `worktree.sh release <change>` deletes a claim from the remote by hand,
   for a change whose worktree is already gone. `remove` does it with the
   worktree.
@@ -116,9 +119,8 @@ work. The loop calls it, and you can too:
   the branch tip, the git user, and the time). You run it, and only you: the
   `bash-guard` denies it to the loop, which runs the check where it can and
   hands you the output. `--file <path>` reads a long text from a file.
-  Same sole-route rule as grant. Like grant, it
-  refuses an empty text and the placeholder `what you ran`, exits 2, and
-  writes nothing, because such a sign-off reads as evidence and carries none.
+  Like grant, it refuses an empty text and the placeholder `what you ran`,
+  exits 2, and writes nothing.
 
 ## Configuration files
 

@@ -673,7 +673,7 @@ hone_msg_attest_placeholders() {
 }
 
 msg_wt_usage() {
-    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|governed <change>|land <change>|landed <change>|sync|release <change>|remove <worktree-path | change>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
+    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|governed <change>|complexity <change>|land <change>|landed <change>|sync|release <change>|remove <worktree-path | change>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
 }
 
 msg_wt_grant_usage() {
@@ -689,6 +689,28 @@ msg_wt_not_a_repo() {
 hone worktree: this directory is not a git repository.
 Do: run the command inside the project's git repository.
 Why: every subcommand reads git state.
+EOF
+}
+
+msg_wt_complexity_no_branch() {
+    local branch="$1"
+    cat <<EOF
+hone worktree: branch $branch does not exist, so no change is there to score.
+Do: run complexity from the change's own run, after 'worktree.sh add <change>'.
+Why: the answer reads what the change touched.
+EOF
+}
+
+msg_wt_complexity_no_tool() {
+    printf '%s\n' "complexity: skipped, cccc or jq is not on PATH."
+}
+
+msg_wt_complexity_found() {
+    local limit="$1"
+    cat <<EOF
+This change pushed the functions above over a cognitive complexity of $limit, or made them worse.
+Do: split each one now. Move a case or a nested block into a function of its own, and keep the unit tier green. If one must stay whole, give the reason in the verify receipt.
+Why: a function grows one case per change, and no single change looks too big. So the check compares the function before and after this change.
 EOF
 }
 
@@ -1961,6 +1983,9 @@ worktree|human|msg_wt_lock_unopenable|<git-common-dir>/hone-land.lock
 worktree|human|msg_wt_lock_timeout|<seconds>
 worktree|human|msg_wt_review_scope_no_branch|hone/<change>
 worktree|human|msg_wt_governed_no_branch|hone/<change>
+worktree|human|msg_wt_complexity_no_branch|hone/<change>
+worktree|plain|msg_wt_complexity_no_tool
+worktree|agent|msg_wt_complexity_found|<limit>
 worktree|human|msg_wt_land_no_branch|hone/<change>
 worktree|human|msg_wt_land_detached
 worktree|human|msg_wt_land_no_cut_line|hone/<change>|<main-root>/.worktrees/<change>

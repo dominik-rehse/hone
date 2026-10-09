@@ -158,6 +158,19 @@
 #       in front of them. Exit: 0 printed, or nothing to print · 2
 #       usage/not-a-repo/no such branch.
 #
+#   worktree.sh complexity <change>
+#       Print each function whose cognitive complexity this change pushed over
+#       HONE_COMPLEXITY_MAX (default 15), or raised while it was already over:
+#       "<file>:<line> <name>: <score>, was <old>" or "..., new". It scores the
+#       changed files with cccc, on the merge base and in the change's tree,
+#       read as governed reads it. A function matches its base by its name and
+#       the names around it, in any changed file, so a moved function keeps
+#       its old score. Old functions that the change left as they were never
+#       show. A function grows one case per change, and no single change looks
+#       too big, so the check compares before and after. Without cccc or jq
+#       on PATH it says so and passes. Exit: 0 nothing over · 1 printed · 2
+#       usage/not-a-repo/no such branch.
+#
 #   worktree.sh verify
 #       Run the full suite (scripts/run-tests.sh --all) in the current tree,
 #       serialized under the SAME lock and queue as land. e2e tiers are
@@ -557,6 +570,89 @@ cmd_governed() {
         [ -z "$hit" ] || printf '%s\n' "$doc"
     done < <(cd "$tree" && find docs/decisions docs/notes -type f -name '*.md' 2>/dev/null | sort)
     return 0
+}
+
+# Print "<tab-path>\t<name-path>\t<cognitive>\t<line>" for every function that
+# cccc finds in files $2.. under directory $1. The name path joins the names of
+# the enclosing functions, so a nested function keys apart from a top-level one.
+complexity_scores() {
+    local dir="$1"; shift
+    [ "$#" -gt 0 ] || return 0
+    (cd "$dir" && cccc --no-config --no-cache --no-ignore -- "$@" 2>/dev/null) | jq -r '
+        def fns($pre): .[] | (if $pre == "" then .name else $pre + "/" + .name end) as $k
+            | "\($k)\t\(.cognitive)\t\(.line)", ((.children // []) | fns($k));
+        .files[] | .path as $p | .functions | fns("") | "\($p)\t\(.)"' 2>/dev/null
+}
+
+cmd_complexity() {
+    local change="${1:-}"
+    [ -n "$change" ] || { msg_wt_needs_change complexity >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
+
+    local common_dir main_root branch wt base tree changed limit tmp f found
+    common_dir=$(git rev-parse --git-common-dir 2>/dev/null)
+    main_root=$(git -C "$common_dir/.." rev-parse --show-toplevel 2>/dev/null)
+    branch="hone/$change"
+    wt="$main_root/.worktrees/$change"
+    git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch" || {
+        msg_wt_complexity_no_branch "$branch" >&2; return 2; }
+    limit="${HONE_COMPLEXITY_MAX:-15}"
+    case "$limit" in ''|*[!0-9]*) limit=15 ;; esac
+    if ! command -v cccc >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+        msg_wt_complexity_no_tool
+        return 0
+    fi
+    base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
+    [ -n "$base" ] || return 0
+    # The worktree, committed or not, as governed reads it. With no worktree,
+    # the branch's own files.
+    tmp=$(mktemp -d) || return 2
+    local attrdir="$main_root"
+    local -a attrs=("--source=$branch")
+    if [ -d "$wt" ]; then
+        tree="$wt"; attrdir="$wt"; attrs=()
+        changed=$( { git -C "$wt" diff --no-renames --name-only "$base"
+                     git -C "$wt" ls-files --others --exclude-standard; } 2>/dev/null | sort -u)
+    else
+        tree="$tmp/after"
+        changed=$(git -C "$main_root" diff --no-renames --name-only "$base" "$branch" 2>/dev/null)
+    fi
+
+    local -a before=() after=()
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        # Vendored or generated code is nobody's to split. With no worktree the
+        # marks come from the branch (git 2.40 or later; an older git reads
+        # none, and the file counts).
+        [ -n "$(git -C "$attrdir" check-attr "${attrs[@]}" linguist-generated linguist-vendored -- "$f" 2>/dev/null \
+            | grep -E ': (set|true)$')" ] && continue
+        if git -C "$main_root" cat-file -e "$base:$f" 2>/dev/null; then
+            mkdir -p "$tmp/before/$(dirname -- "$f")"
+            git -C "$main_root" show "$base:$f" >"$tmp/before/$f" 2>/dev/null && before+=("$f")
+        fi
+        if [ "$tree" = "$tmp/after" ] && git -C "$main_root" cat-file -e "$branch:$f" 2>/dev/null; then
+            mkdir -p "$tmp/after/$(dirname -- "$f")"
+            git -C "$main_root" show "$branch:$f" >"$tmp/after/$f" 2>/dev/null
+        fi
+        hone_generated_header "$tree/$f" && continue
+        [ -f "$tree/$f" ] && after+=("$f")
+    done <<<"$changed"
+
+    # A function counts when it scores over the limit and higher than every
+    # function of the same name path in the base versions of the changed files.
+    # The match ignores the file, so a function that the change only moved
+    # keeps its old score, and a function that is new compares with zero.
+    found=$( { complexity_scores "$tmp/before" "${before[@]}" | sed 's/^/B\t/'
+               complexity_scores "$tree" "${after[@]}" | sed 's/^/A\t/'; } | awk -F'\t' -v limit="$limit" '
+        $1 == "B" { if (!($3 in was) || $4 + 0 > was[$3]) was[$3] = $4 + 0; next }
+        $4 + 0 > limit && (!($3 in was) || $4 + 0 > was[$3]) {
+            printf "%s:%s %s: %s, %s\n", $2, $5, $3, $4, ($3 in was ? "was " was[$3] : "new")
+        }')
+    rm -rf "$tmp"
+    [ -n "$found" ] || return 0
+    printf '%s\n' "$found"
+    msg_wt_complexity_found "$limit"
+    return 1
 }
 
 # Classify a branch about to land as IRREVERSIBLE (an effectively irreversible
@@ -2565,6 +2661,7 @@ main() {
         verify)   progress_step verify "$@" ;;
         review-scope) progress_step review-scope "$@" ;;
         governed) progress_step governed "$@" ;;
+        complexity) cmd_complexity "$@" ;;
         land)     progress_step land "$@" ;;
         remove)   cmd_remove "$@" ;;
         landed)   cmd_landed "$@" ;;

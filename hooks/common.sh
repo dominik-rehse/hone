@@ -26,6 +26,13 @@ hone_json_escape() {
     printf '%s' "$s" | tr -d '\001-\010\013\014\016-\037'
 }
 
+# True when file $1 says in its first five lines that a tool wrote it:
+# @generated, DO NOT EDIT, or auto-generated. Nobody reads such a file to work
+# in its area, and nobody splits a function in it.
+hone_generated_header() {
+    head -n 5 -- "$1" 2>/dev/null | grep -Eiq '@generated|do not edit|auto-?generated'
+}
+
 # Emit a PreToolUse decision. $1 = deny|ask, $2 = reason. The caller exits 0
 # afterwards so this JSON is the sole channel (a non-zero exit would compete).
 hone_pretool_decision() {
