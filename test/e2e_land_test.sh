@@ -1839,6 +1839,7 @@ echo "== 5k. complexity: the functions a change pushed over the limit =="
 mkdir -p "$REPO.cccc"; trap 'rm -rf "$REPO" "$REPO.bin" "$REPO.herdr.log" "$REPO.cccc"' EXIT
 cat > "$REPO.cccc/cccc" <<'STUB'
 #!/bin/bash
+[ "${1:-}" = --help ] && { echo "Measure Cognitive Complexity and Cyclomatic Complexity of source code."; exit 0; }
 while [ "$#" -gt 0 ] && [ "$1" != "--" ]; do shift; done; shift
 awk '
     function endfile() {
@@ -1896,6 +1897,16 @@ nocccc=$(printf '%s' "$PATH" | tr ':' '\n' | while IFS= read -r p; do [ -x "$p/c
 out=$(PATH="${nocccc%:}" bash "$WSH" complexity calc-grow 2>&1); rc=$?
 [ "$rc" -eq 0 ] && [ "$out" = "complexity: skipped, cccc or jq is not on PATH." ] \
     || die "without cccc the check should say so and pass (got $rc: $out)"
+# Ubuntu's `cccc` package is another tool with the same name. Its stand-in
+# here writes into its working directory, as the real one does.
+mkdir -p "$REPO.cccc/other"
+printf '#!/bin/bash\nmkdir -p .cccc\necho "CCCC - C and C++ Code Counter"\n' > "$REPO.cccc/other/cccc"
+chmod +x "$REPO.cccc/other/cccc"
+out=$(cd "$WT_CX" && PATH="$REPO.cccc/other:$PATH" bash "$WSH" complexity calc-grow 2>&1); rc=$?
+[ "$rc" -eq 0 ] && [ "$out" = "complexity: skipped, the cccc on PATH ($REPO.cccc/other/cccc) is not moznion/cccc." ] \
+    || die "another cccc on PATH should skip the check (got $rc: $out)"
+[ ! -e "$WT_CX/.cccc" ] && [ ! -e "$REPO/.cccc" ] || die "probing another cccc should write nothing into the tree"
+step "another tool named cccc skips the check and writes nothing into the tree"
 out=$(PATH="$REPO.cccc:$PATH" bash "$WSH" complexity no-such-change 2>&1); rc=$?
 [ "$rc" -eq 2 ] || die "complexity on a missing branch should exit 2 (got $rc)"
 step "without cccc it says so and passes, and a missing branch exits 2"

@@ -84,7 +84,8 @@ work. The loop calls it, and you can too:
   pushed over a cognitive complexity of `HONE_COMPLEXITY_MAX` (default 15),
   or made worse, and exits 1. Verify runs it first. It needs
   [cccc](https://github.com/moznion/cccc) and `jq`, and skips without them.
-  Vendored and generated files do not count.
+  It also skips when the `cccc` on `PATH` is another tool, such as Ubuntu's
+  package of that name. Vendored and generated files do not count.
 - `worktree.sh hygiene <change>` prints the hygiene findings of what the
   change touched, and exits 1 on one to fix now. Consolidate runs it. Items
   under "For the person" go to the final report.

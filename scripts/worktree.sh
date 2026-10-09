@@ -168,7 +168,8 @@
 #       its old score. Old functions that the change left as they were never
 #       show. A function grows one case per change, and no single change looks
 #       too big, so the check compares before and after. Without cccc or jq
-#       on PATH it says so and passes. Exit: 0 nothing over · 1 printed · 2
+#       on PATH, or with a cccc that is not moznion/cccc, it says so and
+#       passes. Exit: 0 nothing over · 1 printed · 2
 #       usage/not-a-repo/no such branch.
 #
 #   worktree.sh hygiene <change>
@@ -659,6 +660,18 @@ cmd_complexity() {
         msg_wt_complexity_no_tool
         return 0
     fi
+    # Ubuntu's `cccc` package is another tool (C and C++ Code Counter) with the
+    # same name. Its output would read as no function at all, so the check
+    # would pass in silence. Ask in an empty directory, so an unknown `cccc`
+    # writes nothing into the tree.
+    local probe
+    probe=$(mktemp -d) || return 2
+    if ! (cd "$probe" && timeout 10 cccc --help </dev/null 2>/dev/null) | grep -q 'Cognitive Complexity'; then
+        rm -rf "$probe"
+        msg_wt_complexity_wrong_tool "$(command -v cccc)"
+        return 0
+    fi
+    rm -rf "$probe"
     base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
     [ -n "$base" ] || return 0
     # The worktree, committed or not, as governed reads it. With no worktree,

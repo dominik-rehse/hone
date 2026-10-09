@@ -735,6 +735,10 @@ Why: the answer reads what the change touched.
 EOF
 }
 
+msg_wt_complexity_wrong_tool() {
+    printf '%s\n' "complexity: skipped, the cccc on PATH ($1) is not moznion/cccc."
+}
+
 msg_wt_complexity_no_tool() {
     printf '%s\n' "complexity: skipped, cccc or jq is not on PATH."
 }
@@ -2051,6 +2055,7 @@ worktree|human|msg_wt_review_scope_no_branch|hone/<change>
 worktree|human|msg_wt_governed_no_branch|hone/<change>
 worktree|human|msg_wt_complexity_no_branch|hone/<change>
 worktree|plain|msg_wt_complexity_no_tool
+worktree|plain|msg_wt_complexity_wrong_tool|/usr/bin/cccc
 worktree|agent|msg_wt_complexity_found|<limit>
 worktree|human|msg_wt_land_no_branch|hone/<change>
 worktree|human|msg_wt_land_detached
