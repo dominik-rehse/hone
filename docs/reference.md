@@ -67,8 +67,8 @@ work. The loop calls it, and you can too:
   new worktree (see *Adapters*).
 - `worktree.sh verify` runs the full test suite, then type-check and lint,
   serialized against other sessions. It runs every step, even after a red
-  one. The only sanctioned way to run `--all` by hand. Only an all-green run
-  writes the gate's receipt.
+  one. The only sanctioned way to run `--all` by hand. An all-green run
+  writes the gate's receipt for the tree it tested.
 - `worktree.sh review-scope <change>` prints how deep the change's review must
   go: `full`, or `docs-only` when the diff touches nothing outside `docs/` and
   `.plans/`. The loop skips `/code-review` only on `docs-only`, where a code
@@ -82,7 +82,7 @@ work. The loop calls it, and you can too:
   whether the change opened them or not.
 - `worktree.sh complexity <change>` prints each function that the change
   pushed over a cognitive complexity of `HONE_COMPLEXITY_MAX` (default 15),
-  or made worse, and exits 1. Verify runs it first. It needs
+  or made worse, and exits 1. The run's verify step runs it first. It needs
   [cccc](https://github.com/moznion/cccc) and `jq`, and skips without them
   or with another tool named `cccc`. Vendored and generated files do not
   count.
@@ -94,7 +94,8 @@ work. The loop calls it, and you can too:
   change touched, and exits 1 on one to fix now. Consolidate runs it. Items
   under "For the person" go to the final report.
 - `worktree.sh attention` prints what needs the person in the primary tree.
-  Session start shows it there, and the coordinator prints it at batch end.
+  Session start shows it there. The run's final report and the
+  coordinator's batch end include it.
 - `worktree.sh land <change>` builds the merge in the change's worktree,
   re-runs the suite there, fast-forwards the primary branch onto the tested
   merge commit, and cleans up. Runs the land gates first. When the primary
@@ -216,7 +217,7 @@ their text.
 
 `.hone-off` disables all of them at once. A project with no
 `scripts/run-tests.sh` is never gated, and enforcement assumes code lives
-under `src/<area>/`. No hook checks hygiene. The run calls `worktree.sh
+under `src/<area>/`. No hook blocks on hygiene. The run calls `worktree.sh
 hygiene`, and session start shows `worktree.sh attention`.
 
 The hooks run inside the agent's session, and nowhere else. An edit you make
@@ -233,7 +234,7 @@ neither. When you want that record, route the edit through the loop.
   - Anywhere, no new file under `src/` unless a test for it exists. Test
     files and fixtures stay writable.
   - In the primary tree, no edits to the protected paths at all, including
-    the two policy files. That work belongs in a worktree, landed by a
+    the policy files. That work belongs in a worktree, landed by a
     merge.
   - In any tree, it asks before an edit to a check config. The ask says
     whether the change's Plan names the file.
@@ -294,10 +295,7 @@ neither. When you want that record, route the edit through the loop.
 - *gate* (Stop) blocks the turn until the checks are green.
   - With an uncommitted change to any durable path it runs the fast unit
     tier of `scripts/run-tests.sh`, plus `scripts/typecheck.sh` and
-    `scripts/lint.sh` when they exist. A dependency refresh dirties the
-    manifest and the lockfile rather than `src/`, and it breaks the suite
-    just as easily. So the gate reads the whole durable perimeter, not
-    `src/` and `tests/` alone. A green run records the version and the
+    `scripts/lint.sh` when they exist. A green run records the version and the
     tree in `<git-dir>/hone-gate-unit`, and a later Stop on the same tree
     runs nothing. Files that git ignores are not part of the tree.
   - On a clean `hone/<change>` branch it runs no suite. It reads the
@@ -327,7 +325,7 @@ neither. When you want that record, route the edit through the loop.
   - In a nested `/code-review` session it exits at once.
 - *progress* (after each Bash call, and Stop) shows the loop's progress
   line: `◆ [csv-export] worktree ✓ > build ... > verify > …`. A garden
-  change gets `worktree > cut > verify > land`. It never blocks.
+  change gets `worktree > cut > verify > land`, with repair for a repair. It never blocks.
 - *watch* (Stop) blocks a session that watches SUBs from ending its turn
   with no `coordinate.sh wait` armed, twice at most. It also restarts a dead
   ticker. In a watched session it writes a `turn-ended` event.
@@ -560,8 +558,9 @@ hone/
 ├── rules/workflow.md            # injected at session start
 ├── skills/{setup,plan,run,garden,coordinate}/ # the five commands; run/references/ loads on demand
 ├── hooks/                       # guard, bash-guard, dirty-guard, gate, progress, watch, session-start
+│   ├── hygiene.sh               # the checks behind worktree.sh hygiene and attention
 │   └── messages.sh              # every message hone prints, one template each
-├── scripts/{worktree,setup,coordinate}.sh
+├── scripts/{worktree,setup,coordinate}.sh, sql-rewrite.awk
 ├── agents/                      # plan-critic, consolidate-critic
 ├── templates/{run-tests,proof}/ # adapter contracts and templates
 ├── templates/quality/           # which existing analyzer fits which goal

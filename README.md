@@ -31,8 +31,9 @@ Two hooks apply the rules mechanically:
 
 - The *guard* allows no production code without a failing test. It also
   keeps the primary tree a merge target, edited only by landing merges.
-- The *gate* requires tests, type-check, and lint to be green before a
-  turn may end.
+- The *gate* requires the unit tests, type-check, and lint to be green
+  before a turn may end, and a committed change to have passed the full
+  suite.
 
 A script checks the hygiene of each change, such as a Note that has grown
 too large, and the run fixes what it finds. The run's final report and
@@ -51,8 +52,8 @@ real-environment change until a person signs it off in writing
 
 hone ships no code analyzer. A project enforces code quality through its
 own `scripts/lint.sh` and `scripts/typecheck.sh`, and the gate runs both.
-One check is hone's own: when [cccc](https://github.com/moznion/cccc) is
-installed, the loop names each function that a change made too complex.
+One check is hone's own: when [cccc](https://github.com/moznion/cccc) and
+`jq` are installed, the loop names each function that a change made too complex.
 [`templates/quality/README.md`](templates/quality/README.md) says which
 kind of existing tool fits which goal.
 

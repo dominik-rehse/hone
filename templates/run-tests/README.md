@@ -9,7 +9,8 @@ and adapt it. It must follow this contract:
   outside the repo (no network, no DB, no browser). This is what
   the `gate` runs and what the build loop's refactor step re-runs.
 - `run-tests.sh --all` runs *every* tier, including slow or external
-  integration/e2e tests (network, DB, browser). Run at land.
+  integration/e2e tests (network, DB, browser). `worktree.sh verify` and
+  land run it.
 - `run-tests.sh --unit` runs the unit tier explicitly.
 - `run-tests.sh <files...>` runs exactly those files (the red/green inner loop).
 - Exit `0` = all selected tests passed. Any other exit means failures.

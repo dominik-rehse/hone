@@ -194,11 +194,10 @@ universal invariant (`parse(serialize(x)) == x`) alongside the example tests.
   - It runs `scripts/typecheck.sh` and `scripts/lint.sh` too, if present. All
     must be green.
   - Run the gate here so you can confirm each check from its output, not from
-    having intended to run it. The Stop-hook gate enforces the same checks
-    independently. On a clean, committed `hone/<change>` branch it blocks
-    until verify has passed on that branch (so an integration regression can't
-    merge on a green unit tier alone). While the tree is dirty it runs the fast
-    unit tier.
+    having intended to run it. The Stop-hook gate checks independently. On a
+    clean, committed `hone/<change>` branch it blocks until verify has passed
+    on that branch (so an integration regression can't merge on a green unit
+    tier alone). While the tree is dirty it runs the fast unit tier.
   - A full suite can outlast the ~2m foreground Bash timeout, which kills it
     regardless of any inner `timeout`. Run the gate (and any long build or verify
     command) in your Bash tool's background mode, and poll it to completion.

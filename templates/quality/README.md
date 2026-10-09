@@ -29,8 +29,8 @@ npx jscpd src --min-tokens 70 --exit-code 1 || rc=1
 exit "$rc"
 ```
 
-- The gate runs the adapters on every stop with a dirty tree, so keep them
-  fast. Put a slow whole-project analysis behind a check on the changed
+- The gate runs the adapters on every stop whose uncommitted tree
+  changed, so keep them fast. Put a slow whole-project analysis behind a check on the changed
   files, where the tool has one.
 
 ## Which check serves which goal
@@ -83,7 +83,8 @@ loop hands them to the critic.
 
 The run's verify step checks small functions itself, when cccc and `jq`
 are installed. `worktree.sh complexity <change>` names each function that
-the change pushed over a cognitive complexity of 15, or made worse. Old
+the change pushed over a cognitive complexity of 15
+(`HONE_COMPLEXITY_MAX`), or made worse. Old
 functions that the change left alone pass, so it needs no scope.
 `/hone:garden` lists the old ones that change most, with `worktree.sh
 hotspots`, and proposes a Plan to split them.

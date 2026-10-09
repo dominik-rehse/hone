@@ -33,7 +33,7 @@
 #       under the lock. Then it takes a flock on
 #       <git-common-dir>/hone-land.lock (waits up to HONE_LAND_LOCK_TIMEOUT s,
 #       default 600). Takers queue in arrival order, and a land goes before a
-#       verify or a gate. Under the lock it runs the checks once more, because
+#       verify. Under the lock it runs the checks once more, because
 #       a grant, a sign-off, or the tip can change during the wait. While it
 #       holds the lock, it checks out the primary branch's tip in the change's
 #       worktree, merges --no-ff there, and re-runs scripts/run-tests.sh

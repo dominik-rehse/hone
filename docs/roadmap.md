@@ -111,6 +111,14 @@ in git.
   aa340d60 of the 2026-10-01 note). Done in 0.75.0: `start` and `send`
   type through one helper, read the pane back, and exit 3 when the text
   does not show whole.
+- New on 2026-10-09 in 0.78.1: `start` typed a run's prompt whole and did
+  not submit it, and the read-back passed. A coordinator also ended its
+  turn twice with no wait while a run was in flight, and the first `wait`
+  of two coordinators printed events of earlier batches
+  ([`hotspot-batch`](spikes/2026-10-09-hotspot-batch.md)). Next step: let
+  `start` confirm that the session began to work after the Enter, and send
+  Enter again once if it did not. Then decide whether `open` should skip
+  the events that came before it.
 
 #### Parallel runs starve the suite lock, and the gate repeats work
 
@@ -159,6 +167,11 @@ in git.
   without a verify receipt it asks for `worktree.sh verify`, and while a
   verify or land holds the lock it lets the turn end. `verify` runs the
   suite, type-check, and lint. The unit tier skips a tree it already passed.
+- Seen again on 2026-10-09 in 0.78.1: with three parallel runs in one
+  repository, one verify timed out twice at 600 seconds (exit 5), and the
+  run wrote its own retry loop. The queue keeps lands first, so a verify
+  waits longest. Next step: decide whether verify should wait as long as
+  it takes, since nothing red can land while it waits.
 - Still open: the Stop gate blocks a run while a background subagent is
   in the red half of a red-green cycle (12 blocks in one run, 4 in
   another). Next step: decide what the gate should do while a subagent
@@ -411,8 +424,14 @@ fix itself. hone only reports them.
 - The check stops new growth only. The four repositories hold 8 to 75
   functions over 15 from before it. `/hone:garden` now runs `worktree.sh
   hotspots`, which ranks them by score times the commits to their file in
-  90 days, and proposes a Plan to split the worst. Next step: read whether
-  such a Plan lands with no change of behaviour.
+  90 days, and proposes a Plan to split the worst.
+- First answer, 2026-10-09: a coordinated batch split ten such hotspots in
+  the four repositories. All ten landed, from cognitive 29 to 82 down to 1
+  to 15 ([`hotspot-batch`](spikes/2026-10-09-hotspot-batch.md)). One split
+  that its Plan called "no change of behavior" changed behavior, and only
+  the tests check that claim. Next step: collect more such cases in the
+  field log. With three, decide whether the `consolidate-critic` or the
+  review must compare behavior on a refactor.
 
 #### `setup-misfit` failed once in nine runs
 

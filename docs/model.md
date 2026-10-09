@@ -111,7 +111,7 @@ flowchart TD
   names the `src/` paths the decision explains. `worktree.sh hygiene`
   flags the file when a named path stops existing. And when a change touches a named
   path, `worktree.sh governed` puts the file in front of the
-  `consolidate-critic`. That is how the hooks catch stale prose
+  `consolidate-critic`. That is how hone catches stale prose
   mechanically.
 - *Notes*: `docs/notes/<area>.md`. An optional per-area map plus its one
   invariant. It points at the relevant Decision and the key types. One
@@ -170,8 +170,8 @@ consolidate, and the entry goes.
 *Enforcement:* the guard, gate, bash-guard, and dirty-guard hooks,
 described in [`reference.md`](reference.md). In short: no production code
 without a failing test, and no direct edits to protected paths in the
-primary tree. Tests, type-check, and lint must be green before a turn
-ends. A hook's visible message never reaches the model. So the run gets
+primary tree. The unit tier, type-check, and lint must be green before a
+turn ends, and a committed change waits for a green verify. A hook's visible message never reaches the model. So the run gets
 the hygiene findings of its change and fixes them, and you read the rest.
 After three identical
 failures the gate asks for a final report and then lets the turn end. So a
@@ -448,7 +448,6 @@ denies the loop the helper, and both guards deny every other route into
 `.hone-grant/`. A person may still decide once for a whole repository, where
 a lost table costs little, by committing `.hone-grant-auto`. The gate then
 records each change instead of stopping it.
-Mechanics are in [`reference.md`](reference.md).
 
 The guards assume an agent that makes a mistake, skips a step, or takes a
 route around a gate that its command names. They read the command and the
@@ -567,8 +566,7 @@ manual: a few paragraphs naming the workflow and its invariants. It stays
 short on purpose. A long always-on rule costs context in every session,
 and the model stops following it as it grows. The operational detail
 lives in the `plan`, `run`, and `garden` skills, which load only when
-invoked. (In a single repo rather than a distributed plugin, the same
-split works as a lean `CLAUDE.md` pointing at local skills.)
+invoked.
 
 ## Invariants
 
@@ -584,7 +582,7 @@ split works as a lean `CLAUDE.md` pointing at local skills.)
    record, which is the structural cure for the spec pile.
 2. Every `docs/` write passes the cut test (principle 2), and a Note
    passes two more: 1:1 with an existing area, and under the size cap.
-   The hooks hold the correspondence and the size, and `/code-review`
+   `worktree.sh hygiene` holds the correspondence and the size, and `/code-review`
    judges whether the area boundaries make sense.
 3. The primary tree's protected artifacts change only through *land*, a
    merge, so no half-built change ever sits in the tree everything merges

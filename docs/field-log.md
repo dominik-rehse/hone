@@ -14,11 +14,27 @@ The counts and the method are in
 [the 2026-09-20 field-data note](spikes/2026-09-20-field-data-from-real-sessions.md),
 [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md),
 [the 2026-10-01 note on a coordinated batch](spikes/2026-10-01-field-data-coordinated-batch.md),
-and [the 2026-10-09 note on function complexity](spikes/2026-10-09-function-complexity-in-the-field.md).
+[the 2026-10-09 note on function complexity](spikes/2026-10-09-function-complexity-in-the-field.md),
+and [the 2026-10-09 note on a hotspot batch](spikes/2026-10-09-hotspot-batch.md).
 "Not recorded" in the version field means the source did not record it.
 The MAIN incidents up to 2026-09-28 are counted in
 [the 2026-09-28 note](spikes/2026-09-28-main-tracking-of-subs.md).
 
+- 2026-10-09 · 0.78.1 · `run` · a split that its Plan called "no change
+  of behavior" made an action of an unknown kind throw, where before it
+  counted as a revert. The run reported it.
+- 2026-10-09 · 0.78.1 · `coordinate` · `start` typed a run's prompt into its
+  tab and did not submit it. The coordinator asked the person to press
+  Enter.
+- 2026-10-09 · 0.78.1 · `coordinate` · a coordinator ended its turn twice
+  with no wait, and the watch hook let it end while a run was in flight.
+- 2026-10-09 · 0.78.1 · `coordinate` · the first `wait` of two coordinators
+  printed events of earlier batches (count 2).
+- 2026-10-09 · 0.78.1 · `verify` · three parallel runs queued on the suite
+  lock. One verify timed out twice at 600 seconds (exit 5), and the run
+  wrote its own retry loop.
+- 2026-10-09 · 0.78.1 · `coordinate` · a coordinator reported scores from
+  the commit messages and did not measure them.
 - 2026-07-10 to 2026-10-02 · 0.2.0 to 0.75.0 · `run` · in all four
   repositories, runs grew existing functions past a cognitive complexity
   of 15 in 15 steps, and wrote 16 more that started over it. One run took a

@@ -117,15 +117,15 @@ mechanical steps.
      after a `!` in Claude Code, and the run lands the change. Since 0.66
      the grant placeholder is `your reason`. A script of yours that pastes
      `who/why` must pass a real reason.
+   - *The complexity check since 0.76*: install
+     [cccc](https://github.com/moznion/cccc) and `jq` to turn it on. Mark
+     vendored code `linguist-vendored` in `.gitattributes`.
    - *The gate runs no full suite since 0.77*: it asks for `worktree.sh
      verify` instead, which also runs type-check and lint. Restart running
      sessions. `HONE_SUITE_LOCK_TIMEOUT` is gone.
    - *The nag is gone since 0.78*: restart running sessions. Setup deletes
      the leftover `hone-nag-seen`. A run now fixes the hygiene findings of
      its change, and session start shows you what needs you.
-   - *The complexity check since 0.76*: install
-     [cccc](https://github.com/moznion/cccc) and `jq` to turn it on. Mark
-     vendored code `linguist-vendored` in `.gitattributes`.
    - *Automatic grants since 0.66*: to let every irreversible change land
      without you, commit an empty `.hone-grant-auto` at the repo root. A
      `#` line in it can say who decided and why. Nothing changes without

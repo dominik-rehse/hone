@@ -27,12 +27,9 @@ read that file before releasing.
 Which suite a change must pass follows from what it touches.
 
 *Mechanical*: `bash test/run.sh`. It is deterministic and makes no model
-calls. It covers:
-
-- the hook unit tests
-- the end-to-end land path (worktree, gates, merge, fast-forward)
-- the plumbing of the eval harness and of the lab, against a fake CLI
-- the prose and the shape of every message in `hooks/messages.sh`
+calls. Its header lists what it covers. It takes over ten minutes, so run
+it in the background, or run the one `test/*_test.sh` you need while you
+work.
 
 Every release runs this suite. Run it after any change to `hooks/`,
 `scripts/`, `evals/run.sh`, or `evals/lab/` too. The shell sources also stay
@@ -115,7 +112,7 @@ Each class of building block has its own evaluator:
 The figures are API prices from 2026-09-18 on claude-opus-5. The account
 is on the Max plan, so the real limit is the plan's usage.
 
-- The mechanical suite: no model call, a few minutes.
+- The mechanical suite: no model call, over ten minutes.
 - One unit target at three votes: 1 to 3 dollars. The whole unit suite
   costs about 4 dollars.
 - One full lab pass: about 36 dollars and 65 minutes.
@@ -123,9 +120,10 @@ is on the Max plan, so the real limit is the plan's usage.
 ## Changing judgment prose
 
 The critic prompts (`agents/`), the run skill and its references
-(`skills/run/`), and the injected rule (`rules/workflow.md`) are behavior,
-not documentation. Treat an edit to them like a code change. Run the
-relevant eval target before and after the edit. When a critic misjudges a
+(`skills/run/`), the garden skill, and the injected rule
+(`rules/workflow.md`) are behavior, not documentation. Treat an edit to
+them like a code change. Run the one eval target it touches, at `--votes 3
+--model opus`. Ablate a new case (`--ablate`) before you keep it. When a critic misjudges a
 real change or the loop takes a wrong turn, capture it as a new case.
 *Extending* in [`evals/README.md`](../evals/README.md) shows how. The same
 suite is what makes *deleting* prose safe as models improve: trim, re-run,
