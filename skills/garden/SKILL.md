@@ -1,6 +1,6 @@
 ---
 name: garden
-description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, oversized areas, broken Governs links, redundant tests, dead code, stale open questions, drift in the project's own CLAUDE.md and skills), then land the safe changes one at a time through the same worktree loop. Two units of work, each with its own proof: a cut removes something and the suite proves it safe, and a repair repoints a durable reference in docs/ whose target moved, proven by the new target existing. Escalates every judgment call instead of forcing it, batched as one Plan per area. Use it when the caller asks for a maintenance, cleanup, or staleness pass over the repo, or when a larger workflow schedules one between changes. Never start it on your own in the middle of other work. Invoke with /hone:garden."
+description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, oversized areas, broken Governs links, redundant tests, dead code, complexity hotspots, stale open questions, drift in the project's own CLAUDE.md and skills), then land the safe changes one at a time through the same worktree loop. Two units of work, each with its own proof: a cut removes something and the suite proves it safe, and a repair repoints a durable reference in docs/ whose target moved, proven by the new target existing. Escalates every judgment call instead of forcing it, batched as one Plan per area. Use it when the caller asks for a maintenance, cleanup, or staleness pass over the repo, or when a larger workflow schedules one between changes. Never start it on your own in the middle of other work. Invoke with /hone:garden."
 argument-hint: "[area-or-scope]"
 ---
 
@@ -58,6 +58,12 @@ behind the team's, so first run
 - **Oversized area**: a `src/<area>/` whose tracked text files, generated ones
   aside, hold more lines than `HONE_AREA_MAX_LINES` (default 3000). A run
   names one only when its change touched it.
+- **Complexity hotspot**: a function that
+  `bash "${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh" hotspots` lists. It scores
+  over the limit and its file changes often, so every run there pays for it.
+  Cite its lines. If it prints a skip, state the skip in the scan list. A
+  hotspot is never a cut, because `garden` does not refactor. It goes to a
+  Plan (step 4).
 - **Redundant test**: two tests pinning the same behaviour through the same
   surface, or a test the codebase made dead.
 - **Dead code**: a `src/` symbol or file with no remaining caller (confirm with a
@@ -239,7 +245,10 @@ sentences.
 
 So group the remaining findings by area, and propose **at most one Plan per
 area**. Name it for the area and let it carry every finding there
-(`docs/<area>-staleness`). Findings that share no area travel alone. Two reasons
+(`docs/<area>-staleness`). Findings that share no area travel alone.
+A hotspot's Plan reads: split `<function>` along its cases, with no change of
+behaviour, and the existing tests prove it. A hotspot with too few tests to
+prove the split gets a Plan that adds the tests first. Two reasons
 make the area the right unit. Findings in one area sit in the same handful of
 files, so separate Plans collide at land (exit 9) and serialize anyway. And one
 reader deciding the whole area's prose at once decides it consistently, where

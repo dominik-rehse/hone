@@ -408,6 +408,11 @@ fix itself. hone only reports them.
   run splits the function that the check names, or keeps it whole with a
   reason. Without cccc installed the check skips, so the consumer
   repositories need cccc first.
+- The check stops new growth only. The four repositories hold 8 to 75
+  functions over 15 from before it. `/hone:garden` now runs `worktree.sh
+  hotspots`, which ranks them by score times the commits to their file in
+  90 days, and proposes a Plan to split the worst. Next step: read whether
+  such a Plan lands with no change of behaviour.
 
 #### `setup-misfit` failed once in nine runs
 

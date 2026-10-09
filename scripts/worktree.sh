@@ -172,6 +172,16 @@
 #       passes. Exit: 0 nothing over · 1 printed · 2
 #       usage/not-a-repo/no such branch.
 #
+#   worktree.sh hotspots [N]
+#       Print the N (default 10) worst complexity hotspots of the current tree:
+#       "<file>:<line> <name>: <score>, <c> commits in 90 days". It scores
+#       every tracked file with cccc and keeps each function over
+#       HONE_COMPLEXITY_MAX. It skips files, and skips the whole scan, as
+#       complexity does. The rank is the score times one
+#       plus the commits that touched the file in the last 90 days, because
+#       every run that touches a complex function pays for it. garden reads
+#       it. Exit: 0 nothing over, or skipped · 1 printed · 2 usage/not-a-repo.
+#
 #   worktree.sh hygiene <change>
 #       Run the hygiene checks (hooks/hygiene.sh) on what this change touched,
 #       read as governed reads it. Fix now: the change deletes nothing; a
@@ -636,10 +646,41 @@ cmd_governed() {
 complexity_scores() {
     local dir="$1"; shift
     [ "$#" -gt 0 ] || return 0
-    (cd "$dir" && cccc --no-config --no-cache --no-ignore -- "$@" 2>/dev/null) | jq -r '
+    (cd "$dir" && cccc --no-config --no-cache --no-ignore -- "$@" 2>/dev/null) | complexity_rows
+}
+
+# The rows of complexity_scores, from cccc's JSON on stdin.
+complexity_rows() {
+    jq -r '
         def fns($pre): .[] | (if $pre == "" then .name else $pre + "/" + .name end) as $k
             | "\($k)\t\(.cognitive)\t\(.line)", ((.children // []) | fns($k));
         .files[] | .path as $p | .functions | fns("") | "\($p)\t\(.)"' 2>/dev/null
+}
+
+# The cognitive complexity a function may reach: HONE_COMPLEXITY_MAX, else 15.
+complexity_limit() {
+    local limit="${HONE_COMPLEXITY_MAX:-15}"
+    case "$limit" in ''|*[!0-9]*) limit=15 ;; esac
+    printf '%s\n' "$limit"
+}
+
+# Succeed when cccc (moznion/cccc) and jq are on PATH. Else print the skip
+# line and fail, and the caller passes.
+complexity_tool_ready() {
+    if ! command -v cccc >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+        msg_wt_complexity_no_tool
+        return 1
+    fi
+    # Ubuntu's `cccc` package is another tool (C and C++ Code Counter) with the
+    # same name. Its output would read as no function at all, so the check
+    # would pass in silence. Ask in an empty directory, so an unknown `cccc`
+    # writes nothing into the tree.
+    local probe ok=0
+    probe=$(mktemp -d) || return 1
+    (cd "$probe" && timeout 10 cccc --help </dev/null 2>/dev/null) | grep -q 'Cognitive Complexity' || ok=1
+    rm -rf "$probe"
+    [ "$ok" -eq 0 ] || msg_wt_complexity_wrong_tool "$(command -v cccc)"
+    return "$ok"
 }
 
 cmd_complexity() {
@@ -654,24 +695,8 @@ cmd_complexity() {
     wt="$main_root/.worktrees/$change"
     git -C "$main_root" show-ref --verify --quiet "refs/heads/$branch" || {
         msg_wt_complexity_no_branch "$branch" >&2; return 2; }
-    limit="${HONE_COMPLEXITY_MAX:-15}"
-    case "$limit" in ''|*[!0-9]*) limit=15 ;; esac
-    if ! command -v cccc >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
-        msg_wt_complexity_no_tool
-        return 0
-    fi
-    # Ubuntu's `cccc` package is another tool (C and C++ Code Counter) with the
-    # same name. Its output would read as no function at all, so the check
-    # would pass in silence. Ask in an empty directory, so an unknown `cccc`
-    # writes nothing into the tree.
-    local probe
-    probe=$(mktemp -d) || return 2
-    if ! (cd "$probe" && timeout 10 cccc --help </dev/null 2>/dev/null) | grep -q 'Cognitive Complexity'; then
-        rm -rf "$probe"
-        msg_wt_complexity_wrong_tool "$(command -v cccc)"
-        return 0
-    fi
-    rm -rf "$probe"
+    limit=$(complexity_limit)
+    complexity_tool_ready || return 0
     base=$(git -C "$main_root" merge-base HEAD "$branch" 2>/dev/null)
     [ -n "$base" ] || return 0
     # The worktree, committed or not, as governed reads it. With no worktree,
@@ -722,6 +747,46 @@ cmd_complexity() {
     [ -n "$found" ] || return 0
     printf '%s\n' "$found"
     msg_wt_complexity_found "$limit"
+    return 1
+}
+
+# The worst complexity hotspots of the current tree (header: `worktree.sh
+# hotspots`). One cccc call scores every file, and one git log pass counts the
+# commits per file.
+cmd_hotspots() {
+    local n="${1:-10}"
+    case "$n" in ''|*[!0-9]*|0) msg_wt_hotspots_usage >&2; return 2 ;; esac
+    [ "$#" -le 1 ] || { msg_wt_hotspots_usage >&2; return 2; }
+    git rev-parse --git-dir >/dev/null 2>&1 || { msg_wt_not_a_repo >&2; return 2; }
+    local limit p a v found
+    limit=$(complexity_limit)
+    complexity_tool_ready || return 0
+
+    # Vendored or generated code is nobody's to split, as for complexity.
+    local -A marked=()
+    while IFS= read -r -d '' p && IFS= read -r -d '' a && IFS= read -r -d '' v; do
+        case "$v" in set|true) marked[$p]=1 ;; esac
+    done < <(git ls-files -z | git check-attr -z --stdin linguist-generated linguist-vendored 2>/dev/null)
+
+    found=$(git ls-files -z | while IFS= read -r -d '' p; do
+                [ -f "$p" ] && [ -z "${marked[$p]:-}" ] && printf '%s\0' "$p"
+            done | xargs -0 -r cccc --no-config --no-cache --no-ignore -- 2>/dev/null \
+            | complexity_rows | awk -F'\t' -v limit="$limit" '$3 + 0 > limit')
+    [ -n "$found" ] || return 0
+
+    # A score costs every run that touches the file, so the rank is the score
+    # times one plus the commits of the last 90 days.
+    found=$( { git -c core.quotepath=off log --since=90.days --format= --name-only 2>/dev/null | sed '/^$/d; s/^/C\t/'
+               printf '%s\n' "$found" | sed 's/^/F\t/'; } | awk -F'\t' '
+        $1 == "C" { churn[$2]++; next }
+        { c = churn[$2] + 0; printf "%d\t%s\t%s\t%s\t%s\t%d\n", $4 * (1 + c), $2, $5, $3, $4, c }' \
+        | sort -t "$(printf '\t')" -k1,1nr -k2,2 -k3,3n \
+        | while IFS=$'\t' read -r _ p line name score c; do
+            hone_generated_header "$p" && continue
+            printf '%s:%s %s: %s, %s commits in 90 days\n' "$p" "$line" "$name" "$score" "$c"
+        done | head -n "$n")
+    [ -n "$found" ] || return 0
+    printf '%s\n' "$found"
     return 1
 }
 
@@ -2881,6 +2946,7 @@ main() {
         review-scope) progress_step review-scope "$@" ;;
         governed) progress_step governed "$@" ;;
         complexity) cmd_complexity "$@" ;;
+        hotspots) cmd_hotspots "$@" ;;
         hygiene)  cmd_hygiene "$@" ;;
         attention) cmd_attention "$@" ;;
         land)     progress_step land "$@" ;;

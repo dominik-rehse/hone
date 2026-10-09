@@ -174,7 +174,8 @@ setup and reconcile the repo's own artifacts.
   (stale docs, dead code, redundant tests) and lands the safe deletions.
   It also repoints a reference in `docs/` whose target merely moved,
   which is the one change it makes that deletes nothing. Anything needing
-  prose written it escalates, as one proposed Plan per area. You invoke
+  prose written it escalates, as one proposed Plan per area. So does a
+  complex function that changes often: its Plan splits it. You invoke
   it when you want a maintenance pass, and another agent may invoke it
   too. Small, frequent passes work better than one large pass.
 

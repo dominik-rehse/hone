@@ -707,7 +707,7 @@ hone_msg_attest_placeholders() {
 }
 
 msg_wt_usage() {
-    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|governed <change>|complexity <change>|hygiene <change>|attention|land <change>|landed <change>|sync|release <change>|remove <worktree-path | change>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
+    printf '%s\n' "usage: worktree.sh {add <change>|landable|verify|review-scope <change>|governed <change>|complexity <change>|hotspots [N]|hygiene <change>|attention|land <change>|landed <change>|sync|release <change>|remove <worktree-path | change>|status|grant <change> \"$(hone_msg_grant_why)\"|attest <change> \"$(hone_msg_attest_what)\"}"
 }
 
 msg_wt_grant_usage() {
@@ -741,6 +741,10 @@ msg_wt_complexity_wrong_tool() {
 
 msg_wt_complexity_no_tool() {
     printf '%s\n' "complexity: skipped, cccc or jq is not on PATH."
+}
+
+msg_wt_hotspots_usage() {
+    printf '%s\n' "usage: worktree.sh hotspots [N]   (N: how many to print, default 10)"
 }
 
 msg_wt_complexity_found() {
@@ -2057,6 +2061,7 @@ worktree|human|msg_wt_complexity_no_branch|hone/<change>
 worktree|plain|msg_wt_complexity_no_tool
 worktree|plain|msg_wt_complexity_wrong_tool|/usr/bin/cccc
 worktree|agent|msg_wt_complexity_found|<limit>
+worktree|plain|msg_wt_hotspots_usage
 worktree|human|msg_wt_land_no_branch|hone/<change>
 worktree|human|msg_wt_land_detached
 worktree|human|msg_wt_land_no_cut_line|hone/<change>|<main-root>/.worktrees/<change>

@@ -85,3 +85,5 @@ The run's verify step checks small functions itself, when cccc and `jq`
 are installed. `worktree.sh complexity <change>` names each function that
 the change pushed over a cognitive complexity of 15, or made worse. Old
 functions that the change left alone pass, so it needs no scope.
+`/hone:garden` lists the old ones that change most, with `worktree.sh
+hotspots`, and proposes a Plan to split them.
