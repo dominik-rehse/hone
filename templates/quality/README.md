@@ -6,8 +6,8 @@ the merge at land. Any check that a program can decide belongs in one of
 them. Then every change meets the check, and no prompt has to ask for it.
 
 This page maps hone's goals for a codebase to the kinds of tool that check
-them. The tool names are leads from a search on 2026-09-18, and hone depends
-on none of them. Read the documentation of a tool before you adopt it.
+them. The tool names are leads from searches on 2026-09-18 and
+2026-10-09, and hone depends on none of them. Read the documentation of a tool before you adopt it.
 
 ## Contract
 
@@ -41,9 +41,16 @@ exit "$rc"
 - *No dead code.* knip for JavaScript and TypeScript, vulture for Python,
   the `deadcode` command for Go, cargo-shear or cargo-machete for Rust.
   Go's `deadcode` exits 0 on a finding, so the adapter must fail on output.
-- *Small functions.* The linter of the language has the rules. ESLint,
-  oxlint, and Biome have `complexity` and `max-lines-per-function`. ruff has
-  `C901` and `PLR0915`. lizard reads about 27 languages and takes thresholds.
+- *Small functions.* Measure cognitive complexity, which counts nesting,
+  with a limit of 15. Biome has `noExcessiveCognitiveComplexity`, off by
+  default, and ESLint has it in `eslint-plugin-sonarjs`. ruff has `C901`
+  and `PLR0915`, which count branches and statements. cccc reads about 20
+  languages, and `--max-cognitive 15 --min 16 --table` fails and names the
+  function. lizard reads about 27 languages and counts branches. On an
+  existing codebase a limit fails at once. Give the tool only the files
+  that differ from `main` (`git diff --name-only --diff-filter=d main`).
+  Then a change that touches a file with an old long function also
+  splits that function.
 - *Boundaries between areas, and no import cycle.* dependency-cruiser for
   JavaScript and TypeScript, with `--affected <revision>` for the changed
   modules. import-linter or tach for Python.
