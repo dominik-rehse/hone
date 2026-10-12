@@ -78,7 +78,8 @@ each measure.
 ### The rules
 
 1. *Coverage is the limit.* A change can degrade an outcome that nothing
-   measures. So the measurements grow before a campaign of changes.
+   measures. Real use and `test/run.sh` are the main measures. A new
+   benchmark, probe, or eval campaign needs the maintainer's word.
 2. *A change enters as a reviewed change.* No tool commits here.
 3. *A change carries its upgrade path.* A consumer repo holds state that
    hone wrote. That state is the adapters, the policy files, the settings
