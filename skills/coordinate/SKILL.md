@@ -123,6 +123,17 @@ did not show in the tab. Do what its `Do:` line says. Use the model the person n
 none, leave out `--model`, and the session runs on `opus`. Never start a
 session on `fable` unless the person asked for that model by name.
 
+A shared ledger, such as the roadmap, collides at land when parallel runs
+each edit it (`parallel.md`, *Shared ledgers*). So when a batch has more than
+one run, send each run this line right after its `start`:
+
+```
+This run is one of a batch. Leave shared ledgers such as docs/roadmap.md unchanged, and list the edits they need in your final report.
+```
+
+Keep each edit a run lists. The global consolidate pass makes them all in
+one change after the batch.
+
 ## Watch
 
 Run the wait with the Bash tool in background mode, then end the turn:
@@ -218,7 +229,7 @@ to type. Tell them the command and the tab instead. Exit 3 means the text
 did not show in the tab, as with `start`. It also refuses a
 session that waits on a question or a prompt, because that answer belongs
 to the person. Send only what the person said to send, and nothing that
-routes around a gate.
+routes around a gate. The one exception is the batch line under *Start*.
 
 ## After a batch
 
@@ -233,7 +244,9 @@ Its prompt names the batch's base commit, which the first `start run`
 recorded, and the count of merges since it, so the pass covers every one.
 It runs a `consolidate-critic` over the combined result, and it lands any
 accepted cuts through worktree changes named `consolidate/<slug>`. When
-`start` says the pass has no base commit, tell the person and ask. Close
+`start` says the pass has no base commit, tell the person and ask. Send the
+pass the ledger edits the runs listed, as one message. It makes them in one
+docs-only change after its cuts. Close
 its tab on its `finished` event, which waits until no cut holds a worktree.
 Then print the board as the report:
 per change, landed (with the merge commit) or stopped (with the blocker and the
