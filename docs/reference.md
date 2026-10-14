@@ -327,7 +327,8 @@ neither. When you want that record, route the edit through the loop.
   line: `◆ [csv-export] worktree ✓ > build ... > verify > …`. A garden
   change gets `worktree > cut > verify > land`, with repair for a repair. It never blocks.
 - *watch* (Stop) blocks a session that watches SUBs from ending its turn
-  with no `coordinate.sh wait` armed, twice at most. It also restarts a dead
+  with no `coordinate.sh wait` armed, twice at most. A wait that returned
+  and whose notification is still queued counts as armed. It also restarts a dead
   ticker. In a watched session it writes a `turn-ended` event.
 - *session-start* injects the workflow rule from the plugin. It warns when
   the test adapter or the `src/` layout is missing. It also warns, naming

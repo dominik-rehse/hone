@@ -52,6 +52,14 @@ lost. Each block cost one extra turn and nothing else. The hook reads
 "no wait runs" as "nobody will wake this session". That is wrong when a
 wait has exited and its notification is pending.
 
+I replayed the harness's queue log up to each `watch` block in every
+transcript since 2026-09-29. 84 of the 91 blocks had a task notification
+in the queue that no turn had taken. In 4 of the other 7, no wait had
+run for hours, so the block was right. In 2, the wait had exited 3
+seconds before, and its notification was not yet in the log. In the
+last one, the hook blocked although the agent said a newer wait ran. I
+did not look into it.
+
 The same coordinator's first wait printed events of earlier batches, as
 two did on 0.78.1.
 

@@ -15,6 +15,15 @@
 # (each run session included) finds no session file with its id, and the hook
 # exits at once.
 #
+# A wait that already returned does not need to run. Its exit queued a task
+# notification, and Claude Code delivers a queued notification as the
+# session's next turn, so the session wakes. The hook lets the turn end when
+# the transcript's queue holds a task notification that no turn has taken.
+# A coordinator's wait often returns at once on a queued event, and the
+# block that followed cost a turn 84 times in the field
+# (docs/spikes/2026-10-14-field-data-since-0-79-1.md). With no transcript,
+# no jq, or a queue it cannot read, the hook blocks as before.
+#
 # The hook blocks at most twice in a row. The third Stop without a wait ends
 # the turn and tells the person, so a session that cannot comply still gets
 # its report out. The ticker notifies the person either way.
@@ -66,6 +75,25 @@ last_line() {
     printf '%s\n' "$msg" | sed 's/[[:space:]]*$//' | grep -v '^$' | tail -1 | sed -E 's/^[[:space:]]+//; s/^(.{160}).*/\1/'
 }
 
+# Exit 0 when the transcript's queue holds a task notification that no turn
+# has taken yet. The harness logs each queue operation: enqueue adds an item,
+# dequeue takes the first, remove takes the item it names, popAll takes all.
+notification_pending() {
+    local tp
+    tp=$(hone_extract_top_field "$INPUT" transcript_path)
+    [ -f "$tp" ] && command -v jq >/dev/null 2>&1 || return 1
+    grep -F '"type":"queue-operation"' "$tp" 2>/dev/null | jq -es '
+        reduce .[] as $r ([];
+            if $r.operation == "enqueue" then . + [$r.content // ""]
+            elif $r.operation == "dequeue" then .[1:]
+            elif $r.operation == "remove" then
+                (indices($r.content // "") | first) as $i
+                | if $i == null then . else .[:$i] + .[$i + 1:] end
+            elif $r.operation == "popAll" then []
+            else . end)
+        | any(.[]; contains("<task-notification>"))' >/dev/null 2>&1
+}
+
 # A session that a watch names by its tab: push its turn end.
 if [ -n "${HERDR_TAB_ID:-}" ]; then
     for f in "$STATE"/sessions/*; do
@@ -99,7 +127,7 @@ bash "$COORD" ensure >/dev/null 2>&1
 
 COUNTER="$STATE/watch-block.$SID"
 pid=$(cat "$STATE/wait.$SID.pid" 2>/dev/null)
-if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+if { [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; } || notification_pending; then
     rm -f "$COUNTER"
     exit 0
 fi

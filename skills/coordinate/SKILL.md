@@ -137,7 +137,8 @@ The harness then wakes you. Handle the events, print the board, and start the
 wait again. Exit 3 means the wait ended on time with no event, before the
 harness limit could kill it. Start it again at once and end the turn. Never
 ask the person to wake you. A Stop hook refuses to end your turn while a
-watched session runs and no wait runs. Never write a watcher or a poller of
+watched session runs and nothing will wake you: no wait runs, and no
+returned wait's notification is queued. Never write a watcher or a poller of
 your own, and never poll with `herdr agent wait`: it returns at once on a
 session that is already idle.
 

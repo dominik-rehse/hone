@@ -171,6 +171,24 @@ out=$(stop main-1)
 [ -z "$out" ] && [ ! -f "$STATE/watch-block.main-1" ] && ok "a live wait lets the turn end and resets the count" \
     || bad "a live wait should pass: $out"
 kill "$live" 2>/dev/null; wait "$live" 2>/dev/null
+# The field shape: the wait returned at once on a queued event, and its task
+# notification waits in the queue when the turn ends. That notification wakes
+# the session, so the turn may end.
+TP="$(dirname "$REPO")/transcript.jsonl"
+q() { printf '{"type":"queue-operation","operation":"%s"%s}\n' "$1" "${2:+,\"content\":\"$2\"}"; }
+stop_tp() { printf '{"session_id":"%s","cwd":"%s","transcript_path":"%s"}' "$1" "$REPO" "$TP" | bash "$WATCH"; }
+{ q enqueue 'later prompt'; q dequeue; q enqueue '<task-notification>\n<task-id>w1</task-id>'; } > "$TP"
+out=$(stop_tp main-1)
+[ -z "$out" ] && [ ! -f "$STATE/watch-block.main-1" ] && ok "a queued task notification lets the turn end" \
+    || bad "a pending notification should pass: $out"
+q remove '<task-notification>\n<task-id>w1</task-id>' >> "$TP"
+out=$(stop_tp main-1); rm -f "$STATE/watch-block.main-1"
+echo "$out" | grep -q '"decision":"block"' && ok "a notification a turn already took does not count" \
+    || bad "a removed notification should block: $out"
+{ q enqueue '<task-notification>\n<task-id>w2</task-id>'; q enqueue 'a person typed'; q popAll; q enqueue 'a person typed'; } >> "$TP"
+out=$(stop_tp main-1); rm -f "$STATE/watch-block.main-1"
+echo "$out" | grep -q '"decision":"block"' && ok "a queue with no task notification blocks" \
+    || bad "only a task notification should pass: $out"
 stop main-1 >/dev/null; out2=$(stop main-1); out3=$(stop main-1)
 echo "$out2" | grep -q '"decision":"block"' && echo "$out3" | grep -q '"systemMessage"' && ! echo "$out3" | grep -q '"decision"' \
     && ok "the third Stop with no wait lets the turn end and tells the person" || bad "cap: $out3"
