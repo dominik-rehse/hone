@@ -1353,6 +1353,19 @@ out=$(cd "$REPO" && printf '{"session_id":"m1"}' | bash "$GATE")
 [ "$(wc -l < "$RUNS")" -eq 6 ] && ok "a red tree runs again at the next stop" || bad "a red tree should run again (runs: $(wc -l < "$RUNS"))"
 rm -f "$REPO/src/auth/new.ts" "$MEMO" "$REPO/.git/hone-gate-blocks"
 git -C "$REPO" checkout -q -- src/auth/login.ts scripts/run-tests.sh
+# An edit of the same size in the same second as the index keeps the file's
+# cached stat. The tree hash read the edit as no change when its copy of the
+# index got a fresh mtime, so a red tree could skip the unit run. This test
+# flaked on that (2026-10-14). The copy keeps the index's mtime, and git then
+# compares the content.
+RACY=$(mktemp -d)
+(cd "$RACY" && git init -q && echo "exit 0" > f.sh && touch -d '2026-01-01 00:00:00' f.sh && git add f.sh)
+t1=$(cd "$RACY" && bash -c ". '$PLUGIN_ROOT/hooks/common.sh'; hone_tree_state")
+(cd "$RACY" && echo "exit 1" > f.sh && touch -d '2026-01-01 00:00:00' f.sh .git/index)
+t2=$(cd "$RACY" && bash -c ". '$PLUGIN_ROOT/hooks/common.sh'; hone_tree_state")
+[ -n "$t1" ] && [ "$t1" != "$t2" ] && ok "a same-size edit in the index's second changes the tree" \
+    || bad "a same-size edit in the index's second should change the tree ($t1 = $t2)"
+rm -rf "$RACY"
 
 # An edit inside a submodule leaves the parent's tree key as it was, because
 # git records only the submodule's HEAD. While a submodule holds uncommitted

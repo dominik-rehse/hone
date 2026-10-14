@@ -390,7 +390,7 @@ hone_tree_state() {
     local gd idx tree
     gd=$(git rev-parse --absolute-git-dir 2>/dev/null) || return 0
     idx=$(mktemp "${TMPDIR:-/tmp}/hone-index.XXXXXX" 2>/dev/null) || return 0
-    cp "$gd/index" "$idx" 2>/dev/null || rm -f "$idx"
+    cp -p "$gd/index" "$idx" 2>/dev/null || rm -f "$idx"
     tree=$(GIT_INDEX_FILE="$idx" git add -A . >/dev/null 2>&1 \
            && GIT_INDEX_FILE="$idx" git write-tree 2>/dev/null)
     rm -f "$idx"
