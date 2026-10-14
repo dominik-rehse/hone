@@ -146,6 +146,8 @@ ADAPTER="scripts/run-tests.sh"
 #
 # docs/-only dirt triggers the suite too. The unit tier plus type-check and
 # lint is cheap, and one rule the reader can state beats an exception list.
+# The rule is hone_is_durable's, so a spike note or an open question alone,
+# which that function leaves writable, triggers nothing.
 gate_durable_dirt() {
     local entry xy path expect_orig=0
     while IFS= read -r -d '' entry; do

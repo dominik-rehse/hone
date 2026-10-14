@@ -68,8 +68,12 @@ behind the team's, so first run
   surface, or a test the codebase made dead.
 - **Dead code**: a `src/` symbol or file with no remaining caller (confirm with a
   repo-wide search, not a guess).
-- **Resolved open question**: a `docs/open-questions.md` entry running code has
-  already settled.
+- **Resolved open question**: a file in `docs/open-questions/` whose question
+  running code has already settled.
+- **Dangling open-question citation**: a citation of a
+  `docs/open-questions/<slug>.md` path whose file is gone. Repoint it as a
+  repair when the commit that deleted the file names where the answer went.
+  Otherwise escalate it.
 - **Leftover artifact**: a landed Plan never deleted, a `.plans/<change>/`
   reference directory consolidate never settled, or a merged `hone/*` branch land
   forgot to remove.
@@ -232,7 +236,7 @@ defends stays.
 
 Anything that needs a human call is **logged, never guessed at**. That covers a
 Decision that may be stale but only the owner knows, and a Note whose invariant
-you can't confirm. Log it as a `docs/open-questions.md` entry, or an escalation.
+you can't confirm. Log it as a file in `docs/open-questions/`, or an escalation.
 `garden` never deletes recorded rationale just to have a cut to show.
 
 ### Batch what is left: one Plan per area, never one per finding

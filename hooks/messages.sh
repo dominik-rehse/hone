@@ -558,6 +558,14 @@ Why: the gate runs the project's test adapter.
 EOF
 }
 
+msg_session_old_open_questions() {
+    cat <<'EOF'
+hone: docs/open-questions.md still holds the open questions in one file with numbered entries.
+Do: when no change is in flight, move each question to docs/open-questions/<slug>.md and repoint its citations, as hone's docs/upgrading.md says under 0.81.0.
+Why: parallel changes conflicted on that file and reused numbers.
+EOF
+}
+
 msg_session_no_src() {
     cat <<'EOF'
 hone: this project has no src/ directory, so the guard and the gate do nothing.
@@ -638,7 +646,7 @@ msg_setup_gitignore_ok() {
 }
 
 msg_setup_docs_created() {
-    printf 'hone setup: created docs/decisions, docs/notes, docs/open-questions.md, .plans/, and src/.\n'
+    printf 'hone setup: created docs/decisions, docs/notes, docs/open-questions, .plans/, and src/.\n'
 }
 
 msg_setup_missing_deny() {
@@ -2035,6 +2043,7 @@ attention|plain|msg_attention_stale_claim|<change>
 attention|plain|msg_attention_memory_project|<file>.md|<memory-dir>
 session-start|human|msg_session_no_adapter
 session-start|human|msg_session_no_src
+session-start|human|msg_session_old_open_questions
 session-start|human|msg_session_missing_deny|<missing deny rule>
 session-start|plain|msg_session_attention_heading
 session-start|plain|msg_session_attention_context

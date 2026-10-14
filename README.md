@@ -127,7 +127,7 @@ Then, once per project, in a Claude Code session:
 It runs `scripts/setup.sh` for the mechanics. The script installs a test
 adapter `scripts/run-tests.sh` for your ecosystem, gitignores for the
 per-developer files, the docs skeleton, and `src/`. The docs skeleton is
-`docs/decisions/`, `docs/notes/`, and `docs/open-questions.md`. The skill
+`docs/decisions/`, `docs/notes/`, and `docs/open-questions/`. The skill
 then verifies the result: it executes each installed adapter and adapts
 it where the template does not fit the project. Examples of a bad fit: an
 ecosystem the script cannot detect, a missing `test` script, an

@@ -90,7 +90,7 @@ flowchart TD
     shape -->|"No, it is behavior<br/>or rationale"| kind{"What is it?"}
     kind -->|"A decision, and why<br/>it was made"| dec["Write it to<br/>decisions/"]
     kind -->|"An area's map and<br/>its one invariant"| note["Write it to<br/>notes/"]
-    kind -->|"A bet only running<br/>code can settle"| oq["Log it in<br/>open-questions.md"]
+    kind -->|"A bet only running<br/>code can settle"| oq["Log it in<br/>open-questions/"]
 ```
 
 *Committed and permanent. These survive the change:*
@@ -117,9 +117,10 @@ flowchart TD
   invariant. It points at the relevant Decision and the key types. One
   per existing `src/` area at most, size-capped, and its pointers can be
   a `Governs:` line too.
-- *Open questions*: `docs/open-questions.md`. Assumptions only running
-  code can settle. Consolidate closes or deletes an entry rather than
-  letting entries accumulate.
+- *Open questions*: `docs/open-questions/<slug>.md`, one file per
+  assumption only running code can settle, cited by its path.
+  Consolidate deletes it once settled and repoints the citations. With
+  no number and no index, parallel changes share no file.
 - *Spikes*: `docs/spikes/<YYYY-MM-DD>-<slug>`, one dated stem holding
   everything one probe left behind, of any type: the note, the probe
   code, a mockup, a capture. This is the one artifact hone allows to go

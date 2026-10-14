@@ -43,9 +43,8 @@ too. Then read every ready Plan and compare them pairwise:
   file format).
 - any Decision or Note more than one would touch. A Plan's file list names
   `src/` files and under-declares this. So read each Plan for the doc topics
-  its consolidate step will edit. That means the Decision it makes, the Note
-  it amends, the open question it closes. Consolidate is where parallel lands
-  actually collide.
+  its consolidate step will edit. That means the Decision it makes and the
+  Note it amends. Consolidate is where parallel lands actually collide.
 - any **reference** two Plans both name. A shared fixture or schema file is a
   hard signal: they are not independent even if their `src/` files are disjoint.
 
@@ -63,24 +62,20 @@ parallel. `c` touches the same schema as `a`: after `a` lands").
 
 ## Shared ledgers
 
-A single shared file every change may touch (`docs/open-questions.md`, a
-roadmap the project keeps) collides in its own way. Edits land as adjacent
-hunks in one file, so the second land conflicts. An id ledger collides
-silently. Two worktrees cut from the same base take the same next free
-open-question id. Each tree's suite stays green, because each tree's own
-file still holds that id free. The merge is what puts both entries in one
-file, so the collision first appears at land. Two rules:
+A single shared file every change may touch (a roadmap the project keeps, a
+changelog) collides in its own way. Edits land as adjacent hunks in one file,
+so the second land conflicts. So parallel Plans do not each edit a shared
+ledger. Give the shared edits (roadmap pruning, cross-change bookkeeping) to
+one docs-only follow-up Plan that runs last, alone. That Plan confirms each
+sibling landed by reading the landed code, never git history. When a check
+fails, it stops and reports rather than deletes. It is also the home for a
+finding a sibling run surfaced but could not file.
 
-- Parallel Plans do not each edit a shared ledger. Give the shared edits
-  (roadmap pruning, cross-change bookkeeping) to one docs-only follow-up Plan
-  that runs last, alone. That Plan confirms each sibling landed by reading
-  the landed code, never git history. When a check fails, it stops and
-  reports rather than deletes. It is also the home for a finding a sibling
-  run surfaced but could not file.
-- A change may still close or add an open question of its own, when no
-  sibling in the same fan-out touches that file. On an id collision at land,
-  renumber to the next free id on the current trunk, fold the trunk in, and
-  land again.
+Open questions are no ledger. Each is its own file in `docs/open-questions/`,
+so a change closes or adds its own question in parallel with its siblings.
+Two siblings that pick the same slug add the same path, and the second land
+conflicts on it. Then rename that change's question to a free slug, repoint
+its citations, fold the trunk in, and land again.
 
 ## Claims
 

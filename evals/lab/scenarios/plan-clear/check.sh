@@ -6,7 +6,7 @@ grep -E '^## What' "$plan" >/dev/null 2>&1 && grep -E '^## Why' "$plan" >/dev/nu
 grep -F 'Hellowo…' "$plan" >/dev/null 2>&1 && ok "the Plan carries the proof of the sketch" || bad "the Plan lost the proof that the sketch gave"
 # /hone:plan writes a Plan and nothing else. A spike note and an open
 # question are the two other things that it may write.
-diff_confined '^(\.plans/|docs/spikes/|docs/open-questions\.md$)'
+diff_confined '^(\.plans/|docs/spikes/|docs/open-questions/[^/]+\.md$)'
 worktree_removed
 reviewed_once
 # Each call of the plan-critic is one round. A round beyond the first means

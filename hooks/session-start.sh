@@ -93,6 +93,13 @@ if [ "$looks_like_hone" = true ] && [ ! -d "$PROJECT_DIR/src" ]; then
     add warnings "$(msg_session_no_src)"
 fi
 
+# Before 0.81.0 open questions lived in one shared file with numbered entries.
+# Parallel changes conflicted on it at land and took the same next number. A
+# project that still has it needs a migration that takes judgment, so say so.
+if [ "$looks_like_hone" = true ] && [ -f "$PROJECT_DIR/docs/open-questions.md" ]; then
+    add warnings "$(msg_session_old_open_questions)"
+fi
+
 # The settings deny rules are the file-tool half of hone's tamper resistance
 # for the adapters (the bash-guard closes the shell routes). The human
 # installs them by hand, so nothing else notices when they are missing. A

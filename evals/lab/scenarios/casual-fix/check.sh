@@ -1,6 +1,6 @@
 # hone_is_durable (hooks/common.sh) is the definition. Spike notes and the
-# open-questions ledger are writable in the primary tree, so they are not here.
-durable=(src tests docs db scripts ':(exclude)docs/spikes' ':(exclude)docs/open-questions.md')
+# open questions are writable in the primary tree, so they are not here.
+durable=(src tests docs db scripts ':(exclude)docs/spikes' ':(exclude)docs/open-questions/*.md')
 direct=$(git log --first-parent --no-merges --format='%h %s' "$LAB_BASE..main" -- "${durable[@]}")
 [ -z "$direct" ] && ok "no commit on main changed a durable path outside a merge" \
     || bad "a commit made directly on main changed a durable path: $(printf '%s' "$direct" | head -3 | tr '\n' '|')"

@@ -331,7 +331,8 @@ neither. When you want that record, route the edit through the loop.
   notification is queued counts too. It also restarts a dead
   ticker. In a watched session it writes a `turn-ended` event.
 - *session-start* injects the workflow rule from the plugin. It warns when
-  the test adapter or the `src/` layout is missing. It also warns, naming
+  the test adapter or the `src/` layout is missing, or an old
+  `docs/open-questions.md` remains. It also warns, naming
   the missing rules, when the settings lack any rule from the canonical deny
   list (`templates/settings/deny-rules.txt`). You see the warnings, and the
   model gets them with the rule. In the primary tree it shows you
@@ -539,7 +540,7 @@ repo/                            # the primary tree: a merge target, never a wor
 │   ├── decisions/<topic>.md     # one present-tense decision + why, per topic
 │   ├── notes/<area>.md          # optional per-area map + one invariant, size-capped
 │   ├── spikes/<date>-<slug>*    # optional frozen spike: note, probe, captures, any type
-│   └── open-questions.md        # bets only running code can settle
+│   └── open-questions/<slug>.md # one bet only running code can settle, per file
 ├── scripts/run-tests.sh         # the test adapter (plus optional typecheck/lint/proof/setup-tree)
 ├── .plans/<change>.md           # tracked; written at plan, deleted at consolidate
 ├── .plans/<change>/             # optional reference files for the Plan
@@ -609,9 +610,8 @@ probe needs no test and no worktree, and nothing there has to keep the suite
 green by itself.
 
 Both `plan` (before a Plan exists) and `consolidate` (after the change) write a
-spike. `docs/spikes/` and `docs/open-questions.md` are the two paths under
-`docs/` the guard leaves writable in the primary tree, exactly as it leaves
-`.plans/`. A probe and a plan-time open question both precede the Plan. Most
+spike. `docs/spikes/` and `docs/open-questions/` are the two paths under
+`docs/` the guard leaves writable in the primary tree. A probe and a plan-time open question both precede the Plan. Most
 probes leave nothing behind: keep a spike only when its method or its dead
 ends would save a future reader from running it again.
 

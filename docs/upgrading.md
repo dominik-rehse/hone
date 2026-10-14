@@ -66,10 +66,6 @@ mechanical steps.
      changes without the marker. Turn it on with no worktree in flight and
      the primary branch pushed. Then no branch was cut from a commit that a
      later rebase moves. The remote must accept pushes to `refs/hone/*`.
-   - *The review names its level since 0.53.1*: the loop's nested
-     `/code-review` runs at `high`, which may cost more than your last
-     level. Nothing to install.
-
    - *Land demands the `Cut:` line since 0.55*: `worktree.sh land` refuses a
      branch on which no commit body carries `Cut: <what>` (or `Repair: <what>`
      for a garden repair), with exit 2. A change that removed nothing writes
@@ -78,13 +74,6 @@ mechanical steps.
      already. A worktree that was in flight during the upgrade may lack it.
      Amend its commit as the refusal says, and land again. A script of yours
      that lands a branch must write the line too.
-   - *Two more things since 0.55 need nothing from you*: hone names a
-     `src/<area>/` over `HONE_AREA_MAX_LINES` (default 3000) when a change
-     touched it. Since 0.56 `/hone:garden` names such an area
-     across the whole repo, and puts it into a proposed Plan. And the loop
-     hands the `consolidate-critic` every Note and Decision about the changed
-     code, which `worktree.sh governed` lists. A `Governs:` line on a Decision
-     is what puts it on that list, so the lines are worth more than before.
    - *The critics and the review run on the `opus` alias since 0.59*: they
      named claude-opus-5. They now run on the newest Opus that your Claude
      Code maps the alias to, and a new Opus reaches them without a hone
@@ -126,6 +115,14 @@ mechanical steps.
    - *The nag is gone since 0.78*: restart running sessions. Setup deletes
      the leftover `hone-nag-seen`. A run now fixes the hygiene findings of
      its change, and session start shows you what needs you.
+   - *One file per open question since 0.81*: `docs/open-questions/<slug>.md`
+     replaces `docs/open-questions.md`, and the slug replaces the `OQ-N`
+     number. Session start warns while the old file remains. With no change
+     in flight, move each open entry to its own file, with `# ` and the
+     question on its first line. Repoint each citation of its number to the
+     new path, in tests too, and the citation of a closed number to the
+     Decision or Note that settled it. A number another repo owns stays.
+     Delete the old file, and land it all as one change.
    - *Automatic grants since 0.66*: to let every irreversible change land
      without you, commit an empty `.hone-grant-auto` at the repo root. A
      `#` line in it can say who decided and why. Nothing changes without

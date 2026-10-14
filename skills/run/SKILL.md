@@ -239,10 +239,11 @@ build.
   a map + one invariant, size-capped, 1:1 with an area).
 - a decision + why (and a rejected alternative, if load-bearing) → a **Decision**
   (`docs/decisions/<topic>.md`, present-tense, one per topic, edited in place).
-- an assumption running code has now settled → **close** its
-  `docs/open-questions.md` entry.
+- an assumption running code has now settled → **close** its open question:
+  delete `docs/open-questions/<slug>.md`, and repoint each citation of that
+  path to the Decision, Note, or code that now holds the answer.
 - an assumption this change's proof run has **not** settled yet → **leave** its
-  `docs/open-questions.md` entry open, and write no Decision that states or
+  file in `docs/open-questions/`, and write no Decision that states or
   predicts the answer. A Decision states what is settled. The open question
   holds the rest, and consolidate stays silent on it. A change whose Plan
   carries a `Proof: real-environment` line can never report its own proof
@@ -370,7 +371,7 @@ apply.
   second review.
 - **Decline** a confirmed finding only when it contradicts the Plan's explicit
   stance or falls outside the change's scope. Record the decline **durably**:
-  the landing commit body, or a `docs/open-questions.md` entry for a real defect
+  the landing commit body, or a file in `docs/open-questions/` for a real defect
   deferred rather than dismissed. That is how an out-of-scope finding becomes
   follow-up material instead of expanding the change. A decline that lives only in
   the conversation is lost to the next cycle.
