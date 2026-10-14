@@ -212,18 +212,26 @@ for c in 'flock \"$(git rev-parse --git-common-dir)/hone-land.lock\" sleep 99999
          'rm .git/hone-{gate-blocks,gate-unit}' \
          'cp forged .git/worktrees/x/hone-gate-g*' \
          'cat .git/hone-land.*' \
-         'cat .git/hone-land.lock.log'; do
+         'cat .git/hone-land.lock.log' \
+         'flock .git/hone-land.lo\"c\"? true' \
+         'cat .git/{hone-a.md,hone-land.loc?}' \
+         'cat .git/hone-a.md/../hone-gat?-*' \
+         'ls .git/hone-x.md*' 'ls .git/hone-x.md{,.lock}'; do
     gs_denied "$(bg "$c")" && ok "gate state denied: $c" || bad "a command naming the gate's state should deny: $c"
 done
 # Ordinary work names hone- too, and none of it may deny: the helpers, the
-# dot-file globs, and the land log that a refused land names.
+# dot-file globs, the land log that a refused land names, and a file name
+# such as hone-guard.md that code puts in one word with a slice (the field
+# shape of 2026-10-14).
 for c in 'bash \"${CLAUDE_PLUGIN_ROOT}/scripts/worktree.sh\" verify' \
          'bash /home/u/.claude/plugins/cache/hone/hone/0.77.0/scripts/worktree.sh land my-change' \
          'ls .hone-grant/*' 'cat .hone-proof/{a,b}' \
          'tail -50 \"$(git rev-parse --git-common-dir)/hone-land.b10+log-a.log\"' \
          'mktemp -d /tmp/hone-XXXX' \
          'tail \"$(git rev-parse --git-common-dir)/hone-land.${change}.log\"' \
-         'cat .git/hone-land.*.log'; do
+         'cat .git/hone-land.*.log' \
+         'python3 - <<EOF\ns=s[:j]+\"see .claude/rules/hone-guard.md\\n\"+s[j:]\nEOF' \
+         "python3 -c \\\"s=t[:j]+'see hone-guard.md'+t[j:]\\\""; do
     echo "$(bg "$c")" | grep -q 'gate.s state' && bad "ordinary work must not hit the gate-state deny: $c" || ok "no gate-state deny: $c"
 done
 out=$(bg 'flock .git/hone-land.lock true')

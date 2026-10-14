@@ -58,6 +58,17 @@ MARKER_TOKENS='\.hone-off|\.hone-(grant|proof)/'
 # hone-land.<anything>.log word before the glob test. hone-land.lock in
 # any spelled-out form still denies.
 #
+# It also drops a whole file name such as hone-guard.md, with a code or doc
+# extension, when a quote, a backslash, or another character that ends a
+# path follows it. Code in a heredoc puts such a name in one word with a
+# slice, as in `hone-guard.md\n"+s[j:]`, and the glob test denied that in
+# the field (docs/spikes/2026-10-14-field-data-since-0-79-1.md). A shell
+# glob that starts with the literal name can match only files that start
+# with it, and no gate file does. Code that slices the string can build any
+# name, but a quote split builds the same and is an accepted gap above. A
+# glob char, a dot, or a slash after the extension keeps the name, so
+# `hone-x.md*` and `hone-x.md/../*` still reach the test.
+#
 # The gaps, accepted. String matching cannot close a glob over file names:
 # one that does not start with `hone-` reaches the records and the lock
 # (`.git/*gate-b*`, `.git/ho?e-gate-blocks`, `find .git -name '*gate*'`),
@@ -75,6 +86,7 @@ gate_state_named() {
     printf '%s' "$1" | sed -E \
         -e 's/\$\{[^}]*\}/V/g' \
         -e 's/hone-land\.[^[:space:]|;&]*\.log([^A-Za-z0-9_.]|$)/LOG\1/Ig' \
+        -e 's#hone-[A-Za-z0-9_-]+\.(md|txt|json|ya?ml|sh|ts|js|py)([^A-Za-z0-9_./*?{}[-]|$)#NAME\2#Ig' \
         | grep -Eiq "$GATE_GLOB"
 }
 
