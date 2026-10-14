@@ -17,7 +17,10 @@ the repo.
 
 Real use is the main source of work. After a release reaches the
 maintainer's repos and they have run sessions on it, read the transcripts
-since the last field note. Write each failure as a line in
+since the last field note. Start with the counts across all of them:
+`evals/field/extract.py` lists every hook event and critic verdict, and
+its header says how to run it. Then read the sessions behind the counts.
+Write each failure as a line in
 `docs/field-log.md`, and the counts in a dated note under `docs/spikes/`.
 A fix for a field shape ships with a test or a lab scenario that replays
 the shape.

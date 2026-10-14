@@ -2,7 +2,8 @@
 # Run hone's mechanical test suite: the hook unit tests, the hygiene checks,
 # the end-to-end land
 # path (solo and shared mode), the coordinate helper and its watch hook, the table-rewrite reader, the shipped test
-# adapters, the plumbing of the eval harness and of the scenario lab, the
+# adapters, the plumbing of the eval harness and of the scenario lab, the transcript reader
+# of the field pass, the
 # prose integrity checks, and the
 # two checks on the message templates (prose and shape). These are
 # deterministic (no model calls). The critic/rule evals are separate and live
@@ -33,6 +34,9 @@ bash "$DIR/adapters_test.sh" || rc=1
 echo
 echo "### evals_test.sh"
 bash "$DIR/evals_test.sh" || rc=1
+echo
+echo "### field_extract_test.sh"
+bash "$DIR/field_extract_test.sh" || rc=1
 echo
 echo "### lab_test.sh"
 bash "$DIR/lab_test.sh" || rc=1
