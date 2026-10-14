@@ -133,11 +133,13 @@ EOF
 
 # The gate's own state: the suite lock and the records the gate reads. A
 # held lock lets a turn end with no check, and a forged record skips one. The
-# Do line names the check itself and nothing that touches the files.
+# Do line names the check itself and nothing that touches the files. Agents
+# read the lock to learn whether a land runs before a step that loads the
+# machine, so the Do line names status, which says so.
 msg_bashguard_gate_state() {
-    cat <<'EOF'
+    cat <<EOF
 hone bash-guard: this command names a file that holds the hone gate's state: the suite lock or a gate record.
-Do: leave those files to hone's hooks and scripts. Run the check that the gate asks for instead.
+Do: leave those files to hone's hooks and scripts. Run the check that the gate asks for instead. To learn whether a land or a verify runs, run 'bash "$(hone_msg_plugin_root)/scripts/worktree.sh" status'.
 Why: the gate reads them to decide whether a turn may end. A command that takes the lock or edits a record can end a turn with nothing checked.
 EOF
 }
@@ -1705,6 +1707,20 @@ msg_status_worktrees_none() {
     printf -- '- worktrees: none in flight\n'
 }
 
+# $1 = what holds the suite lock, $2 = lands waiting, $3 = verifies waiting.
+msg_status_suite_held() {
+    printf -- '- suite lock: held by %s. Waiting: %s land(s), %s verify(s).\n' "$1" "$2" "$3"
+}
+
+# $1 = lands waiting, $2 = verifies waiting.
+msg_status_suite_free() {
+    if [ "$1" -eq 0 ] && [ "$2" -eq 0 ]; then
+        printf -- '- suite lock: free. No land or verify runs.\n'
+    else
+        printf -- '- suite lock: free. Waiting: %s land(s), %s verify(s).\n' "$1" "$2"
+    fi
+}
+
 msg_status_grant() {
     printf -- '- grant: %s\n' "$1"
 }
@@ -2172,6 +2188,8 @@ status|plain|msg_status_plan_pending|.plans/<change>.md
 status|plain|msg_status_plans_none
 status|plain|msg_status_worktree|<path>|<branch>
 status|plain|msg_status_worktrees_none
+status|plain|msg_status_suite_held|<holder>|<lands>|<verifies>
+status|plain|msg_status_suite_free|<lands>|<verifies>
 status|plain|msg_status_grant|.hone-grant/<change>
 status|plain|msg_status_signoff|.hone-proof/<change>
 status|plain|msg_status_deny_present

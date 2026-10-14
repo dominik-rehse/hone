@@ -300,20 +300,10 @@ gate_block_or_cap() {
 gate_clear_blocks() { rm -f "$(gate_blocks_file)" 2>/dev/null || true; }
 
 # Exit 0 when a verify or a land holds the suite lock right now
-# (<git-common-dir>/hone-land.lock, taken through hone_suite_lock). Two
-# signs must agree: the lock is taken, and the queue's holder record names a
-# live process (hone_queue_holder_live). A bare flock by anything else, such
-# as a server that a suite left running or a lock taken by hand, is not a
-# verify, so it does not let the turn end. The probe takes the lock for an
-# instant on a read-only fd, so it never creates the file and never waits.
-# Without flock, or without the file, the lock reads as free.
+# (<git-common-dir>/hone-land.lock, see hone_suite_busy). A bare flock by
+# anything else does not let the turn end.
 gate_suite_busy() {
-    local lock
-    command -v flock >/dev/null 2>&1 || return 1
-    lock="$(git rev-parse --git-common-dir 2>/dev/null)/hone-land.lock"
-    [ -r "$lock" ] || return 1
-    { flock -n 8; } 8<"$lock" 2>/dev/null && return 1
-    hone_queue_holder_live "$lock.queue"
+    hone_suite_busy "$(git rev-parse --git-common-dir 2>/dev/null)/hone-land.lock"
 }
 
 # Exit 0 when a submodule holds uncommitted work: modified or untracked

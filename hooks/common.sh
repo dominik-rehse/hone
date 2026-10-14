@@ -267,18 +267,33 @@ hone_pid_start() {
 # order. A ticket whose process is gone, or whose pid now names another
 # process, is a waiter that died. It must not hold the queue.
 hone_queue_head() {
-    local t pid
+    local t
     for t in "$1"/[01].*.*; do
         [ -f "$t" ] || continue
-        pid=${t##*.}
-        if kill -0 "$pid" 2>/dev/null \
-           && [ "$(hone_pid_start "$pid")" = "$(cat "$t" 2>/dev/null)" ]; then
+        if hone_ticket_live "$t"; then
             printf '%s\n' "$t"
             return 0
         fi
         rm -f "$t" 2>/dev/null
     done
     return 0
+}
+
+# Exit 0 when ticket $1 belongs to a live taker: the pid in its name runs,
+# and it started when the ticket says.
+hone_ticket_live() {
+    local pid=${1##*.}
+    kill -0 "$pid" 2>/dev/null && [ "$(hone_pid_start "$pid")" = "$(cat "$1" 2>/dev/null)" ]
+}
+
+# Print the live tickets in queue $1 as two counts: lands, then suites.
+hone_queue_counts() {
+    local t lands=0 suites=0
+    for t in "$1"/[01].*.*; do
+        [ -f "$t" ] && hone_ticket_live "$t" || continue
+        case ${t##*/} in 0.*) lands=$((lands + 1)) ;; *) suites=$((suites + 1)) ;; esac
+    done
+    printf '%s %s\n' "$lands" "$suites"
 }
 
 # Exit 0 when the taker that last took the lock through the queue
@@ -288,6 +303,19 @@ hone_queue_holder_live() {
     read -r pid st 2>/dev/null <"$1/holder" || return 1
     [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null \
         && [ "$(hone_pid_start "$pid" | tr -d ' ')" = "${st// /}" ]
+}
+
+# Exit 0 when a verify or a land holds the suite lock $1 right now. Two signs
+# must agree: the lock is taken, and the queue's holder record names a live
+# process. A bare flock by anything else, such as a server that a suite left
+# running or a lock taken by hand, is not a verify. The probe takes the lock
+# for an instant on a read-only fd, so it never creates the file and never
+# waits. Without flock, or without the file, the lock reads as free.
+hone_suite_busy() {
+    command -v flock >/dev/null 2>&1 || return 1
+    [ -r "$1" ] || return 1
+    { flock -n 8; } 8<"$1" 2>/dev/null && return 1
+    hone_queue_holder_live "$1.queue"
 }
 
 # Take the suite lock on fd 9, in arrival order. $1 = the lock file, $2 = the

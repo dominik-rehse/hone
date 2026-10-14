@@ -2543,6 +2543,19 @@ cmd_status() {
         any=1
     done < <(parse_worktrees "$(git worktree list --porcelain 2>/dev/null)" "$main_root")
     [ "$any" -eq 0 ] && msg_status_worktrees_none
+    # The suite lock: whether a land or a verify holds it, and who waits. An
+    # agent asks before a step that loads the machine, such as a commit whose
+    # hook runs the tests, and the bash-guard denies a read of the lock's files.
+    local lock holder_pid holder counts
+    lock="$(cd "$(git rev-parse --git-common-dir)" && pwd)/hone-land.lock"
+    counts=$(hone_queue_counts "$lock.queue")
+    if hone_suite_busy "$lock"; then
+        read -r holder_pid _ <"$lock.queue/holder"
+        holder=$(ps -o args= -p "$holder_pid" 2>/dev/null | sed -nE 's/.*worktree\.sh (.*)/\1/p')
+        msg_status_suite_held "${holder:-a land or a verify}" ${counts}
+    else
+        msg_status_suite_free ${counts}
+    fi
     # Other developers' claims: refs/hone/claim/* on the remote with no
     # worktree here, each with its record (who, where, when). A remote that
     # does not answer lists nothing, and status stays 0.

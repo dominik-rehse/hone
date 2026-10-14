@@ -2015,6 +2015,23 @@ echo "$out" | grep -q "plan pending: .plans/queued.md" || die "status should lis
 rm -f "$REPO/.hone-off" "$REPO/.plans/queued.md"
 step "status reports hooks, adapters, plans, worktrees, deny rules"
 
+# The field shape of 2026-10-14: agents read the suite lock's files to learn
+# whether a land ran before a commit whose hook runs the tests, and the
+# bash-guard denied it. status answers that question.
+echo "$out" | grep -qF -- "- suite lock: free. No land or verify runs." || die "status should report a free suite lock: $out"
+if command -v flock >/dev/null 2>&1; then
+  FW="$(dirname "$REPO")/fake-wt"; mkdir -p "$FW"
+  printf '. "%s/hooks/common.sh"; hone_suite_lock "%s" 30 "$1" && sleep 2\n' \
+      "$PLUGIN_ROOT" "$REPO/.git/hone-land.lock" > "$FW/worktree.sh"
+  bash "$FW/worktree.sh" suite & H1=$!; sleep 0.5
+  bash "$FW/worktree.sh" land & H2=$!; sleep 0.5
+  out=$(bash "$WSH" status) || die "status failed with the suite lock held"
+  wait "$H1" "$H2"
+  echo "$out" | grep -qF -- "- suite lock: held by suite. Waiting: 1 land(s), 0 verify(s)." \
+      || die "status should name what holds the suite lock and count the waiters: $out"
+  step "status says what holds the suite lock and who waits"
+fi
+
 echo "== 6b. a conflicting land exits 9, tree restored =="
 WT_CA=$(bash "$WSH" add conflict-a) || die "worktree add conflict-a"
 WT_CB=$(bash "$WSH" add conflict-b) || die "worktree add conflict-b"

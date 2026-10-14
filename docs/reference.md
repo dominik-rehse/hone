@@ -57,8 +57,8 @@ work. The loop calls it, and you can too:
 
 - `worktree.sh status` shows the state of everything on this page in one
   screen. That covers hooks, adapters, policy files and their commit state,
-  pending Plans, worktrees in flight, grants and sign-offs, and the settings
-  deny rules.
+  pending Plans, worktrees in flight, what holds the suite lock, grants and
+  sign-offs, and the settings deny rules.
 - `worktree.sh add <change>` creates `.worktrees/<change>` on branch
   `hone/<change>`. Creating it is what claims the change, so a second `add`
   of the same name fails. In shared mode (see *Configuration files*) the
@@ -327,8 +327,8 @@ neither. When you want that record, route the edit through the loop.
   line: `◆ [csv-export] worktree ✓ > build ... > verify > …`. A garden
   change gets `worktree > cut > verify > land`, with repair for a repair. It never blocks.
 - *watch* (Stop) blocks a session that watches SUBs from ending its turn
-  with no `coordinate.sh wait` armed, twice at most. A wait that returned
-  and whose notification is still queued counts as armed. It also restarts a dead
+  with no `coordinate.sh wait` armed, twice at most. A returned wait whose
+  notification is queued counts too. It also restarts a dead
   ticker. In a watched session it writes a `turn-ended` event.
 - *session-start* injects the workflow rule from the plugin. It warns when
   the test adapter or the `src/` layout is missing. It also warns, naming
