@@ -15,11 +15,24 @@ The counts and the method are in
 [the 2026-09-25 field-data note](spikes/2026-09-25-field-data-since-0-58.md),
 [the 2026-10-01 note on a coordinated batch](spikes/2026-10-01-field-data-coordinated-batch.md),
 [the 2026-10-09 note on function complexity](spikes/2026-10-09-function-complexity-in-the-field.md),
-and [the 2026-10-09 note on a hotspot batch](spikes/2026-10-09-hotspot-batch.md).
+[the 2026-10-09 note on a hotspot batch](spikes/2026-10-09-hotspot-batch.md),
+and [the 2026-10-14 note since 0.79.1](spikes/2026-10-14-field-data-since-0-79-1.md).
 "Not recorded" in the version field means the source did not record it.
 The MAIN incidents up to 2026-09-28 are counted in
 [the 2026-09-28 note](spikes/2026-09-28-main-tracking-of-subs.md).
 
+- 2026-10-12 to 2026-10-14 · 0.79.1 · `watch` · a coordinator's background
+  `wait` returned at once with a queued event, and the hook blocked the
+  end of the turn because no wait ran. The wake-up was already pending.
+  Each block cost one turn (count 39, one session).
+- 2026-10-14 · 0.79.1 · `bash-guard` · plan sessions read the suite lock's
+  queue to learn whether a land ran before a commit, and the guard denied
+  it. hone has no read-only way to ask, so they used `pgrep` (count 3).
+- 2026-10-14 · 0.79.1 · `bash-guard` · the gate-state glob rule denied a
+  Python heredoc. The word `hone-guard.md\n"+s[j:]` starts with `hone-` and
+  holds `[`.
+- 2026-10-12 · 0.79.1 · `coordinate` · the first `wait` of a coordinator
+  printed events of earlier batches, as on 0.78.1.
 - 2026-10-09 · 0.78.1 · `run` · a split that its Plan called "no change
   of behavior" made an action of an unknown kind throw, where before it
   counted as a revert. The run reported it.
