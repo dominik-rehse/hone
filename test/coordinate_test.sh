@@ -276,12 +276,19 @@ out=$(CLAUDE_CODE_SESSION_ID=main-1 bash "$COORD" start run pdf-export 2>&1); rc
 [ "$rc" -eq 0 ] && echo "$out" | grep -q 'started run pdf-export in tab run:pdf-export (agent run-pdf-export, model opus)' \
     && ok "start run opens the tab, starts the agent, and says so" || bad "start run (rc $rc): $out"
 grep -q -- "^tab create --workspace w --cwd $REPO --label run:pdf-export --no-focus$" "$FAKE/log" \
-    && grep -q -- '^agent start run-pdf-export --kind claude --pane w:p[0-9]* -- --permission-mode auto --model opus$' "$FAKE/log" \
+    && grep -q -- '^agent start run-pdf-export --kind claude --pane w:p[0-9]* --timeout 60000 -- --permission-mode auto --model opus$' "$FAKE/log" \
     && grep -q -- '^pane run w:p[0-9]* /hone:run pdf-export$' "$FAKE/log" \
     && [ "$(grep -c '^pane run' "$FAKE/log")" -eq 1 ] \
     && ok "the session opens in the background, in auto mode, on opus, with one prompt" || bad "start calls: $(cat "$FAKE/log")"
 grep -qx 'owner=main-1' "$STATE/sessions/run-pdf-export" && grep -qx 'change=pdf-export' "$STATE/sessions/run-pdf-export" \
     && ok "start registers the watch for the calling session" || bad "start should watch"
+# The field shape: Claude Code started after herdr's 30 s default and agent
+# start timed out, so start carries its own budget, which the env var sets.
+: > "$FAKE/log"
+out=$(HONE_COORD_START_MS=120000 bash "$COORD" start run slow-start 2>&1); rc=$?
+[ "$rc" -eq 0 ] && grep -q -- '^agent start run-slow-start --kind claude --pane w:p[0-9]* --timeout 120000 -- ' "$FAKE/log" \
+    && ok "start passes HONE_COORD_START_MS to agent start as --timeout" || bad "start timeout (rc $rc): $(cat "$FAKE/log")"
+rm -f "$STATE/sessions/run-slow-start"
 # The field shape: a first prompt arrived as "ude/hone:plan ...". start
 # reads the pane back, and a prompt that does not show whole exits 3.
 out=$(FAKE_CUT=1 HONE_COORD_TYPE_TRIES=2 bash "$COORD" start run cut-prompt 2>&1); rc=$?

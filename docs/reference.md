@@ -187,7 +187,7 @@ file:
   it.
 - `.hone-grant/<change>` is the authorization for one irreversible change.
   Its text lands in the merge commit body. Delete the file to revoke. You
-  write it with `worktree.sh grant`, and the loop never does. A green land deletes the spent file. A
+  write it with `worktree.sh grant`, and the loop never does. A green land deletes it. A
   grant is not pinned to a commit, so a leftover one would authorize a later
   change that reuses the slug.
 - `.hone-proof/<change>` is the sign-off that the real-environment check for
@@ -196,12 +196,12 @@ file:
   `worktree.sh attest` or your own editor, and the loop never does. A
   sign-off that opened
   the proof gate lands in the merge commit body like a grant, and a green
-  land deletes the spent file.
+  land deletes it.
 
-Two environment variables tune the cross-session mechanics.
+Two variables tune the cross-session mechanics.
 `HONE_LAND_LOCK_TIMEOUT` sets the seconds a land or full-suite run waits for
 the lock (default 600). Takers queue, and a land goes first. A
-land's wait pauses while a run holds the lock. `HONE_LAND_RETRIES` sets how
+land's wait pauses while a run holds it. `HONE_LAND_RETRIES` sets how
 many times land redoes merge and suite after the primary branch moved, or
 the remote rejected its push (default 3).
 
@@ -209,9 +209,10 @@ the remote rejected its push (default 3).
 names a `src/<area>/` (default 3000). `HONE_GATE_BLOCK_CAP` sets how many
 identical failures the gate blocks a turn end for before it lets the turn
 end (default 3). `HONE_COORD_TICK` (15), `HONE_COORD_QUIET`
-(600), and `HONE_COORD_WAIT` (540, then exit 3) set the coordinate seconds.
-`HONE_COORD_TYPE_TRIES` (10) sets how long `start` and `send` check
-their text.
+(600), and `HONE_COORD_WAIT` (540, then exit 3) set seconds.
+`HONE_COORD_START_MS` (60000) is the milliseconds `start` waits.
+`HONE_COORD_TYPE_TRIES` (10) sets the checks of `start` and `send`
+on their text.
 
 ## Hooks
 

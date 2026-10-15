@@ -1806,7 +1806,7 @@ msg_coord_herdr_step() {
     local step="$1" out="$2"
     cat <<EOF
 hone coordinate: herdr refused the step "$step", so the session did not start.
-Do: read herdr's answer below, fix the cause, and start the change again. Close the tab if it stays empty.
+Do: read herdr's answer below, fix the cause, and start the change again. Close the tab if it stays empty, after you check that it did not start late and claim the change.
 Why: a session that never got its prompt runs nothing.
 $(hone_msg_block "$out")
 EOF

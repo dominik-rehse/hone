@@ -206,6 +206,10 @@ set -uo pipefail
 . "$(dirname -- "${BASH_SOURCE[0]}")/worktree.sh"
 
 HONE_COORD="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/coordinate.sh"
+# HONE_COORD_START_MS (default 60000) is how long `start` lets herdr wait for
+# Claude Code to come up in the new tab. herdr's own default is 30000, and a
+# repo with many SessionStart hooks needs longer. A session that starts after
+# herdr gave up still takes its prompt and can claim the change.
 # A blocked agent waits this long before the ticker calls it a need. herdr
 # reports a short blocked state while it reads a new screen.
 COORD_BLOCKED=30
@@ -821,7 +825,7 @@ cmd_start() {
     out=$(herdr_call tab create --workspace "$HERDR_WORKSPACE_ID" --cwd "$main_root" --label "$label" --no-focus 2>&1)
     tab=$(json_str "$out" tab_id); pane=$(json_str "$out" pane_id)
     [ -n "$tab" ] && [ -n "$pane" ] || { msg_coord_herdr_step "tab create" "$out" >&2; return 2; }
-    out=$(herdr agent start "$agent" --kind claude --pane "$pane" -- --permission-mode auto --model "$model" 2>&1) \
+    out=$(herdr agent start "$agent" --kind claude --pane "$pane" --timeout "${HONE_COORD_START_MS:-60000}" -- --permission-mode auto --model "$model" 2>&1) \
         || { msg_coord_herdr_step "agent start" "$out" >&2; return 2; }
     # agent start returns when herdr sees the agent. Claude Code's input box
     # can come later, so wait for idle before the first keys.
