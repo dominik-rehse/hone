@@ -90,7 +90,7 @@ flowchart TD
     shape -->|"No, it is behavior<br/>or rationale"| kind{"What is it?"}
     kind -->|"A decision, and why<br/>it was made"| dec["Write it to<br/>decisions/"]
     kind -->|"An area's map and<br/>its one invariant"| note["Write it to<br/>notes/"]
-    kind -->|"A bet only running<br/>code can settle"| oq["Log it in<br/>open-questions/"]
+    kind -->|"Open work: a bet,<br/>a defect, a call"| oq["File it in<br/>issues/"]
 ```
 
 *Committed and permanent. These survive the change:*
@@ -105,7 +105,7 @@ flowchart TD
 - *Decisions*: `docs/decisions/<topic>.md`. Present tense: the current
   decision and why. Record a rejected alternative when that stops a dead
   option from coming up again. A claim a later proof run will settle is
-  not a decision. It stays in the open question below, and consolidate
+  not a decision. It stays in its issue below, and consolidate
   writes nothing that predicts its answer. One file per topic, edited in
   place, landing with the code it governs. An optional `Governs:` line
   names the `src/` paths the decision explains. `worktree.sh hygiene`
@@ -117,10 +117,12 @@ flowchart TD
   invariant. It points at the relevant Decision and the key types. One
   per existing `src/` area at most, size-capped, and its pointers can be
   a `Governs:` line too.
-- *Open questions*: `docs/open-questions/<slug>.md`, one file per
-  assumption only running code can settle, cited by its path.
-  Consolidate deletes it once settled and repoints the citations. With
-  no number and no index, parallel changes share no file.
+- *Issues*: `docs/issues/<slug>.md`, one file per piece of open work,
+  cited by its path. A `Type:` line says what it is, and a `Waits on:`
+  line says what must happen first: nothing, evidence from running code,
+  the owner's call, or an upstream party. Consolidate
+  deletes the file once settled and repoints the citations. With no
+  number and no index, parallel changes share no file.
 - *Spikes*: `docs/spikes/<YYYY-MM-DD>-<slug>`, one dated stem holding
   everything one probe left behind, of any type: the note, the probe
   code, a mockup, a capture. This is the one artifact hone allows to go
@@ -128,8 +130,7 @@ flowchart TD
   It carries the question, the probe, the finding, and a forward pointer
   to the Decision or Note that holds the finding now. Nobody maintains a
   spike against the code. It never claims to describe the present, so it
-  cannot mislead. Spikes are rare by design: most probes answer their
-  question and leave nothing behind.
+  cannot mislead. Most probes leave nothing behind.
 - *Git history*: what changed and why, at each point in time.
 
 *Tracked but temporary. These go away when the change lands:*
@@ -158,15 +159,10 @@ the hooks, the critics, and `garden`, so nothing ever corrects it.
 Session start names such entries. The fix is to land the content in `docs/` through
 consolidate, where review and later cuts can reach it.
 
-*Outside the routing: forward-looking planning.* Everything above sorts
-what a change *leaves behind*. A document about work nobody has started
-leaves nothing behind, so none of these rules reach it, and a project may
-keep one. hone keeps [`roadmap.md`](roadmap.md) for its own build-out.
-Three limits stop such a document from becoming the pile this model
-exists to prevent. It is one file. It describes work, never behavior,
-because the code and the tests carry behavior. And it shrinks as the work
-lands: whatever a landed change settles moves into a Decision at
-consolidate, and the entry goes.
+*Outside the routing: a roadmap.* A project may keep one file that
+orders its open work, as hone keeps [`roadmap.md`](roadmap.md). It links
+to issues for the detail. It describes work, never behavior, because the
+code and the tests carry behavior. And it shrinks as the work lands.
 
 *Enforcement:* the guard, gate, bash-guard, and dirty-guard hooks,
 described in [`reference.md`](reference.md). In short: no production code
@@ -289,7 +285,7 @@ stop. Only the build⇄verify cycle loops, as many times as it takes. The
 loop may decline a confirmed review finding only when it contradicts the
 Plan's explicit position or falls outside the change. It records the
 decline where the decline survives: in the landing commit body, or as an
-open question for a deferred defect. It never records the decline only in
+issue for a deferred defect. It never records the decline only in
 conversation. The run stops in exactly three cases. Either verify
 stays red after the fixes ran out, or the change is genuinely ambiguous,
 or the work is complete. The human's response to a stop is to revise the Plan and
@@ -527,7 +523,7 @@ the remote. The merge still verifies it, and a collision is the same exit 9.
 `plan → run` cleans up at the point of change, but staleness also builds
 up *between* changes, in the parts nothing touches. Examples: a Decision
 whose code moved, a Note nobody re-checked, a test a later change made
-redundant, an open question that running code has answered.
+redundant, an issue that running code has settled.
 
 `garden` (`/hone:garden`) scans the whole repo for that staleness and
 lands the safe changes through the worktree loop, one at a time. It has two units of work, and each carries its own

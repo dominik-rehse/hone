@@ -48,9 +48,19 @@
 #  11. Oversized area: a src/<area>/ whose tracked text files hold more lines
 #      than HONE_AREA_MAX_LINES (default 3000). A generated file does not
 #      count (see hy_area_files).
+#  12. Issue without its fields: a docs/issues/<slug>.md with no valid
+#      `Type:` line or no valid `Waits on:` line (HY_ISSUE_TYPES,
+#      HY_ISSUE_WAITS). The fields are what tell ready work from a bet and
+#      from a decision.
+#  13. Issue that waits on the owner: a docs/issues/<slug>.md whose
+#      `Waits on:` is `owner`. Only the person can settle it.
 
 # Note size cap: lines. "Half a screen".
 HY_NOTE_MAX_LINES=40
+
+# The values of an issue's two fields (checks 12 and 13).
+HY_ISSUE_TYPES="bug security feature chore assumption"
+HY_ISSUE_WAITS="nothing evidence owner upstream"
 
 # ------------------------------------------------------------ tree access
 #
@@ -117,6 +127,27 @@ hy_spike_dated() {
         [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]-*) return 0 ;;
     esac
     return 1
+}
+
+# 12 and 13. Print the value of field $2 (`Type` or `Waits on`) of issue $1:
+# its first line that opens with the field name.
+hy_issue_field() {
+    hy_cat "$1" | sed -n "s/^$2:[[:space:]]*//p" | head -1 | sed 's/[[:space:]]*$//'
+}
+
+# 12. Print what is wrong with the fields of issue $1, or nothing.
+hy_issue_bad() {
+    local t w
+    t=$(hy_issue_field "$1" Type)
+    w=$(hy_issue_field "$1" 'Waits on')
+    case " $HY_ISSUE_TYPES " in
+        *" $t "*) ;;
+        *) [ -n "$t" ] && printf 'an unknown Type: %s\n' "$t" || printf 'no Type: line\n'; return ;;
+    esac
+    case " $HY_ISSUE_WAITS " in
+        *" $w "*) ;;
+        *) [ -n "$w" ] && printf 'an unknown Waits on: %s\n' "$w" || printf 'no Waits on: line\n' ;;
+    esac
 }
 
 # 6. Print each path on doc $1's Governs: line that does not exist. A glob
@@ -307,6 +338,21 @@ hy_stale_claims() {
         [ -d ".worktrees/$c" ] && continue
         printf '%s\n' "$c"
     done < <(git for-each-ref --format='%(refname)' 'refs/hone/claim/' 2>/dev/null | sed 's|^refs/hone/claim/||')
+}
+
+# 12 and 13. Run in the primary tree. Print "owner\t<issue>\t<title>" for
+# each issue that waits on the person, and "bad\t<issue>" for each issue
+# without valid fields.
+hy_issues() {
+    local f
+    for f in docs/issues/*.md; do
+        [ -f "$f" ] || continue
+        if [ -n "$(hy_issue_bad "$f")" ]; then
+            printf 'bad\t%s\n' "$f"
+        elif [ "$(hy_issue_field "$f" 'Waits on')" = owner ]; then
+            printf 'owner\t%s\t%s\n' "$f" "$(sed -n '1s/^#[[:space:]]*//p' "$f")"
+        fi
+    done
 }
 
 # 7. Print "<file>\t<memory-dir>" for each project memory of project root $1.

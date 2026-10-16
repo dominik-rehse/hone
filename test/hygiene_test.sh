@@ -169,6 +169,16 @@ CAP=30 hy "$R" two-groups
 printf '%s\n' "$out" | grep -q '^- This change deletes nothing' && printf '%s\n' "$out" | grep -q '^  Do: ' \
     && ok "a finding is a list item with its Do line indented" || bad "a finding should render as a list item: $out"
 
+echo "== hygiene: an issue the change added or edited (check 12) =="
+both_modes "$R" issue-bare 'mkdir -p docs/issues && printf "# A bug\nIt breaks.\n" > docs/issues/a-bug.md; sed -i 1d README.md' \
+    'rc=1|' 'want|docs/issues/a-bug.md has no Type: line.'
+both_modes "$R" issue-no-wait 'mkdir -p docs/issues && printf "# A bug\n\nType: bug\n" > docs/issues/a-bug.md; sed -i 1d README.md' \
+    'rc=1|' 'want|docs/issues/a-bug.md has no Waits on: line.'
+both_modes "$R" issue-unknown 'mkdir -p docs/issues && printf "# A bug\n\nType: defect\nWaits on: nothing\n" > docs/issues/a-bug.md; sed -i 1d README.md' \
+    'rc=1|' 'want|docs/issues/a-bug.md has an unknown Type: defect.'
+both_modes "$R" issue-fine 'mkdir -p docs/issues && printf "# A bet\n\nType: assumption\nWaits on: evidence\nGated: x\n" > docs/issues/a-bet.md; sed -i 1d README.md' \
+    'rc=0|' 'none|docs/issues'
+
 echo "== hygiene: exit 2 =="
 out=$(cd "$R" && bash "$WSH" hygiene 2>&1); rc=$?
 [ "$rc" -eq 2 ] && ok "no change name exits 2" || bad "no change should exit 2 (got $rc)"
@@ -280,6 +290,21 @@ has "goal.md in" && has "is a 'type: project' harness memory" && ok "a project m
 has 'pref.md' && bad "a user memory is the person's own: $out" || ok "a user memory is not named"
 out=$(cd "$A" && CLAUDE_CONFIG_DIR="$TMP/none" bash "$WSH" attention 2>&1)
 has 'harness memory' && bad "an absent store should yield nothing: $out" || ok "an absent memory store fails open"
+attn "$A"; [ -z "$out" ] && ok "the repository is clean again" || bad "leftover attention items: $out"
+
+echo "== attention: issues (checks 12 and 13) =="
+mkdir -p "$A/docs/issues"
+printf '# Should a viewer see the strip?\n\nType: feature\nWaits on: owner\n' > "$A/docs/issues/viewer-strip.md"
+printf '# A bet\n\nType: assumption\nWaits on: evidence\n' > "$A/docs/issues/a-bet.md"
+printf '# Old question\n' > "$A/docs/issues/old-one.md"
+printf '# Other\n\nType: bug\nWaits on: someone\n' > "$A/docs/issues/other.md"
+attn "$A"
+[ "$rc" -eq 1 ] && has 'docs/issues/viewer-strip.md waits on your decision: Should a viewer see the strip?' \
+    && ok "an issue that waits on the owner is named, with its title" || bad "should name the owner's issue: $out"
+has 'a-bet.md' && bad "a bet is not the person's: $out" || ok "an issue that waits on evidence is not named"
+has '2 issue(s) in docs/issues/ lack a valid Type: or Waits on: line' \
+    && ok "issues without valid fields are counted on one line" || bad "should count two issues without fields: $out"
+rm -rf "$A/docs/issues"
 attn "$A"; [ -z "$out" ] && ok "the repository is clean again" || bad "leftover attention items: $out"
 
 echo

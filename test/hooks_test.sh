@@ -151,23 +151,24 @@ done
 out=$(guard_write "docs/notes/auth.md" "$REPO")
 denied "$out" && ok "docs/ outside spikes/ still denied in the primary tree" || bad "the rest of docs/ must stay denied in the primary tree"
 
-echo "== guard: an open question in docs/open-questions/ is writable in the primary tree =="
+echo "== guard: an issue in docs/issues/ is writable in the primary tree =="
 # The plan skill records a plan-time open question as one file in
-# docs/open-questions/, and /hone:plan runs in the primary tree. So the guard
-# leaves a .md file directly in that directory open, as it leaves docs/spikes/.
-out=$(guard_write "docs/open-questions/driver-dialect.md" "$REPO")
-denied "$out" && bad "an open question file should be writable in the primary tree" || ok "docs/open-questions/<slug>.md allowed"
+# docs/issues/, and /hone:plan runs in the primary tree. So the guard leaves
+# a .md file directly in that directory open, as it leaves docs/spikes/.
+out=$(guard_write "docs/issues/driver-dialect.md" "$REPO")
+denied "$out" && bad "an issue file should be writable in the primary tree" || ok "docs/issues/<slug>.md allowed"
 # The exemption is one level of .md files, never a lookalike, a deeper path, a
-# dot-file, or a path that climbs out.
-for p in docs/open-questions.md docs/open-questions-draft.md docs/open-questions/sub/x.md \
-         docs/open-questions/../notes/auth.md docs/open-questions/x.ts docs/open-questions/.x.md; do
+# dot-file, or a path that climbs out. The old folder is durable again.
+for p in docs/issues.md docs/issues-draft.md docs/issues/sub/x.md \
+         docs/issues/../notes/auth.md docs/issues/x.ts docs/issues/.x.md \
+         docs/issues/.md docs/issues/x.md/.. docs/open-questions/driver-dialect.md; do
     out=$(guard_write "$p" "$REPO")
-    denied "$out" && ok "still denied: $p" || bad "only a .md file directly in docs/open-questions/ is exempt: $p"
+    denied "$out" && ok "still denied: $p" || bad "only a .md file directly in docs/issues/ is exempt: $p"
 done
 # .hone-durable-paths re-protects it for a project that wants that.
-printf 'docs/open-questions/\n' > "$REPO/.hone-durable-paths"
-out=$(guard_write "docs/open-questions/driver-dialect.md" "$REPO")
-denied "$out" && ok ".hone-durable-paths re-protects the open questions" || bad ".hone-durable-paths should re-protect the open questions"
+printf 'docs/issues/\n' > "$REPO/.hone-durable-paths"
+out=$(guard_write "docs/issues/driver-dialect.md" "$REPO")
+denied "$out" && ok ".hone-durable-paths re-protects the issues" || bad ".hone-durable-paths should re-protect the issues"
 rm "$REPO/.hone-durable-paths"
 
 echo "== guard: .hone-off disables it =="
@@ -1837,11 +1838,11 @@ echo "$ctx" | grep -qF 'Edit(./scripts/proof.sh)' && ok "the deny warning reache
 echo "$msg" | grep -qF 'Edit(./scripts/proof.sh)' && ok "the deny warning reaches the person" || bad "systemMessage should carry the deny warning"
 # The adapter and src/ warnings, in a project that has neither.
 SS_BARE=$(mktemp -d); mkdir -p "$SS_BARE/docs/notes"
-printf '# Open questions\n' > "$SS_BARE/docs/open-questions.md"
+mkdir -p "$SS_BARE/docs/open-questions" && printf '# A question\n' > "$SS_BARE/docs/open-questions/q.md"
 out=$(ss_raw "$SS_BARE")
 ctx=$(printf '%s' "$out" | jq -r '.hookSpecificOutput.additionalContext')
 msg=$(printf '%s' "$out" | jq -r '.systemMessage')
-for w in 'no scripts/run-tests.sh' 'no src/ directory' 'missing these deny rules' 'docs/open-questions.md still holds'; do
+for w in 'no scripts/run-tests.sh' 'no src/ directory' 'missing these deny rules' 'docs/open-questions still holds'; do
     echo "$ctx" | grep -qF "$w" && echo "$msg" | grep -qF "$w" \
         && ok "warning '$w' reaches both readers" || bad "warning '$w' should be in both fields: $out"
 done

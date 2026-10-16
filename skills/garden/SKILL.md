@@ -1,6 +1,6 @@
 ---
 name: garden
-description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, oversized areas, broken Governs links, redundant tests, dead code, complexity hotspots, stale open questions, drift in the project's own CLAUDE.md and skills), then land the safe changes one at a time through the same worktree loop. Two units of work, each with its own proof: a cut removes something and the suite proves it safe, and a repair repoints a durable reference in docs/ whose target moved, proven by the new target existing. Escalates every judgment call instead of forcing it, batched as one Plan per area. Use it when the caller asks for a maintenance, cleanup, or staleness pass over the repo, or when a larger workflow schedules one between changes. Never start it on your own in the middle of other work. Invoke with /hone:garden."
+description: "Run hone's continuous-maintenance loop: scan the whole repo for staleness that built up between changes (orphan/oversized Notes, oversized areas, broken Governs links, redundant tests, dead code, complexity hotspots, settled issues, drift in the project's own CLAUDE.md and skills), then land the safe changes one at a time through the same worktree loop. Two units of work, each with its own proof: a cut removes something and the suite proves it safe, and a repair repoints a durable reference in docs/ whose target moved, proven by the new target existing. Escalates every judgment call instead of forcing it, batched as one Plan per area. Use it when the caller asks for a maintenance, cleanup, or staleness pass over the repo, or when a larger workflow schedules one between changes. Never start it on your own in the middle of other work. Invoke with /hone:garden."
 argument-hint: "[area-or-scope]"
 ---
 
@@ -10,8 +10,8 @@ Input: $ARGUMENTS
 
 `plan → run` refines the codebase *at the point of change*: each change cuts its
 own leftovers. But staleness also accumulates *between* changes. A Decision whose code
-moved, a Note nobody re-derived, a test made redundant by a later change, an open
-question running code already settled. Nothing in the change-triggered loop looks
+moved, a Note nobody re-derived, a test made redundant by a later change, an
+issue running code already settled. Nothing in the change-triggered loop looks
 at the repo as a whole. `garden` is that standing look. A human or another agent
 invokes it between changes. It runs the same loop, driven by a scan instead of a
 Plan, and it has two units of work: a **cut** and a **repair**.
@@ -68,21 +68,24 @@ behind the team's, so first run
   surface, or a test the codebase made dead.
 - **Dead code**: a `src/` symbol or file with no remaining caller (confirm with a
   repo-wide search, not a guess).
-- **Resolved open question**: a file in `docs/open-questions/` whose question
-  running code has already settled.
-- **Dangling open-question citation**: a citation of a
-  `docs/open-questions/<slug>.md` path whose file is gone. Repoint it as a
+- **Settled issue**: a file in `docs/issues/` whose question running code
+  has already settled, or whose fix has already landed.
+- **Issue without its fields**: a file in `docs/issues/` that
+  `worktree.sh attention` counts. Choosing its `Type:` and `Waits on:` is
+  prose, so it goes to a Plan (step 4).
+- **Dangling issue citation**: a citation of a
+  `docs/issues/<slug>.md` path whose file is gone. Repoint it as a
   repair when the commit that deleted the file names where the answer went.
   Otherwise escalate it.
 - **Leftover artifact**: a landed Plan never deleted, a `.plans/<change>/`
   reference directory consolidate never settled, or a merged `hone/*` branch land
   forgot to remove.
 - **Spike gone wrong**: a `docs/spikes/<date>-<slug>` whose note points forward
-  at a Decision, Note, or open question that no longer exists. Or one whose note
+  at a Decision, Note, or issue that no longer exists. Or one whose note
   has started describing what the system does *today*. Never cut a spike for
   being old, and never update one. The date says it is frozen history, which is
   the whole reason it escapes the staleness rules. Cut a spike whose pointer to
-  a Decision, Note, or open question is dead, and cut it **whole**, note and
+  a Decision, Note, or issue is dead, and cut it **whole**, note and
   probe and captures together, because the stem is the unit. A pointer to a Plan
   dies by design when the Plan lands, so it is no reason to cut. Treat a note
   that drifted into a second spec as judgment. The live sentence belongs in a
@@ -236,7 +239,8 @@ defends stays.
 
 Anything that needs a human call is **logged, never guessed at**. That covers a
 Decision that may be stale but only the owner knows, and a Note whose invariant
-you can't confirm. Log it as a file in `docs/open-questions/`, or an escalation.
+you can't confirm. Log it as a file in `docs/issues/` with `Waits on: owner`, or
+as an escalation.
 `garden` never deletes recorded rationale just to have a cut to show.
 
 ### Batch what is left: one Plan per area, never one per finding

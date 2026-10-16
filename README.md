@@ -38,7 +38,7 @@ Two hooks apply the rules mechanically:
 A script checks the hygiene of each change, such as a Note that has grown
 too large, and the run fixes what it finds. The run's final report and
 session start name what needs you, such as an area of `src/` that has
-grown too large.
+grown too large, or an issue in `docs/issues/` that waits on your decision.
 
 Two critic agents check the plan and the consolidated result. Their
 prompts tell them to find fault rather than approve. The second critic
@@ -127,7 +127,7 @@ Then, once per project, in a Claude Code session:
 It runs `scripts/setup.sh` for the mechanics. The script installs a test
 adapter `scripts/run-tests.sh` for your ecosystem, gitignores for the
 per-developer files, the docs skeleton, and `src/`. The docs skeleton is
-`docs/decisions/`, `docs/notes/`, and `docs/open-questions/`. The skill
+`docs/decisions/`, `docs/notes/`, and `docs/issues/`. The skill
 then verifies the result: it executes each installed adapter and adapts
 it where the template does not fit the project. Examples of a bad fit: an
 ecosystem the script cannot detect, a missing `test` script, an

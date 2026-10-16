@@ -18,7 +18,7 @@ record of behaviour.
 
 This command helps its caller write that brief. It writes **only** `.plans/<change>.md`
 (and, when the change rests on an untested assumption, a file in
-`docs/open-questions/`). It does not write code, tests, or other docs.
+`docs/issues/`). It does not write code, tests, or other docs.
 
 When you ask the caller something, write plain English. Use short
 sentences. Name things as the person sees them. Explain a file, a
@@ -86,7 +86,7 @@ review can't hold it. Too small and you multiply merge overhead on shared files.
 - If the sketch is really several independent changes, say so and propose the
   split: one Plan each, each landable alone. Independent means disjoint `src/`
   files (they can run in parallel worktrees) AND disjoint consolidate
-  footprints: the Decisions, Notes, and open-question entries each change
+  footprints: the Decisions, Notes, and issue files each change
   will edit. A Plan's file list names only the first, so read each Plan for
   the doc topics its consolidate will touch. `run` re-checks independence
   before fanning out, and the merge verifies it.
@@ -95,29 +95,35 @@ review can't hold it. Too small and you multiply merge overhead on shared files.
 Decide this now. The `plan-critic` (the Plan checker run at step 6) will
 challenge a Plan whose scope is wrong.
 
-### 4. Surface untested assumptions as open questions
+### 4. Surface untested assumptions as issues
 
 The change may rest on an assumption only running code can settle: a driver's
 dialect, an SDK's headless behaviour, a library on this runtime. Record it as
-a question gated to this change, not in the Plan. Each open question is its
-own file, `docs/open-questions/<slug>.md`. The slug names the question's
-subject in kebab case, like a Plan's slug, and it is the question's identifier
-for good: code and docs cite the question by that path. Pick a slug that no
+a question gated to this change, not in the Plan. Each question is its own
+issue file, `docs/issues/<slug>.md`. The slug names the question's
+subject in kebab case, like a Plan's slug, and it is the issue's identifier
+for good: code and docs cite the issue by that path. Pick a slug that no
 file in the directory has. The first line is `# ` and the question as one
-sentence. The body says why it matters and what running code would settle it.
-Never number a question. Parallel Plans took the same next number, and a
+sentence. Under it go two lines, `Type: assumption` and `Waits on: evidence`.
+The body says why it matters and what running code would settle it.
+Never number an issue. Parallel Plans took the same next number, and a
 shared index conflicted at nearly every land. The guard leaves that directory
 open in the primary tree exactly for this step, and the file commits together
 with the Plan (step 7). Distinct from a *decision already made* (that's a
 Decision, written at consolidate). Don't invent questions to fill the
 directory.
 
-Where the assumption decides the *shape* of the Plan, an open question is too
+The caller may instead hand you an issue to plan: a bug, a feature, or a
+chore that waits on nothing. Read its file as the sketch, and name its path
+in the Plan's *Notes for the loop*, so consolidate deletes it when the change
+lands.
+
+Where the assumption decides the *shape* of the Plan, an issue is too
 slow. A Plan written on a guess is a Plan the loop builds wrong. Settle it now
 with a **spike**. Probe it under `docs/spikes/`, where no hook guards what you
 write, so there is no test to write first and no worktree to spawn. Read the
 answer and write the Plan from what you learned. The question never reaches
-`docs/open-questions/`, because running code already answered it.
+`docs/issues/`, because running code already answered it.
 
 Then decide whether the spike is worth keeping, and keep or delete it whole:
 
@@ -131,8 +137,8 @@ Then decide whether the spike is worth keeping, and keep or delete it whole:
   where one file is not enough. Commit it with the Plan.
 
 You write all of this here, in the primary tree. `docs/spikes/` and
-`docs/open-questions/` are the two paths under `docs/` the guard leaves
-open, because a probe and an open question both precede the Plan. What
+`docs/issues/` are the two paths under `docs/` the guard leaves
+open, because a probe and an issue both precede the Plan. What
 you keep is dated and frozen from then on, so nobody updates it later.
 
 One warning about committed probe code. The project's test runner, linter, or
@@ -140,7 +146,7 @@ type-checker may pick up a file under `docs/spikes/`, and the gate needs all
 three green. Exclude the directory in those adapters the first time a spike
 trips one.
 
-One question is never an open question. It goes to the caller, now. If the
+One question is never an issue. It goes to the caller, now. If the
 change touches a persistent schema (a migration, a stored format), ask **"is
 the existing data worth preserving?"** before any migration design. Record
 the answer in the Plan's *Notes for the loop*. Everything downstream hinges on
@@ -177,7 +183,7 @@ suite covers it.>
 - <Files/areas expected to change; whether this is independent of in-flight work.>
 - <Behaviour the change removes, and the files that hold it, named exactly.>
 - <Behaviour the change relies on that no test pins yet.>
-- <Open question this change resolves, by its path in `docs/open-questions/`, if any.>
+- <Issue this change settles or fixes, by its path in `docs/issues/`, if any.>
 
 ## References (optional)
 - `<path>`: <what it carries, in one line.>
@@ -203,7 +209,7 @@ A reference is a **file that exists**, never prose moved into a second file:
   HTML mockup of a screen): put it under `.plans/<slug>/`. That directory belongs
   to the Plan, and it is also the only place you can write one here. `guard`
   denies writes to `docs/`, `src/`, and `tests/` in the primary tree, which is
-  where `/hone:plan` runs. (`docs/spikes/` and `docs/open-questions/` are
+  where `/hone:plan` runs. (`docs/spikes/` and `docs/issues/` are
   the two exceptions, and neither takes a Plan's reference.)
 
 The sketch may be a **dependency or toolchain refresh**: a version bump of a
@@ -243,7 +249,7 @@ The Plan is a tracked artifact. Commit it now (only once the critic returns
 ```bash
 bunx dprint fmt .plans/<slug>.md          # or the project's formatter — scoped to the file, never bare
 git add .plans/<slug>.md .plans/<slug>/   # the second path only if you wrote references
-git add docs/open-questions/<question>.md # only if step 4 added a question
+git add docs/issues/<slug>.md             # only if step 4 added an issue
 git commit -m "chore(plan): <slug>"
 ```
 
@@ -261,9 +267,9 @@ the primary tree. The alternative is an out-of-band delete of an untracked file,
 which the unattended run cannot perform. Both reasons apply to a reference
 exactly as they do to the Plan. An uncommitted reference is invisible inside the
 worktree, so the build fails on a missing file it was told to read. The same
-holds for a step-4 open question: the run cuts its worktree from HEAD, so an
-uncommitted question is invisible to the run. Commit nothing but the Plan, its
-references, and that question. The loop owns every other artifact.
+holds for a step-4 issue: the run cuts its worktree from HEAD, so an
+uncommitted issue is invisible to the run. Commit nothing but the Plan, its
+references, and that issue. The loop owns every other artifact.
 
 When the primary tree holds a committed `.hone-shared` marker, the primary
 branch belongs to a team on a remote. Before the commit, put an owner line
@@ -294,7 +300,7 @@ the user typed, so state it plainly:
 > on `<branch>`. It is tracked: it shows in `git log`, not as an untracked file;
 > the change's landing merge removes it from the tree, and git history keeps it.
 > [I named it `<slug>` rather than `<what-you-typed>` to mirror `src/`.]
-> [Open question added as `docs/open-questions/<question>.md`.]
+> [Issue added as `docs/issues/<slug>.md`.]
 > Run `/hone:run <slug>` to build, verify, consolidate, review, and land it, or
 > `/hone:run` to pick it up with any other ready Plans.
 

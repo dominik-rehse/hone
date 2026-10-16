@@ -496,6 +496,15 @@ Why: the date marks a spike as frozen history.
 EOF
 }
 
+msg_hygiene_issue_fields() {
+    local issue="$1" why="$2"
+    cat <<EOF
+$issue has $why.
+Do: give it one Type: line (bug, security, feature, chore, or assumption) and one Waits on: line (nothing, evidence, owner, or upstream).
+Why: the fields tell ready work from a bet and from a decision for the owner.
+EOF
+}
+
 msg_hygiene_governs_broken() {
     local doc="$1" path="$2"
     cat <<EOF
@@ -544,6 +553,14 @@ msg_attention_stale_claim() {
         "$1" "$(hone_msg_plugin_root)" "$1"
 }
 
+msg_attention_issue_owner() {
+    printf '%s waits on your decision: %s\n' "$1" "$2"
+}
+
+msg_attention_issues_unfielded() {
+    printf "%s issue(s) in docs/issues/ lack a valid Type: or Waits on: line. 'worktree.sh hygiene' names the fix.\n" "$1"
+}
+
 msg_attention_memory_project() {
     printf "%s in %s is a 'type: project' harness memory. Land it as a Decision or a Note.\n" "$1" "$2"
 }
@@ -560,9 +577,9 @@ EOF
 
 msg_session_old_open_questions() {
     cat <<'EOF'
-hone: docs/open-questions.md still holds the open questions in one file with numbered entries.
-Do: when no change is in flight, move each question to docs/open-questions/<slug>.md and repoint its citations, as hone's docs/upgrading.md says under 0.81.0.
-Why: parallel changes conflicted on that file and reused numbers.
+hone: docs/open-questions still holds open questions, and hone now keeps them in docs/issues/.
+Do: when no change is in flight, plan one change that moves each question to docs/issues/<slug>.md with its two fields. hone's docs/upgrading.md lists the steps under 0.82.0.
+Why: the skills write and read docs/issues/ only.
 EOF
 }
 
@@ -646,7 +663,7 @@ msg_setup_gitignore_ok() {
 }
 
 msg_setup_docs_created() {
-    printf 'hone setup: created docs/decisions, docs/notes, docs/open-questions, .plans/, and src/.\n'
+    printf 'hone setup: created docs/decisions, docs/notes, docs/issues, .plans/, and src/.\n'
 }
 
 msg_setup_missing_deny() {
@@ -2033,6 +2050,7 @@ hygiene|agent|msg_hygiene_no_deletions|<count>|<branch>
 hygiene|agent|msg_hygiene_note_oversized|docs/notes/<area>.md|<count>|<cap>
 hygiene|agent|msg_hygiene_note_orphan|docs/notes/<area>.md|<area>
 hygiene|agent|msg_hygiene_spike_undated|docs/spikes/<entry>
+hygiene|agent|msg_hygiene_issue_fields|docs/issues/<slug>.md|no Type: line
 hygiene|agent|msg_hygiene_governs_broken|docs/decisions/<topic>.md|<path>
 hygiene|agent|msg_hygiene_link_broken|docs/decisions/<topic>.md|<target>
 hygiene|human|msg_hygiene_area_oversized|src/<area>/|<count>|<cap>
@@ -2040,6 +2058,8 @@ attention|plain|msg_attention_plan_survived|.plans/<change>.md|<evidence>
 attention|plain|msg_attention_plans_pending|<count>
 attention|plain|msg_attention_merged_branch|hone/<change>
 attention|plain|msg_attention_stale_claim|<change>
+attention|plain|msg_attention_issue_owner|docs/issues/<slug>.md|<title>
+attention|plain|msg_attention_issues_unfielded|<count>
 attention|plain|msg_attention_memory_project|<file>.md|<memory-dir>
 session-start|human|msg_session_no_adapter
 session-start|human|msg_session_no_src

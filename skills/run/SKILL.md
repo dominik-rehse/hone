@@ -63,7 +63,7 @@ outcome:
 
 - Outcome: <the merge commit, or the blocker>
 - Cut: <what consolidate removed, or "nothing" with the reason>
-- Docs: <Decisions/Notes written, open questions closed, or "none">
+- Docs: <Decisions/Notes written, issues closed, or "none">
 - Declined: <review findings declined + where recorded, or "none">
 - For you: <the person items from hygiene and from worktree.sh attention after land, or "nothing">
 - Next: <"nothing" | the one action you recommend>
@@ -239,12 +239,13 @@ build.
   a map + one invariant, size-capped, 1:1 with an area).
 - a decision + why (and a rejected alternative, if load-bearing) → a **Decision**
   (`docs/decisions/<topic>.md`, present-tense, one per topic, edited in place).
-- an assumption running code has now settled → **close** its open question:
-  delete `docs/open-questions/<slug>.md`, and repoint each citation of that
-  path to the Decision, Note, or code that now holds the answer.
+- an issue this change fixes, or an assumption running code has now settled
+  → **close** the issue: delete `docs/issues/<slug>.md`, and repoint each
+  citation of that path to the Decision, Note, or code that now holds the
+  answer.
 - an assumption this change's proof run has **not** settled yet → **leave** its
-  file in `docs/open-questions/`, and write no Decision that states or
-  predicts the answer. A Decision states what is settled. The open question
+  file in `docs/issues/`, and write no Decision that states or
+  predicts the answer. A Decision states what is settled. The issue
   holds the rest, and consolidate stays silent on it. A change whose Plan
   carries a `Proof: real-environment` line can never report its own proof
   result here, because that proof runs at land, after this step. So a forecast
@@ -371,8 +372,10 @@ apply.
   second review.
 - **Decline** a confirmed finding only when it contradicts the Plan's explicit
   stance or falls outside the change's scope. Record the decline **durably**:
-  the landing commit body, or a file in `docs/open-questions/` for a real defect
-  deferred rather than dismissed. That is how an out-of-scope finding becomes
+  the landing commit body, or a file in `docs/issues/` for a real defect
+  deferred rather than dismissed. Give the file its `Type:` (`bug`, or
+  `security` for a gap in access) and `Waits on:` (`nothing` when the fix is
+  known, `owner` when it needs a call only the person can make). That is how an out-of-scope finding becomes
   follow-up material instead of expanding the change. A decline that lives only in
   the conversation is lost to the next cycle.
 

@@ -26,7 +26,7 @@ this:
 2. You pruned `naming.legacy.test.ts`, which asserted the old inlined string
    character for character. The two new tests cover what it covered.
 3. `docs/notes/server.md` is untouched. Its map and its invariant still hold.
-4. `docs/open-questions/naming-output-tokens.md` stays open: "does the preset swap move the
+4. `docs/issues/naming-output-tokens.md` stays open: "does the preset swap move the
    naming call's output tokens? The old prompt's last measured row wrote 473.
    Settle this from the first production row after the change deploys."
 5. `git rm .plans/server/naming-prompt-slim.md` is done, and the change's

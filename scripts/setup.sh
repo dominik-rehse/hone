@@ -90,7 +90,7 @@ fi
 # Note to a src/<area>/. The gate watches src/ and tests/ for work in flight. Code must
 # live under src/ for these to apply, Python packages included (src/<pkg>/ is a
 # supported layout).
-mkdir -p docs/decisions docs/notes docs/open-questions .plans src
+mkdir -p docs/decisions docs/notes docs/issues .plans src
 msg_setup_docs_created
 
 # 4. Report (never write) the settings deny rules. The human installs the

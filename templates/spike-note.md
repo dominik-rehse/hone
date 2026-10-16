@@ -22,7 +22,7 @@ observation. Not only the verdict.>
 
 <The forward pointer to the living home of this finding. That home is a
 Decision under `docs/decisions/`, a Note under `docs/notes/`, a question in
-`docs/open-questions/`, or the Plan it produced. The truth lives there. This
+`docs/issues/`, or the Plan it produced. The truth lives there. This
 note only preserves the investigation.
 
 If a line here starts describing what the system does *today*, it has become a

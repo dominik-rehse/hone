@@ -188,7 +188,8 @@
 #       Note it touched is over the size cap or has no src/<area>/ (also when
 #       the change deleted the area); a docs/spikes/ entry it added has no
 #       date; a broken Governs: path or relative link in a Decision or Note
-#       that it touched, or that governs code it touched. For the person: a
+#       that it touched, or that governs code it touched; an issue it added
+#       or edited has no valid Type: or Waits on: line. For the person: a
 #       src/<area>/ it touched holds more than HONE_AREA_MAX_LINES lines
 #       (default 3000), because the fix is a Plan of its own. Each finding is
 #       a three-line message under the heading of its group. Exit: 0 nothing
@@ -199,9 +200,11 @@
 #       Print what the person should know about the primary tree, one short
 #       line per item, and nothing when nothing is there: a `type: project`
 #       harness memory file, a merged hone/* branch with no worktree, a stale
-#       claim, the Plan of a landed change, and the count of pending Plans
+#       claim, the Plan of a landed change, the count of pending Plans
 #       (left out while a coordinator is active, or while session <id> once
-#       waited as one). The SessionStart hook shows it in the primary tree.
+#       waited as one), each docs/issues/ file that waits on the owner, and
+#       the count of issue files without valid fields. The SessionStart hook
+#       shows it in the primary tree.
 #       Exit: 0 nothing · 1 printed · 2 not-a-repo.
 #
 #   worktree.sh verify
@@ -867,6 +870,14 @@ cmd_hygiene() {
         hy_spike_dated "$entry" || hy_fix "$(msg_hygiene_spike_undated "docs/spikes/$entry")"
     done < <(printf '%s\n' "$changed" | sed -n 's|^docs/spikes/\([^/]*\).*|\1|p' | sort -u)
 
+    # 12. An issue the change added or edited, without its fields.
+    local issue why
+    while IFS= read -r issue; do
+        [ -n "$issue" ] && hy_exists "$issue" || continue
+        why=$(hy_issue_bad "$issue")
+        [ -n "$why" ] && hy_fix "$(msg_hygiene_issue_fields "$issue" "$why")"
+    done < <(printf '%s\n' "$changed" | grep -E '^docs/issues/[^/]+\.md$')
+
     # 6 and 9. A Decision or Note the change touched, or one that governs
     # code it touched (cmd_governed decides which).
     docs=$( { printf '%s\n' "$changed" | grep -E '^docs/(decisions|notes)/.*\.md$'
@@ -933,6 +944,14 @@ cmd_attention() {
                 pending) hy_pending_quiet "$session" || msg_attention_plans_pending "$a" ;;
             esac
         done < <(hy_plans)
+        local unfielded=0
+        while IFS=$'\t' read -r kind a b; do
+            case "$kind" in
+                owner) msg_attention_issue_owner "$a" "$b" ;;
+                bad) unfielded=$((unfielded + 1)) ;;
+            esac
+        done < <(hy_issues)
+        [ "$unfielded" -eq 0 ] || msg_attention_issues_unfielded "$unfielded"
     )
     [ -n "$out" ] || return 0
     printf '%s\n' "$out" | sed 's/^/- /'

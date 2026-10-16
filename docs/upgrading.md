@@ -115,14 +115,14 @@ mechanical steps.
    - *The nag is gone since 0.78*: restart running sessions. Setup deletes
      the leftover `hone-nag-seen`. A run now fixes the hygiene findings of
      its change, and session start shows you what needs you.
-   - *One file per open question since 0.81*: `docs/open-questions/<slug>.md`
-     replaces `docs/open-questions.md`, and the slug replaces the `OQ-N`
-     number. Session start warns while the old file remains. With no change
-     in flight, move each open entry to its own file, with `# ` and the
-     question on its first line. Repoint each citation of its number to the
-     new path, in tests too, and the citation of a closed number to the
-     Decision or Note that settled it. A number another repo owns stays.
-     Delete the old file, and land it all as one change.
+   - *Issues since 0.82*: `docs/issues/<slug>.md` replaces
+     `docs/open-questions/<slug>.md` and, before 0.81, the numbered
+     `docs/open-questions.md`. Session start warns while either remains.
+     With no change in flight, plan one change that moves each open
+     question to its own issue file. Give each file the `Type:` and
+     `Waits on:` lines that `reference.md` lists. Repoint each citation to
+     the new path, in tests too, and a citation of a closed
+     number to the Decision or Note that settled it. A number another repo owns stays.
    - *Automatic grants since 0.66*: to let every irreversible change land
      without you, commit an empty `.hone-grant-auto` at the repo root. A
      `#` line in it can say who decided and why. Nothing changes without

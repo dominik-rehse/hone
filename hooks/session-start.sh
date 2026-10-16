@@ -93,10 +93,12 @@ if [ "$looks_like_hone" = true ] && [ ! -d "$PROJECT_DIR/src" ]; then
     add warnings "$(msg_session_no_src)"
 fi
 
-# Before 0.81.0 open questions lived in one shared file with numbered entries.
-# Parallel changes conflicted on it at land and took the same next number. A
-# project that still has it needs a migration that takes judgment, so say so.
-if [ "$looks_like_hone" = true ] && [ -f "$PROJECT_DIR/docs/open-questions.md" ]; then
+# Before 0.82.0 open questions lived in docs/open-questions/, and before
+# 0.81.0 in one shared file, docs/open-questions.md. The skills now read and
+# write docs/issues/ only. The move needs judgment (each issue's two fields),
+# so say so.
+if [ "$looks_like_hone" = true ] && { [ -f "$PROJECT_DIR/docs/open-questions.md" ] \
+        || [ -d "$PROJECT_DIR/docs/open-questions" ]; }; then
     add warnings "$(msg_session_old_open_questions)"
 fi
 

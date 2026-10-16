@@ -71,10 +71,10 @@ sibling landed by reading the landed code, never git history. When a check
 fails, it stops and reports rather than deletes. It is also the home for a
 finding a sibling run surfaced but could not file.
 
-Open questions are no ledger. Each is its own file in `docs/open-questions/`,
-so a change closes or adds its own question in parallel with its siblings.
+Issues are no ledger. Each is its own file in `docs/issues/`,
+so a change closes or adds its own issue in parallel with its siblings.
 Two siblings that pick the same slug add the same path, and the second land
-conflicts on it. Then rename that change's question to a free slug, repoint
+conflicts on it. Then rename that change's issue to a free slug, repoint
 its citations, fold the trunk in, and land again.
 
 ## Claims

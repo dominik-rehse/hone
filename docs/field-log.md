@@ -16,11 +16,16 @@ The counts and the method are in
 [the 2026-10-01 note on a coordinated batch](spikes/2026-10-01-field-data-coordinated-batch.md),
 [the 2026-10-09 note on function complexity](spikes/2026-10-09-function-complexity-in-the-field.md),
 [the 2026-10-09 note on a hotspot batch](spikes/2026-10-09-hotspot-batch.md),
-and [the 2026-10-14 note since 0.79.1](spikes/2026-10-14-field-data-since-0-79-1.md).
+[the 2026-10-14 note since 0.79.1](spikes/2026-10-14-field-data-since-0-79-1.md),
+and [the 2026-10-16 note on open questions](spikes/2026-10-16-open-questions-in-the-field.md).
 "Not recorded" in the version field means the source did not record it.
 The MAIN incidents up to 2026-09-28 are counted in
 [the 2026-09-28 note](spikes/2026-09-28-main-tracking-of-subs.md).
 
+- 2026-10-16 · 0.81.1 · `run`, `garden` · the open-questions folder held
+  deferred defects, security gaps, and calls for the owner beside the bets.
+  In one repository 25 of 52 files were no bet, and the owner's calls
+  reached no list of theirs.
 - 2026-10-12 to 2026-10-14 · 0.79.1 · `watch` · a coordinator's background
   `wait` returned at once with a queued event, and the hook blocked the
   end of the turn because no wait ran. The wake-up was already pending.

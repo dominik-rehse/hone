@@ -39,13 +39,13 @@ already be one.
   indirection with no second user. Judge this **reactively**, at this point of
   change only. Do not hunt the wider codebase for abstractions to build. Rule of
   three: duplication is cheaper than the wrong abstraction.
-- **A stale or leftover artifact.** The Plan not deleted. An open question resolved
+- **A stale or leftover artifact.** The Plan not deleted. An issue settled or fixed
   by this change but left open. A decision superseded but not collapsed.
 - **A spike note doing a spec's job.** A `docs/spikes/<date>-<slug>.md` is
   frozen history: what somebody tried on that date, and where the finding went.
   Argue for the cut when it instead describes what the system does today.
   Argue for the cut when it has no forward pointer to the Decision, Note, or
-  open question that carries the finding. Argue for the cut when the change
+  issue that carries the finding. Argue for the cut when the change
   made that pointer dangle. A note whose whole content is the conclusion is
   also a cut. The conclusion already lives in its real home, and the note
   exists only for the method and the dead ends. Never argue to cut one for

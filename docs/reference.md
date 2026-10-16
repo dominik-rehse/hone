@@ -332,8 +332,8 @@ neither. When you want that record, route the edit through the loop.
   notification is queued counts too. It also restarts a dead
   ticker. In a watched session it writes a `turn-ended` event.
 - *session-start* injects the workflow rule from the plugin. It warns when
-  the test adapter or the `src/` layout is missing, or an old
-  `docs/open-questions.md` remains. It also warns, naming
+  the test adapter or the `src/` layout is missing, or
+  `docs/open-questions` remains. It also warns, naming
   the missing rules, when the settings lack any rule from the canonical deny
   list (`templates/settings/deny-rules.txt`). You see the warnings, and the
   model gets them with the rule. In the primary tree it shows you
@@ -541,7 +541,7 @@ repo/                            # the primary tree: a merge target, never a wor
 │   ├── decisions/<topic>.md     # one present-tense decision + why, per topic
 │   ├── notes/<area>.md          # optional per-area map + one invariant, size-capped
 │   ├── spikes/<date>-<slug>*    # optional frozen spike: note, probe, captures, any type
-│   └── open-questions/<slug>.md # one bet only running code can settle, per file
+│   └── issues/<slug>.md         # one piece of open work per file, with Type: and Waits on:
 ├── scripts/run-tests.sh         # the test adapter (plus optional typecheck/lint/proof/setup-tree)
 ├── .plans/<change>.md           # tracked; written at plan, deleted at consolidate
 ├── .plans/<change>/             # optional reference files for the Plan
@@ -553,6 +553,14 @@ repo/                            # the primary tree: a merge target, never a wor
 ├── .hone-shared                 # committed policy (optional): the team's remote
 └── .claude/settings.json        # enables the plugin; deny rules for the adapters
 ```
+
+An issue file opens with `# ` and its title. Two lines follow. `Type:` is
+`bug`, `security`, `feature`, `chore`, or `assumption`. `Waits on:` is
+`nothing` (ready to plan), `evidence` (running code must answer), `owner`
+(you decide), or `upstream` (another party acts). An optional `Gated:
+<change>` line names the change it gates. `worktree.sh hygiene` reports a
+changed issue without valid fields. `worktree.sh attention` names each issue
+that waits on you and counts the invalid ones.
 
 The plugin itself:
 
@@ -576,7 +584,7 @@ hone/
 
 W = writes, M = amends, P = prunes/deletes, R = reads, . = untouched
 
-| Operation   | .plans/ | code | tests | decisions/ | notes/ | open-q | .git |
+| Operation   | .plans/ | code | tests | decisions/ | notes/ | issues | .git |
 |-------------|---------|------|-------|------------|--------|--------|------|
 | plan        | W       | R    | R     | R          | R      | (W)    | W    |
 | build       | R/P     | W    | W     | M          | M      | .      | .    |
@@ -587,43 +595,37 @@ W = writes, M = amends, P = prunes/deletes, R = reads, . = untouched
 
 Notes on the rarer cells: plan's reads are its step 2, where it reads the code,
 the tests, and the area's Decisions and Notes. The Plan can then state what the
-change replaces. plan's `(W)` on open questions covers only a new
+change replaces. plan's `(W)` on issues covers only a new
 question the Plan surfaces. Its `.git` write is the commit of the Plan
 and its references on the primary branch. build's `.plans/` prune is a
 reference promoted out, `git mv`'d next to the test that reads it. (build
 is the only step that writes tests.) build's `M` in `docs/` amends a
 line that the change makes wrong, or one that a test reads. consolidate's `.plans/` prune is the `git rm` of the
-Plan and any references build did not promote. garden is not part of a
-change, but the standalone maintenance loop. Every column it touches is
-a deletion, apart from the three `M` cells. Those carry its one non-deleting
-change, the repair. It replaces a reference under `docs/` whose target moved,
-one target for one target, and leaves the claim around it untouched. Code keeps
-no `M`: a dangling reference in a `src/` comment sits beside code, and only
-build writes code.
+Plan and any references build did not promote. garden is the standalone
+maintenance loop. Every column it touches is a deletion, apart from the
+three `M` cells. Those carry its repair: a reference under `docs/` whose
+target moved, repointed one for one. Code keeps no `M`, because only build
+writes code.
 
 Spikes are outside the table, because a spike is not a change. Everything one
-spike leaves behind lives under `docs/spikes/`, whatever its type. Examples:
-the note, the probe code that produced it, a mockup, a captured payload, a
-screenshot.
+spike leaves behind, of any type, lives under `docs/spikes/`.
 One spike is one dated stem, `<YYYY-MM-DD>-<slug>`, a single file where one
 file is enough and a directory where it is not. No hook looks inside, so a
-probe needs no test and no worktree, and nothing there has to keep the suite
-green by itself.
+probe needs no test or worktree.
 
 Both `plan` (before a Plan exists) and `consolidate` (after the change) write a
-spike. `docs/spikes/` and `docs/open-questions/` are the two paths under
-`docs/` the guard leaves writable in the primary tree. A probe and a plan-time open question both precede the Plan. Most
+spike. `docs/spikes/` and `docs/issues/` are the two paths under
+`docs/` the guard leaves writable in the primary tree. A probe and a plan-time issue both precede the Plan. Most
 probes leave nothing behind: keep a spike only when its method or its dead
 ends would save a future reader from running it again.
 
 The note at `<YYYY-MM-DD>-<slug>.md` is the way in. It is write-once, past
-tense, and it always points forward to the Decision, Note, or open question
+tense, and it always points forward to the Decision, Note, or issue
 that carries the finding. The date is what says so: `worktree.sh hygiene`
 reports a new entry under `docs/spikes/` without one, `garden` never cuts a
 spike for being old, and nobody updates one. A note that starts describing what the system does
 today has become a second spec, and the `consolidate-critic` argues for that
-cut. `garden` cuts a spike whole, stem and all, because the stem is the unit.
-Copy the shape from [`templates/spike-note.md`](../templates/spike-note.md).
+cut. Copy the shape from [`templates/spike-note.md`](../templates/spike-note.md).
 
 Committed probe code has one practical cost. A project's test runner, linter,
 or type-checker may pick up a file under `docs/spikes/`, and the gate needs all

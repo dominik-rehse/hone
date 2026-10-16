@@ -51,7 +51,7 @@
 #
 #   The seed. The fixture keeps its code, its tests, its adapter, its docs and
 #   its task. It loses what only hone leaves: the .hone-* policy files and
-#   markers, their lines in .gitignore, the open questions, and the
+#   markers, their lines in .gitignore, the issues, and the
 #   deny rules of .claude/settings.json. The brief under .plans/ stays, so
 #   that a check on it reads a true zero and not a vacuous pass. One word of
 #   hone stays as well: scripts/run-tests.sh names it in its header and in
@@ -306,11 +306,11 @@ plugin_files() {
 # setup. The adapter and the docs skeleton stay, because any project could have
 # them and the checks run the adapter. What goes is what only hone leaves: the
 # policy files and markers, the gitignore lines that name them, and the
-# open questions. The deny rules go through DENY_RULES above, and the
+# issues. The deny rules go through DENY_RULES above, and the
 # brief under .plans/ stays, because it is how the scenario states its task.
 # The working directory is the fixture.
 strip_hone() {
-    rm -rf .hone-* docs/open-questions.md docs/open-questions
+    rm -rf .hone-* docs/open-questions.md docs/open-questions docs/issues
     [ -f .gitignore ] || return 0
     grep -vxE '\.worktrees/|\.hone-[a-z/.-]*' .gitignore > .gitignore.bare
     mv .gitignore.bare .gitignore
